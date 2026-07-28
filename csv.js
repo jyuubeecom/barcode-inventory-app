@@ -1,6 +1,7 @@
 "use strict";
 
 let exportProductsCsvButton = null;
+let exportMovementsCsvButton = null;
 
 document.addEventListener(
   "DOMContentLoaded",
@@ -9,6 +10,7 @@ document.addEventListener(
 
 function initializeCsvFunctions() {
   createProductsCsvButton();
+  createMovementsCsvButton();
   createCsvButtonStyle();
 }
 
@@ -21,6 +23,11 @@ function createProductsCsvButton() {
   if (existingButton) {
     exportProductsCsvButton =
       existingButton;
+
+    exportProductsCsvButton.addEventListener(
+      "click",
+      exportProductsCsv
+    );
 
     return;
   }
@@ -38,7 +45,7 @@ function createProductsCsvButton() {
 
   if (!referenceButton) {
     console.error(
-      "CSVボタンを追加する場所が見つかりません。"
+      "商品一覧CSVボタンを追加する場所が見つかりません。"
     );
 
     return;
@@ -66,6 +73,60 @@ function createProductsCsvButton() {
   );
 }
 
+function createMovementsCsvButton() {
+  const existingButton =
+    document.querySelector(
+      "#export-movements-csv-button"
+    );
+
+  if (existingButton) {
+    exportMovementsCsvButton =
+      existingButton;
+
+    exportMovementsCsvButton.addEventListener(
+      "click",
+      exportMovementsCsv
+    );
+
+    return;
+  }
+
+  const referenceButton =
+    exportProductsCsvButton ||
+    document.querySelector(
+      "#show-history-button"
+    );
+
+  if (!referenceButton) {
+    console.error(
+      "入出庫履歴CSVボタンを追加する場所が見つかりません。"
+    );
+
+    return;
+  }
+
+  exportMovementsCsvButton =
+    document.createElement("button");
+
+  exportMovementsCsvButton.id =
+    "export-movements-csv-button";
+
+  exportMovementsCsvButton.type =
+    "button";
+
+  exportMovementsCsvButton.textContent =
+    "入出庫履歴CSVを出力する";
+
+  exportMovementsCsvButton.addEventListener(
+    "click",
+    exportMovementsCsv
+  );
+
+  referenceButton.parentElement.appendChild(
+    exportMovementsCsvButton
+  );
+}
+
 function createCsvButtonStyle() {
   const existingStyle =
     document.querySelector(
@@ -87,7 +148,12 @@ function createCsvButtonStyle() {
       background-color: #00796b;
     }
 
-    #export-products-csv-button:disabled {
+    #export-movements-csv-button {
+      background-color: #5d4037;
+    }
+
+    #export-products-csv-button:disabled,
+    #export-movements-csv-button:disabled {
       background-color: #90a4ae;
       cursor: not-allowed;
     }
@@ -182,11 +248,11 @@ async function exportProductsCsv() {
             product.category
           ),
 
-          getCsvNumber(
+          getCsvStockNumber(
             product.stock
           ),
 
-          getCsvNumber(
+          getCsvStockNumber(
             product.minStock
           ),
 
@@ -247,6 +313,194 @@ async function exportProductsCsv() {
   }
 }
 
+async function exportMovementsCsv() {
+  if (!exportMovementsCsvButton) {
+    return;
+  }
+
+  exportMovementsCsvButton.disabled =
+    true;
+
+  exportMovementsCsvButton.textContent =
+    "CSVを作成しています";
+
+  try {
+    const [
+      movements,
+      products
+    ] = await Promise.all([
+      getAllStockMovements(),
+      getAllProducts()
+    ]);
+
+    if (
+      !Array.isArray(movements) ||
+      movements.length === 0
+    ) {
+      alert(
+        "CSVへ出力する入出庫履歴がありません。\n\n" +
+        "商品登録、入庫、出庫などを行ってください。"
+      );
+
+      return;
+    }
+
+    const productMap =
+      createProductMap(
+        products
+      );
+
+    const sortedMovements =
+      [...movements].sort(
+        function (
+          movementA,
+          movementB
+        ) {
+          return (
+            getCsvDateTimeNumber(
+              movementB.dateTime
+            ) -
+            getCsvDateTimeNumber(
+              movementA.dateTime
+            )
+          );
+        }
+      );
+
+    const csvRows = [
+      [
+        "日時",
+        "JANコード",
+        "社内コード",
+        "商品コード",
+        "商品名",
+        "区分",
+        "数量",
+        "変更前在庫",
+        "変更後在庫",
+        "担当者",
+        "理由",
+        "メモ"
+      ]
+    ];
+
+    sortedMovements.forEach(
+      function (movement) {
+        const product =
+          productMap.get(
+            movement.internalCode
+          );
+
+        const janCode =
+          movement.janCode ||
+          product?.janCode ||
+          "";
+
+        csvRows.push([
+          formatCsvDateTime(
+            movement.dateTime
+          ),
+
+          formatCodeForExcel(
+            janCode
+          ),
+
+          formatCodeForExcel(
+            movement.internalCode
+          ),
+
+          formatCodeForExcel(
+            movement.productCode
+          ),
+
+          getCsvText(
+            movement.productName
+          ),
+
+          getCsvText(
+            movement.type
+          ),
+
+          getCsvInteger(
+            movement.quantity
+          ),
+
+          getCsvStockNumber(
+            movement.beforeStock
+          ),
+
+          getCsvStockNumber(
+            movement.afterStock
+          ),
+
+          getCsvText(
+            movement.person
+          ),
+
+          getCsvText(
+            movement.reason
+          ),
+
+          getCsvText(
+            movement.memo
+          )
+        ]);
+      }
+    );
+
+    const csvText =
+      createCsvText(
+        csvRows
+      );
+
+    const fileName =
+      `入出庫履歴_${getCsvDateText()}.csv`;
+
+    downloadCsvFile(
+      csvText,
+      fileName
+    );
+
+    alert(
+      `${sortedMovements.length}件の入出庫履歴をCSVへ出力しました。\n\n` +
+      `ファイル名：${fileName}`
+    );
+  } catch (error) {
+    console.error(error);
+
+    alert(
+      "入出庫履歴CSVを作成できませんでした。\n\n" +
+      "入出庫履歴とブラウザーの設定を確認してください。"
+    );
+  } finally {
+    exportMovementsCsvButton.disabled =
+      false;
+
+    exportMovementsCsvButton.textContent =
+      "入出庫履歴CSVを出力する";
+  }
+}
+
+function createProductMap(products) {
+  const productMap =
+    new Map();
+
+  if (!Array.isArray(products)) {
+    return productMap;
+  }
+
+  products.forEach(
+    function (product) {
+      productMap.set(
+        product.internalCode,
+        product
+      );
+    }
+  );
+
+  return productMap;
+}
+
 function createCsvText(rows) {
   return rows
     .map(
@@ -305,7 +559,20 @@ function getCsvText(value) {
   return String(value).trim();
 }
 
-function getCsvNumber(value) {
+function getCsvInteger(value) {
+  const number =
+    Number(value);
+
+  if (
+    !Number.isFinite(number)
+  ) {
+    return 0;
+  }
+
+  return Math.trunc(number);
+}
+
+function getCsvStockNumber(value) {
   const number =
     Number(value);
 
@@ -320,14 +587,14 @@ function getCsvNumber(value) {
 }
 
 function getCsvMinimumStock(product) {
-  return getCsvNumber(
+  return getCsvStockNumber(
     product.minStock
   );
 }
 
 function getCsvStockStatus(product) {
   const currentStock =
-    getCsvNumber(
+    getCsvStockNumber(
       product.stock
     );
 
@@ -398,6 +665,21 @@ function formatCsvDateTime(value) {
     `${year}-${month}-${day} ` +
     `${hours}:${minutes}:${seconds}`
   );
+}
+
+function getCsvDateTimeNumber(value) {
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return 0;
+  }
+
+  return date.getTime();
 }
 
 function getCsvDateText() {

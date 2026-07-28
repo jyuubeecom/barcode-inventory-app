@@ -29,6 +29,7 @@ let stocktakingItemsBody = null;
 let stocktakingSaveMessage = null;
 
 let saveStocktakingItemsButton = null;
+let confirmStocktakingButton = null;
 let cancelStocktakingSetupButton = null;
 let backHomeFromStocktakingButton = null;
 let deleteStocktakingButton = null;
@@ -48,15 +49,14 @@ function initializeStocktaking() {
 }
 
 function createStocktakingStartButton() {
-  if (
+  const existingButton =
     document.querySelector(
       "#show-stocktaking-button"
-    )
-  ) {
+    );
+
+  if (existingButton) {
     stocktakingStartButton =
-      document.querySelector(
-        "#show-stocktaking-button"
-      );
+      existingButton;
 
     return;
   }
@@ -99,12 +99,12 @@ function createStocktakingScreens() {
       "#stocktaking-active"
     );
 
-  if (
-    existingSetupScreen ||
-    existingActiveScreen
-  ) {
-    existingSetupScreen?.remove();
-    existingActiveScreen?.remove();
+  if (existingSetupScreen) {
+    existingSetupScreen.remove();
+  }
+
+  if (existingActiveScreen) {
+    existingActiveScreen.remove();
   }
 
   const mainElement =
@@ -305,11 +305,43 @@ function createStocktakingScreens() {
       実在庫を入力したら「入力内容を保存する」を押してください。
     </p>
 
+    <fieldset class="stocktaking-reflect-area">
+      <legend>
+        棚卸確定時の在庫処理
+      </legend>
+
+      <label>
+        <input
+          type="radio"
+          name="stocktaking-reflect"
+          value="yes"
+          checked
+        >
+        実在庫を現在庫へ反映する
+      </label>
+
+      <label>
+        <input
+          type="radio"
+          name="stocktaking-reflect"
+          value="no"
+        >
+        棚卸結果だけを保存し、現在庫は変更しない
+      </label>
+    </fieldset>
+
     <button
       id="save-stocktaking-items-button"
       type="button"
     >
       入力内容を保存する
+    </button>
+
+    <button
+      id="confirm-stocktaking-button"
+      type="button"
+    >
+      棚卸を確認・確定する
     </button>
 
     <button
@@ -445,6 +477,11 @@ function getStocktakingElements() {
       "#save-stocktaking-items-button"
     );
 
+  confirmStocktakingButton =
+    document.querySelector(
+      "#confirm-stocktaking-button"
+    );
+
   backHomeFromStocktakingButton =
     document.querySelector(
       "#back-home-from-stocktaking-button"
@@ -470,6 +507,11 @@ function addStocktakingEventListeners() {
   saveStocktakingItemsButton.addEventListener(
     "click",
     handleSaveStocktakingItems
+  );
+
+  confirmStocktakingButton.addEventListener(
+    "click",
+    handleConfirmStocktaking
   );
 
   backHomeFromStocktakingButton.addEventListener(
@@ -590,13 +632,11 @@ function createStocktakingStyle() {
       white-space: nowrap;
     }
 
-    .stocktaking-items-table
-    input[type="number"] {
+    .stocktaking-items-table input[type="number"] {
       min-width: 100px;
     }
 
-    .stocktaking-items-table
-    input[type="text"] {
+    .stocktaking-items-table input[type="text"] {
       min-width: 180px;
     }
 
@@ -664,8 +704,45 @@ function createStocktakingStyle() {
       color: #1b5e20;
     }
 
+    .stocktaking-reflect-area {
+      display: grid;
+      gap: 12px;
+      margin: 20px 0;
+      padding: 16px;
+      border: 2px solid #6a1b9a;
+      border-radius: 10px;
+      background-color: #faf5fc;
+    }
+
+    .stocktaking-reflect-area legend {
+      padding: 0 8px;
+      color: #4a148c;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .stocktaking-reflect-area label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+      padding: 10px;
+      border-radius: 8px;
+      background-color: #ffffff;
+    }
+
+    .stocktaking-reflect-area input {
+      width: 24px;
+      height: 24px;
+      margin: 0;
+    }
+
     #save-stocktaking-items-button {
       background-color: #2e7d32;
+    }
+
+    #confirm-stocktaking-button {
+      background-color: #1565c0;
     }
 
     #delete-stocktaking-button {
@@ -827,7 +904,7 @@ async function handleStocktakingStart(
   if (targetProducts.length === 0) {
     alert(
       "棚卸対象の商品がありません。\n\n" +
-      "保管場所の入力内容を確認してください。"
+      "登録商品数と保管場所を確認してください。"
     );
 
     stocktakingLocationInput.focus();
@@ -863,6 +940,7 @@ async function handleStocktakingStart(
     startedAt: startedAt,
     updatedAt: startedAt,
     confirmedAt: "",
+    reflectedToInventory: false,
     items:
       createStocktakingItems(
         targetProducts
@@ -1044,6 +1122,13 @@ async function showActiveStocktaking(
   stocktakingSaveMessage.classList.remove(
     "saved"
   );
+
+  const reflectYesInput =
+    document.querySelector(
+      'input[name="stocktaking-reflect"][value="yes"]'
+    );
+
+  reflectYesInput.checked = true;
 
   stocktakingHasUnsavedChanges =
     false;
@@ -1471,12 +1556,11 @@ function updateStocktakingRowAppearance(
   );
 }
 
-function updateStocktakingSummary() {
+function getStocktakingCounts() {
   const items =
-    currentStocktaking?.items || [];
-
-  const targetCount =
-    items.length;
+    currentStocktaking
+      ? currentStocktaking.items
+      : [];
 
   const checkedItems =
     items.filter(
@@ -1487,60 +1571,63 @@ function updateStocktakingSummary() {
       }
     );
 
-  const checkedCount =
-    checkedItems.length;
+  return {
+    target: items.length,
+    checked: checkedItems.length,
+    unchecked:
+      items.length -
+      checkedItems.length,
+    match:
+      checkedItems.filter(
+        function (item) {
+          return (
+            item.result ===
+            "差異なし"
+          );
+        }
+      ).length,
+    shortage:
+      checkedItems.filter(
+        function (item) {
+          return (
+            item.result ===
+            "在庫不足"
+          );
+        }
+      ).length,
+    surplus:
+      checkedItems.filter(
+        function (item) {
+          return (
+            item.result ===
+            "在庫過剰"
+          );
+        }
+      ).length
+  };
+}
 
-  const uncheckedCount =
-    targetCount -
-    checkedCount;
-
-  const matchCount =
-    checkedItems.filter(
-      function (item) {
-        return (
-          item.result ===
-          "差異なし"
-        );
-      }
-    ).length;
-
-  const shortageCount =
-    checkedItems.filter(
-      function (item) {
-        return (
-          item.result ===
-          "在庫不足"
-        );
-      }
-    ).length;
-
-  const surplusCount =
-    checkedItems.filter(
-      function (item) {
-        return (
-          item.result ===
-          "在庫過剰"
-        );
-      }
-    ).length;
+function updateStocktakingSummary() {
+  const counts =
+    getStocktakingCounts();
 
   stocktakingSummaryTarget.textContent =
-    targetCount;
+    counts.target;
 
   stocktakingSummaryChecked.textContent =
-    checkedCount;
+    counts.checked;
 
   stocktakingSummaryUnchecked.textContent =
-    uncheckedCount;
+    counts.unchecked;
 
   stocktakingSummaryMatch.textContent =
-    matchCount;
+    counts.match;
 
   stocktakingSummaryShortage.textContent =
-    shortageCount;
+    counts.shortage;
 
   stocktakingSummarySurplus.textContent =
-    surplusCount;
+    counts.surplus;
 }
 
 function filterStocktakingItems() {
@@ -1678,6 +1765,306 @@ async function saveCurrentStocktaking(
     );
 
     return false;
+  }
+}
+
+async function handleConfirmStocktaking() {
+  const saved =
+    await saveCurrentStocktaking(
+      false
+    );
+
+  if (!saved) {
+    return;
+  }
+
+  const counts =
+    getStocktakingCounts();
+
+  if (counts.unchecked > 0) {
+    alert(
+      "未確認の商品が残っているため、棚卸を確定できません。\n\n" +
+      `未確認商品：${counts.unchecked}件\n\n` +
+      "すべての商品に実在庫を入力してください。"
+    );
+
+    focusFirstUncheckedItem();
+    return;
+  }
+
+  const selectedReflectInput =
+    document.querySelector(
+      'input[name="stocktaking-reflect"]:checked'
+    );
+
+  const reflectToInventory =
+    selectedReflectInput.value ===
+    "yes";
+
+  const reflectText =
+    reflectToInventory
+      ? "実在庫を現在庫へ反映する"
+      : "現在庫は変更しない";
+
+  const confirmationMessage =
+    "次の内容で棚卸を確定しますか？\n\n" +
+    `対象商品：${counts.target}件\n` +
+    `確認済み：${counts.checked}件\n` +
+    `差異なし：${counts.match}件\n` +
+    `在庫不足：${counts.shortage}件\n` +
+    `在庫過剰：${counts.surplus}件\n\n` +
+    `在庫処理：${reflectText}\n\n` +
+    "確定後は、この棚卸を編集できません。";
+
+  const isConfirmed =
+    window.confirm(
+      confirmationMessage
+    );
+
+  if (!isConfirmed) {
+    return;
+  }
+
+  confirmStocktakingButton.disabled =
+    true;
+
+  try {
+    const confirmedAt =
+      new Date().toISOString();
+
+    const updatedProducts = [];
+    const movements = [];
+
+    if (reflectToInventory) {
+      const allProducts =
+        await getAllProducts();
+
+      const productMap =
+        new Map();
+
+      allProducts.forEach(
+        function (product) {
+          productMap.set(
+            product.internalCode,
+            product
+          );
+        }
+      );
+
+      const missingItems = [];
+      const changedItems = [];
+
+      currentStocktaking.items.forEach(
+        function (item) {
+          const product =
+            productMap.get(
+              item.internalCode
+            );
+
+          if (!product) {
+            missingItems.push(
+              item.productName
+            );
+
+            return;
+          }
+
+          const currentStock =
+            getValidStocktakingNumber(
+              product.stock
+            );
+
+          if (
+            currentStock !==
+            item.registeredStock
+          ) {
+            changedItems.push({
+              productName:
+                item.productName,
+              registeredStock:
+                item.registeredStock,
+              currentStock:
+                currentStock
+            });
+          }
+        }
+      );
+
+      if (missingItems.length > 0) {
+        alert(
+          "棚卸開始後に削除された商品があります。\n\n" +
+          missingItems.join("\n") +
+          "\n\n棚卸を確定できません。"
+        );
+
+        return;
+      }
+
+      if (changedItems.length > 0) {
+        const changedText =
+          changedItems
+            .slice(0, 5)
+            .map(
+              function (item) {
+                return (
+                  `${item.productName}\n` +
+                  `棚卸開始時：${item.registeredStock}個\n` +
+                  `現在：${item.currentStock}個`
+                );
+              }
+            )
+            .join("\n\n");
+
+        alert(
+          "棚卸開始後に在庫数が変更された商品があります。\n\n" +
+          changedText +
+          "\n\n入庫・出庫の内容を確認し、棚卸をやり直してください。"
+        );
+
+        return;
+      }
+
+      currentStocktaking.items.forEach(
+        function (item, index) {
+          const product =
+            productMap.get(
+              item.internalCode
+            );
+
+          const beforeStock =
+            getValidStocktakingNumber(
+              product.stock
+            );
+
+          const afterStock =
+            getValidStocktakingNumber(
+              item.actualStock
+            );
+
+          if (
+            beforeStock ===
+            afterStock
+          ) {
+            return;
+          }
+
+          const updatedProduct = {
+            ...product,
+            stock: afterStock,
+            updatedAt: confirmedAt
+          };
+
+          updatedProducts.push(
+            updatedProduct
+          );
+
+          const memoText =
+            item.memo === ""
+              ? `棚卸日：${currentStocktaking.stocktakingDate}`
+              : `棚卸日：${currentStocktaking.stocktakingDate} / ${item.memo}`;
+
+          movements.push({
+            id:
+              createStocktakingMovementId(
+                index
+              ),
+            dateTime: confirmedAt,
+            internalCode:
+              product.internalCode,
+            productCode:
+              product.productCode,
+            productName:
+              product.productName,
+            type: "棚卸調整",
+            quantity:
+              afterStock -
+              beforeStock,
+            beforeStock:
+              beforeStock,
+            afterStock:
+              afterStock,
+            person:
+              currentStocktaking.person,
+            reason: "棚卸調整",
+            memo: memoText
+          });
+        }
+      );
+    }
+
+    const completedStocktaking = {
+      ...currentStocktaking,
+      status: "確定済み",
+      confirmedAt: confirmedAt,
+      updatedAt: confirmedAt,
+      reflectedToInventory:
+        reflectToInventory
+    };
+
+    await completeStocktakingSession(
+      completedStocktaking,
+      updatedProducts,
+      movements
+    );
+
+    const completionMessage =
+      reflectToInventory
+        ? "棚卸を確定しました。\n\n実在庫を現在庫へ反映しました。"
+        : "棚卸を確定しました。\n\n現在庫は変更していません。";
+
+    alert(completionMessage);
+
+    window.location.reload();
+  } catch (error) {
+    console.error(error);
+
+    alert(
+      "棚卸を確定できませんでした。\n\n" +
+      "入力内容と商品データを確認してください。"
+    );
+  } finally {
+    confirmStocktakingButton.disabled =
+      false;
+  }
+}
+
+function focusFirstUncheckedItem() {
+  const uncheckedItem =
+    currentStocktaking.items.find(
+      function (item) {
+        return (
+          item.actualStock === ""
+        );
+      }
+    );
+
+  if (!uncheckedItem) {
+    return;
+  }
+
+  stocktakingProductSearchInput.value =
+    "";
+
+  filterStocktakingItems();
+
+  const inputs =
+    stocktakingItemsBody.querySelectorAll(
+      ".stocktaking-actual-input"
+    );
+
+  for (const input of inputs) {
+    if (
+      input.dataset.internalCode ===
+      uncheckedItem.internalCode
+    ) {
+      input.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+
+      input.focus();
+      break;
+    }
   }
 }
 
@@ -1910,5 +2297,18 @@ function createStocktakingId() {
 
   return (
     `stocktaking-${Date.now()}-${randomText}`
+  );
+}
+
+function createStocktakingMovementId(
+  index
+) {
+  const randomText =
+    Math.random()
+      .toString(36)
+      .slice(2, 10);
+
+  return (
+    `stocktaking-movement-${Date.now()}-${index}-${randomText}`
   );
 }

@@ -686,3 +686,76 @@ async function deleteStocktakingSession(
     };
   });
 }
+
+async function completeStocktakingSession(
+  stocktaking,
+  updatedProducts,
+  movements
+) {
+  const database = await openDatabase();
+
+  return new Promise(function (
+    resolve,
+    reject
+  ) {
+    const transaction =
+      database.transaction(
+        [
+          PRODUCT_STORE_NAME,
+          MOVEMENT_STORE_NAME,
+          STOCKTAKING_STORE_NAME
+        ],
+        "readwrite"
+      );
+
+    const productStore =
+      transaction.objectStore(
+        PRODUCT_STORE_NAME
+      );
+
+    const movementStore =
+      transaction.objectStore(
+        MOVEMENT_STORE_NAME
+      );
+
+    const stocktakingStore =
+      transaction.objectStore(
+        STOCKTAKING_STORE_NAME
+      );
+
+    updatedProducts.forEach(
+      function (product) {
+        productStore.put(product);
+      }
+    );
+
+    movements.forEach(
+      function (movement) {
+        movementStore.add(movement);
+      }
+    );
+
+    stocktakingStore.put(
+      stocktaking
+    );
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve();
+    };
+
+    transaction.onerror = function () {
+      const error = transaction.error;
+
+      database.close();
+      reject(error);
+    };
+
+    transaction.onabort = function () {
+      const error = transaction.error;
+
+      database.close();
+      reject(error);
+    };
+  });
+}

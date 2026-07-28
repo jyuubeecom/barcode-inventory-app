@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>バーコード在庫・棚卸管理</title>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <header>
+    <h1>バーコード在庫・棚卸管理</h1>
+  </header>
+
+  <main>
+    <!-- ホーム画面 -->
+    <section id="home">
+      <h2>ホーム画面</h2>
+
+      <p>
+        登録商品数：
+        <span id="product-count">0</span>件
+      </p>
+
+      <p>
+        総在庫数：
+        <span id="total-stock">0</span>個
+      </p>
+
+      <p id="out-of-stock-summary">
+        在庫切れ：
+        <span id="out-of-stock-count">0</span>件
+      </p>
+
+      <p id="low-stock-summary">
+        要補充：
+        <span id="low-stock-count">0</span>件
+      </p>
+
+      <div>
+        <button
+          id="show-barcode-lookup-button"
+          type="button"
+        >
+          JANコードを入力して探す
+        </button>
+
+        <button
+          id="show-register-button"
+          type="button"
+        >
+          商品を登録する
+        </button>
+
+        <button
+          id="show-list-button"
+          type="button"
+        >
+          商品一覧を見る
+        </button>
+
+        <button
+          id="show-history-button"
+          type="button"
+        >
+          入出庫履歴を見る
+        </button>
+      </div>
+    </section>
+
+    <!-- JANコード手入力検索画面 -->
+    <section
+      id="barcode-lookup"
+      hidden
+    >
+      <h2>JANコード手入力検索</h2>
+
+      <p>
+        商品のJANコードを入力してください。
+      </p>
+
+      <p>
+        バーコードが汚れている場合や、
+        カメラで読み取れない場合に使用します。
+      </p>
+
+      <form id="barcode-lookup-form">
+        <div>
+          <label for="barcode-lookup-code">
+            JANコード（必須）
+          </label>
+
+          <input
+            id="barcode-lookup-code"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            placeholder="例：4901234567890"
+            required
+          >
+        </div>
+
+        <p id="barcode-lookup-message">
+          登録済みの商品を検索します。
+        </p>
+
+        <button type="submit">
+          商品を検索する
+        </button>
+
+        <button
+          id="cancel-barcode-lookup-button"
+          type="button"
+        >
+          ホームへ戻る
+        </button>
+      </form>
+    </section>
+
+    <!-- 商品登録画面 -->
+    <section
+      id="product-register"
+      hidden
+    >
+      <h2>商品登録画面</h2>
+
+      <p>
+        「必須」と書かれている項目は、
+        必ず入力してください。
+      </p>
+
+      <form id="product-form">
+        <div>
+          <label for="internal-code">
+            社内コード（必須）
+          </label>
+
+          <input
+            id="internal-code"
+            name="internalCode"
+            type="text"
+            placeholder="例：A-001"
+            required
+          >
+        </div>
+
+        <div>
+          <label for="product-code">
+            商品コード（必須）
+          </label>
+
+          <input
+            id="product-code"
+            name="productCode"
+            type="text"
+            placeholder="例：SH-1001"
+            required
+          >
+        </div>
+
+        <div>
+          <label for="product-name">
+            商品名（必須）
+          </label>
+
+          <input
+            id="product-name"
+            name="productName"
+            type="text"
+            placeholder="例：テスト商品A"
+            required
+          >
+        </div>
+
+        <div>
+          <label for="jan-code">
+            JANコード（任意）
+          </label>
+
+          <input
+            id="jan-code"
+            name="janCode"
+            type="text"
+            inputmode="numeric"
+            placeholder="例：4901234567890"
+          >
+        </div>
+
+        <div>
+          <label for="stock">
+            初期在庫数（必須）
+          </label>
+
+          <input
+            id="stock"
+            name="stock"
+            type="number"
+            min="0"
+            step="1"
+            value="0"
+            required
+          >
+        </div>
+
+        <div>
+          <label for="min-stock">
+            最低在庫数
+          </label>
+
+          <input
+            id="min-stock"
+            name="minStock"
+            type="number"
+            min="0"
+            step="1"
+            value="0"
+            placeholder="例：5"
+          >
+
+          <small>
+            この数量以下になると「要補充」と表示します。
+          </small>
+        </div>
+
+        <div>
+          <label for="category">
+            カテゴリー
+          </label>
+
+          <input
+            id="category"
+            name="category"
+            type="text"
+            placeholder="例：事務用品"
+          >
+        </div>
+
+        <div>
+          <label for="location">
+            保管場所
+          </label>
+
+          <input
+            id="location"
+            name="location"
+            type="text"
+            placeholder="例：倉庫A"
+          >
+        </div>
+
+        <div>
+          <label for="supplier">
+            仕入先（必須）
+          </label>
+
+          <input
+            id="supplier"
+            name="supplier"
+            type="text"
+            placeholder="例：サンプル商事"
+            required
+          >
+        </div>
+
+        <button type="submit">
+          商品を登録する
+        </button>
+
+        <button
+          id="back-home-from-register"
+          type="button"
+        >
+          ホームへ戻る
+        </button>
+      </form>
+    </section>
+
+    <!-- 商品一覧画面 -->
+    <section
+      id="product-list"
+      hidden
+    >
+      <h2>商品一覧画面</h2>
+
+      <div>
+        <label for="product-search">
+          商品を検索
+        </label>
+
+        <input
+          id="product-search"
+          type="search"
+          placeholder="商品名・社内コード・JANコードなど"
+        >
+
+        <button
+          id="clear-search-button"
+          type="button"
+        >
+          検索を解除
+        </button>
+
+        <p id="search-result-message">
+          登録商品をすべて表示しています。
+        </p>
+      </div>
+
+      <button
+        id="back-home-from-list"
+        type="button"
+      >
+        ホームへ戻る
+      </button>
+
+      <table>
+        <thead>
+          <tr>
+            <th>社内コード</th>
+            <th>商品コード</th>
+            <th>商品名</th>
+            <th>JANコード</th>
+            <th>在庫数</th>
+            <th>最低在庫数</th>
+            <th>在庫状態</th>
+            <th>カテゴリー</th>
+            <th>保管場所</th>
+            <th>仕入先</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+
+        <tbody id="product-table-body">
+          <tr>
+            <td colspan="11">
+              登録されている商品はありません。
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 入出庫履歴画面 -->
+    <section
+      id="stock-movement-history"
+      hidden
+    >
+      <h2>入出庫履歴画面</h2>
+
+      <p id="movement-history-count">
+        履歴を読み込んでいます。
+      </p>
+
+      <button
+        id="back-home-from-history"
+        type="button"
+      >
+        ホームへ戻る
+      </button>
+
+      <table>
+        <thead>
+          <tr>
+            <th>日時</th>
+            <th>社内コード</th>
+            <th>商品コード</th>
+            <th>商品名</th>
+            <th>区分</th>
+            <th>数量</th>
+            <th>変更前在庫</th>
+            <th>変更後在庫</th>
+            <th>担当者</th>
+            <th>理由</th>
+            <th>メモ</th>
+          </tr>
+        </thead>
+
+        <tbody id="movement-history-body">
+          <tr>
+            <td colspan="11">
+              履歴を読み込んでいます。
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 商品詳細画面 -->
+    <section
+      id="product-detail"
+      hidden
+    >
+      <h2>商品詳細画面</h2>
+
+      <table>
+        <tbody>
+          <tr>
+            <th>社内コード</th>
+            <td id="detail-internal-code"></td>
+          </tr>
+
+          <tr>
+            <th>商品コード</th>
+            <td id="detail-product-code"></td>
+          </tr>
+
+          <tr>
+            <th>商品名</th>
+            <td id="detail-product-name"></td>
+          </tr>
+
+          <tr>
+            <th>JANコード</th>
+            <td id="detail-jan-code"></td>
+          </tr>
+
+          <tr>
+            <th>現在庫数</th>
+            <td id="detail-stock"></td>
+          </tr>
+
+          <tr>
+            <th>最低在庫数</th>
+            <td id="detail-min-stock"></td>
+          </tr>
+
+          <tr>
+            <th>在庫状態</th>
+            <td id="detail-stock-status"></td>
+          </tr>
+
+          <tr>
+            <th>カテゴリー</th>
+            <td id="detail-category"></td>
+          </tr>
+
+          <tr>
+            <th>保管場所</th>
+            <td id="detail-location"></td>
+          </tr>
+
+          <tr>
+            <th>仕入先</th>
+            <td id="detail-supplier"></td>
+          </tr>
+
+          <tr>
+            <th>最終更新日時</th>
+            <td id="detail-updated-at"></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <button
+        id="stock-in-from-detail-button"
+        type="button"
+      >
+        入庫する
+      </button>
+
+      <button
+        id="stock-out-from-detail-button"
+        type="button"
+      >
+        出庫する
+      </button>
+
+      <button
+        id="stock-adjust-from-detail-button"
+        type="button"
+      >
+        数量調整する
+      </button>
+
+      <button
+        id="edit-from-detail-button"
+        type="button"
+      >
+        商品情報を編集する
+      </button>
+
+      <button
+        id="delete-from-detail-button"
+        type="button"
+      >
+        商品を削除する
+      </button>
+
+      <button
+        id="back-list-from-detail"
+        type="button"
+      >
+        商品一覧へ戻る
+      </button>
+    </section>
+
+    <!-- 入庫画面 -->
+    <section
+      id="stock-in"
+      hidden
+    >
+      <h2>入庫画面</h2>
+
+      <p>
+        入庫する数量と担当者を入力してください。
+      </p>
+
+      <form id="stock-in-form">
+        <div>
+          <label for="stock-in-internal-code">
+            社内コード
+          </label>
+
+          <input
+            id="stock-in-internal-code"
+            type="text"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="stock-in-product-name">
+            商品名
+          </label>
+
+          <input
+            id="stock-in-product-name"
+            type="text"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="stock-in-current-stock">
+            現在庫数
+          </label>
+
+          <input
+            id="stock-in-current-stock"
+            type="number"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="stock-in-quantity">
+            入庫数量（必須）
+          </label>
+
+          <input
+            id="stock-in-quantity"
+            type="number"
+            min="1"
+            step="1"
+            value="1"
+            required
+          >
+        </div>
+
+        <div>
+          <label for="stock-in-after-stock">
+            入庫後の在庫数
+          </label>
+
+          <input
+            id="stock-in-after-stock"
+            type="number"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="stock-in-person">
+            担当者（必須）
+          </label>
+
+          <input
+            id="stock-in-person"
+            type="text"
+            placeholder="例：テスト担当者"
+            required
+          >
+        </div>
+
+        <div>
+          <label for="stock-in-reason">
+            理由（必須）
+          </label>
+
+          <select
+            id="stock-in-reason"
+            required
+          >
+            <option value="仕入れ">仕入れ</option>
+            <option value="返品">返品</option>
+            <option value="棚卸調整">棚卸調整</option>
+            <option value="移動">移動</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="stock-in-memo">
+            メモ
+          </label>
+
+          <textarea
+            id="stock-in-memo"
+            rows="4"
+            placeholder="必要な内容を入力してください"
+          ></textarea>
+        </div>
+
+        <button type="submit">
+          入庫を確定する
+        </button>
+
+        <button
+          id="cancel-stock-in-button"
+          type="button"
+        >
+          入庫をやめる
+        </button>
+      </form>
+    </section>
+
+    <!-- 出庫画面 -->
+    <section
+      id="stock-out"
+      hidden
+    >
+      <h2>出庫画面</h2>
+
+      <p>
+        出庫する数量と担当者を入力してください。
+      </p>
+
+      <form id="stock-out-form">
+        <div>
+          <label for="stock-out-internal-code">
+            社内コード
+          </label>
+
+          <input
+            id="stock-out-internal-code"
+            type="text"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="stock-out-product-name">
+            商品名
+          </label>
+
+          <input
+            id="stock-out-product-name"
+            type="text"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="stock-out-current-stock">
+            現在庫数
+          </label>
+
+          <input
+            id="stock-out-current-stock"
+            type="number"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="stock-out-quantity">
+            出庫数量（必須）
+          </label>
+
+          <input
+            id="stock-out-quantity"
+            type="number"
+            min="1"
+            step="1"
+            value="1"
+            required
+          >
+        </div>
+
+        <div>
+          <label for="stock-out-after-stock">
+            出庫後の在庫数
+          </label>
+
+          <input
+            id="stock-out-after-stock"
+            type="number"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="stock-out-person">
+            担当者（必須）
+          </label>
+
+          <input
+            id="stock-out-person"
+            type="text"
+            placeholder="例：テスト担当者"
+            required
+          >
+        </div>
+
+        <div>
+          <label for="stock-out-reason">
+            理由（必須）
+          </label>
+
+          <select
+            id="stock-out-reason"
+            required
+          >
+            <option value="販売">販売</option>
+            <option value="出荷">出荷</option>
+            <option value="使用">使用</option>
+            <option value="廃棄">廃棄</option>
+            <option value="移動">移動</option>
+            <option value="棚卸調整">棚卸調整</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="stock-out-memo">
+            メモ
+          </label>
+
+          <textarea
+            id="stock-out-memo"
+            rows="4"
+            placeholder="必要な内容を入力してください"
+          ></textarea>
+        </div>
+
+        <button type="submit">
+          出庫を確定する
+        </button>
+
+        <button
+          id="cancel-stock-out-button"
+          type="button"
+        >
+          出庫をやめる
+        </button>
+      </form>
+    </section>
+
+    <!-- 数量調整画面 -->
+    <section
+      id="stock-adjust"
+      hidden
+    >
+      <h2>数量調整画面</h2>
+
+      <p>
+        実際に確認した正しい在庫数を入力してください。
+      </p>
+
+      <form id="stock-adjust-form">
+        <div>
+          <label for="stock-adjust-internal-code">
+            社内コード
+          </label>
+
+          <input
+            id="stock-adjust-internal-code"
+            type="text"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="stock-adjust-product-name">
+            商品名
+          </label>
+
+          <input
+            id="stock-adjust-product-name"
+            type="text"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="stock-adjust-current-stock">
+            現在庫数
+          </label>
+
+          <input
+            id="stock-adjust-current-stock"
+            type="number"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="stock-adjust-new-stock">
+            調整後の在庫数（必須）
+          </label>
+
+          <input
+            id="stock-adjust-new-stock"
+            type="number"
+            min="0"
+            step="1"
+            required
+          >
+        </div>
+
+        <div>
+          <label for="stock-adjust-difference">
+            差異
+          </label>
+
+          <input
+            id="stock-adjust-difference"
+            type="text"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="stock-adjust-person">
+            担当者（必須）
+          </label>
+
+          <input
+            id="stock-adjust-person"
+            type="text"
+            placeholder="例：テスト担当者"
+            required
+          >
+        </div>
+
+        <div>
+          <label for="stock-adjust-reason">
+            理由（必須）
+          </label>
+
+          <select
+            id="stock-adjust-reason"
+            required
+          >
+            <option value="棚卸調整">
+              棚卸調整
+            </option>
+
+            <option value="入力間違いの修正">
+              入力間違いの修正
+            </option>
+
+            <option value="破損・廃棄">
+              破損・廃棄
+            </option>
+
+            <option value="その他">
+              その他
+            </option>
+          </select>
+        </div>
+
+        <div>
+          <label for="stock-adjust-memo">
+            メモ
+          </label>
+
+          <textarea
+            id="stock-adjust-memo"
+            rows="4"
+            placeholder="調整理由などを入力してください"
+          ></textarea>
+        </div>
+
+        <button type="submit">
+          数量調整を確定する
+        </button>
+
+        <button
+          id="cancel-stock-adjust-button"
+          type="button"
+        >
+          数量調整をやめる
+        </button>
+      </form>
+    </section>
+
+    <!-- 商品編集画面 -->
+    <section
+      id="product-edit"
+      hidden
+    >
+      <h2>商品編集画面</h2>
+
+      <p>
+        社内コードと現在庫数は、
+        この画面では変更できません。
+      </p>
+
+      <form id="edit-product-form">
+        <div>
+          <label for="edit-internal-code">
+            社内コード
+          </label>
+
+          <input
+            id="edit-internal-code"
+            type="text"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="edit-product-code">
+            商品コード（必須）
+          </label>
+
+          <input
+            id="edit-product-code"
+            type="text"
+            required
+          >
+        </div>
+
+        <div>
+          <label for="edit-product-name">
+            商品名（必須）
+          </label>
+
+          <input
+            id="edit-product-name"
+            type="text"
+            required
+          >
+        </div>
+
+        <div>
+          <label for="edit-jan-code">
+            JANコード（任意）
+          </label>
+
+          <input
+            id="edit-jan-code"
+            type="text"
+            inputmode="numeric"
+          >
+        </div>
+
+        <div>
+          <label for="edit-stock">
+            現在庫数
+          </label>
+
+          <input
+            id="edit-stock"
+            type="number"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="edit-min-stock">
+            最低在庫数
+          </label>
+
+          <input
+            id="edit-min-stock"
+            type="number"
+            min="0"
+            step="1"
+            required
+          >
+        </div>
+
+        <div>
+          <label for="edit-category">
+            カテゴリー
+          </label>
+
+          <input
+            id="edit-category"
+            type="text"
+          >
+        </div>
+
+        <div>
+          <label for="edit-location">
+            保管場所
+          </label>
+
+          <input
+            id="edit-location"
+            type="text"
+          >
+        </div>
+
+        <div>
+          <label for="edit-supplier">
+            仕入先（必須）
+          </label>
+
+          <input
+            id="edit-supplier"
+            type="text"
+            required
+          >
+        </div>
+
+        <button type="submit">
+          変更内容を保存する
+        </button>
+
+        <button
+          id="cancel-edit-button"
+          type="button"
+        >
+          編集をやめる
+        </button>
+      </form>
+    </section>
+  </main>
+
+  <script src="storage.js"></script>
+  <script src="app.js"></script>
+  <script src="inventory.js"></script>
+  <script src="scanner.js"></script>
+</body>
+</html>

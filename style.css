@@ -1,0 +1,331 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: #f3f6f9;
+  color: #263238;
+  font-family:
+    "Yu Gothic",
+    "Meiryo",
+    sans-serif;
+  line-height: 1.6;
+}
+
+header {
+  background-color: #1565c0;
+  color: #ffffff;
+  padding: 20px 15px;
+  text-align: center;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 26px;
+}
+
+main {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 15px 40px;
+}
+
+section {
+  margin-bottom: 25px;
+  padding: 24px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow:
+    0 3px 12px rgba(0, 0, 0, 0.08);
+}
+
+h2 {
+  margin-top: 0;
+  padding-bottom: 10px;
+  color: #1565c0;
+  border-bottom: 3px solid #90caf9;
+  font-size: 22px;
+}
+
+#home p {
+  display: inline-block;
+  min-width: 180px;
+  margin: 5px 10px 15px 0;
+  padding: 15px;
+  background-color: #e3f2fd;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+#home #out-of-stock-summary {
+  background-color: #ffebee;
+  color: #b71c1c;
+}
+
+#home #low-stock-summary {
+  background-color: #fff3e0;
+  color: #e65100;
+}
+
+button {
+  min-height: 48px;
+  margin: 5px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  background-color: #1565c0;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(0.9);
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+form {
+  display: grid;
+  gap: 18px;
+}
+
+form div {
+  display: grid;
+  gap: 7px;
+}
+
+label {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+small {
+  color: #546e7a;
+  font-size: 14px;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 2px solid #b0bec5;
+  border-radius: 8px;
+  background-color: #ffffff;
+  font-family: inherit;
+  font-size: 17px;
+}
+
+textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #1565c0;
+  outline: 3px solid #bbdefb;
+}
+
+input[readonly] {
+  background-color: #eceff1;
+  color: #455a64;
+}
+
+form button[type="submit"] {
+  width: 100%;
+  margin: 10px 0 0;
+  background-color: #2e7d32;
+  font-size: 18px;
+}
+
+#stock-in-from-detail-button,
+#stock-in-form button[type="submit"] {
+  background-color: #2e7d32;
+}
+
+#stock-out-from-detail-button,
+#stock-out-form button[type="submit"],
+#delete-from-detail-button {
+  background-color: #c62828;
+}
+
+#stock-adjust-from-detail-button,
+#stock-adjust-form button[type="submit"] {
+  background-color: #ef6c00;
+}
+
+#edit-from-detail-button {
+  background-color: #1565c0;
+}
+
+hr {
+  display: none;
+}
+
+#product-list,
+#stock-movement-history {
+  overflow-x: auto;
+}
+
+#product-list table,
+#stock-movement-history table,
+#product-detail table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #ffffff;
+}
+
+#product-list th,
+#product-list td,
+#stock-movement-history th,
+#stock-movement-history td,
+#product-detail th,
+#product-detail td {
+  padding: 12px 10px;
+  border: 1px solid #cfd8dc;
+  text-align: left;
+  vertical-align: middle;
+}
+
+#product-list th,
+#stock-movement-history th,
+#product-detail th {
+  background-color: #1565c0;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+#product-list table {
+  min-width: 1250px;
+}
+
+#product-list tbody tr:hover {
+  filter: brightness(0.97);
+}
+
+#product-list tbody tr.stock-low-row {
+  background-color: #fff3e0;
+}
+
+#product-list tbody tr.stock-out-row {
+  background-color: #ffebee;
+}
+
+.status-badge {
+  display: inline-block;
+  min-width: 76px;
+  padding: 5px 9px;
+  border-radius: 20px;
+  text-align: center;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.status-normal {
+  background-color: #e8f5e9;
+  color: #1b5e20;
+}
+
+.status-low {
+  background-color: #ffe0b2;
+  color: #e65100;
+}
+
+.status-out {
+  background-color: #ffcdd2;
+  color: #b71c1c;
+}
+
+.detail-status-normal {
+  color: #1b5e20;
+  font-weight: bold;
+}
+
+.detail-status-low {
+  color: #e65100;
+  font-weight: bold;
+}
+
+.detail-status-out {
+  color: #b71c1c;
+  font-weight: bold;
+}
+
+#stock-movement-history table {
+  min-width: 1250px;
+}
+
+#stock-movement-history tbody tr.movement-in {
+  background-color: #e8f5e9;
+}
+
+#stock-movement-history tbody tr.movement-out {
+  background-color: #ffebee;
+}
+
+#stock-movement-history tbody tr.movement-other {
+  background-color: #fff8e1;
+}
+
+#movement-history-count,
+#search-result-message {
+  padding: 10px 12px;
+  background-color: #e3f2fd;
+  border-radius: 8px;
+  font-weight: bold;
+}
+
+@media (max-width: 700px) {
+  header {
+    padding: 16px 10px;
+  }
+
+  header h1 {
+    font-size: 21px;
+  }
+
+  main {
+    padding: 12px 10px 30px;
+  }
+
+  section {
+    padding: 18px 14px;
+    border-radius: 10px;
+  }
+
+  h2 {
+    font-size: 20px;
+  }
+
+  #home p {
+    display: block;
+    width: 100%;
+    margin-right: 0;
+  }
+
+  #home button {
+    width: 100%;
+    margin: 6px 0;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  #product-detail button {
+    width: 100%;
+    margin: 6px 0;
+  }
+}

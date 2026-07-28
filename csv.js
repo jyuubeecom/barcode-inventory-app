@@ -2,6 +2,7 @@
 
 let exportProductsCsvButton = null;
 let exportMovementsCsvButton = null;
+let exportStocktakingCsvButton = null;
 
 document.addEventListener(
   "DOMContentLoaded",
@@ -11,6 +12,7 @@ document.addEventListener(
 function initializeCsvFunctions() {
   createProductsCsvButton();
   createMovementsCsvButton();
+  createStocktakingCsvButton();
   createCsvButtonStyle();
 }
 
@@ -127,6 +129,61 @@ function createMovementsCsvButton() {
   );
 }
 
+function createStocktakingCsvButton() {
+  const existingButton =
+    document.querySelector(
+      "#export-stocktaking-csv-button"
+    );
+
+  if (existingButton) {
+    exportStocktakingCsvButton =
+      existingButton;
+
+    exportStocktakingCsvButton.addEventListener(
+      "click",
+      exportStocktakingCsv
+    );
+
+    return;
+  }
+
+  const referenceButton =
+    exportMovementsCsvButton ||
+    exportProductsCsvButton ||
+    document.querySelector(
+      "#show-stocktaking-history-button"
+    );
+
+  if (!referenceButton) {
+    console.error(
+      "棚卸結果CSVボタンを追加する場所が見つかりません。"
+    );
+
+    return;
+  }
+
+  exportStocktakingCsvButton =
+    document.createElement("button");
+
+  exportStocktakingCsvButton.id =
+    "export-stocktaking-csv-button";
+
+  exportStocktakingCsvButton.type =
+    "button";
+
+  exportStocktakingCsvButton.textContent =
+    "棚卸結果CSVを出力する";
+
+  exportStocktakingCsvButton.addEventListener(
+    "click",
+    exportStocktakingCsv
+  );
+
+  referenceButton.parentElement.appendChild(
+    exportStocktakingCsvButton
+  );
+}
+
 function createCsvButtonStyle() {
   const existingStyle =
     document.querySelector(
@@ -152,8 +209,13 @@ function createCsvButtonStyle() {
       background-color: #5d4037;
     }
 
+    #export-stocktaking-csv-button {
+      background-color: #6a1b9a;
+    }
+
     #export-products-csv-button:disabled,
-    #export-movements-csv-button:disabled {
+    #export-movements-csv-button:disabled,
+    #export-stocktaking-csv-button:disabled {
       background-color: #90a4ae;
       cursor: not-allowed;
     }
@@ -481,6 +543,304 @@ async function exportMovementsCsv() {
   }
 }
 
+async function exportStocktakingCsv() {
+  if (!exportStocktakingCsvButton) {
+    return;
+  }
+
+  exportStocktakingCsvButton.disabled =
+    true;
+
+  exportStocktakingCsvButton.textContent =
+    "CSVを作成しています";
+
+  try {
+    const [
+      stocktakingSessions,
+      products
+    ] = await Promise.all([
+      loadAllStocktakingSessionsForCsv(),
+      getAllProducts()
+    ]);
+
+    const completedSessions =
+      stocktakingSessions.filter(
+        function (session) {
+          return (
+            session.status ===
+            "確定済み"
+          );
+        }
+      );
+
+    if (
+      completedSessions.length === 0
+    ) {
+      alert(
+        "CSVへ出力できる確定済みの棚卸がありません。\n\n" +
+        "棚卸を開始し、すべての実在庫を入力して確定してください。"
+      );
+
+      return;
+    }
+
+    completedSessions.sort(
+      function (
+        sessionA,
+        sessionB
+      ) {
+        return (
+          getCsvDateTimeNumber(
+            sessionB.confirmedAt ||
+            sessionB.updatedAt
+          ) -
+          getCsvDateTimeNumber(
+            sessionA.confirmedAt ||
+            sessionA.updatedAt
+          )
+        );
+      }
+    );
+
+    const latestStocktaking =
+      completedSessions[0];
+
+    const stocktakingItems =
+      Array.isArray(
+        latestStocktaking.items
+      )
+        ? [...latestStocktaking.items]
+        : [];
+
+    if (
+      stocktakingItems.length === 0
+    ) {
+      alert(
+        "最新の確定済み棚卸に商品データがありません。"
+      );
+
+      return;
+    }
+
+    stocktakingItems.sort(
+      function (
+        itemA,
+        itemB
+      ) {
+        return String(
+          itemA.internalCode || ""
+        ).localeCompare(
+          String(
+            itemB.internalCode || ""
+          ),
+          "ja"
+        );
+      }
+    );
+
+    const productMap =
+      createProductMap(
+        products
+      );
+
+    const reflectedText =
+      latestStocktaking
+        .reflectedToInventory
+        ? "反映済み"
+        : "未反映";
+
+    const csvRows = [
+      [
+        "棚卸日",
+        "JANコード",
+        "社内コード",
+        "商品コード",
+        "商品名",
+        "登録在庫",
+        "実在庫",
+        "差異",
+        "保管場所",
+        "担当者",
+        "結果",
+        "在庫反映",
+        "メモ"
+      ]
+    ];
+
+    stocktakingItems.forEach(
+      function (item) {
+        const currentProduct =
+          productMap.get(
+            item.internalCode
+          );
+
+        const janCode =
+          item.janCode ||
+          currentProduct?.janCode ||
+          "";
+
+        const registeredStock =
+          getCsvStockNumber(
+            item.registeredStock
+          );
+
+        const actualStock =
+          getCsvStocktakingActualStock(
+            item.actualStock
+          );
+
+        const difference =
+          getCsvStocktakingDifference(
+            registeredStock,
+            actualStock
+          );
+
+        const result =
+          getCsvStocktakingResult(
+            difference,
+            actualStock
+          );
+
+        csvRows.push([
+          getCsvText(
+            latestStocktaking.stocktakingDate
+          ),
+
+          formatCodeForExcel(
+            janCode
+          ),
+
+          formatCodeForExcel(
+            item.internalCode
+          ),
+
+          formatCodeForExcel(
+            item.productCode
+          ),
+
+          getCsvText(
+            item.productName
+          ),
+
+          registeredStock,
+
+          actualStock === ""
+            ? ""
+            : actualStock,
+
+          difference === null
+            ? ""
+            : difference,
+
+          getCsvText(
+            item.location
+          ),
+
+          getCsvText(
+            latestStocktaking.person
+          ),
+
+          result,
+
+          reflectedText,
+
+          getCsvText(
+            item.memo
+          )
+        ]);
+      }
+    );
+
+    const csvText =
+      createCsvText(
+        csvRows
+      );
+
+    const fileName =
+      `棚卸結果_${getCsvDateText()}.csv`;
+
+    downloadCsvFile(
+      csvText,
+      fileName
+    );
+
+    alert(
+      `${stocktakingItems.length}件の棚卸結果をCSVへ出力しました。\n\n` +
+      `棚卸日：${latestStocktaking.stocktakingDate}\n` +
+      `担当者：${latestStocktaking.person}\n` +
+      `ファイル名：${fileName}`
+    );
+  } catch (error) {
+    console.error(error);
+
+    alert(
+      "棚卸結果CSVを作成できませんでした。\n\n" +
+      "棚卸履歴とブラウザーの設定を確認してください。"
+    );
+  } finally {
+    exportStocktakingCsvButton.disabled =
+      false;
+
+    exportStocktakingCsvButton.textContent =
+      "棚卸結果CSVを出力する";
+  }
+}
+
+async function loadAllStocktakingSessionsForCsv() {
+  const database =
+    await openDatabase();
+
+  return new Promise(
+    function (
+      resolve,
+      reject
+    ) {
+      const transaction =
+        database.transaction(
+          "stocktakings",
+          "readonly"
+        );
+
+      const stocktakingStore =
+        transaction.objectStore(
+          "stocktakings"
+        );
+
+      const request =
+        stocktakingStore.getAll();
+
+      let stocktakingSessions = [];
+
+      request.onsuccess =
+        function () {
+          stocktakingSessions =
+            request.result || [];
+        };
+
+      transaction.oncomplete =
+        function () {
+          database.close();
+
+          resolve(
+            stocktakingSessions
+          );
+        };
+
+      transaction.onerror =
+        function () {
+          const error =
+            transaction.error;
+
+          database.close();
+
+          reject(
+            error
+          );
+        };
+    }
+  );
+}
+
 function createProductMap(products) {
   const productMap =
     new Map();
@@ -584,6 +944,66 @@ function getCsvStockNumber(value) {
   }
 
   return Math.floor(number);
+}
+
+function getCsvStocktakingActualStock(
+  value
+) {
+  if (
+    value === "" ||
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
+
+  const number =
+    Number(value);
+
+  if (
+    !Number.isInteger(number) ||
+    number < 0
+  ) {
+    return "";
+  }
+
+  return number;
+}
+
+function getCsvStocktakingDifference(
+  registeredStock,
+  actualStock
+) {
+  if (actualStock === "") {
+    return null;
+  }
+
+  return (
+    actualStock -
+    registeredStock
+  );
+}
+
+function getCsvStocktakingResult(
+  difference,
+  actualStock
+) {
+  if (
+    actualStock === "" ||
+    difference === null
+  ) {
+    return "未確認";
+  }
+
+  if (difference === 0) {
+    return "差異なし";
+  }
+
+  if (difference < 0) {
+    return "在庫不足";
+  }
+
+  return "在庫過剰";
 }
 
 function getCsvMinimumStock(product) {

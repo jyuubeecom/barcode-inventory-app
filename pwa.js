@@ -1,5 +1,7 @@
 "use strict";
 
+let deferredInstallPrompt = null;
+
 document.addEventListener(
   "DOMContentLoaded",
   initializePwa
@@ -8,6 +10,9 @@ document.addEventListener(
 function initializePwa() {
   registerServiceWorker();
   showNetworkStatus();
+  createPwaInstallButton();
+  watchPwaInstallEvents();
+  updatePwaInstallButton();
 }
 
 async function registerServiceWorker() {
@@ -108,6 +113,18 @@ function createNetworkStatusArea() {
     statusArea
   );
 
+  createPwaStyle();
+}
+
+function createPwaStyle() {
+  if (
+    document.querySelector(
+      "#pwa-status-style"
+    )
+  ) {
+    return;
+  }
+
   const style =
     document.createElement("style");
 
@@ -134,6 +151,56 @@ function createNetworkStatusArea() {
       display: block;
       background-color: #ef6c00;
       color: #ffffff;
+    }
+
+    #pwa-install-button {
+      background-color: #6a1b9a;
+    }
+
+    #pwa-install-button[hidden] {
+      display: none;
+    }
+
+    .pwa-install-dialog {
+      position: fixed;
+      inset: 0;
+      z-index: 12000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background-color: rgba(0, 0, 0, 0.55);
+      box-sizing: border-box;
+    }
+
+    .pwa-install-dialog[hidden] {
+      display: none;
+    }
+
+    .pwa-install-dialog-content {
+      width: min(100%, 520px);
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 22px;
+      border-radius: 14px;
+      background-color: #ffffff;
+      color: #263238;
+      box-sizing: border-box;
+    }
+
+    .pwa-install-dialog-content h2 {
+      margin-top: 0;
+    }
+
+    .pwa-install-dialog-content ol {
+      padding-left: 24px;
+      line-height: 1.8;
+    }
+
+    .pwa-install-dialog-content button {
+      width: 100%;
+      margin-top: 12px;
+      background-color: #546e7a;
     }
 
     .pwa-update-notice {
@@ -188,6 +255,431 @@ function updateNetworkStatus() {
     statusArea.textContent =
       "オフラインで使用しています";
   }
+}
+
+function createPwaInstallButton() {
+  if (
+    document.querySelector(
+      "#pwa-install-button"
+    )
+  ) {
+    return;
+  }
+
+  const homeScreen =
+    findPwaHomeScreen();
+
+  if (!homeScreen) {
+    console.error(
+      "インストールボタンを追加するホーム画面が見つかりません。"
+    );
+
+    return;
+  }
+
+  const button =
+    document.createElement("button");
+
+  button.id =
+    "pwa-install-button";
+
+  button.type =
+    "button";
+
+  button.textContent =
+    "アプリをインストールする";
+
+  button.addEventListener(
+    "click",
+    handlePwaInstallButton
+  );
+
+  homeScreen.appendChild(
+    button
+  );
+
+  createPwaInstallDialog();
+}
+
+function findPwaHomeScreen() {
+  const knownSelectors = [
+    "#home-screen",
+    "#home",
+    '[data-screen="home"]'
+  ];
+
+  for (
+    const selector of knownSelectors
+  ) {
+    const screen =
+      document.querySelector(
+        selector
+      );
+
+    if (screen) {
+      return screen;
+    }
+  }
+
+  const sections =
+    Array.from(
+      document.querySelectorAll(
+        "main > section"
+      )
+    );
+
+  const homeSection =
+    sections.find(
+      function (section) {
+        const text =
+          section.textContent || "";
+
+        return (
+          text.includes(
+            "登録商品数"
+          ) ||
+          text.includes(
+            "総在庫数"
+          )
+        );
+      }
+    );
+
+  return (
+    homeSection ||
+    sections[0] ||
+    document.querySelector("main")
+  );
+}
+
+function createPwaInstallDialog() {
+  if (
+    document.querySelector(
+      "#pwa-install-dialog"
+    )
+  ) {
+    return;
+  }
+
+  const dialog =
+    document.createElement("div");
+
+  dialog.id =
+    "pwa-install-dialog";
+
+  dialog.className =
+    "pwa-install-dialog";
+
+  dialog.hidden =
+    true;
+
+  dialog.setAttribute(
+    "role",
+    "dialog"
+  );
+
+  dialog.setAttribute(
+    "aria-modal",
+    "true"
+  );
+
+  dialog.setAttribute(
+    "aria-labelledby",
+    "pwa-install-dialog-title"
+  );
+
+  dialog.innerHTML = `
+    <div class="pwa-install-dialog-content">
+      <h2 id="pwa-install-dialog-title">
+        ホーム画面へ追加する
+      </h2>
+
+      <div id="pwa-install-dialog-body"></div>
+
+      <button
+        id="close-pwa-install-dialog"
+        type="button"
+      >
+        閉じる
+      </button>
+    </div>
+  `;
+
+  document.body.appendChild(
+    dialog
+  );
+
+  document
+    .querySelector(
+      "#close-pwa-install-dialog"
+    )
+    .addEventListener(
+      "click",
+      closePwaInstallDialog
+    );
+
+  dialog.addEventListener(
+    "click",
+    function (event) {
+      if (
+        event.target === dialog
+      ) {
+        closePwaInstallDialog();
+      }
+    }
+  );
+}
+
+function watchPwaInstallEvents() {
+  window.addEventListener(
+    "beforeinstallprompt",
+    function (event) {
+      event.preventDefault();
+
+      deferredInstallPrompt =
+        event;
+
+      updatePwaInstallButton();
+    }
+  );
+
+  window.addEventListener(
+    "appinstalled",
+    function () {
+      deferredInstallPrompt =
+        null;
+
+      updatePwaInstallButton();
+
+      alert(
+        "アプリをインストールしました。ホーム画面から起動できます。"
+      );
+    }
+  );
+
+  const displayModeMedia =
+    window.matchMedia(
+      "(display-mode: standalone)"
+    );
+
+  if (
+    typeof displayModeMedia.addEventListener ===
+      "function"
+  ) {
+    displayModeMedia.addEventListener(
+      "change",
+      updatePwaInstallButton
+    );
+  } else if (
+    typeof displayModeMedia.addListener ===
+      "function"
+  ) {
+    displayModeMedia.addListener(
+      updatePwaInstallButton
+    );
+  }
+}
+
+function updatePwaInstallButton() {
+  const button =
+    document.querySelector(
+      "#pwa-install-button"
+    );
+
+  if (!button) {
+    return;
+  }
+
+  if (isPwaInstalled()) {
+    button.hidden =
+      true;
+
+    return;
+  }
+
+  button.hidden =
+    false;
+
+  if (
+    deferredInstallPrompt
+  ) {
+    button.textContent =
+      "アプリをインストールする";
+  } else if (
+    isIosDevice()
+  ) {
+    button.textContent =
+      "iPhoneのホーム画面に追加する";
+  } else {
+    button.textContent =
+      "アプリの追加方法を確認する";
+  }
+}
+
+async function handlePwaInstallButton() {
+  if (isPwaInstalled()) {
+    alert(
+      "このアプリはすでにインストールされています。"
+    );
+
+    return;
+  }
+
+  if (
+    deferredInstallPrompt
+  ) {
+    try {
+      deferredInstallPrompt.prompt();
+
+      const choice =
+        await deferredInstallPrompt.userChoice;
+
+      if (
+        choice.outcome ===
+        "accepted"
+      ) {
+        console.log(
+          "アプリのインストールが選択されました。"
+        );
+      } else {
+        console.log(
+          "アプリのインストールがキャンセルされました。"
+        );
+      }
+    } catch (error) {
+      console.error(
+        "インストール画面を開けませんでした。",
+        error
+      );
+    } finally {
+      deferredInstallPrompt =
+        null;
+
+      updatePwaInstallButton();
+    }
+
+    return;
+  }
+
+  showPwaInstallInstructions();
+}
+
+function showPwaInstallInstructions() {
+  const dialog =
+    document.querySelector(
+      "#pwa-install-dialog"
+    );
+
+  const body =
+    document.querySelector(
+      "#pwa-install-dialog-body"
+    );
+
+  if (
+    !dialog ||
+    !body
+  ) {
+    return;
+  }
+
+  if (isIosDevice()) {
+    body.innerHTML = `
+      <p>
+        Safariで次の操作を行ってください。
+      </p>
+
+      <ol>
+        <li>
+          画面下の共有ボタンを押します。
+        </li>
+        <li>
+          「ホーム画面に追加」を押します。
+        </li>
+        <li>
+          右上の「追加」を押します。
+        </li>
+      </ol>
+
+      <p>
+        Chromeで開いている場合は、先にSafariでこのページを開いてください。
+      </p>
+    `;
+  } else {
+    body.innerHTML = `
+      <p>
+        ブラウザーのメニューから追加できます。
+      </p>
+
+      <ol>
+        <li>
+          ChromeまたはEdgeのメニューを開きます。
+        </li>
+        <li>
+          「アプリをインストール」または
+          「ホーム画面に追加」を選びます。
+        </li>
+        <li>
+          表示された確認画面で追加します。
+        </li>
+      </ol>
+
+      <p>
+        メニューに表示されない場合は、ページを一度更新してから確認してください。
+      </p>
+    `;
+  }
+
+  dialog.hidden =
+    false;
+}
+
+function closePwaInstallDialog() {
+  const dialog =
+    document.querySelector(
+      "#pwa-install-dialog"
+    );
+
+  if (dialog) {
+    dialog.hidden =
+      true;
+  }
+}
+
+function isPwaInstalled() {
+  const standaloneDisplay =
+    window.matchMedia(
+      "(display-mode: standalone)"
+    ).matches;
+
+  const iosStandalone =
+    window.navigator.standalone ===
+    true;
+
+  return (
+    standaloneDisplay ||
+    iosStandalone
+  );
+}
+
+function isIosDevice() {
+  const userAgent =
+    window.navigator.userAgent
+      .toLowerCase();
+
+  const isAppleMobile =
+    /iphone|ipad|ipod/.test(
+      userAgent
+    );
+
+  const isIpadDesktopMode =
+    navigator.platform ===
+      "MacIntel" &&
+    navigator.maxTouchPoints > 1;
+
+  return (
+    isAppleMobile ||
+    isIpadDesktopMode
+  );
 }
 
 function showPwaUpdateNotice() {

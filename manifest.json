@@ -1,0 +1,27 @@
+{
+  "name": "バーコード在庫・棚卸管理",
+  "short_name": "在庫管理",
+  "description": "バーコードを使って商品登録、入出庫、在庫確認、棚卸を行うアプリ",
+  "lang": "ja",
+  "dir": "ltr",
+  "id": "./",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f7fa",
+  "theme_color": "#1565c0",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -5,7 +5,8 @@ let csvImportFileInput = null;
 let csvImportMessage = null;
 let csvImportErrors = null;
 let csvImportPreviewBody = null;
-
+let csvImportRegisterButton = null;
+let csvImportBusy = false;
 let currentCsvImportRows = [];
 
 const COMPANY_MASTER_COLUMNS = {
@@ -17,10 +18,7 @@ const COMPANY_MASTER_COLUMNS = {
   supplier: 42
 };
 
-document.addEventListener(
-  "DOMContentLoaded",
-  initializeCsvImport
-);
+document.addEventListener("DOMContentLoaded", initializeCsvImport);
 
 function initializeCsvImport() {
   createCsvImportButton();
@@ -29,109 +27,61 @@ function initializeCsvImport() {
 }
 
 function createCsvImportButton() {
-  const existingButton =
-    document.querySelector(
-      "#show-csv-import-button"
-    );
-
-  if (existingButton) {
+  if (document.querySelector("#show-csv-import-button")) {
     return;
   }
 
   const referenceButton =
-    document.querySelector(
-      "#export-stocktaking-csv-button"
-    ) ||
-    document.querySelector(
-      "#export-movements-csv-button"
-    ) ||
-    document.querySelector(
-      "#export-products-csv-button"
-    ) ||
-    document.querySelector(
-      "#show-history-button"
-    );
+    document.querySelector("#export-stocktaking-csv-button") ||
+    document.querySelector("#export-movements-csv-button") ||
+    document.querySelector("#export-products-csv-button") ||
+    document.querySelector("#show-history-button");
 
   if (!referenceButton) {
-    console.error(
-      "CSV読込ボタンを追加する場所が見つかりません。"
-    );
-
+    console.error("CSV読込ボタンを追加する場所が見つかりません。");
     return;
   }
 
-  const button =
-    document.createElement("button");
-
-  button.id =
-    "show-csv-import-button";
-
-  button.type =
-    "button";
-
-  button.textContent =
-    "商品一覧CSVを読み込む";
-
-  button.addEventListener(
-    "click",
-    openCsvImportScreen
-  );
-
-  referenceButton.parentElement.appendChild(
-    button
-  );
+  const button = document.createElement("button");
+  button.id = "show-csv-import-button";
+  button.type = "button";
+  button.textContent = "商品一覧CSVを読み込む";
+  button.addEventListener("click", openCsvImportScreen);
+  referenceButton.parentElement.appendChild(button);
 }
 
 function createCsvImportScreen() {
-  const oldScreen =
-    document.querySelector(
-      "#csv-import-screen"
-    );
+  const oldScreen = document.querySelector("#csv-import-screen");
 
   if (oldScreen) {
     oldScreen.remove();
   }
 
-  csvImportScreen =
-    document.createElement("section");
-
-  csvImportScreen.id =
-    "csv-import-screen";
-
-  csvImportScreen.hidden =
-    true;
+  csvImportScreen = document.createElement("section");
+  csvImportScreen.id = "csv-import-screen";
+  csvImportScreen.hidden = true;
 
   csvImportScreen.innerHTML = `
     <h2>社内商品マスタCSV読込</h2>
 
     <p class="csv-import-notice">
-      社内の商品マスタから、次の列を読み取ります。
-      <br>
-      A列：社内コード
-      <br>
-      B列：商品コード
-      <br>
-      C列：商品名
-      <br>
-      F列：JANコード
-      <br>
-      I列：カテゴリー
-      <br>
+      社内の商品マスタから、次の列を読み取ります。<br>
+      A列：社内コード<br>
+      B列：商品コード<br>
+      C列：商品名<br>
+      F列：JANコード<br>
+      I列：カテゴリー<br>
       AQ列：仕入れ先名
     </p>
 
     <p class="csv-import-duplicate-notice">
-      商品コードは空欄でも読み込めます。
-      <br>
-      商品コードとJANコードは、
-      同じ番号が複数あっても読み込めます。
-      <br>
+      商品コードは空欄でも読み込めます。<br>
+      商品コードとJANコードは、同じ番号が複数あっても読み込めます。<br>
       重複できないのは社内コードだけです。
     </p>
 
     <p class="csv-import-default-notice">
-      現在庫数は0個、最低在庫数は0個、
-      保管場所は未設定として読み込みます。
+      現在庫数は0個、最低在庫数は0個、保管場所は未設定として登録します。
     </p>
 
     <div class="csv-import-file-area">
@@ -193,6 +143,14 @@ function createCsvImportScreen() {
     </div>
 
     <button
+      id="register-new-csv-products-button"
+      type="button"
+      disabled
+    >
+      新規商品を登録する
+    </button>
+
+    <button
       id="clear-csv-import-button"
       type="button"
     >
@@ -207,50 +165,42 @@ function createCsvImportScreen() {
     </button>
   `;
 
-  document
-    .querySelector("main")
-    .appendChild(
-      csvImportScreen
-    );
+  document.querySelector("main").appendChild(csvImportScreen);
 
   csvImportFileInput =
-    document.querySelector(
-      "#csv-import-file"
-    );
+    document.querySelector("#csv-import-file");
 
   csvImportMessage =
-    document.querySelector(
-      "#csv-import-message"
-    );
+    document.querySelector("#csv-import-message");
 
   csvImportErrors =
-    document.querySelector(
-      "#csv-import-errors"
-    );
+    document.querySelector("#csv-import-errors");
 
   csvImportPreviewBody =
-    document.querySelector(
-      "#csv-import-preview-body"
-    );
+    document.querySelector("#csv-import-preview-body");
+
+  csvImportRegisterButton =
+    document.querySelector("#register-new-csv-products-button");
 
   csvImportFileInput.addEventListener(
     "change",
     handleCsvFileSelection
   );
 
+  csvImportRegisterButton.addEventListener(
+    "click",
+    registerNewCsvProducts
+  );
+
   document
-    .querySelector(
-      "#clear-csv-import-button"
-    )
+    .querySelector("#clear-csv-import-button")
     .addEventListener(
       "click",
       resetCsvImportScreen
     );
 
   document
-    .querySelector(
-      "#back-home-from-csv-import"
-    )
+    .querySelector("#back-home-from-csv-import")
     .addEventListener(
       "click",
       returnHomeFromCsvImport
@@ -259,19 +209,14 @@ function createCsvImportScreen() {
 
 function createCsvImportStyle() {
   const oldStyle =
-    document.querySelector(
-      "#csv-import-style"
-    );
+    document.querySelector("#csv-import-style");
 
   if (oldStyle) {
     oldStyle.remove();
   }
 
-  const style =
-    document.createElement("style");
-
-  style.id =
-    "csv-import-style";
+  const style = document.createElement("style");
+  style.id = "csv-import-style";
 
   style.textContent = `
     #show-csv-import-button {
@@ -398,6 +343,16 @@ function createCsvImportStyle() {
       color: #b71c1c;
     }
 
+    #register-new-csv-products-button {
+      background-color: #2e7d32;
+    }
+
+    #register-new-csv-products-button:disabled {
+      background-color: #b0bec5;
+      color: #eceff1;
+      cursor: not-allowed;
+    }
+
     #clear-csv-import-button {
       background-color: #ef6c00;
     }
@@ -414,17 +369,12 @@ function createCsvImportStyle() {
     }
   `;
 
-  document.head.appendChild(
-    style
-  );
+  document.head.appendChild(style);
 }
 
 function openCsvImportScreen() {
   hideAllScreensForCsvImport();
-
-  csvImportScreen.hidden =
-    false;
-
+  csvImportScreen.hidden = false;
   resetCsvImportScreen();
 
   window.scrollTo({
@@ -434,19 +384,21 @@ function openCsvImportScreen() {
 }
 
 function resetCsvImportScreen() {
+  if (csvImportBusy) {
+    return;
+  }
+
   currentCsvImportRows = [];
-
-  csvImportFileInput.value =
-    "";
-
+  csvImportFileInput.value = "";
   csvImportMessage.textContent =
     "CSVファイルを選択してください。";
 
-  csvImportErrors.hidden =
-    true;
+  csvImportErrors.hidden = true;
+  csvImportErrors.innerHTML = "";
 
-  csvImportErrors.innerHTML =
-    "";
+  csvImportRegisterButton.disabled = true;
+  csvImportRegisterButton.textContent =
+    "新規商品を登録する";
 
   csvImportPreviewBody.innerHTML = `
     <tr>
@@ -458,6 +410,10 @@ function resetCsvImportScreen() {
 }
 
 async function handleCsvFileSelection() {
+  if (csvImportBusy) {
+    return;
+  }
+
   const file =
     csvImportFileInput.files[0];
 
@@ -466,27 +422,19 @@ async function handleCsvFileSelection() {
     return;
   }
 
-  if (
-    !file.name
-      .toLowerCase()
-      .endsWith(".csv")
-  ) {
-    alert(
-      "CSVファイルを選択してください。"
-    );
-
+  if (!file.name.toLowerCase().endsWith(".csv")) {
+    alert("CSVファイルを選択してください。");
     resetCsvImportScreen();
     return;
   }
 
+  csvImportRegisterButton.disabled = true;
+
   csvImportMessage.textContent =
     `「${file.name}」を確認しています。`;
 
-  csvImportErrors.hidden =
-    true;
-
-  csvImportErrors.innerHTML =
-    "";
+  csvImportErrors.hidden = true;
+  csvImportErrors.innerHTML = "";
 
   try {
     const csvText =
@@ -496,17 +444,14 @@ async function handleCsvFileSelection() {
       parseCsvText(csvText);
 
     const previewResult =
-      await createCompanyMasterPreview(
-        parsedRows
-      );
+      await createCompanyMasterPreview(parsedRows);
 
-    displayCsvPreview(
-      previewResult
-    );
+    displayCsvPreview(previewResult);
   } catch (error) {
     console.error(error);
 
     currentCsvImportRows = [];
+    csvImportRegisterButton.disabled = true;
 
     csvImportMessage.textContent =
       "CSVファイルを読み込めませんでした。";
@@ -531,24 +476,17 @@ function readCsvFile(file) {
     resolve,
     reject
   ) {
-    const reader =
-      new FileReader();
+    const reader = new FileReader();
 
-    reader.onload =
-      function () {
-        resolve(
-          String(
-            reader.result || ""
-          )
-        );
-      };
+    reader.onload = function () {
+      resolve(
+        String(reader.result || "")
+      );
+    };
 
-    reader.onerror =
-      function () {
-        reject(
-          reader.error
-        );
-      };
+    reader.onerror = function () {
+      reject(reader.error);
+    };
 
     reader.readAsText(
       file,
@@ -560,10 +498,7 @@ function readCsvFile(file) {
 function parseCsvText(csvText) {
   const text =
     String(csvText || "")
-      .replace(
-        /^\uFEFF/,
-        ""
-      );
+      .replace(/^\uFEFF/, "");
 
   const rows = [];
 
@@ -650,15 +585,11 @@ function parseCsvText(csvText) {
 }
 
 function hasCsvRowData(row) {
-  return row.some(
-    function (cell) {
-      return (
-        String(
-          cell || ""
-        ).trim() !== ""
-      );
-    }
-  );
+  return row.some(function (cell) {
+    return (
+      String(cell || "").trim() !== ""
+    );
+  });
 }
 
 async function createCompanyMasterPreview(
@@ -686,9 +617,7 @@ async function createCompanyMasterPreview(
       parsedRows[0]
     );
 
-  if (
-    headerErrors.length > 0
-  ) {
+  if (headerErrors.length > 0) {
     result.errors.push(
       ...headerErrors
     );
@@ -736,9 +665,7 @@ async function createCompanyMasterPreview(
         }
       );
 
-  if (
-    previewRows.length === 0
-  ) {
+  if (previewRows.length === 0) {
     result.errors.push(
       "2行目以降に商品データがありません。"
     );
@@ -765,27 +692,27 @@ async function createCompanyMasterPreview(
     previewRows;
 
   result.warnings.push(
-    "商品コードは空欄でも読み込めます。"
+    "既存商品とエラー行は登録されません。"
   );
 
   result.warnings.push(
-    "商品コードは重複していても読み込めます。"
+    "商品コードは空欄でも登録できます。"
   );
 
   result.warnings.push(
-    "JANコードは重複していても読み込めます。"
+    "商品コードとJANコードは重複していても登録できます。"
   );
 
   result.warnings.push(
-    "現在庫数は0個として読み込みます。"
+    "現在庫数は0個として登録します。"
   );
 
   result.warnings.push(
-    "最低在庫数は0個として読み込みます。"
+    "最低在庫数は0個として登録します。"
   );
 
   result.warnings.push(
-    "保管場所は未設定として読み込みます。"
+    "保管場所は未設定として登録します。"
   );
 
   return result;
@@ -892,7 +819,8 @@ function validateCompanyMasterHeaders(
 
       if (!isAccepted) {
         errors.push(
-          `${check.columnName}の項目名を「${check.expectedName}」にしてください。現在の項目名：${actualHeader || "空欄"}`
+          `${check.columnName}の項目名を「${check.expectedName}」にしてください。` +
+          `現在の項目名：${actualHeader || "空欄"}`
         );
       }
     }
@@ -954,7 +882,6 @@ function createCompanyMasterItem(
     stock: 0,
     minStock: 0,
     location: "",
-
     status: "新規",
     messages: []
   };
@@ -976,25 +903,19 @@ function validateCompanyMasterItem(
   internalCodeCounts,
   existingInternalCodes
 ) {
-  if (
-    item.internalCode === ""
-  ) {
+  if (item.internalCode === "") {
     item.messages.push(
       "A列の社内コードが空欄です。"
     );
   }
 
-  if (
-    item.productName === ""
-  ) {
+  if (item.productName === "") {
     item.messages.push(
       "C列の商品名が空欄です。"
     );
   }
 
-  if (
-    item.supplier === ""
-  ) {
+  if (item.supplier === "") {
     item.messages.push(
       "AQ列の仕入れ先名が空欄です。"
     );
@@ -1016,9 +937,7 @@ function validateCompanyMasterItem(
     );
   }
 
-  if (
-    item.messages.length > 0
-  ) {
+  if (item.messages.length > 0) {
     item.status =
       "エラー";
 
@@ -1043,19 +962,15 @@ function validateCompanyMasterItem(
   item.status =
     "新規";
 
-  if (
-    item.productCode === ""
-  ) {
+  if (item.productCode === "") {
     item.messages = [
-      "新しい商品として読み込めます。商品コードは空欄です。"
+      "新しい商品として登録できます。商品コードは空欄です。"
     ];
-
-    return;
+  } else {
+    item.messages = [
+      "新しい商品として登録できます。"
+    ];
   }
-
-  item.messages = [
-    "新しい商品として読み込めます。商品コードとJANコードの重複は許可されています。"
-  ];
 }
 
 function countInternalCodeValues(
@@ -1116,9 +1031,7 @@ function getImportCode(value) {
         );
   }
 
-  if (
-    text.startsWith("'")
-  ) {
+  if (text.startsWith("'")) {
     text =
       text.slice(1);
   }
@@ -1136,10 +1049,7 @@ function normalizeCompareText(value) {
 function normalizeHeaderText(value) {
   return String(value || "")
     .normalize("NFKC")
-    .replace(
-      /\s/g,
-      ""
-    )
+    .replace(/\s/g, "")
     .toLowerCase()
     .trim();
 }
@@ -1151,10 +1061,14 @@ function displayCsvPreview(result) {
   csvImportPreviewBody.innerHTML =
     "";
 
-  if (
-    result.errors.length > 0
-  ) {
+  if (result.errors.length > 0) {
     currentCsvImportRows = [];
+
+    csvImportRegisterButton.disabled =
+      true;
+
+    csvImportRegisterButton.textContent =
+      "新規商品を登録する";
 
     csvImportMessage.textContent =
       "社内商品マスタの形式にエラーがあります。";
@@ -1174,9 +1088,10 @@ function displayCsvPreview(result) {
     return;
   }
 
-  if (
-    result.rows.length === 0
-  ) {
+  if (result.rows.length === 0) {
+    csvImportRegisterButton.disabled =
+      true;
+
     csvImportMessage.textContent =
       "CSVに商品データがありません。";
 
@@ -1229,15 +1144,20 @@ function displayCsvPreview(result) {
     `既存${existingCount}件 / ` +
     `エラー${errorRows.length}件`;
 
-  const messages = [];
+  csvImportRegisterButton.disabled =
+    newCount === 0;
 
-  result.warnings.forEach(
-    function (warning) {
-      messages.push(
-        warning
-      );
-    }
-  );
+  if (newCount > 0) {
+    csvImportRegisterButton.textContent =
+      `新規商品${newCount}件を登録する`;
+  } else {
+    csvImportRegisterButton.textContent =
+      "登録できる新規商品はありません";
+  }
+
+  const messages = [
+    ...result.warnings
+  ];
 
   errorRows.forEach(
     function (item) {
@@ -1250,9 +1170,7 @@ function displayCsvPreview(result) {
     }
   );
 
-  if (
-    messages.length > 0
-  ) {
+  if (messages.length > 0) {
     showCsvImportErrors(
       messages,
       errorRows.length === 0
@@ -1357,9 +1275,7 @@ function appendPreviewCell(
       ? "未入力"
       : String(value);
 
-  row.appendChild(
-    cell
-  );
+  row.appendChild(cell);
 }
 
 function appendStatusCell(
@@ -1385,56 +1301,313 @@ function appendStatusCell(
   badge.textContent =
     status;
 
-  cell.appendChild(
-    badge
-  );
-
-  row.appendChild(
-    cell
-  );
+  cell.appendChild(badge);
+  row.appendChild(cell);
 }
 
 function getPreviewRowClass(status) {
-  if (
-    status === "新規"
-  ) {
-    return (
-      "csv-import-row-new"
-    );
+  if (status === "新規") {
+    return "csv-import-row-new";
   }
 
-  if (
-    status === "既存"
-  ) {
-    return (
-      "csv-import-row-existing"
-    );
+  if (status === "既存") {
+    return "csv-import-row-existing";
   }
 
-  return (
-    "csv-import-row-error"
-  );
+  return "csv-import-row-error";
 }
 
 function getPreviewBadgeClass(status) {
-  if (
-    status === "新規"
-  ) {
-    return (
-      "csv-import-badge-new"
+  if (status === "新規") {
+    return "csv-import-badge-new";
+  }
+
+  if (status === "既存") {
+    return "csv-import-badge-existing";
+  }
+
+  return "csv-import-badge-error";
+}
+
+async function registerNewCsvProducts() {
+  if (csvImportBusy) {
+    return;
+  }
+
+  const newRows =
+    currentCsvImportRows.filter(
+      function (item) {
+        return (
+          item.status ===
+          "新規"
+        );
+      }
+    );
+
+  if (newRows.length === 0) {
+    alert(
+      "登録できる新規商品がありません。"
+    );
+
+    return;
+  }
+
+  const confirmed =
+    window.confirm(
+      `新規商品${newRows.length}件を登録します。\n\n` +
+      "現在庫数は0個で登録されます。\n" +
+      "既存商品とエラー行は登録されません。\n\n" +
+      "登録してよろしいですか？"
+    );
+
+  if (!confirmed) {
+    return;
+  }
+
+  csvImportBusy = true;
+
+  csvImportRegisterButton.disabled =
+    true;
+
+  csvImportFileInput.disabled =
+    true;
+
+  csvImportRegisterButton.textContent =
+    "登録しています...";
+
+  csvImportMessage.textContent =
+    `新規商品${newRows.length}件を登録しています。`;
+
+  let successCount = 0;
+  let skippedCount = 0;
+
+  const failedMessages = [];
+
+  try {
+    const latestProducts =
+      await getAllProducts();
+
+    const latestInternalCodes =
+      new Set(
+        latestProducts.map(
+          function (product) {
+            return normalizeCompareText(
+              product.internalCode
+            );
+          }
+        )
+      );
+
+    for (const item of newRows) {
+      const internalKey =
+        normalizeCompareText(
+          item.internalCode
+        );
+
+      if (
+        latestInternalCodes.has(
+          internalKey
+        )
+      ) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const dateTime =
+        new Date().toISOString();
+
+      const product =
+        createProductFromCsvItem(
+          item,
+          dateTime
+        );
+
+      const movement =
+        createInitialMovementFromCsvItem(
+          item,
+          dateTime
+        );
+
+      try {
+        await saveProductAndMovement(
+          product,
+          movement
+        );
+
+        latestInternalCodes.add(
+          internalKey
+        );
+
+        successCount += 1;
+      } catch (error) {
+        console.error(
+          "CSV商品登録エラー",
+          item.internalCode,
+          error
+        );
+
+        failedMessages.push(
+          `${item.lineNumber}行目「${item.productName}」を登録できませんでした。`
+        );
+      }
+    }
+  } catch (error) {
+    console.error(error);
+
+    failedMessages.push(
+      "商品データベースを確認できませんでした。"
     );
   }
 
+  csvImportBusy = false;
+  csvImportFileInput.disabled = false;
+
+  if (successCount > 0) {
+    let resultMessage =
+      `${successCount}件の商品を登録しました。`;
+
+    if (skippedCount > 0) {
+      resultMessage +=
+        `\n登録直前に既存と確認された${skippedCount}件は登録していません。`;
+    }
+
+    if (failedMessages.length > 0) {
+      resultMessage +=
+        `\n登録できなかった商品：${failedMessages.length}件`;
+    }
+
+    resultMessage +=
+      "\n\n商品一覧を更新します。";
+
+    alert(resultMessage);
+
+    window.location.reload();
+    return;
+  }
+
+  csvImportRegisterButton.disabled =
+    false;
+
+  csvImportRegisterButton.textContent =
+    `新規商品${newRows.length}件を登録する`;
+
+  if (failedMessages.length > 0) {
+    showCsvImportErrors(
+      failedMessages
+    );
+
+    csvImportMessage.textContent =
+      "商品を登録できませんでした。";
+
+    return;
+  }
+
+  alert(
+    "登録対象の商品は、すでに登録されています。"
+  );
+
+  csvImportMessage.textContent =
+    "新しく登録された商品はありません。";
+}
+
+function createProductFromCsvItem(
+  item,
+  dateTime
+) {
+  return {
+    internalCode:
+      item.internalCode,
+
+    productCode:
+      item.productCode,
+
+    productName:
+      item.productName,
+
+    janCode:
+      item.janCode,
+
+    category:
+      item.category,
+
+    stock: 0,
+    minStock: 0,
+    location: "",
+
+    supplier:
+      item.supplier,
+
+    memo:
+      "社内商品マスタCSVから登録",
+
+    createdAt:
+      dateTime,
+
+    updatedAt:
+      dateTime
+  };
+}
+
+function createInitialMovementFromCsvItem(
+  item,
+  dateTime
+) {
+  return {
+    id:
+      createCsvImportId(
+        "movement"
+      ),
+
+    dateTime:
+      dateTime,
+
+    internalCode:
+      item.internalCode,
+
+    productCode:
+      item.productCode,
+
+    janCode:
+      item.janCode,
+
+    productName:
+      item.productName,
+
+    type:
+      "初期登録",
+
+    quantity: 0,
+    beforeStock: 0,
+    afterStock: 0,
+
+    person:
+      "CSV読込",
+
+    staff:
+      "CSV読込",
+
+    reason:
+      "社内商品マスタCSV読込",
+
+    memo:
+      "初期在庫0個で登録"
+  };
+}
+
+function createCsvImportId(prefix) {
   if (
-    status === "既存"
+    window.crypto &&
+    typeof window.crypto.randomUUID ===
+      "function"
   ) {
     return (
-      "csv-import-badge-existing"
+      `${prefix}-${window.crypto.randomUUID()}`
     );
   }
 
   return (
-    "csv-import-badge-error"
+    `${prefix}-${Date.now()}-` +
+    `${Math.random().toString(36).slice(2)}`
   );
 }
 
@@ -1470,7 +1643,7 @@ function showCsvImportErrors(
     <strong>
       ${
         warningsOnly
-          ? "読込時の設定"
+          ? "登録時の設定"
           : "確認が必要な内容"
       }
     </strong>
@@ -1501,29 +1674,18 @@ function showCsvImportErrors(
 
 function escapeHtml(value) {
   return String(value || "")
-    .replace(
-      /&/g,
-      "&amp;"
-    )
-    .replace(
-      /</g,
-      "&lt;"
-    )
-    .replace(
-      />/g,
-      "&gt;"
-    )
-    .replace(
-      /"/g,
-      "&quot;"
-    )
-    .replace(
-      /'/g,
-      "&#039;"
-    );
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function returnHomeFromCsvImport() {
+  if (csvImportBusy) {
+    return;
+  }
+
   csvImportScreen.hidden =
     true;
 

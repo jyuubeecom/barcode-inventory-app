@@ -3,7 +3,7 @@
 const DATABASE_NAME =
   "barcodeInventoryDatabase";
 
-const DATABASE_VERSION = 3;
+const DATABASE_VERSION = 4;
 
 const PRODUCT_STORE_NAME =
   "products";
@@ -19,128 +19,166 @@ function openDatabase() {
     resolve,
     reject
   ) {
-    const request = indexedDB.open(
-      DATABASE_NAME,
-      DATABASE_VERSION
-    );
+    const request =
+      indexedDB.open(
+        DATABASE_NAME,
+        DATABASE_VERSION
+      );
 
-    request.onupgradeneeded = function (
-      event
-    ) {
-      const database =
-        event.target.result;
+    request.onupgradeneeded =
+      function (event) {
+        const database =
+          event.target.result;
 
-      if (
-        !database.objectStoreNames.contains(
-          PRODUCT_STORE_NAME
-        )
-      ) {
-        const productStore =
-          database.createObjectStore(
-            PRODUCT_STORE_NAME,
+        const upgradeTransaction =
+          event.target.transaction;
+
+        if (
+          !database.objectStoreNames.contains(
+            PRODUCT_STORE_NAME
+          )
+        ) {
+          const productStore =
+            database.createObjectStore(
+              PRODUCT_STORE_NAME,
+              {
+                keyPath:
+                  "internalCode"
+              }
+            );
+
+          productStore.createIndex(
+            "productCode",
+            "productCode",
             {
-              keyPath: "internalCode"
+              unique: false
+            }
+          );
+        } else if (
+          event.oldVersion < 4
+        ) {
+          const productStore =
+            upgradeTransaction.objectStore(
+              PRODUCT_STORE_NAME
+            );
+
+          if (
+            productStore.indexNames.contains(
+              "productCode"
+            )
+          ) {
+            productStore.deleteIndex(
+              "productCode"
+            );
+          }
+
+          productStore.createIndex(
+            "productCode",
+            "productCode",
+            {
+              unique: false
+            }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            MOVEMENT_STORE_NAME
+          )
+        ) {
+          const movementStore =
+            database.createObjectStore(
+              MOVEMENT_STORE_NAME,
+              {
+                keyPath: "id"
+              }
+            );
+
+          movementStore.createIndex(
+            "internalCode",
+            "internalCode",
+            {
+              unique: false
             }
           );
 
-        productStore.createIndex(
-          "productCode",
-          "productCode",
-          {
-            unique: true
-          }
-        );
-      }
-
-      if (
-        !database.objectStoreNames.contains(
-          MOVEMENT_STORE_NAME
-        )
-      ) {
-        const movementStore =
-          database.createObjectStore(
-            MOVEMENT_STORE_NAME,
+          movementStore.createIndex(
+            "dateTime",
+            "dateTime",
             {
-              keyPath: "id"
+              unique: false
             }
           );
 
-        movementStore.createIndex(
-          "internalCode",
-          "internalCode",
-          {
-            unique: false
-          }
-        );
-
-        movementStore.createIndex(
-          "dateTime",
-          "dateTime",
-          {
-            unique: false
-          }
-        );
-
-        movementStore.createIndex(
-          "type",
-          "type",
-          {
-            unique: false
-          }
-        );
-      }
-
-      if (
-        !database.objectStoreNames.contains(
-          STOCKTAKING_STORE_NAME
-        )
-      ) {
-        const stocktakingStore =
-          database.createObjectStore(
-            STOCKTAKING_STORE_NAME,
+          movementStore.createIndex(
+            "type",
+            "type",
             {
-              keyPath: "id"
+              unique: false
+            }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            STOCKTAKING_STORE_NAME
+          )
+        ) {
+          const stocktakingStore =
+            database.createObjectStore(
+              STOCKTAKING_STORE_NAME,
+              {
+                keyPath: "id"
+              }
+            );
+
+          stocktakingStore.createIndex(
+            "status",
+            "status",
+            {
+              unique: false
             }
           );
 
-        stocktakingStore.createIndex(
-          "status",
-          "status",
-          {
-            unique: false
-          }
+          stocktakingStore.createIndex(
+            "stocktakingDate",
+            "stocktakingDate",
+            {
+              unique: false
+            }
+          );
+
+          stocktakingStore.createIndex(
+            "startedAt",
+            "startedAt",
+            {
+              unique: false
+            }
+          );
+        }
+      };
+
+    request.onsuccess =
+      function () {
+        resolve(
+          request.result
         );
+      };
 
-        stocktakingStore.createIndex(
-          "stocktakingDate",
-          "stocktakingDate",
-          {
-            unique: false
-          }
+    request.onerror =
+      function () {
+        reject(
+          request.error
         );
-
-        stocktakingStore.createIndex(
-          "startedAt",
-          "startedAt",
-          {
-            unique: false
-          }
-        );
-      }
-    };
-
-    request.onsuccess = function () {
-      resolve(request.result);
-    };
-
-    request.onerror = function () {
-      reject(request.error);
-    };
+      };
   });
 }
 
-async function saveProduct(product) {
-  const database = await openDatabase();
+async function saveProduct(
+  product
+) {
+  const database =
+    await openDatabase();
 
   return new Promise(function (
     resolve,
@@ -157,26 +195,33 @@ async function saveProduct(product) {
         PRODUCT_STORE_NAME
       );
 
-    productStore.add(product);
+    productStore.add(
+      product
+    );
 
-    transaction.oncomplete = function () {
-      database.close();
-      resolve();
-    };
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve();
+      };
 
-    transaction.onerror = function () {
-      const error = transaction.error;
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
 
-    transaction.onabort = function () {
-      const error = transaction.error;
+    transaction.onabort =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
   });
 }
 
@@ -184,7 +229,8 @@ async function saveProductAndMovement(
   product,
   movement
 ) {
-  const database = await openDatabase();
+  const database =
+    await openDatabase();
 
   return new Promise(function (
     resolve,
@@ -209,32 +255,45 @@ async function saveProductAndMovement(
         MOVEMENT_STORE_NAME
       );
 
-    productStore.add(product);
-    movementStore.add(movement);
+    productStore.add(
+      product
+    );
 
-    transaction.oncomplete = function () {
-      database.close();
-      resolve();
-    };
+    movementStore.add(
+      movement
+    );
 
-    transaction.onerror = function () {
-      const error = transaction.error;
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve();
+      };
 
-      database.close();
-      reject(error);
-    };
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
 
-    transaction.onabort = function () {
-      const error = transaction.error;
+        database.close();
+        reject(error);
+      };
 
-      database.close();
-      reject(error);
-    };
+    transaction.onabort =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
   });
 }
 
-async function updateProduct(product) {
-  const database = await openDatabase();
+async function updateProduct(
+  product
+) {
+  const database =
+    await openDatabase();
 
   return new Promise(function (
     resolve,
@@ -251,33 +310,41 @@ async function updateProduct(product) {
         PRODUCT_STORE_NAME
       );
 
-    productStore.put(product);
+    productStore.put(
+      product
+    );
 
-    transaction.oncomplete = function () {
-      database.close();
-      resolve();
-    };
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve();
+      };
 
-    transaction.onerror = function () {
-      const error = transaction.error;
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
 
-    transaction.onabort = function () {
-      const error = transaction.error;
+    transaction.onabort =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
   });
 }
 
 async function deleteProduct(
   internalCode
 ) {
-  const database = await openDatabase();
+  const database =
+    await openDatabase();
 
   return new Promise(function (
     resolve,
@@ -294,31 +361,39 @@ async function deleteProduct(
         PRODUCT_STORE_NAME
       );
 
-    productStore.delete(internalCode);
+    productStore.delete(
+      internalCode
+    );
 
-    transaction.oncomplete = function () {
-      database.close();
-      resolve();
-    };
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve();
+      };
 
-    transaction.onerror = function () {
-      const error = transaction.error;
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
 
-    transaction.onabort = function () {
-      const error = transaction.error;
+    transaction.onabort =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
   });
 }
 
 async function getAllProducts() {
-  const database = await openDatabase();
+  const database =
+    await openDatabase();
 
   return new Promise(function (
     resolve,
@@ -340,27 +415,35 @@ async function getAllProducts() {
 
     let savedProducts = [];
 
-    request.onsuccess = function () {
-      savedProducts =
-        request.result;
-    };
+    request.onsuccess =
+      function () {
+        savedProducts =
+          request.result || [];
+      };
 
-    transaction.oncomplete = function () {
-      database.close();
-      resolve(savedProducts);
-    };
+    transaction.oncomplete =
+      function () {
+        database.close();
 
-    transaction.onerror = function () {
-      const error = transaction.error;
+        resolve(
+          savedProducts
+        );
+      };
 
-      database.close();
-      reject(error);
-    };
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
   });
 }
 
 async function getAllStockMovements() {
-  const database = await openDatabase();
+  const database =
+    await openDatabase();
 
   return new Promise(function (
     resolve,
@@ -382,22 +465,29 @@ async function getAllStockMovements() {
 
     let savedMovements = [];
 
-    request.onsuccess = function () {
-      savedMovements =
-        request.result;
-    };
+    request.onsuccess =
+      function () {
+        savedMovements =
+          request.result || [];
+      };
 
-    transaction.oncomplete = function () {
-      database.close();
-      resolve(savedMovements);
-    };
+    transaction.oncomplete =
+      function () {
+        database.close();
 
-    transaction.onerror = function () {
-      const error = transaction.error;
+        resolve(
+          savedMovements
+        );
+      };
 
-      database.close();
-      reject(error);
-    };
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
   });
 }
 
@@ -405,7 +495,8 @@ async function recordStockMovement(
   updatedProduct,
   movement
 ) {
-  const database = await openDatabase();
+  const database =
+    await openDatabase();
 
   return new Promise(function (
     resolve,
@@ -438,31 +529,37 @@ async function recordStockMovement(
       movement
     );
 
-    transaction.oncomplete = function () {
-      database.close();
-      resolve();
-    };
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve();
+      };
 
-    transaction.onerror = function () {
-      const error = transaction.error;
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
 
-    transaction.onabort = function () {
-      const error = transaction.error;
+    transaction.onabort =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
   });
 }
 
 async function saveStocktakingSession(
   stocktaking
 ) {
-  const database = await openDatabase();
+  const database =
+    await openDatabase();
 
   return new Promise(function (
     resolve,
@@ -483,31 +580,37 @@ async function saveStocktakingSession(
       stocktaking
     );
 
-    transaction.oncomplete = function () {
-      database.close();
-      resolve();
-    };
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve();
+      };
 
-    transaction.onerror = function () {
-      const error = transaction.error;
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
 
-    transaction.onabort = function () {
-      const error = transaction.error;
+    transaction.onabort =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
   });
 }
 
 async function updateStocktakingSession(
   stocktaking
 ) {
-  const database = await openDatabase();
+  const database =
+    await openDatabase();
 
   return new Promise(function (
     resolve,
@@ -528,29 +631,35 @@ async function updateStocktakingSession(
       stocktaking
     );
 
-    transaction.oncomplete = function () {
-      database.close();
-      resolve();
-    };
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve();
+      };
 
-    transaction.onerror = function () {
-      const error = transaction.error;
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
 
-    transaction.onabort = function () {
-      const error = transaction.error;
+    transaction.onabort =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
   });
 }
 
 async function getOpenStocktakingSessions() {
-  const database = await openDatabase();
+  const database =
+    await openDatabase();
 
   return new Promise(function (
     resolve,
@@ -573,33 +682,43 @@ async function getOpenStocktakingSessions() {
       );
 
     const request =
-      statusIndex.getAll("進行中");
+      statusIndex.getAll(
+        "進行中"
+      );
 
     let stocktakings = [];
 
-    request.onsuccess = function () {
-      stocktakings =
-        request.result;
-    };
+    request.onsuccess =
+      function () {
+        stocktakings =
+          request.result || [];
+      };
 
-    transaction.oncomplete = function () {
-      database.close();
-      resolve(stocktakings);
-    };
+    transaction.oncomplete =
+      function () {
+        database.close();
 
-    transaction.onerror = function () {
-      const error = transaction.error;
+        resolve(
+          stocktakings
+        );
+      };
 
-      database.close();
-      reject(error);
-    };
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
   });
 }
 
 async function getStocktakingSession(
   stocktakingId
 ) {
-  const database = await openDatabase();
+  const database =
+    await openDatabase();
 
   return new Promise(function (
     resolve,
@@ -623,29 +742,37 @@ async function getStocktakingSession(
 
     let stocktaking = null;
 
-    request.onsuccess = function () {
-      stocktaking =
-        request.result || null;
-    };
+    request.onsuccess =
+      function () {
+        stocktaking =
+          request.result || null;
+      };
 
-    transaction.oncomplete = function () {
-      database.close();
-      resolve(stocktaking);
-    };
+    transaction.oncomplete =
+      function () {
+        database.close();
 
-    transaction.onerror = function () {
-      const error = transaction.error;
+        resolve(
+          stocktaking
+        );
+      };
 
-      database.close();
-      reject(error);
-    };
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
   });
 }
 
 async function deleteStocktakingSession(
   stocktakingId
 ) {
-  const database = await openDatabase();
+  const database =
+    await openDatabase();
 
   return new Promise(function (
     resolve,
@@ -666,24 +793,29 @@ async function deleteStocktakingSession(
       stocktakingId
     );
 
-    transaction.oncomplete = function () {
-      database.close();
-      resolve();
-    };
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve();
+      };
 
-    transaction.onerror = function () {
-      const error = transaction.error;
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
 
-    transaction.onabort = function () {
-      const error = transaction.error;
+    transaction.onabort =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
   });
 }
 
@@ -692,7 +824,8 @@ async function completeStocktakingSession(
   updatedProducts,
   movements
 ) {
-  const database = await openDatabase();
+  const database =
+    await openDatabase();
 
   return new Promise(function (
     resolve,
@@ -725,13 +858,17 @@ async function completeStocktakingSession(
 
     updatedProducts.forEach(
       function (product) {
-        productStore.put(product);
+        productStore.put(
+          product
+        );
       }
     );
 
     movements.forEach(
       function (movement) {
-        movementStore.add(movement);
+        movementStore.add(
+          movement
+        );
       }
     );
 
@@ -739,23 +876,28 @@ async function completeStocktakingSession(
       stocktaking
     );
 
-    transaction.oncomplete = function () {
-      database.close();
-      resolve();
-    };
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve();
+      };
 
-    transaction.onerror = function () {
-      const error = transaction.error;
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
 
-    transaction.onabort = function () {
-      const error = transaction.error;
+    transaction.onabort =
+      function () {
+        const error =
+          transaction.error;
 
-      database.close();
-      reject(error);
-    };
+        database.close();
+        reject(error);
+      };
   });
 }

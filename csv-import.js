@@ -6,13 +6,16 @@ let csvImportMessage = null;
 let csvImportErrors = null;
 let csvImportPreviewBody = null;
 
-const REQUIRED_CSV_HEADERS = [
-  "社内コード",
-  "商品コード",
-  "商品名",
-  "現在庫数",
-  "仕入先"
-];
+let currentCsvImportRows = [];
+
+const COMPANY_MASTER_COLUMNS = {
+  internalCode: 0,
+  productCode: 1,
+  productName: 2,
+  janCode: 5,
+  category: 8,
+  supplier: 42
+};
 
 document.addEventListener(
   "DOMContentLoaded",
@@ -26,11 +29,12 @@ function initializeCsvImport() {
 }
 
 function createCsvImportButton() {
-  if (
+  const existingButton =
     document.querySelector(
       "#show-csv-import-button"
-    )
-  ) {
+    );
+
+  if (existingButton) {
     return;
   }
 
@@ -98,16 +102,41 @@ function createCsvImportScreen() {
     true;
 
   csvImportScreen.innerHTML = `
-    <h2>商品一覧CSV読込</h2>
+    <h2>社内商品マスタCSV読込</h2>
 
     <p class="csv-import-notice">
-      今回は、CSVの内容をプレビューしてエラーを確認します。
-      この画面では、まだ商品は登録されません。
+      社内の商品マスタから、次の列を読み取ります。
+      <br>
+      A列：社内コード
+      <br>
+      B列：商品コード
+      <br>
+      C列：商品名
+      <br>
+      F列：JANコード
+      <br>
+      I列：カテゴリー
+      <br>
+      AQ列：仕入れ先名
+    </p>
+
+    <p class="csv-import-duplicate-notice">
+      商品コードは空欄でも読み込めます。
+      <br>
+      商品コードとJANコードは、
+      同じ番号が複数あっても読み込めます。
+      <br>
+      重複できないのは社内コードだけです。
+    </p>
+
+    <p class="csv-import-default-notice">
+      現在庫数は0個、最低在庫数は0個、
+      保管場所は未設定として読み込みます。
     </p>
 
     <div class="csv-import-file-area">
       <label for="csv-import-file">
-        商品一覧CSVを選択
+        社内商品マスタCSVを選択
       </label>
 
       <input
@@ -115,6 +144,10 @@ function createCsvImportScreen() {
         type="file"
         accept=".csv,text/csv"
       >
+
+      <small>
+        Excelでは「CSV UTF-8（コンマ区切り）」として保存してください。
+      </small>
     </div>
 
     <p
@@ -134,17 +167,17 @@ function createCsvImportScreen() {
       <table class="csv-import-table">
         <thead>
           <tr>
-            <th>行</th>
+            <th>CSV行</th>
             <th>判定</th>
             <th>社内コード</th>
             <th>商品コード</th>
             <th>商品名</th>
             <th>JANコード</th>
+            <th>カテゴリー</th>
+            <th>仕入れ先名</th>
             <th>現在庫数</th>
             <th>最低在庫数</th>
-            <th>カテゴリー</th>
             <th>保管場所</th>
-            <th>仕入先</th>
             <th>確認内容</th>
           </tr>
         </thead>
@@ -246,11 +279,34 @@ function createCsvImportStyle() {
     }
 
     .csv-import-notice,
+    .csv-import-duplicate-notice,
+    .csv-import-default-notice,
     .csv-import-message {
       padding: 12px;
       border-radius: 8px;
-      background-color: #e3f2fd;
       font-weight: bold;
+    }
+
+    .csv-import-notice {
+      background-color: #e3f2fd;
+      color: #0d47a1;
+      line-height: 1.8;
+    }
+
+    .csv-import-duplicate-notice {
+      background-color: #e8f5e9;
+      color: #1b5e20;
+      line-height: 1.7;
+    }
+
+    .csv-import-default-notice {
+      background-color: #fff8e1;
+      color: #795548;
+    }
+
+    .csv-import-message {
+      background-color: #e8f5e9;
+      color: #1b5e20;
     }
 
     .csv-import-file-area {
@@ -259,6 +315,11 @@ function createCsvImportStyle() {
       border: 2px solid #90caf9;
       border-radius: 10px;
       background-color: #f7fbff;
+    }
+
+    .csv-import-file-area small {
+      display: block;
+      margin-top: 10px;
     }
 
     .csv-import-errors {
@@ -282,7 +343,7 @@ function createCsvImportStyle() {
 
     .csv-import-table {
       width: 100%;
-      min-width: 1500px;
+      min-width: 1550px;
       border-collapse: collapse;
     }
 
@@ -373,6 +434,8 @@ function openCsvImportScreen() {
 }
 
 function resetCsvImportScreen() {
+  currentCsvImportRows = [];
+
   csvImportFileInput.value =
     "";
 
@@ -433,7 +496,7 @@ async function handleCsvFileSelection() {
       parseCsvText(csvText);
 
     const previewResult =
-      await createCsvPreviewResult(
+      await createCompanyMasterPreview(
         parsedRows
       );
 
@@ -443,12 +506,14 @@ async function handleCsvFileSelection() {
   } catch (error) {
     console.error(error);
 
+    currentCsvImportRows = [];
+
     csvImportMessage.textContent =
       "CSVファイルを読み込めませんでした。";
 
     showCsvImportErrors([
-      "CSVの形式が正しいか確認してください。",
-      "ダブルクォーテーションが途中で切れていないか確認してください。"
+      "Excelで「CSV UTF-8（コンマ区切り）」として保存したか確認してください。",
+      "CSVのダブルクォーテーションが途中で切れていないか確認してください。"
     ]);
 
     csvImportPreviewBody.innerHTML = `
@@ -469,19 +534,21 @@ function readCsvFile(file) {
     const reader =
       new FileReader();
 
-    reader.onload = function () {
-      resolve(
-        String(
-          reader.result || ""
-        )
-      );
-    };
+    reader.onload =
+      function () {
+        resolve(
+          String(
+            reader.result || ""
+          )
+        );
+      };
 
-    reader.onerror = function () {
-      reject(
-        reader.error
-      );
-    };
+    reader.onerror =
+      function () {
+        reject(
+          reader.error
+        );
+      };
 
     reader.readAsText(
       file,
@@ -555,15 +622,7 @@ function parseCsvText(csvText) {
 
       row.push(value);
 
-      if (
-        row.some(
-          function (cell) {
-            return (
-              String(cell).trim() !== ""
-            );
-          }
-        )
-      ) {
+      if (hasCsvRowData(row)) {
         rows.push(row);
       }
 
@@ -583,27 +642,32 @@ function parseCsvText(csvText) {
 
   row.push(value);
 
-  if (
-    row.some(
-      function (cell) {
-        return (
-          String(cell).trim() !== ""
-        );
-      }
-    )
-  ) {
+  if (hasCsvRowData(row)) {
     rows.push(row);
   }
 
   return rows;
 }
 
-async function createCsvPreviewResult(
+function hasCsvRowData(row) {
+  return row.some(
+    function (cell) {
+      return (
+        String(
+          cell || ""
+        ).trim() !== ""
+      );
+    }
+  );
+}
+
+async function createCompanyMasterPreview(
   parsedRows
 ) {
   const result = {
     rows: [],
-    errors: []
+    errors: [],
+    warnings: []
   };
 
   if (
@@ -617,24 +681,18 @@ async function createCsvPreviewResult(
     return result;
   }
 
-  const headerMap =
-    createHeaderMap(
+  const headerErrors =
+    validateCompanyMasterHeaders(
       parsedRows[0]
     );
 
-  REQUIRED_CSV_HEADERS.forEach(
-    function (header) {
-      if (!headerMap.has(header)) {
-        result.errors.push(
-          `項目名「${header}」がありません。`
-        );
-      }
-    }
-  );
-
   if (
-    result.errors.length > 0
+    headerErrors.length > 0
   ) {
+    result.errors.push(
+      ...headerErrors
+    );
+
     return result;
   }
 
@@ -644,141 +702,207 @@ async function createCsvPreviewResult(
   const existingInternalCodes =
     new Set();
 
-  const existingProductCodes =
-    new Set();
-
-  const existingJanCodes =
-    new Set();
-
   existingProducts.forEach(
     function (product) {
-      existingInternalCodes.add(
+      const internalCode =
         normalizeCompareText(
           product.internalCode
-        )
-      );
-
-      existingProductCodes.add(
-        normalizeCompareText(
-          product.productCode
-        )
-      );
-
-      const janCode =
-        normalizeCompareText(
-          product.janCode
         );
 
-      if (janCode !== "") {
-        existingJanCodes.add(
-          janCode
+      if (internalCode !== "") {
+        existingInternalCodes.add(
+          internalCode
         );
       }
     }
   );
 
-  const convertedRows =
+  const previewRows =
     parsedRows
       .slice(1)
       .map(
         function (row, index) {
-          return createPreviewItem(
+          return createCompanyMasterItem(
             row,
-            headerMap,
             index + 2
+          );
+        }
+      )
+      .filter(
+        function (item) {
+          return !isEmptyMasterItem(
+            item
           );
         }
       );
 
+  if (
+    previewRows.length === 0
+  ) {
+    result.errors.push(
+      "2行目以降に商品データがありません。"
+    );
+
+    return result;
+  }
+
   const internalCodeCounts =
-    countPreviewValues(
-      convertedRows,
-      "internalCode"
+    countInternalCodeValues(
+      previewRows
     );
 
-  const productCodeCounts =
-    countPreviewValues(
-      convertedRows,
-      "productCode"
-    );
-
-  const janCodeCounts =
-    countPreviewValues(
-      convertedRows,
-      "janCode",
-      true
-    );
-
-  convertedRows.forEach(
+  previewRows.forEach(
     function (item) {
-      validatePreviewItem(
+      validateCompanyMasterItem(
         item,
         internalCodeCounts,
-        productCodeCounts,
-        janCodeCounts,
-        existingInternalCodes,
-        existingProductCodes,
-        existingJanCodes
+        existingInternalCodes
       );
     }
   );
 
   result.rows =
-    convertedRows;
+    previewRows;
+
+  result.warnings.push(
+    "商品コードは空欄でも読み込めます。"
+  );
+
+  result.warnings.push(
+    "商品コードは重複していても読み込めます。"
+  );
+
+  result.warnings.push(
+    "JANコードは重複していても読み込めます。"
+  );
+
+  result.warnings.push(
+    "現在庫数は0個として読み込みます。"
+  );
+
+  result.warnings.push(
+    "最低在庫数は0個として読み込みます。"
+  );
+
+  result.warnings.push(
+    "保管場所は未設定として読み込みます。"
+  );
 
   return result;
 }
 
-function createHeaderMap(
+function validateCompanyMasterHeaders(
   headerRow
 ) {
-  const headerMap =
-    new Map();
+  const errors = [];
 
-  headerRow.forEach(
-    function (header, index) {
-      const normalizedHeader =
-        String(header || "")
-          .replace(
-            /^\uFEFF/,
-            ""
-          )
-          .normalize("NFKC")
-          .trim();
+  const checks = [
+    {
+      columnName: "A列",
+      index:
+        COMPANY_MASTER_COLUMNS.internalCode,
+      acceptedNames: [
+        "社内コード"
+      ],
+      expectedName:
+        "社内コード"
+    },
+    {
+      columnName: "B列",
+      index:
+        COMPANY_MASTER_COLUMNS.productCode,
+      acceptedNames: [
+        "商品コード"
+      ],
+      expectedName:
+        "商品コード"
+    },
+    {
+      columnName: "C列",
+      index:
+        COMPANY_MASTER_COLUMNS.productName,
+      acceptedNames: [
+        "商品名",
+        "品名"
+      ],
+      expectedName:
+        "商品名"
+    },
+    {
+      columnName: "F列",
+      index:
+        COMPANY_MASTER_COLUMNS.janCode,
+      acceptedNames: [
+        "JANコード",
+        "JAN",
+        "JAN CD",
+        "JANCD"
+      ],
+      expectedName:
+        "JANコード"
+    },
+    {
+      columnName: "I列",
+      index:
+        COMPANY_MASTER_COLUMNS.category,
+      acceptedNames: [
+        "カテゴリー",
+        "カテゴリ"
+      ],
+      expectedName:
+        "カテゴリー"
+    },
+    {
+      columnName: "AQ列",
+      index:
+        COMPANY_MASTER_COLUMNS.supplier,
+      acceptedNames: [
+        "仕入れ先名"
+      ],
+      expectedName:
+        "仕入れ先名"
+    }
+  ];
 
-      if (
-        normalizedHeader !== ""
-      ) {
-        headerMap.set(
-          normalizedHeader,
-          index
+  checks.forEach(
+    function (check) {
+      const actualHeader =
+        getImportText(
+          headerRow[
+            check.index
+          ]
+        );
+
+      const normalizedActual =
+        normalizeHeaderText(
+          actualHeader
+        );
+
+      const isAccepted =
+        check.acceptedNames.some(
+          function (acceptedName) {
+            return (
+              normalizedActual ===
+              normalizeHeaderText(
+                acceptedName
+              )
+            );
+          }
+        );
+
+      if (!isAccepted) {
+        errors.push(
+          `${check.columnName}の項目名を「${check.expectedName}」にしてください。現在の項目名：${actualHeader || "空欄"}`
         );
       }
     }
   );
 
-  if (
-    headerMap.has(
-      "初期在庫数"
-    ) &&
-    !headerMap.has(
-      "現在庫数"
-    )
-  ) {
-    headerMap.set(
-      "現在庫数",
-      headerMap.get(
-        "初期在庫数"
-      )
-    );
-  }
-
-  return headerMap;
+  return errors;
 }
 
-function createPreviewItem(
+function createCompanyMasterItem(
   row,
-  headerMap,
   lineNumber
 ) {
   return {
@@ -787,116 +911,189 @@ function createPreviewItem(
 
     internalCode:
       getImportCode(
-        getCell(
-          row,
-          headerMap,
-          "社内コード"
-        )
+        row[
+          COMPANY_MASTER_COLUMNS.internalCode
+        ]
       ),
 
     productCode:
       getImportCode(
-        getCell(
-          row,
-          headerMap,
-          "商品コード"
-        )
+        row[
+          COMPANY_MASTER_COLUMNS.productCode
+        ]
       ),
 
     productName:
       getImportText(
-        getCell(
-          row,
-          headerMap,
-          "商品名"
-        )
+        row[
+          COMPANY_MASTER_COLUMNS.productName
+        ]
       ),
 
     janCode:
       getImportCode(
-        getCell(
-          row,
-          headerMap,
-          "JANコード"
-        )
-      ),
-
-    stock:
-      getImportText(
-        getCell(
-          row,
-          headerMap,
-          "現在庫数"
-        )
-      ),
-
-    minStock:
-      getImportText(
-        getCell(
-          row,
-          headerMap,
-          "最低在庫数"
-        )
+        row[
+          COMPANY_MASTER_COLUMNS.janCode
+        ]
       ),
 
     category:
       getImportText(
-        getCell(
-          row,
-          headerMap,
-          "カテゴリー"
-        )
-      ),
-
-    location:
-      getImportText(
-        getCell(
-          row,
-          headerMap,
-          "保管場所"
-        )
+        row[
+          COMPANY_MASTER_COLUMNS.category
+        ]
       ),
 
     supplier:
       getImportText(
-        getCell(
-          row,
-          headerMap,
-          "仕入先"
-        )
+        row[
+          COMPANY_MASTER_COLUMNS.supplier
+        ]
       ),
 
-    status:
-      "新規",
+    stock: 0,
+    minStock: 0,
+    location: "",
 
+    status: "新規",
     messages: []
   };
 }
 
-function getCell(
-  row,
-  headerMap,
-  headerName
-) {
-  if (
-    !headerMap.has(
-      headerName
-    )
-  ) {
-    return "";
-  }
-
+function isEmptyMasterItem(item) {
   return (
-    row[
-      headerMap.get(
-        headerName
-      )
-    ] || ""
+    item.internalCode === "" &&
+    item.productCode === "" &&
+    item.productName === "" &&
+    item.janCode === "" &&
+    item.category === "" &&
+    item.supplier === ""
   );
 }
 
+function validateCompanyMasterItem(
+  item,
+  internalCodeCounts,
+  existingInternalCodes
+) {
+  if (
+    item.internalCode === ""
+  ) {
+    item.messages.push(
+      "A列の社内コードが空欄です。"
+    );
+  }
+
+  if (
+    item.productName === ""
+  ) {
+    item.messages.push(
+      "C列の商品名が空欄です。"
+    );
+  }
+
+  if (
+    item.supplier === ""
+  ) {
+    item.messages.push(
+      "AQ列の仕入れ先名が空欄です。"
+    );
+  }
+
+  const internalKey =
+    normalizeCompareText(
+      item.internalCode
+    );
+
+  if (
+    internalKey !== "" &&
+    internalCodeCounts.get(
+      internalKey
+    ) > 1
+  ) {
+    item.messages.push(
+      "CSV内で社内コードが重複しています。"
+    );
+  }
+
+  if (
+    item.messages.length > 0
+  ) {
+    item.status =
+      "エラー";
+
+    return;
+  }
+
+  if (
+    existingInternalCodes.has(
+      internalKey
+    )
+  ) {
+    item.status =
+      "既存";
+
+    item.messages = [
+      "社内コードが登録済みです。"
+    ];
+
+    return;
+  }
+
+  item.status =
+    "新規";
+
+  if (
+    item.productCode === ""
+  ) {
+    item.messages = [
+      "新しい商品として読み込めます。商品コードは空欄です。"
+    ];
+
+    return;
+  }
+
+  item.messages = [
+    "新しい商品として読み込めます。商品コードとJANコードの重複は許可されています。"
+  ];
+}
+
+function countInternalCodeValues(
+  rows
+) {
+  const counts =
+    new Map();
+
+  rows.forEach(
+    function (item) {
+      const key =
+        normalizeCompareText(
+          item.internalCode
+        );
+
+      if (key === "") {
+        return;
+      }
+
+      counts.set(
+        key,
+        (
+          counts.get(key) || 0
+        ) + 1
+      );
+    }
+  );
+
+  return counts;
+}
+
 function getImportText(value) {
-  return String(value || "")
+  return String(
+    value === undefined ||
+    value === null
+      ? ""
+      : value
+  )
     .normalize("NFKC")
     .trim();
 }
@@ -929,270 +1126,38 @@ function getImportCode(value) {
   return text.trim();
 }
 
-function validatePreviewItem(
-  item,
-  internalCodeCounts,
-  productCodeCounts,
-  janCodeCounts,
-  existingInternalCodes,
-  existingProductCodes,
-  existingJanCodes
-) {
-  const requiredValues = [
-    [
-      "社内コード",
-      item.internalCode
-    ],
-    [
-      "商品コード",
-      item.productCode
-    ],
-    [
-      "商品名",
-      item.productName
-    ],
-    [
-      "現在庫数",
-      item.stock
-    ],
-    [
-      "仕入先",
-      item.supplier
-    ]
-  ];
-
-  requiredValues.forEach(
-    function (
-      [label, value]
-    ) {
-      if (value === "") {
-        item.messages.push(
-          `${label}が空欄です。`
-        );
-      }
-    }
-  );
-
-  if (
-    item.stock !== "" &&
-    parseNonNegativeInteger(
-      item.stock
-    ) === null
-  ) {
-    item.messages.push(
-      "現在庫数は0以上の整数で入力してください。"
-    );
-  }
-
-  if (
-    item.minStock !== "" &&
-    parseNonNegativeInteger(
-      item.minStock
-    ) === null
-  ) {
-    item.messages.push(
-      "最低在庫数は0以上の整数で入力してください。"
-    );
-  }
-
-  const internalKey =
-    normalizeCompareText(
-      item.internalCode
-    );
-
-  const productKey =
-    normalizeCompareText(
-      item.productCode
-    );
-
-  const janKey =
-    normalizeCompareText(
-      item.janCode
-    );
-
-  if (
-    internalKey !== "" &&
-    internalCodeCounts.get(
-      internalKey
-    ) > 1
-  ) {
-    item.messages.push(
-      "CSV内で社内コードが重複しています。"
-    );
-  }
-
-  if (
-    productKey !== "" &&
-    productCodeCounts.get(
-      productKey
-    ) > 1
-  ) {
-    item.messages.push(
-      "CSV内で商品コードが重複しています。"
-    );
-  }
-
-  if (
-    janKey !== "" &&
-    janCodeCounts.get(
-      janKey
-    ) > 1
-  ) {
-    item.messages.push(
-      "CSV内でJANコードが重複しています。"
-    );
-  }
-
-  if (
-    item.messages.length > 0
-  ) {
-    item.status =
-      "エラー";
-
-    return;
-  }
-
-  const existingMessages =
-    [];
-
-  if (
-    existingInternalCodes.has(
-      internalKey
-    )
-  ) {
-    existingMessages.push(
-      "社内コードが登録済みです。"
-    );
-  }
-
-  if (
-    existingProductCodes.has(
-      productKey
-    )
-  ) {
-    existingMessages.push(
-      "商品コードが登録済みです。"
-    );
-  }
-
-  if (
-    janKey !== "" &&
-    existingJanCodes.has(
-      janKey
-    )
-  ) {
-    existingMessages.push(
-      "JANコードが登録済みです。"
-    );
-  }
-
-  if (
-    existingMessages.length > 0
-  ) {
-    item.status =
-      "既存";
-
-    item.messages =
-      existingMessages;
-
-    return;
-  }
-
-  item.status =
-    "新規";
-
-  item.messages = [
-    "新しい商品として読込できます。"
-  ];
-}
-
-function parseNonNegativeInteger(
-  value
-) {
-  const text =
-    String(value || "")
-      .normalize("NFKC")
-      .replace(
-        /,/g,
-        ""
-      )
-      .trim();
-
-  if (
-    !/^\d+$/.test(text)
-  ) {
-    return null;
-  }
-
-  const number =
-    Number(text);
-
-  if (
-    !Number.isSafeInteger(
-      number
-    ) ||
-    number < 0
-  ) {
-    return null;
-  }
-
-  return number;
-}
-
-function countPreviewValues(
-  rows,
-  propertyName,
-  ignoreBlank = false
-) {
-  const counts =
-    new Map();
-
-  rows.forEach(
-    function (item) {
-      const key =
-        normalizeCompareText(
-          item[propertyName]
-        );
-
-      if (
-        ignoreBlank &&
-        key === ""
-      ) {
-        return;
-      }
-
-      counts.set(
-        key,
-        (
-          counts.get(key) || 0
-        ) + 1
-      );
-    }
-  );
-
-  return counts;
-}
-
-function normalizeCompareText(
-  value
-) {
+function normalizeCompareText(value) {
   return String(value || "")
     .normalize("NFKC")
     .toLowerCase()
     .trim();
 }
 
-function displayCsvPreview(
-  result
-) {
+function normalizeHeaderText(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(
+      /\s/g,
+      ""
+    )
+    .toLowerCase()
+    .trim();
+}
+
+function displayCsvPreview(result) {
+  currentCsvImportRows =
+    result.rows;
+
   csvImportPreviewBody.innerHTML =
     "";
 
   if (
     result.errors.length > 0
   ) {
+    currentCsvImportRows = [];
+
     csvImportMessage.textContent =
-      "CSVの項目名にエラーがあります。";
+      "社内商品マスタの形式にエラーがあります。";
 
     showCsvImportErrors(
       result.errors
@@ -1201,7 +1166,7 @@ function displayCsvPreview(
     csvImportPreviewBody.innerHTML = `
       <tr>
         <td colspan="12">
-          エラーを修正したCSVを選び直してください。
+          項目名またはCSVの内容を確認してください。
         </td>
       </tr>
     `;
@@ -1264,23 +1229,33 @@ function displayCsvPreview(
     `既存${existingCount}件 / ` +
     `エラー${errorRows.length}件`;
 
-  if (
-    errorRows.length > 0
-  ) {
-    const errorMessages =
-      errorRows.map(
-        function (item) {
-          return (
-            `${item.lineNumber}行目：` +
-            item.messages.join(
-              " / "
-            )
-          );
-        }
-      );
+  const messages = [];
 
+  result.warnings.forEach(
+    function (warning) {
+      messages.push(
+        warning
+      );
+    }
+  );
+
+  errorRows.forEach(
+    function (item) {
+      messages.push(
+        `${item.lineNumber}行目：` +
+        item.messages.join(
+          " / "
+        )
+      );
+    }
+  );
+
+  if (
+    messages.length > 0
+  ) {
     showCsvImportErrors(
-      errorMessages
+      messages,
+      errorRows.length === 0
     );
   } else {
     csvImportErrors.hidden =
@@ -1291,13 +1266,9 @@ function displayCsvPreview(
   }
 }
 
-function createPreviewRow(
-  item
-) {
+function createPreviewRow(item) {
   const row =
-    document.createElement(
-      "tr"
-    );
+    document.createElement("tr");
 
   row.classList.add(
     getPreviewRowClass(
@@ -1337,29 +1308,29 @@ function createPreviewRow(
 
   appendPreviewCell(
     row,
-    item.stock
-  );
-
-  appendPreviewCell(
-    row,
-    item.minStock === ""
-      ? "0"
-      : item.minStock
-  );
-
-  appendPreviewCell(
-    row,
     item.category
   );
 
   appendPreviewCell(
     row,
-    item.location
+    item.supplier
   );
 
   appendPreviewCell(
     row,
-    item.supplier
+    item.stock
+  );
+
+  appendPreviewCell(
+    row,
+    item.minStock
+  );
+
+  appendPreviewCell(
+    row,
+    item.location === ""
+      ? "未設定"
+      : item.location
   );
 
   appendPreviewCell(
@@ -1377,14 +1348,14 @@ function appendPreviewCell(
   value
 ) {
   const cell =
-    document.createElement(
-      "td"
-    );
+    document.createElement("td");
 
   cell.textContent =
-    value === ""
+    value === "" ||
+    value === null ||
+    value === undefined
       ? "未入力"
-      : value;
+      : String(value);
 
   row.appendChild(
     cell
@@ -1396,14 +1367,10 @@ function appendStatusCell(
   status
 ) {
   const cell =
-    document.createElement(
-      "td"
-    );
+    document.createElement("td");
 
   const badge =
-    document.createElement(
-      "span"
-    );
+    document.createElement("span");
 
   badge.classList.add(
     "csv-import-badge"
@@ -1427,16 +1394,18 @@ function appendStatusCell(
   );
 }
 
-function getPreviewRowClass(
-  status
-) {
-  if (status === "新規") {
+function getPreviewRowClass(status) {
+  if (
+    status === "新規"
+  ) {
     return (
       "csv-import-row-new"
     );
   }
 
-  if (status === "既存") {
+  if (
+    status === "既存"
+  ) {
     return (
       "csv-import-row-existing"
     );
@@ -1447,16 +1416,18 @@ function getPreviewRowClass(
   );
 }
 
-function getPreviewBadgeClass(
-  status
-) {
-  if (status === "新規") {
+function getPreviewBadgeClass(status) {
+  if (
+    status === "新規"
+  ) {
     return (
       "csv-import-badge-new"
     );
   }
 
-  if (status === "既存") {
+  if (
+    status === "既存"
+  ) {
     return (
       "csv-import-badge-existing"
     );
@@ -1468,11 +1439,12 @@ function getPreviewBadgeClass(
 }
 
 function showCsvImportErrors(
-  messages
+  messages,
+  warningsOnly = false
 ) {
   const listItems =
     messages
-      .slice(0, 20)
+      .slice(0, 30)
       .map(
         function (message) {
           return (
@@ -1486,19 +1458,42 @@ function showCsvImportErrors(
     messages.length -
     Math.min(
       messages.length,
-      20
+      30
     );
 
   const remainingText =
     remainingCount > 0
-      ? `<p>ほかに${remainingCount}件のエラーがあります。</p>`
+      ? `<p>ほかに${remainingCount}件あります。</p>`
       : "";
 
   csvImportErrors.innerHTML = `
-    <strong>確認が必要な内容</strong>
+    <strong>
+      ${
+        warningsOnly
+          ? "読込時の設定"
+          : "確認が必要な内容"
+      }
+    </strong>
+
     <ul>${listItems}</ul>
+
     ${remainingText}
   `;
+
+  csvImportErrors.style.borderColor =
+    warningsOnly
+      ? "#ef6c00"
+      : "#c62828";
+
+  csvImportErrors.style.backgroundColor =
+    warningsOnly
+      ? "#fff8e1"
+      : "#ffebee";
+
+  csvImportErrors.style.color =
+    warningsOnly
+      ? "#795548"
+      : "#b71c1c";
 
   csvImportErrors.hidden =
     false;

@@ -2,16 +2,51 @@
 
 let deferredInstallPrompt = null;
 
+/*
+  Android Chromeのインストール通知を取り逃さないように、
+  DOMContentLoadedより前から監視します。
+*/
+window.addEventListener(
+  "beforeinstallprompt",
+  handleBeforeInstallPrompt
+);
+
+window.addEventListener(
+  "appinstalled",
+  handlePwaInstalled
+);
+
 document.addEventListener(
   "DOMContentLoaded",
   initializePwa
 );
 
+function handleBeforeInstallPrompt(event) {
+  event.preventDefault();
+
+  deferredInstallPrompt =
+    event;
+
+  updatePwaInstallButton();
+}
+
+function handlePwaInstalled() {
+  deferredInstallPrompt =
+    null;
+
+  updatePwaInstallButton();
+
+  alert(
+    "アプリをインストールしました。ホーム画面から起動できます。"
+  );
+}
+
 function initializePwa() {
   registerServiceWorker();
   showNetworkStatus();
   createPwaInstallButton();
-  watchPwaInstallEvents();
+  createPwaInstallDialog();
+  watchPwaDisplayMode();
   updatePwaInstallButton();
 }
 
@@ -287,7 +322,7 @@ function createPwaInstallButton() {
     "button";
 
   button.textContent =
-    "アプリをインストールする";
+    "アプリの追加方法を確認する";
 
   button.addEventListener(
     "click",
@@ -297,8 +332,6 @@ function createPwaInstallButton() {
   homeScreen.appendChild(
     button
   );
-
-  createPwaInstallDialog();
 }
 
 function findPwaHomeScreen() {
@@ -430,33 +463,7 @@ function createPwaInstallDialog() {
   );
 }
 
-function watchPwaInstallEvents() {
-  window.addEventListener(
-    "beforeinstallprompt",
-    function (event) {
-      event.preventDefault();
-
-      deferredInstallPrompt =
-        event;
-
-      updatePwaInstallButton();
-    }
-  );
-
-  window.addEventListener(
-    "appinstalled",
-    function () {
-      deferredInstallPrompt =
-        null;
-
-      updatePwaInstallButton();
-
-      alert(
-        "アプリをインストールしました。ホーム画面から起動できます。"
-      );
-    }
-  );
-
+function watchPwaDisplayMode() {
   const displayModeMedia =
     window.matchMedia(
       "(display-mode: standalone)"
@@ -505,15 +512,30 @@ function updatePwaInstallButton() {
   ) {
     button.textContent =
       "アプリをインストールする";
-  } else if (
+
+    return;
+  }
+
+  if (
     isIosDevice()
   ) {
     button.textContent =
       "iPhoneのホーム画面に追加する";
-  } else {
-    button.textContent =
-      "アプリの追加方法を確認する";
+
+    return;
   }
+
+  if (
+    isAndroidDevice()
+  ) {
+    button.textContent =
+      "Androidのホーム画面に追加する";
+
+    return;
+  }
+
+  button.textContent =
+    "アプリの追加方法を確認する";
 }
 
 async function handlePwaInstallButton() {
@@ -599,33 +621,51 @@ function showPwaInstallInstructions() {
           右上の「追加」を押します。
         </li>
       </ol>
+    `;
+  } else if (
+    isAndroidDevice()
+  ) {
+    body.innerHTML = `
+      <p>
+        Android版Chromeで次の操作を行ってください。
+      </p>
+
+      <ol>
+        <li>
+          画面右上の「︙」を押します。
+        </li>
+        <li>
+          「アプリをインストール」または
+          「ホーム画面に追加」を押します。
+        </li>
+        <li>
+          表示された確認画面で
+          「インストール」または「追加」を押します。
+        </li>
+      </ol>
 
       <p>
-        Chromeで開いている場合は、先にSafariでこのページを開いてください。
+        項目が出ない場合は、このページを30秒以上開き、
+        画面を一度タップしてから更新してください。
       </p>
     `;
   } else {
     body.innerHTML = `
       <p>
-        ブラウザーのメニューから追加できます。
+        ChromeまたはEdgeのメニューから追加できます。
       </p>
 
       <ol>
         <li>
-          ChromeまたはEdgeのメニューを開きます。
+          ブラウザーのメニューを開きます。
         </li>
         <li>
-          「アプリをインストール」または
-          「ホーム画面に追加」を選びます。
+          「アプリをインストール」を選びます。
         </li>
         <li>
           表示された確認画面で追加します。
         </li>
       </ol>
-
-      <p>
-        メニューに表示されない場合は、ページを一度更新してから確認してください。
-      </p>
     `;
   }
 
@@ -658,6 +698,12 @@ function isPwaInstalled() {
   return (
     standaloneDisplay ||
     iosStandalone
+  );
+}
+
+function isAndroidDevice() {
+  return /android/i.test(
+    window.navigator.userAgent
   );
 }
 

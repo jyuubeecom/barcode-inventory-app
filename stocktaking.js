@@ -25,6 +25,7 @@ let stocktakingSummarySurplus = null;
 
 let stocktakingProductSearchInput = null;
 let stocktakingSearchMessage = null;
+let stocktakingCameraScanButton = null;
 let stocktakingItemsBody = null;
 let stocktakingSaveMessage = null;
 
@@ -41,6 +42,13 @@ document.addEventListener(
   "DOMContentLoaded",
   initializeStocktaking
 );
+
+window.stocktakingApp = {
+  handleBarcode:
+    handleStocktakingScannedBarcode,
+  returnFromScanner:
+    returnFromStocktakingScanner
+};
 
 function initializeStocktaking() {
   createStocktakingStartButton();
@@ -272,6 +280,13 @@ function createStocktakingScreens() {
       </p>
     </div>
 
+    <button
+      id="stocktaking-camera-scan-button"
+      type="button"
+    >
+      バーコードで棚卸商品を読み取る
+    </button>
+
     <div class="stocktaking-table-area">
       <table class="stocktaking-items-table">
         <thead>
@@ -462,6 +477,11 @@ function getStocktakingElements() {
       "#stocktaking-search-message"
     );
 
+  stocktakingCameraScanButton =
+    document.querySelector(
+      "#stocktaking-camera-scan-button"
+    );
+
   stocktakingItemsBody =
     document.querySelector(
       "#stocktaking-items-body"
@@ -527,6 +547,11 @@ function addStocktakingEventListeners() {
   stocktakingProductSearchInput.addEventListener(
     "input",
     filterStocktakingItems
+  );
+
+  stocktakingCameraScanButton.addEventListener(
+    "click",
+    openStocktakingCameraScanner
   );
 }
 
@@ -735,6 +760,13 @@ function createStocktakingStyle() {
       width: 24px;
       height: 24px;
       margin: 0;
+    }
+
+    #stocktaking-camera-scan-button {
+      width: 100%;
+      margin: 0 0 18px;
+      background-color: #0277bd;
+      font-size: 18px;
     }
 
     #save-stocktaking-items-button {
@@ -2240,6 +2272,199 @@ function hideAllMainScreensForStocktaking() {
       screen.hidden = true;
     }
   );
+}
+
+function openStocktakingCameraScanner() {
+  if (!currentStocktaking) {
+    alert(
+      "進行中の棚卸が見つかりません。"
+    );
+
+    return;
+  }
+
+  if (
+    !window.barcodeScanner ||
+    typeof window.barcodeScanner.openForStocktaking !==
+      "function"
+  ) {
+    alert(
+      "バーコード読取機能を開けませんでした。\n\n" +
+      "画面を更新して、もう一度棚卸を開いてください。"
+    );
+
+    return;
+  }
+
+  window.barcodeScanner.openForStocktaking();
+}
+
+function handleStocktakingScannedBarcode(
+  barcodeValue
+) {
+  if (
+    !currentStocktaking ||
+    !Array.isArray(
+      currentStocktaking.items
+    )
+  ) {
+    return {
+      success: false,
+      message:
+        "進行中の棚卸が見つかりません。"
+    };
+  }
+
+  const normalizedBarcode =
+    normalizeStocktakingBarcode(
+      barcodeValue
+    );
+
+  if (normalizedBarcode === "") {
+    return {
+      success: false,
+      message:
+        "バーコード番号を確認できませんでした。"
+    };
+  }
+
+  const matchingItems =
+    currentStocktaking.items.filter(
+      function (item) {
+        return (
+          normalizeStocktakingBarcode(
+            item.janCode
+          ) === normalizedBarcode
+        );
+      }
+    );
+
+  if (matchingItems.length === 0) {
+    return {
+      success: false,
+      message:
+        "このバーコードの商品は、今回の棚卸対象にありません。\n\n" +
+        "保管場所または商品登録内容を確認してください。"
+    };
+  }
+
+  if (matchingItems.length > 1) {
+    return {
+      success: false,
+      message:
+        "同じJANコードの商品が棚卸対象に複数あります。\n\n" +
+        "商品名または社内コードで検索してください。"
+    };
+  }
+
+  const selectedItem =
+    matchingItems[0];
+
+  returnFromStocktakingScanner(
+    false
+  );
+
+  stocktakingProductSearchInput.value =
+    selectedItem.janCode;
+
+  filterStocktakingItems();
+
+  stocktakingSearchMessage.textContent =
+    `読み取り成功：${selectedItem.productName}（${selectedItem.janCode}）`;
+
+  stocktakingSaveMessage.textContent =
+    "読み取った商品の実在庫を入力してください。";
+
+  stocktakingSaveMessage.classList.remove(
+    "saved"
+  );
+
+  window.setTimeout(
+    function () {
+      focusStocktakingActualInput(
+        selectedItem.internalCode
+      );
+    },
+    100
+  );
+
+  return {
+    success: true,
+    item: selectedItem
+  };
+}
+
+function returnFromStocktakingScanner(
+  focusSearch
+) {
+  if (!currentStocktaking) {
+    window.inventoryApp.showScreen(
+      "home"
+    );
+
+    return;
+  }
+
+  hideAllMainScreensForStocktaking();
+
+  stocktakingActiveScreen.hidden = false;
+
+  if (focusSearch) {
+    stocktakingProductSearchInput.value =
+      "";
+
+    filterStocktakingItems();
+
+    stocktakingSearchMessage.textContent =
+      "JANコード・商品名・社内コード・商品コードを入力してください。";
+
+    window.setTimeout(
+      function () {
+        stocktakingProductSearchInput.focus();
+      },
+      100
+    );
+  }
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
+}
+
+function focusStocktakingActualInput(
+  internalCode
+) {
+  const inputs =
+    stocktakingItemsBody.querySelectorAll(
+      ".stocktaking-actual-input"
+    );
+
+  for (const input of inputs) {
+    if (
+      input.dataset.internalCode ===
+      internalCode
+    ) {
+      input.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+
+      input.focus();
+      input.select();
+
+      break;
+    }
+  }
+}
+
+function normalizeStocktakingBarcode(
+  value
+) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/\s+/g, "")
+    .trim();
 }
 
 function normalizeStocktakingText(

@@ -47,6 +47,7 @@ let barcodeReader = null;
 let cameraControls = null;
 let barcodeDetected = false;
 let torchEnabled = false;
+let cameraScannerMode = "normal";
 
 document.addEventListener(
   "DOMContentLoaded",
@@ -398,6 +399,23 @@ function createCameraScannerStyle() {
 }
 
 function openCameraScannerScreen() {
+  openCameraScanner(
+    "normal"
+  );
+}
+
+function openCameraScannerForStocktaking() {
+  openCameraScanner(
+    "stocktaking"
+  );
+}
+
+function openCameraScanner(mode) {
+  cameraScannerMode =
+    mode === "stocktaking"
+      ? "stocktaking"
+      : "normal";
+
   hideAllMainScreens();
 
   cameraScannerScreen.hidden = false;
@@ -405,11 +423,23 @@ function openCameraScannerScreen() {
   cameraScannerResult.value = "";
 
   cameraScannerMessage.textContent =
-    "「カメラを開始する」を押してください。";
+    cameraScannerMode === "stocktaking"
+      ? "棚卸する商品のバーコードを読み取ります。「カメラを開始する」を押してください。"
+      : "「カメラを開始する」を押してください。";
 
   cameraTorchButton.disabled = true;
   cameraTorchButton.textContent =
     "ライトを点灯";
+
+  cameraManualButton.textContent =
+    cameraScannerMode === "stocktaking"
+      ? "棚卸商品を手入力で検索"
+      : "手入力に切り替える";
+
+  cameraCancelButton.textContent =
+    cameraScannerMode === "stocktaking"
+      ? "棚卸画面へ戻る"
+      : "キャンセル";
 
   torchEnabled = false;
   barcodeDetected = false;
@@ -618,24 +648,62 @@ function stopCameraScan() {
 }
 
 function closeCameraScannerScreen() {
+  const returnMode =
+    cameraScannerMode;
+
   stopCameraScan();
 
   cameraScannerScreen.hidden = true;
 
   cameraScannerResult.value = "";
 
+  cameraScannerMode = "normal";
+
+  if (
+    returnMode === "stocktaking" &&
+    window.stocktakingApp &&
+    typeof window.stocktakingApp.returnFromScanner ===
+      "function"
+  ) {
+    window.stocktakingApp.returnFromScanner(
+      false
+    );
+
+    return;
+  }
+
   window.inventoryApp.showScreen("home");
 }
 
 function switchToManualLookup() {
+  const returnMode =
+    cameraScannerMode;
+
   stopCameraScan();
 
   cameraScannerScreen.hidden = true;
+
+  cameraScannerMode = "normal";
+
+  if (
+    returnMode === "stocktaking" &&
+    window.stocktakingApp &&
+    typeof window.stocktakingApp.returnFromScanner ===
+      "function"
+  ) {
+    window.stocktakingApp.returnFromScanner(
+      true
+    );
+
+    return;
+  }
 
   openBarcodeLookupScreen();
 }
 
 function openBarcodeLookupScreen() {
+  cameraScannerMode = "normal";
+
   stopCameraScan();
   hideAllMainScreens();
 
@@ -701,6 +769,14 @@ async function processBarcodeValue(
   if (enteredCode === "") {
     alert(
       "バーコード番号を確認できませんでした。"
+    );
+
+    return;
+  }
+
+  if (cameraScannerMode === "stocktaking") {
+    await processStocktakingBarcodeValue(
+      enteredCode
     );
 
     return;
@@ -799,6 +875,65 @@ async function processBarcodeValue(
     alert(
       "商品データを検索できませんでした。\n" +
       "もう一度確認してください。"
+    );
+  }
+}
+
+async function processStocktakingBarcodeValue(
+  enteredCode
+) {
+  if (
+    !window.stocktakingApp ||
+    typeof window.stocktakingApp.handleBarcode !==
+      "function"
+  ) {
+    cameraScannerMessage.textContent =
+      "棚卸画面とバーコード読取を接続できませんでした。";
+
+    alert(
+      "棚卸画面とバーコード読取を接続できませんでした。\n\n" +
+      "画面を更新して、もう一度棚卸を開いてください。"
+    );
+
+    return;
+  }
+
+  try {
+    const result =
+      await window.stocktakingApp.handleBarcode(
+        enteredCode
+      );
+
+    if (
+      result &&
+      result.success
+    ) {
+      stopCameraScan();
+
+      cameraScannerScreen.hidden = true;
+      cameraScannerMode = "normal";
+
+      return;
+    }
+
+    const message =
+      result && result.message
+        ? result.message
+        : "棚卸対象の商品を確認できませんでした。";
+
+    cameraScannerMessage.textContent =
+      `${message} 「読み取りをやり直す」を押してください。`;
+
+    alert(message);
+  } catch (error) {
+    console.error(error);
+
+    cameraScannerMessage.textContent =
+      "棚卸商品を確認できませんでした。";
+
+    alert(
+      "棚卸商品を確認できませんでした。\n\n" +
+      "もう一度読み取ってください。"
     );
   }
 }
@@ -1030,3 +1165,8 @@ function showCameraErrorMessage(error) {
     "ブラウザーのカメラ設定を確認してください。"
   );
 }
+
+window.barcodeScanner = {
+  openForStocktaking:
+    openCameraScannerForStocktaking
+};

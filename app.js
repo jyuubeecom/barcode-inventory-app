@@ -131,6 +131,8 @@ const searchResultMessage =
     "#search-result-message"
   );
 
+let productSortSelect = null;
+
 const internalCodeInput =
   document.querySelector("#internal-code");
 
@@ -377,6 +379,8 @@ async function initializeApp() {
     "click",
     clearSearch
   );
+
+  createProductSortControls();
 
   showScreen("home");
 
@@ -1156,6 +1160,318 @@ function getStockStatus(product) {
   return "正常";
 }
 
+function createProductSortControls() {
+  if (
+    document.querySelector(
+      "#product-sort-select"
+    )
+  ) {
+    productSortSelect =
+      document.querySelector(
+        "#product-sort-select"
+      );
+
+    return;
+  }
+
+  const searchArea =
+    productSearchInput.parentElement;
+
+  const sortArea =
+    document.createElement("div");
+
+  sortArea.classList.add(
+    "product-sort-area"
+  );
+
+  const sortLabel =
+    document.createElement("label");
+
+  sortLabel.htmlFor =
+    "product-sort-select";
+
+  sortLabel.textContent =
+    "商品を並べ替える";
+
+  productSortSelect =
+    document.createElement("select");
+
+  productSortSelect.id =
+    "product-sort-select";
+
+  const sortOptions = [
+    {
+      value: "internal-code",
+      label: "社内コード順"
+    },
+    {
+      value: "product-name",
+      label: "商品名順"
+    },
+    {
+      value: "stock-asc",
+      label: "在庫数の少ない順"
+    },
+    {
+      value: "stock-desc",
+      label: "在庫数の多い順"
+    },
+    {
+      value: "updated-desc",
+      label: "更新日の新しい順"
+    },
+    {
+      value: "location",
+      label: "保管場所順"
+    }
+  ];
+
+  sortOptions.forEach(
+    function (optionData) {
+      const option =
+        document.createElement("option");
+
+      option.value =
+        optionData.value;
+
+      option.textContent =
+        optionData.label;
+
+      productSortSelect.appendChild(
+        option
+      );
+    }
+  );
+
+  productSortSelect.addEventListener(
+    "change",
+    displayCurrentProducts
+  );
+
+  sortArea.appendChild(
+    sortLabel
+  );
+
+  sortArea.appendChild(
+    productSortSelect
+  );
+
+  searchArea.insertBefore(
+    sortArea,
+    clearSearchButton
+  );
+
+  createProductSortStyle();
+}
+
+function createProductSortStyle() {
+  if (
+    document.querySelector(
+      "#product-sort-style"
+    )
+  ) {
+    return;
+  }
+
+  const styleElement =
+    document.createElement("style");
+
+  styleElement.id =
+    "product-sort-style";
+
+  styleElement.textContent = `
+    .product-sort-area {
+      margin: 16px 0;
+      padding: 14px;
+      border: 2px solid #90caf9;
+      border-radius: 10px;
+      background-color: #f7fbff;
+    }
+
+    .product-sort-area label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+
+    #product-sort-select {
+      width: 100%;
+      max-width: 440px;
+      min-height: 48px;
+      padding: 8px;
+      font-size: 18px;
+    }
+  `;
+
+  document.head.appendChild(
+    styleElement
+  );
+}
+
+function sortDisplayedProducts(
+  targetProducts
+) {
+  const sortedProducts = [
+    ...targetProducts
+  ];
+
+  const sortType =
+    productSortSelect
+      ? productSortSelect.value
+      : "internal-code";
+
+  sortedProducts.sort(
+    function (
+      productA,
+      productB
+    ) {
+      if (
+        sortType ===
+        "product-name"
+      ) {
+        return compareProductText(
+          productA.productName,
+          productB.productName
+        );
+      }
+
+      if (
+        sortType ===
+        "stock-asc"
+      ) {
+        const stockDifference =
+          getValidStockNumber(
+            productA.stock
+          ) -
+          getValidStockNumber(
+            productB.stock
+          );
+
+        if (stockDifference !== 0) {
+          return stockDifference;
+        }
+
+        return compareProductText(
+          productA.productName,
+          productB.productName
+        );
+      }
+
+      if (
+        sortType ===
+        "stock-desc"
+      ) {
+        const stockDifference =
+          getValidStockNumber(
+            productB.stock
+          ) -
+          getValidStockNumber(
+            productA.stock
+          );
+
+        if (stockDifference !== 0) {
+          return stockDifference;
+        }
+
+        return compareProductText(
+          productA.productName,
+          productB.productName
+        );
+      }
+
+      if (
+        sortType ===
+        "updated-desc"
+      ) {
+        const dateDifference =
+          getProductUpdatedTime(
+            productB
+          ) -
+          getProductUpdatedTime(
+            productA
+          );
+
+        if (dateDifference !== 0) {
+          return dateDifference;
+        }
+
+        return compareProductText(
+          productA.productName,
+          productB.productName
+        );
+      }
+
+      if (
+        sortType ===
+        "location"
+      ) {
+        const locationDifference =
+          compareProductText(
+            productA.location ||
+              "未登録",
+            productB.location ||
+              "未登録"
+          );
+
+        if (
+          locationDifference !== 0
+        ) {
+          return locationDifference;
+        }
+
+        return compareProductText(
+          productA.productName,
+          productB.productName
+        );
+      }
+
+      return compareProductText(
+        productA.internalCode,
+        productB.internalCode
+      );
+    }
+  );
+
+  return sortedProducts;
+}
+
+function compareProductText(
+  valueA,
+  valueB
+) {
+  return String(
+    valueA || ""
+  ).localeCompare(
+    String(
+      valueB || ""
+    ),
+    "ja",
+    {
+      numeric: true,
+      sensitivity: "base"
+    }
+  );
+}
+
+function getProductUpdatedTime(
+  product
+) {
+  const date =
+    new Date(
+      product.updatedAt || ""
+    );
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return 0;
+  }
+
+  return date.getTime();
+}
+
 function clearSearch() {
   productSearchInput.value = "";
 
@@ -1198,8 +1514,13 @@ function getFilteredProducts() {
 }
 
 function displayCurrentProducts() {
-  const displayedProducts =
+  const filteredProducts =
     getFilteredProducts();
+
+  const displayedProducts =
+    sortDisplayedProducts(
+      filteredProducts
+    );
 
   displayProducts(displayedProducts);
 

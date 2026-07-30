@@ -284,7 +284,7 @@ function createStocktakingScreens() {
       id="stocktaking-camera-scan-button"
       type="button"
     >
-      バーコードで棚卸商品を読み取る
+      JAN・社内コードのバーコードを読み取る
     </button>
 
     <div class="stocktaking-table-area">
@@ -2328,23 +2328,53 @@ function handleStocktakingScannedBarcode(
     };
   }
 
-  const matchingItems =
+  const internalCodeMatches =
     currentStocktaking.items.filter(
       function (item) {
         return (
           normalizeStocktakingBarcode(
-            item.janCode
+            item.internalCode
           ) === normalizedBarcode
         );
       }
     );
+
+  let matchingItems = [];
+  let matchedCodeType = "";
+
+  if (internalCodeMatches.length > 0) {
+    matchingItems =
+      internalCodeMatches;
+
+    matchedCodeType =
+      "社内コード";
+  } else {
+    matchingItems =
+      currentStocktaking.items.filter(
+        function (item) {
+          const normalizedJanCode =
+            normalizeStocktakingBarcode(
+              item.janCode
+            );
+
+          return (
+            normalizedJanCode !== "" &&
+            normalizedJanCode ===
+              normalizedBarcode
+          );
+        }
+      );
+
+    matchedCodeType =
+      "JANコード";
+  }
 
   if (matchingItems.length === 0) {
     return {
       success: false,
       message:
         "このバーコードの商品は、今回の棚卸対象にありません。\n\n" +
-        "保管場所または商品登録内容を確認してください。"
+        "JANコード・社内コード・保管場所を確認してください。"
     };
   }
 
@@ -2352,7 +2382,7 @@ function handleStocktakingScannedBarcode(
     return {
       success: false,
       message:
-        "同じJANコードの商品が棚卸対象に複数あります。\n\n" +
+        `同じ${matchedCodeType}の商品が棚卸対象に複数あります。\n\n` +
         "商品名または社内コードで検索してください。"
     };
   }
@@ -2365,12 +2395,12 @@ function handleStocktakingScannedBarcode(
   );
 
   stocktakingProductSearchInput.value =
-    selectedItem.janCode;
+    selectedItem.internalCode;
 
   filterStocktakingItems();
 
   stocktakingSearchMessage.textContent =
-    `読み取り成功：${selectedItem.productName}（${selectedItem.janCode}）`;
+    `読み取り成功：${selectedItem.productName}（${matchedCodeType}：${normalizedBarcode}）`;
 
   stocktakingSaveMessage.textContent =
     "読み取った商品の実在庫を入力してください。";
@@ -2390,7 +2420,9 @@ function handleStocktakingScannedBarcode(
 
   return {
     success: true,
-    item: selectedItem
+    item: selectedItem,
+    matchedCodeType:
+      matchedCodeType
   };
 }
 

@@ -1,7 +1,7 @@
 "use strict";
 
 const CACHE_NAME =
-  "barcode-inventory-app-v4";
+  "barcode-inventory-app-v5";
 
 const APP_FILES = [
   "./",
@@ -16,10 +16,13 @@ const APP_FILES = [
   "./csv.js",
   "./csv-import.js",
   "./csv-update.js",
+  "./backup.js",
+  "./restore.js",
   "./pwa.js",
   "./manifest.json",
-  "./icon-192.png",
-  "./icon-512.png"
+  "./apple-touch-icon.png",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png"
 ];
 
 self.addEventListener(

@@ -657,9 +657,10 @@ async function exportStocktakingCsv() {
         "商品コード",
         "商品名",
         "登録在庫",
-        "実在庫",
+        "実在庫合計",
         "差異",
-        "保管場所",
+        "登録保管場所",
+        "場所別実在庫",
         "担当者",
         "結果",
         "在庫反映",
@@ -734,6 +735,12 @@ async function exportStocktakingCsv() {
 
           getCsvText(
             item.location
+          ),
+
+          getCsvText(
+            formatCsvLocationBreakdown(
+              item
+            )
           ),
 
           getCsvText(
@@ -944,6 +951,68 @@ function getCsvStockNumber(value) {
   }
 
   return Math.floor(number);
+}
+
+function formatCsvLocationBreakdown(
+  item
+) {
+  const entries =
+    Array.isArray(
+      item.locationBreakdown
+    )
+      ? item.locationBreakdown
+      : [];
+
+  const breakdownText =
+    entries
+      .filter(
+        function (entry) {
+          const location =
+            String(
+              entry.location || ""
+            ).trim();
+
+          const quantity =
+            Number(
+              entry.quantity
+            );
+
+          return (
+            location !== "" &&
+            Number.isInteger(
+              quantity
+            ) &&
+            quantity >= 0
+          );
+        }
+      )
+      .map(
+        function (entry) {
+          return (
+            `${String(entry.location).trim()}：` +
+            `${Number(entry.quantity)}個`
+          );
+        }
+      )
+      .join(" / ");
+
+  if (breakdownText !== "") {
+    return breakdownText;
+  }
+
+  const actualStock =
+    getCsvStocktakingActualStock(
+      item.actualStock
+    );
+
+  if (actualStock === "") {
+    return "";
+  }
+
+  return (
+    `${getCsvText(item.location) || "場所未登録"}：` +
+    `${actualStock}個`
+  );
 }
 
 function getCsvStocktakingActualStock(

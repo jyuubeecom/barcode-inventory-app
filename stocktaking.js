@@ -200,7 +200,7 @@ function createStocktakingScreens() {
     <h2>棚卸中</h2>
 
     <p class="stocktaking-notice">
-      商品を確認し、実際に数えた数量を入力してください。
+      商品を確認し、保管場所ごとの数量を入力してください。複数の場所にある場合は「保管場所を追加」を押します。
     </p>
 
     <table class="stocktaking-info-table">
@@ -216,7 +216,7 @@ function createStocktakingScreens() {
         </tr>
 
         <tr>
-          <th>保管場所</th>
+          <th>登録保管場所</th>
           <td id="active-stocktaking-location"></td>
         </tr>
 
@@ -297,7 +297,7 @@ function createStocktakingScreens() {
             <th>商品名</th>
             <th>保管場所</th>
             <th>登録在庫</th>
-            <th>実在庫</th>
+            <th>場所別実在庫・合計</th>
             <th>差異</th>
             <th>メモ</th>
           </tr>
@@ -317,7 +317,7 @@ function createStocktakingScreens() {
       id="stocktaking-save-message"
       class="stocktaking-save-message"
     >
-      実在庫を入力したら「入力内容を保存する」を押してください。
+      保管場所ごとの数量を入力したら「入力内容を保存する」を押してください。
     </p>
 
     <fieldset class="stocktaking-reflect-area">
@@ -665,6 +665,65 @@ function createStocktakingStyle() {
       min-width: 180px;
     }
 
+    .stocktaking-location-count-cell {
+      min-width: 420px;
+    }
+
+    .stocktaking-location-entries {
+      display: grid;
+      gap: 8px;
+    }
+
+    .stocktaking-location-entry {
+      display: grid;
+      grid-template-columns:
+        minmax(150px, 1fr)
+        100px
+        auto;
+      gap: 8px;
+      align-items: center;
+      padding: 8px;
+      border: 1px solid #d1c4e9;
+      border-radius: 8px;
+      background-color: #ffffff;
+    }
+
+    .stocktaking-location-entry input {
+      width: 100%;
+      min-width: 0;
+      margin: 0;
+    }
+
+    .stocktaking-remove-location-button,
+    .stocktaking-add-location-button {
+      margin: 0;
+      padding: 9px 12px;
+      font-size: 15px;
+    }
+
+    .stocktaking-remove-location-button {
+      background-color: #c62828;
+    }
+
+    .stocktaking-remove-location-button:disabled {
+      background-color: #b0bec5;
+      cursor: not-allowed;
+    }
+
+    .stocktaking-add-location-button {
+      margin-top: 8px;
+      background-color: #0277bd;
+    }
+
+    .stocktaking-location-total {
+      margin: 8px 0 0;
+      padding: 8px;
+      border-radius: 8px;
+      background-color: #ede7f6;
+      color: #4a148c;
+      font-weight: bold;
+    }
+
     .stocktaking-row-unchecked {
       background-color: #eceff1;
     }
@@ -786,6 +845,21 @@ function createStocktakingStyle() {
       #stocktaking-active > button {
         width: 100%;
         margin: 6px 0;
+      }
+
+      .stocktaking-location-count-cell {
+        min-width: 330px;
+      }
+
+      .stocktaking-location-entry {
+        grid-template-columns:
+          minmax(135px, 1fr)
+          90px;
+      }
+
+      .stocktaking-remove-location-button {
+        grid-column: 1 / -1;
+        width: 100%;
       }
 
       .stocktaking-info-table th {
@@ -1051,6 +1125,9 @@ function createStocktakingItems(
 ) {
   return targetProducts.map(
     function (product) {
+      const defaultLocation =
+        product.location || "";
+
       return {
         internalCode:
           product.internalCode || "",
@@ -1061,11 +1138,21 @@ function createStocktakingItems(
         janCode:
           product.janCode || "",
         location:
-          product.location || "未登録",
+          defaultLocation ||
+          "未登録",
         registeredStock:
           getValidStocktakingNumber(
             product.stock
           ),
+        locationBreakdown: [
+          {
+            id:
+              createStocktakingLocationEntryId(),
+            location:
+              defaultLocation,
+            quantity: ""
+          }
+        ],
         actualStock: "",
         difference: null,
         result: "未確認",
@@ -1149,7 +1236,7 @@ async function showActiveStocktaking(
     "";
 
   stocktakingSaveMessage.textContent =
-    "実在庫を入力したら「入力内容を保存する」を押してください。";
+    "保管場所ごとの数量を入力したら「入力内容を保存する」を押してください。";
 
   stocktakingSaveMessage.classList.remove(
     "saved"
@@ -1183,9 +1270,14 @@ function normalizeStocktakingItem(item) {
       item.registeredStock
     );
 
+  const locationBreakdown =
+    normalizeStocktakingLocationBreakdown(
+      item
+    );
+
   const actualStock =
-    normalizeActualStockValue(
-      item.actualStock
+    calculateStocktakingLocationTotal(
+      locationBreakdown
     );
 
   const difference =
@@ -1207,6 +1299,8 @@ function normalizeStocktakingItem(item) {
       item.location || "未登録",
     registeredStock:
       registeredStock,
+    locationBreakdown:
+      locationBreakdown,
     actualStock:
       actualStock,
     difference:
@@ -1218,7 +1312,12 @@ function normalizeStocktakingItem(item) {
     memo:
       item.memo || "",
     checkedAt:
-      item.checkedAt || ""
+      actualStock === ""
+        ? ""
+        : (
+            item.checkedAt ||
+            new Date().toISOString()
+          )
   };
 }
 
@@ -1333,32 +1432,50 @@ function createStocktakingItemRow(
   const actualStockCell =
     document.createElement("td");
 
-  const actualStockInput =
-    document.createElement("input");
-
-  actualStockInput.type =
-    "number";
-
-  actualStockInput.min = "0";
-  actualStockInput.step = "1";
-
-  actualStockInput.placeholder =
-    "実在庫";
-
-  actualStockInput.value =
-    item.actualStock === ""
-      ? ""
-      : item.actualStock;
-
-  actualStockInput.classList.add(
-    "stocktaking-actual-input"
+  actualStockCell.classList.add(
+    "stocktaking-location-count-cell"
   );
 
-  actualStockInput.dataset.internalCode =
+  const locationEntries =
+    document.createElement("div");
+
+  locationEntries.classList.add(
+    "stocktaking-location-entries"
+  );
+
+  locationEntries.dataset.internalCode =
     item.internalCode;
 
+  const addLocationButton =
+    document.createElement("button");
+
+  addLocationButton.type =
+    "button";
+
+  addLocationButton.textContent =
+    "保管場所を追加";
+
+  addLocationButton.classList.add(
+    "stocktaking-add-location-button"
+  );
+
+  const totalDisplay =
+    document.createElement("p");
+
+  totalDisplay.classList.add(
+    "stocktaking-location-total"
+  );
+
   actualStockCell.appendChild(
-    actualStockInput
+    locationEntries
+  );
+
+  actualStockCell.appendChild(
+    addLocationButton
+  );
+
+  actualStockCell.appendChild(
+    totalDisplay
   );
 
   row.appendChild(
@@ -1405,15 +1522,44 @@ function createStocktakingItemRow(
     memoCell
   );
 
-  actualStockInput.addEventListener(
-    "input",
+  addLocationButton.addEventListener(
+    "click",
     function () {
-      handleStocktakingActualInput(
+      item.locationBreakdown.push({
+        id:
+          createStocktakingLocationEntryId(),
+        location: "",
+        quantity: ""
+      });
+
+      renderStocktakingLocationEntries(
         item,
         row,
-        actualStockInput,
+        locationEntries,
+        totalDisplay,
         differenceCell,
         resultBadge
+      );
+
+      markStocktakingAsUnsaved();
+
+      window.setTimeout(
+        function () {
+          const locationInputs =
+            locationEntries.querySelectorAll(
+              ".stocktaking-location-name-input"
+            );
+
+          const lastInput =
+            locationInputs[
+              locationInputs.length - 1
+            ];
+
+          if (lastInput) {
+            lastInput.focus();
+          }
+        },
+        50
       );
     }
   );
@@ -1426,6 +1572,15 @@ function createStocktakingItemRow(
 
       markStocktakingAsUnsaved();
     }
+  );
+
+  renderStocktakingLocationEntries(
+    item,
+    row,
+    locationEntries,
+    totalDisplay,
+    differenceCell,
+    resultBadge
   );
 
   updateStocktakingRowAppearance(
@@ -1451,52 +1606,243 @@ function appendStocktakingTextCell(
   row.appendChild(cell);
 }
 
-function handleStocktakingActualInput(
+function renderStocktakingLocationEntries(
   item,
   row,
-  actualStockInput,
+  locationEntries,
+  totalDisplay,
   differenceCell,
   resultBadge
 ) {
-  const enteredValue =
-    actualStockInput.value.trim();
-
-  if (enteredValue === "") {
-    item.actualStock = "";
-    item.difference = null;
-    item.result = "未確認";
-    item.checkedAt = "";
-  } else {
-    const actualStock =
-      Number(enteredValue);
-
-    if (
-      Number.isInteger(
-        actualStock
-      ) &&
-      actualStock >= 0
-    ) {
-      item.actualStock =
-        actualStock;
-
-      item.difference =
-        actualStock -
-        item.registeredStock;
-
-      item.result =
-        getStocktakingResult(
-          item.difference
-        );
-
-      item.checkedAt =
-        new Date().toISOString();
-    } else {
-      item.actualStock = "";
-      item.difference = null;
-      item.result = "未確認";
-      item.checkedAt = "";
-    }
+  if (
+    !Array.isArray(
+      item.locationBreakdown
+    ) ||
+    item.locationBreakdown.length === 0
+  ) {
+    item.locationBreakdown = [
+      {
+        id:
+          createStocktakingLocationEntryId(),
+        location:
+          item.location === "未登録"
+            ? ""
+            : item.location,
+        quantity: ""
+      }
+    ];
   }
+
+  locationEntries.innerHTML = "";
+
+  item.locationBreakdown.forEach(
+    function (
+      entry,
+      index
+    ) {
+      const entryRow =
+        document.createElement("div");
+
+      entryRow.classList.add(
+        "stocktaking-location-entry"
+      );
+
+      entryRow.dataset.entryId =
+        entry.id;
+
+      const locationInput =
+        document.createElement("input");
+
+      locationInput.type =
+        "text";
+
+      locationInput.placeholder =
+        "保管場所";
+
+      locationInput.value =
+        entry.location || "";
+
+      locationInput.classList.add(
+        "stocktaking-location-name-input"
+      );
+
+      locationInput.dataset.entryId =
+        entry.id;
+
+      locationInput.setAttribute(
+        "aria-label",
+        `${item.productName}の保管場所`
+      );
+
+      const quantityInput =
+        document.createElement("input");
+
+      quantityInput.type =
+        "number";
+
+      quantityInput.min = "0";
+      quantityInput.step = "1";
+
+      quantityInput.placeholder =
+        "数量";
+
+      quantityInput.value =
+        entry.quantity === ""
+          ? ""
+          : entry.quantity;
+
+      quantityInput.classList.add(
+        "stocktaking-actual-input"
+      );
+
+      quantityInput.dataset.internalCode =
+        item.internalCode;
+
+      quantityInput.dataset.entryId =
+        entry.id;
+
+      quantityInput.setAttribute(
+        "aria-label",
+        `${item.productName}の${index + 1}か所目の数量`
+      );
+
+      const removeButton =
+        document.createElement("button");
+
+      removeButton.type =
+        "button";
+
+      removeButton.textContent =
+        "削除";
+
+      removeButton.classList.add(
+        "stocktaking-remove-location-button"
+      );
+
+      removeButton.disabled =
+        item.locationBreakdown.length === 1;
+
+      locationInput.addEventListener(
+        "input",
+        function () {
+          entry.location =
+            locationInput.value.trim();
+
+          refreshStocktakingItemFromLocations(
+            item
+          );
+
+          updateStocktakingLocationDisplay(
+            item,
+            row,
+            totalDisplay,
+            differenceCell,
+            resultBadge
+          );
+
+          markStocktakingAsUnsaved();
+        }
+      );
+
+      quantityInput.addEventListener(
+        "input",
+        function () {
+          entry.quantity =
+            quantityInput.value.trim();
+
+          refreshStocktakingItemFromLocations(
+            item
+          );
+
+          updateStocktakingLocationDisplay(
+            item,
+            row,
+            totalDisplay,
+            differenceCell,
+            resultBadge
+          );
+
+          markStocktakingAsUnsaved();
+        }
+      );
+
+      removeButton.addEventListener(
+        "click",
+        function () {
+          if (
+            item.locationBreakdown.length <= 1
+          ) {
+            return;
+          }
+
+          item.locationBreakdown =
+            item.locationBreakdown.filter(
+              function (
+                currentEntry
+              ) {
+                return (
+                  currentEntry.id !==
+                  entry.id
+                );
+              }
+            );
+
+          refreshStocktakingItemFromLocations(
+            item
+          );
+
+          renderStocktakingLocationEntries(
+            item,
+            row,
+            locationEntries,
+            totalDisplay,
+            differenceCell,
+            resultBadge
+          );
+
+          updateStocktakingSummary();
+          markStocktakingAsUnsaved();
+        }
+      );
+
+      entryRow.appendChild(
+        locationInput
+      );
+
+      entryRow.appendChild(
+        quantityInput
+      );
+
+      entryRow.appendChild(
+        removeButton
+      );
+
+      locationEntries.appendChild(
+        entryRow
+      );
+    }
+  );
+
+  updateStocktakingLocationDisplay(
+    item,
+    row,
+    totalDisplay,
+    differenceCell,
+    resultBadge
+  );
+}
+
+function updateStocktakingLocationDisplay(
+  item,
+  row,
+  totalDisplay,
+  differenceCell,
+  resultBadge
+) {
+  totalDisplay.textContent =
+    item.actualStock === ""
+      ? "実在庫合計：未確認"
+      : `実在庫合計：${item.actualStock}個`;
 
   updateStocktakingRowAppearance(
     item,
@@ -1506,7 +1852,407 @@ function handleStocktakingActualInput(
   );
 
   updateStocktakingSummary();
-  markStocktakingAsUnsaved();
+}
+
+function refreshStocktakingItemFromLocations(
+  item
+) {
+  const actualStock =
+    calculateStocktakingLocationTotal(
+      item.locationBreakdown
+    );
+
+  item.actualStock =
+    actualStock;
+
+  item.difference =
+    actualStock === ""
+      ? null
+      : actualStock -
+        item.registeredStock;
+
+  item.result =
+    getStocktakingResult(
+      item.difference
+    );
+
+  item.checkedAt =
+    actualStock === ""
+      ? ""
+      : new Date().toISOString();
+}
+
+function calculateStocktakingLocationTotal(
+  locationBreakdown
+) {
+  if (
+    !Array.isArray(
+      locationBreakdown
+    )
+  ) {
+    return "";
+  }
+
+  let hasEnteredQuantity =
+    false;
+
+  let total = 0;
+
+  locationBreakdown.forEach(
+    function (entry) {
+      const quantityText =
+        String(
+          entry.quantity ===
+            undefined ||
+          entry.quantity ===
+            null
+            ? ""
+            : entry.quantity
+        ).trim();
+
+      if (quantityText === "") {
+        return;
+      }
+
+      const quantity =
+        Number(quantityText);
+
+      if (
+        Number.isInteger(
+          quantity
+        ) &&
+        quantity >= 0
+      ) {
+        hasEnteredQuantity =
+          true;
+
+        total += quantity;
+      }
+    }
+  );
+
+  return hasEnteredQuantity
+    ? total
+    : "";
+}
+
+function normalizeStocktakingLocationBreakdown(
+  item
+) {
+  let sourceEntries =
+    Array.isArray(
+      item.locationBreakdown
+    )
+      ? item.locationBreakdown
+      : [];
+
+  if (sourceEntries.length === 0) {
+    const oldActualStock =
+      normalizeActualStockValue(
+        item.actualStock
+      );
+
+    sourceEntries = [
+      {
+        id:
+          createStocktakingLocationEntryId(),
+        location:
+          item.location === "未登録"
+            ? ""
+            : (
+                item.location || ""
+              ),
+        quantity:
+          oldActualStock
+      }
+    ];
+  }
+
+  const normalizedEntries =
+    sourceEntries.map(
+      function (entry) {
+        const quantityText =
+          String(
+            entry.quantity ===
+              undefined ||
+            entry.quantity ===
+              null
+              ? ""
+              : entry.quantity
+          ).trim();
+
+        const quantity =
+          quantityText === ""
+            ? ""
+            : Number(quantityText);
+
+        return {
+          id:
+            entry.id ||
+            createStocktakingLocationEntryId(),
+          location:
+            String(
+              entry.location || ""
+            ).trim(),
+          quantity:
+            Number.isInteger(
+              quantity
+            ) &&
+            quantity >= 0
+              ? quantity
+              : ""
+        };
+      }
+    );
+
+  return normalizedEntries.length > 0
+    ? normalizedEntries
+    : [
+        {
+          id:
+            createStocktakingLocationEntryId(),
+          location: "",
+          quantity: ""
+        }
+      ];
+}
+
+function validateStocktakingLocationEntries() {
+  if (
+    !currentStocktaking ||
+    !Array.isArray(
+      currentStocktaking.items
+    )
+  ) {
+    return false;
+  }
+
+  for (
+    const item of
+    currentStocktaking.items
+  ) {
+    const entries =
+      Array.isArray(
+        item.locationBreakdown
+      )
+        ? item.locationBreakdown
+        : [];
+
+    const hasAnyQuantity =
+      entries.some(
+        function (entry) {
+          return (
+            String(
+              entry.quantity ===
+                undefined ||
+              entry.quantity ===
+                null
+                ? ""
+                : entry.quantity
+            ).trim() !== ""
+          );
+        }
+      );
+
+    if (!hasAnyQuantity) {
+      continue;
+    }
+
+    const usedLocations =
+      new Set();
+
+    for (const entry of entries) {
+      const location =
+        String(
+          entry.location || ""
+        ).trim();
+
+      const quantityText =
+        String(
+          entry.quantity ===
+            undefined ||
+          entry.quantity ===
+            null
+            ? ""
+            : entry.quantity
+        ).trim();
+
+      const entryHasData =
+        location !== "" ||
+        quantityText !== "";
+
+      if (!entryHasData) {
+        continue;
+      }
+
+      if (location === "") {
+        alert(
+          `「${item.productName}」の保管場所を入力してください。`
+        );
+
+        focusStocktakingLocationEntry(
+          entry.id,
+          "location"
+        );
+
+        return false;
+      }
+
+      if (quantityText === "") {
+        alert(
+          `「${item.productName}」の「${location}」の数量を入力してください。\n\n` +
+          "その場所に在庫がない場合は0を入力してください。"
+        );
+
+        focusStocktakingLocationEntry(
+          entry.id,
+          "quantity"
+        );
+
+        return false;
+      }
+
+      const quantity =
+        Number(quantityText);
+
+      if (
+        !Number.isInteger(
+          quantity
+        ) ||
+        quantity < 0
+      ) {
+        alert(
+          `「${item.productName}」の場所別数量は、0以上の整数で入力してください。`
+        );
+
+        focusStocktakingLocationEntry(
+          entry.id,
+          "quantity"
+        );
+
+        return false;
+      }
+
+      const locationKey =
+        normalizeStocktakingText(
+          location
+        );
+
+      if (
+        usedLocations.has(
+          locationKey
+        )
+      ) {
+        alert(
+          `「${item.productName}」で同じ保管場所が重複しています。\n\n` +
+          `重複している保管場所：${location}`
+        );
+
+        focusStocktakingLocationEntry(
+          entry.id,
+          "location"
+        );
+
+        return false;
+      }
+
+      usedLocations.add(
+        locationKey
+      );
+    }
+
+    refreshStocktakingItemFromLocations(
+      item
+    );
+  }
+
+  return true;
+}
+
+function focusStocktakingLocationEntry(
+  entryId,
+  fieldName
+) {
+  const selector =
+    fieldName === "location"
+      ? ".stocktaking-location-name-input"
+      : ".stocktaking-actual-input";
+
+  const inputs =
+    stocktakingItemsBody.querySelectorAll(
+      selector
+    );
+
+  for (const input of inputs) {
+    if (
+      input.dataset.entryId ===
+      entryId
+    ) {
+      input.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+
+      input.focus();
+      input.select();
+
+      break;
+    }
+  }
+}
+
+function formatStocktakingLocationBreakdown(
+  item
+) {
+  const entries =
+    Array.isArray(
+      item.locationBreakdown
+    )
+      ? item.locationBreakdown
+      : [];
+
+  return entries
+    .filter(
+      function (entry) {
+        const location =
+          String(
+            entry.location || ""
+          ).trim();
+
+        const quantity =
+          Number(
+            entry.quantity
+          );
+
+        return (
+          location !== "" &&
+          Number.isInteger(
+            quantity
+          ) &&
+          quantity >= 0
+        );
+      }
+    )
+    .map(
+      function (entry) {
+        return (
+          `${String(entry.location).trim()}：` +
+          `${Number(entry.quantity)}個`
+        );
+      }
+    )
+    .join(" / ");
+}
+
+function createStocktakingLocationEntryId() {
+  const randomText =
+    Math.random()
+      .toString(36)
+      .slice(2, 10);
+
+  return (
+    `location-${Date.now()}-${randomText}`
+  );
 }
 
 function updateStocktakingRowAppearance(
@@ -1731,37 +2477,11 @@ async function saveCurrentStocktaking(
     return false;
   }
 
-  const actualInputs =
-    stocktakingItemsBody.querySelectorAll(
-      ".stocktaking-actual-input"
-    );
+  const locationEntriesAreValid =
+    validateStocktakingLocationEntries();
 
-  for (
-    const input of actualInputs
-  ) {
-    const enteredValue =
-      input.value.trim();
-
-    if (enteredValue === "") {
-      continue;
-    }
-
-    const numberValue =
-      Number(enteredValue);
-
-    if (
-      !Number.isInteger(
-        numberValue
-      ) ||
-      numberValue < 0
-    ) {
-      alert(
-        "実在庫は0以上の整数で入力してください。"
-      );
-
-      input.focus();
-      return false;
-    }
+  if (!locationEntriesAreValid) {
+    return false;
   }
 
   currentStocktaking.updatedAt =
@@ -1990,10 +2710,31 @@ async function handleConfirmStocktaking() {
             updatedProduct
           );
 
+          const locationBreakdownText =
+            formatStocktakingLocationBreakdown(
+              item
+            );
+
+          const memoParts = [
+            `棚卸日：${currentStocktaking.stocktakingDate}`
+          ];
+
+          if (
+            locationBreakdownText !== ""
+          ) {
+            memoParts.push(
+              `場所別：${locationBreakdownText}`
+            );
+          }
+
+          if (item.memo !== "") {
+            memoParts.push(
+              item.memo
+            );
+          }
+
           const memoText =
-            item.memo === ""
-              ? `棚卸日：${currentStocktaking.stocktakingDate}`
-              : `棚卸日：${currentStocktaking.stocktakingDate} / ${item.memo}`;
+            memoParts.join(" / ");
 
           movements.push({
             id:
@@ -2403,7 +3144,7 @@ function handleStocktakingScannedBarcode(
     `読み取り成功：${selectedItem.productName}（${matchedCodeType}：${normalizedBarcode}）`;
 
   stocktakingSaveMessage.textContent =
-    "読み取った商品の実在庫を入力してください。";
+    "読み取った商品の保管場所と数量を入力してください。";
 
   stocktakingSaveMessage.classList.remove(
     "saved"

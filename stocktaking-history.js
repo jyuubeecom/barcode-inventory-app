@@ -108,7 +108,7 @@ function createStocktakingHistoryScreens() {
             <th>棚卸日</th>
             <th>状態</th>
             <th>担当者</th>
-            <th>保管場所</th>
+            <th>登録保管場所</th>
             <th>対象商品</th>
             <th>確認済み</th>
             <th>差異あり</th>
@@ -169,8 +169,9 @@ function createStocktakingHistoryScreens() {
             <th>商品名</th>
             <th>JANコード</th>
             <th>保管場所</th>
+            <th>場所別実在庫</th>
             <th>登録在庫</th>
-            <th>実在庫</th>
+            <th>実在庫合計</th>
             <th>差異</th>
             <th>メモ</th>
           </tr>
@@ -285,7 +286,7 @@ function createStocktakingHistoryStyle() {
 
     .stocktaking-history-table,
     .stocktaking-history-items-table {
-      min-width: 1100px;
+      min-width: 1300px;
     }
 
     .stocktaking-history-table th,
@@ -806,7 +807,7 @@ function displayStocktakingHistoryItems(
   if (items.length === 0) {
     stocktakingHistoryDetailBody.innerHTML = `
       <tr>
-        <td colspan="10">
+        <td colspan="11">
           この棚卸には商品データがありません。
         </td>
       </tr>
@@ -862,6 +863,13 @@ function displayStocktakingHistoryItems(
 
       appendTextCell(
         row,
+        formatHistoryLocationBreakdown(
+          item
+        )
+      );
+
+      appendTextCell(
+        row,
         getHistoryNumber(
           item.registeredStock
         )
@@ -893,6 +901,63 @@ function displayStocktakingHistoryItems(
       );
     }
   );
+}
+
+function formatHistoryLocationBreakdown(
+  item
+) {
+  const entries =
+    Array.isArray(
+      item.locationBreakdown
+    )
+      ? item.locationBreakdown
+      : [];
+
+  const breakdownText =
+    entries
+      .filter(
+        function (entry) {
+          const location =
+            String(
+              entry.location || ""
+            ).trim();
+
+          const quantity =
+            Number(
+              entry.quantity
+            );
+
+          return (
+            location !== "" &&
+            Number.isInteger(
+              quantity
+            ) &&
+            quantity >= 0
+          );
+        }
+      )
+      .map(
+        function (entry) {
+          return (
+            `${String(entry.location).trim()}：` +
+            `${Number(entry.quantity)}個`
+          );
+        }
+      )
+      .join(" / ");
+
+  if (breakdownText !== "") {
+    return breakdownText;
+  }
+
+  if (isItemChecked(item)) {
+    return (
+      `${item.location || "場所未登録"}：` +
+      `${getHistoryNumber(item.actualStock)}個`
+    );
+  }
+
+  return "未確認";
 }
 
 function appendTextCell(

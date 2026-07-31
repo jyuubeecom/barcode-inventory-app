@@ -317,7 +317,7 @@ function createStocktakingScreens() {
       id="stocktaking-save-message"
       class="stocktaking-save-message"
     >
-      保管場所ごとの数量を入力したら「入力内容を保存する」を押してください。
+      数量を入力したら、商品カード下部のボタンから保存して次の操作へ進めます。
     </p>
 
     <fieldset class="stocktaking-reflect-area">
@@ -670,7 +670,8 @@ function createStocktakingStyle() {
     }
 
     .stocktaking-mobile-location-heading,
-    .stocktaking-mobile-memo-label {
+    .stocktaking-mobile-memo-label,
+    .stocktaking-cell-mobile-actions {
       display: none;
     }
 
@@ -943,7 +944,8 @@ function createStocktakingStyle() {
           "location location"
           "registered difference"
           "actual actual"
-          "memo memo";
+          "memo memo"
+          "actions actions";
         gap: 0 10px;
         width: 100%;
         padding: 16px;
@@ -1199,6 +1201,36 @@ function createStocktakingStyle() {
       .stocktaking-cell-memo .stocktaking-memo-input {
         width: 100%;
         min-height: 46px;
+      }
+
+      .stocktaking-cell-mobile-actions {
+        grid-area: actions;
+        display: grid !important;
+        gap: 9px;
+        padding-top: 14px !important;
+      }
+
+      .stocktaking-cell-mobile-actions button {
+        width: 100%;
+        margin: 0;
+        padding: 14px 10px;
+        border-radius: 10px;
+        font-size: 17px;
+        font-weight: 700;
+        line-height: 1.35;
+      }
+
+      .stocktaking-save-and-scan-button {
+        background-color: #0277bd;
+      }
+
+      .stocktaking-save-and-top-button {
+        background-color: #546e7a;
+      }
+
+      .stocktaking-cell-mobile-actions button:disabled {
+        background-color: #90a4ae;
+        cursor: wait;
       }
 
       #save-stocktaking-items-button {
@@ -1603,7 +1635,7 @@ async function showActiveStocktaking(
     "";
 
   stocktakingSaveMessage.textContent =
-    "保管場所ごとの数量を入力したら「入力内容を保存する」を押してください。";
+    "数量を入力したら、商品カード下部のボタンから保存して次の操作へ進めます。";
 
   stocktakingSaveMessage.classList.remove(
     "saved"
@@ -1969,6 +2001,75 @@ function createStocktakingItemRow(
 
   row.appendChild(
     memoCell
+  );
+
+  const mobileActionsCell =
+    document.createElement("td");
+
+  mobileActionsCell.classList.add(
+    "stocktaking-cell-mobile-actions"
+  );
+
+  const saveAndScanButton =
+    document.createElement("button");
+
+  saveAndScanButton.type =
+    "button";
+
+  saveAndScanButton.textContent =
+    "保存して次の商品を読み取る";
+
+  saveAndScanButton.classList.add(
+    "stocktaking-save-and-scan-button"
+  );
+
+  const saveAndTopButton =
+    document.createElement("button");
+
+  saveAndTopButton.type =
+    "button";
+
+  saveAndTopButton.textContent =
+    "保存して棚卸画面の上へ戻る";
+
+  saveAndTopButton.classList.add(
+    "stocktaking-save-and-top-button"
+  );
+
+  mobileActionsCell.appendChild(
+    saveAndScanButton
+  );
+
+  mobileActionsCell.appendChild(
+    saveAndTopButton
+  );
+
+  row.appendChild(
+    mobileActionsCell
+  );
+
+  saveAndScanButton.addEventListener(
+    "click",
+    function () {
+      handleStocktakingCardSaveAction(
+        item,
+        "scan",
+        saveAndScanButton,
+        saveAndTopButton
+      );
+    }
+  );
+
+  saveAndTopButton.addEventListener(
+    "click",
+    function () {
+      handleStocktakingCardSaveAction(
+        item,
+        "top",
+        saveAndScanButton,
+        saveAndTopButton
+      );
+    }
   );
 
   addLocationButton.addEventListener(
@@ -2919,6 +3020,121 @@ function markStocktakingAsUnsaved() {
 
   stocktakingSaveMessage.classList.remove(
     "saved"
+  );
+}
+
+async function handleStocktakingCardSaveAction(
+  item,
+  action,
+  saveAndScanButton,
+  saveAndTopButton
+) {
+  if (
+    !item ||
+    item.actualStock === ""
+  ) {
+    alert(
+      "この商品の数量を入力してください。\n\n" +
+      "在庫がない場合は0を入力します。"
+    );
+
+    if (item) {
+      focusStocktakingActualInput(
+        item.internalCode
+      );
+    }
+
+    return;
+  }
+
+  saveAndScanButton.disabled =
+    true;
+
+  saveAndTopButton.disabled =
+    true;
+
+  try {
+    const saved =
+      await saveCurrentStocktaking(
+        false
+      );
+
+    if (!saved) {
+      return;
+    }
+
+    closeStocktakingInputKeyboard();
+
+    if (action === "scan") {
+      stocktakingSaveMessage.textContent =
+        "保存しました。次の商品を読み取ります。";
+
+      stocktakingSaveMessage.classList.add(
+        "saved"
+      );
+
+      openStocktakingCameraScanner();
+      return;
+    }
+
+    stocktakingSaveMessage.textContent =
+      "保存しました。棚卸画面の上へ戻りました。";
+
+    stocktakingSaveMessage.classList.add(
+      "saved"
+    );
+
+    scrollToStocktakingScreenTop();
+  } finally {
+    saveAndScanButton.disabled =
+      false;
+
+    saveAndTopButton.disabled =
+      false;
+  }
+}
+
+function closeStocktakingInputKeyboard() {
+  const activeElement =
+    document.activeElement;
+
+  if (
+    activeElement &&
+    typeof activeElement.blur ===
+      "function"
+  ) {
+    activeElement.blur();
+  }
+}
+
+function scrollToStocktakingScreenTop() {
+  if (!stocktakingActiveScreen) {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
+
+    return;
+  }
+
+  const screenTop =
+    stocktakingActiveScreen
+      .getBoundingClientRect()
+      .top +
+    window.scrollY -
+    8;
+
+  window.setTimeout(
+    function () {
+      window.scrollTo({
+        top: Math.max(
+          0,
+          screenTop
+        ),
+        behavior: "smooth"
+      });
+    },
+    50
   );
 }
 

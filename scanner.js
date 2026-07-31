@@ -48,6 +48,7 @@ let cameraControls = null;
 let barcodeDetected = false;
 let torchEnabled = false;
 let cameraScannerMode = "normal";
+let cameraAutoStartTimer = null;
 
 document.addEventListener(
   "DOMContentLoaded",
@@ -416,28 +417,41 @@ function openCameraScanner(mode) {
       ? "stocktaking"
       : "normal";
 
+  stopCameraScan();
   hideAllMainScreens();
 
   cameraScannerScreen.hidden = false;
 
   cameraScannerResult.value = "";
 
+  const isStocktakingMode =
+    cameraScannerMode ===
+    "stocktaking";
+
   cameraScannerMessage.textContent =
-    cameraScannerMode === "stocktaking"
-      ? "棚卸する商品のバーコードを読み取ります。「カメラを開始する」を押してください。"
+    isStocktakingMode
+      ? "棚卸用カメラを自動で起動しています。"
       : "「カメラを開始する」を押してください。";
 
   cameraTorchButton.disabled = true;
   cameraTorchButton.textContent =
     "ライトを点灯";
 
+  cameraStartButton.textContent =
+    isStocktakingMode
+      ? "カメラを再開する"
+      : "カメラを開始する";
+
+  cameraRetryButton.textContent =
+    "読み取りをやり直す";
+
   cameraManualButton.textContent =
-    cameraScannerMode === "stocktaking"
+    isStocktakingMode
       ? "棚卸商品を手入力で検索"
       : "手入力に切り替える";
 
   cameraCancelButton.textContent =
-    cameraScannerMode === "stocktaking"
+    isStocktakingMode
       ? "棚卸画面へ戻る"
       : "キャンセル";
 
@@ -448,6 +462,27 @@ function openCameraScanner(mode) {
     top: 0,
     behavior: "smooth"
   });
+
+  if (isStocktakingMode) {
+    cameraAutoStartTimer =
+      window.setTimeout(
+        function () {
+          cameraAutoStartTimer =
+            null;
+
+          if (
+            cameraScannerMode !==
+              "stocktaking" ||
+            cameraScannerScreen.hidden
+          ) {
+            return;
+          }
+
+          startCameraScan();
+        },
+        150
+      );
+  }
 }
 
 async function startCameraScan() {
@@ -610,6 +645,18 @@ async function toggleCameraTorch() {
 }
 
 function stopCameraScan() {
+  if (
+    cameraAutoStartTimer !==
+    null
+  ) {
+    window.clearTimeout(
+      cameraAutoStartTimer
+    );
+
+    cameraAutoStartTimer =
+      null;
+  }
+
   if (
     cameraControls &&
     typeof cameraControls.stop ===
@@ -1104,7 +1151,8 @@ function showCameraErrorMessage(error) {
 
     alert(
       "カメラの使用が許可されていません。\n\n" +
-      "ブラウザーのカメラ許可を「許可」に変更してください。"
+      "ブラウザーのカメラ許可を「許可」に変更してください。\n\n" +
+      getStocktakingManualGuidance()
     );
 
     return;
@@ -1162,7 +1210,25 @@ function showCameraErrorMessage(error) {
 
   alert(
     "カメラを起動できませんでした。\n\n" +
-    "ブラウザーのカメラ設定を確認してください。"
+    "ブラウザーのカメラ設定を確認してください。\n\n" +
+    getStocktakingManualGuidance()
+  );
+}
+
+function getStocktakingManualGuidance() {
+  if (
+    cameraScannerMode ===
+    "stocktaking"
+  ) {
+    return (
+      "読み取れない場合は、" +
+      "「棚卸商品を手入力で検索」を押してください。"
+    );
+  }
+
+  return (
+    "読み取れない場合は、" +
+    "「手入力に切り替える」を押してください。"
   );
 }
 

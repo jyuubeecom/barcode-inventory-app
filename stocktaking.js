@@ -669,6 +669,11 @@ function createStocktakingStyle() {
       min-width: 420px;
     }
 
+    .stocktaking-mobile-location-heading,
+    .stocktaking-mobile-memo-label {
+      display: none;
+    }
+
     .stocktaking-location-entries {
       display: grid;
       gap: 8px;
@@ -847,28 +852,390 @@ function createStocktakingStyle() {
         margin: 6px 0;
       }
 
-      .stocktaking-location-count-cell {
-        min-width: 330px;
+      #stocktaking-active {
+        padding-left: 0;
+        padding-right: 0;
       }
 
-      .stocktaking-location-entry {
-        grid-template-columns:
-          minmax(135px, 1fr)
-          90px;
-      }
-
-      .stocktaking-remove-location-button {
-        grid-column: 1 / -1;
-        width: 100%;
+      #stocktaking-active > h2,
+      #stocktaking-active > p,
+      #stocktaking-active > table,
+      #stocktaking-active > .stocktaking-summary,
+      #stocktaking-active > .stocktaking-search-area,
+      #stocktaking-active > fieldset,
+      #stocktaking-active > button {
+        margin-left: 12px;
+        margin-right: 12px;
+        width: calc(100% - 24px);
+        box-sizing: border-box;
       }
 
       .stocktaking-info-table th {
-        width: 115px;
+        width: 112px;
+        padding: 9px;
+        font-size: 14px;
+      }
+
+      .stocktaking-info-table td {
+        padding: 9px;
+        font-size: 14px;
       }
 
       .stocktaking-summary {
         grid-template-columns:
           repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .stocktaking-summary p {
+        padding: 10px 6px;
+        font-size: 14px;
+      }
+
+      .stocktaking-table-area {
+        overflow-x: visible;
+        padding: 0 12px;
+        box-sizing: border-box;
+      }
+
+      .stocktaking-items-table {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        border: 0;
+      }
+
+      .stocktaking-items-table thead {
+        display: none;
+      }
+
+      .stocktaking-items-table tbody {
+        display: grid;
+        gap: 16px;
+        width: 100%;
+      }
+
+      .stocktaking-items-table tbody > tr:not([data-internal-code]) {
+        display: block;
+        width: 100%;
+      }
+
+      .stocktaking-items-table tbody > tr:not([data-internal-code]) td {
+        display: block;
+        width: 100%;
+        padding: 18px;
+        border: 1px solid #cfd8dc;
+        border-radius: 12px;
+        text-align: center;
+        box-sizing: border-box;
+      }
+
+      .stocktaking-product-card-row {
+        display: grid;
+        grid-template-columns:
+          minmax(0, 1fr)
+          minmax(0, 1fr);
+        grid-template-areas:
+          "result result"
+          "name name"
+          "internal internal"
+          "product product"
+          "location location"
+          "registered difference"
+          "actual actual"
+          "memo memo";
+        gap: 0 10px;
+        width: 100%;
+        padding: 16px;
+        border: 2px solid #d7dee5;
+        border-radius: 16px;
+        background-color: #ffffff;
+        box-shadow: 0 4px 14px rgba(38, 50, 56, 0.12);
+        box-sizing: border-box;
+      }
+
+      .stocktaking-product-card-row.stocktaking-row-match {
+        border-color: #81c784;
+      }
+
+      .stocktaking-product-card-row.stocktaking-row-shortage {
+        border-color: #ef9a9a;
+      }
+
+      .stocktaking-product-card-row.stocktaking-row-surplus {
+        border-color: #ffb74d;
+      }
+
+      .stocktaking-product-card-row.stocktaking-row-unchecked {
+        border-color: #b0bec5;
+      }
+
+      .stocktaking-items-table .stocktaking-product-card-row > td {
+        display: block;
+        width: auto;
+        min-width: 0;
+        padding: 8px 0;
+        border: 0;
+        background: transparent;
+        box-sizing: border-box;
+      }
+
+      .stocktaking-cell-result {
+        grid-area: result;
+        justify-self: end;
+        padding-top: 0 !important;
+        padding-bottom: 4px !important;
+      }
+
+      .stocktaking-result-badge {
+        min-width: 0;
+        padding: 7px 12px;
+        border-radius: 9px;
+        font-size: 15px;
+      }
+
+      .stocktaking-cell-product-name {
+        grid-area: name;
+        padding: 6px 0 12px !important;
+        border-bottom: 1px solid #e0e6ea !important;
+        color: #17202a;
+        font-size: 24px;
+        font-weight: 800;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+      }
+
+      .stocktaking-cell-internal-code {
+        grid-area: internal;
+      }
+
+      .stocktaking-cell-product-code {
+        grid-area: product;
+      }
+
+      .stocktaking-cell-registered-location {
+        grid-area: location;
+        padding-bottom: 12px !important;
+        border-bottom: 1px solid #e0e6ea !important;
+      }
+
+      .stocktaking-cell-internal-code,
+      .stocktaking-cell-product-code,
+      .stocktaking-cell-registered-location {
+        display: grid !important;
+        grid-template-columns: 118px minmax(0, 1fr);
+        gap: 8px;
+        align-items: start;
+        color: #263238;
+        font-size: 16px;
+        overflow-wrap: anywhere;
+      }
+
+      .stocktaking-cell-internal-code::before,
+      .stocktaking-cell-product-code::before,
+      .stocktaking-cell-registered-location::before {
+        content: attr(data-label);
+        color: #546e7a;
+        font-weight: 700;
+      }
+
+      .stocktaking-cell-registered-stock,
+      .stocktaking-cell-difference {
+        margin-top: 12px;
+        padding: 12px 8px !important;
+        border-radius: 10px !important;
+        text-align: center !important;
+        font-size: 25px;
+        font-weight: 800;
+      }
+
+      .stocktaking-cell-registered-stock {
+        grid-area: registered;
+        background-color: #e8f1fd !important;
+        color: #1565c0;
+      }
+
+      .stocktaking-cell-difference {
+        grid-area: difference;
+      }
+
+      .stocktaking-cell-registered-stock::before,
+      .stocktaking-cell-difference::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 5px;
+        color: #455a64;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .stocktaking-row-match .stocktaking-cell-difference {
+        background-color: #e8f5e9 !important;
+        color: #1b5e20;
+      }
+
+      .stocktaking-row-shortage .stocktaking-cell-difference {
+        background-color: #ffebee !important;
+        color: #b71c1c;
+      }
+
+      .stocktaking-row-surplus .stocktaking-cell-difference {
+        background-color: #fff3e0 !important;
+        color: #e65100;
+      }
+
+      .stocktaking-row-unchecked .stocktaking-cell-difference {
+        background-color: #eceff1 !important;
+        color: #455a64;
+      }
+
+      .stocktaking-cell-actual-stock {
+        grid-area: actual;
+        margin-top: 14px;
+        padding: 14px !important;
+        border: 1px solid #d7dee5 !important;
+        border-radius: 12px;
+        background-color: #f8fafc !important;
+      }
+
+      .stocktaking-mobile-location-heading {
+        display: grid;
+        grid-template-columns:
+          minmax(0, 1fr)
+          76px
+          46px;
+        gap: 7px;
+        margin-bottom: 7px;
+        color: #455a64;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .stocktaking-mobile-location-heading span:nth-child(2),
+      .stocktaking-mobile-location-heading span:nth-child(3) {
+        text-align: center;
+      }
+
+      .stocktaking-location-count-cell {
+        min-width: 0;
+      }
+
+      .stocktaking-location-entries {
+        gap: 7px;
+      }
+
+      .stocktaking-location-entry {
+        grid-template-columns:
+          minmax(0, 1fr)
+          76px
+          46px;
+        gap: 7px;
+        padding: 0;
+        border: 0;
+        background-color: transparent;
+      }
+
+      .stocktaking-items-table input[type="text"],
+      .stocktaking-items-table input[type="number"] {
+        min-width: 0;
+        width: 100%;
+        margin: 0;
+        padding: 11px 8px;
+        border: 1px solid #b9c5ce;
+        border-radius: 8px;
+        background-color: #ffffff;
+        font-size: 16px;
+        box-sizing: border-box;
+      }
+
+      .stocktaking-location-entry input[type="number"] {
+        text-align: center;
+      }
+
+      .stocktaking-remove-location-button {
+        width: 46px;
+        min-width: 46px;
+        height: 44px;
+        padding: 0;
+        border-radius: 8px;
+        font-size: 12px;
+      }
+
+      .stocktaking-add-location-button {
+        width: 100%;
+        margin-top: 10px;
+        padding: 12px;
+        border: 2px solid #1565c0;
+        background-color: #ffffff;
+        color: #1565c0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .stocktaking-location-total {
+        margin-top: 12px;
+        padding: 13px;
+        border-radius: 10px;
+        background-color: #e8f5e9;
+        color: #1b5e20;
+        text-align: right;
+        font-size: 20px;
+        font-weight: 800;
+      }
+
+      .stocktaking-cell-memo {
+        grid-area: memo;
+        padding-top: 14px !important;
+      }
+
+      .stocktaking-mobile-memo-label {
+        display: block;
+        margin-bottom: 7px;
+        color: #263238;
+        font-size: 17px;
+        font-weight: 700;
+      }
+
+      .stocktaking-cell-memo .stocktaking-memo-input {
+        width: 100%;
+        min-height: 46px;
+      }
+
+      #save-stocktaking-items-button {
+        padding-top: 15px;
+        padding-bottom: 15px;
+        font-size: 19px;
+      }
+    }
+
+    @media (max-width: 390px) {
+      .stocktaking-product-card-row {
+        padding: 13px;
+      }
+
+      .stocktaking-cell-product-name {
+        font-size: 21px;
+      }
+
+      .stocktaking-cell-internal-code,
+      .stocktaking-cell-product-code,
+      .stocktaking-cell-registered-location {
+        grid-template-columns: 105px minmax(0, 1fr);
+        font-size: 15px;
+      }
+
+      .stocktaking-mobile-location-heading,
+      .stocktaking-location-entry {
+        grid-template-columns:
+          minmax(0, 1fr)
+          68px
+          42px;
+        gap: 5px;
+      }
+
+      .stocktaking-remove-location-button {
+        width: 42px;
+        min-width: 42px;
       }
     }
   `;
@@ -1375,6 +1742,10 @@ function createStocktakingItemRow(
   row.dataset.internalCode =
     item.internalCode;
 
+  row.classList.add(
+    "stocktaking-product-card-row"
+  );
+
   row.dataset.searchText =
     normalizeStocktakingText(
       [
@@ -1388,6 +1759,10 @@ function createStocktakingItemRow(
 
   const resultCell =
     document.createElement("td");
+
+  resultCell.classList.add(
+    "stocktaking-cell-result"
+  );
 
   const resultBadge =
     document.createElement("span");
@@ -1406,34 +1781,82 @@ function createStocktakingItemRow(
 
   appendStocktakingTextCell(
     row,
-    item.internalCode
+    item.internalCode,
+    "stocktaking-cell-internal-code",
+    "社内コード"
   );
 
   appendStocktakingTextCell(
     row,
-    item.productCode || "未登録"
+    item.productCode || "未登録",
+    "stocktaking-cell-product-code",
+    "商品コード"
   );
 
   appendStocktakingTextCell(
     row,
-    item.productName
+    item.productName,
+    "stocktaking-cell-product-name",
+    "商品名"
   );
 
   appendStocktakingTextCell(
     row,
-    item.location
+    item.location,
+    "stocktaking-cell-registered-location",
+    "登録保管場所"
   );
 
   appendStocktakingTextCell(
     row,
-    item.registeredStock
+    item.registeredStock,
+    "stocktaking-cell-registered-stock",
+    "登録在庫"
   );
 
   const actualStockCell =
     document.createElement("td");
 
   actualStockCell.classList.add(
-    "stocktaking-location-count-cell"
+    "stocktaking-location-count-cell",
+    "stocktaking-cell-actual-stock"
+  );
+
+  const locationHeading =
+    document.createElement("div");
+
+  locationHeading.classList.add(
+    "stocktaking-mobile-location-heading"
+  );
+
+  const locationHeadingText =
+    document.createElement("span");
+
+  locationHeadingText.textContent =
+    "保管場所";
+
+  const quantityHeadingText =
+    document.createElement("span");
+
+  quantityHeadingText.textContent =
+    "数量";
+
+  const actionHeadingText =
+    document.createElement("span");
+
+  actionHeadingText.textContent =
+    "操作";
+
+  locationHeading.appendChild(
+    locationHeadingText
+  );
+
+  locationHeading.appendChild(
+    quantityHeadingText
+  );
+
+  locationHeading.appendChild(
+    actionHeadingText
   );
 
   const locationEntries =
@@ -1467,6 +1890,10 @@ function createStocktakingItemRow(
   );
 
   actualStockCell.appendChild(
+    locationHeading
+  );
+
+  actualStockCell.appendChild(
     locationEntries
   );
 
@@ -1486,8 +1913,12 @@ function createStocktakingItemRow(
     document.createElement("td");
 
   differenceCell.classList.add(
-    "stocktaking-difference"
+    "stocktaking-difference",
+    "stocktaking-cell-difference"
   );
+
+  differenceCell.dataset.label =
+    "差異";
 
   row.appendChild(
     differenceCell
@@ -1495,6 +1926,20 @@ function createStocktakingItemRow(
 
   const memoCell =
     document.createElement("td");
+
+  memoCell.classList.add(
+    "stocktaking-cell-memo"
+  );
+
+  const memoLabel =
+    document.createElement("label");
+
+  memoLabel.classList.add(
+    "stocktaking-mobile-memo-label"
+  );
+
+  memoLabel.textContent =
+    "メモ";
 
   const memoInput =
     document.createElement("input");
@@ -1513,6 +1958,10 @@ function createStocktakingItemRow(
 
   memoInput.dataset.internalCode =
     item.internalCode;
+
+  memoCell.appendChild(
+    memoLabel
+  );
 
   memoCell.appendChild(
     memoInput
@@ -1595,10 +2044,23 @@ function createStocktakingItemRow(
 
 function appendStocktakingTextCell(
   row,
-  value
+  value,
+  className,
+  label
 ) {
   const cell =
     document.createElement("td");
+
+  if (className) {
+    cell.classList.add(
+      className
+    );
+  }
+
+  if (label) {
+    cell.dataset.label =
+      label;
+  }
 
   cell.textContent =
     value;

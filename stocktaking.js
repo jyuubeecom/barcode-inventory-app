@@ -38,6 +38,52 @@ let deleteStocktakingButton = null;
 let currentStocktaking = null;
 let stocktakingHasUnsavedChanges = false;
 
+const STOCKTAKING_LOCATION_OPTIONS =
+  Object.freeze([
+    "酒本倉庫1階",
+    "酒本倉庫2階",
+    "本社1階",
+    "本社1階　企画",
+    "本社1階　その他",
+    "本社2階",
+    "本社2階　企画",
+    "本社2階　その他"
+  ]);
+
+function createStocktakingLocationOptionsHtml(
+  includeAllLocations
+) {
+  const optionTexts = [];
+
+  if (includeAllLocations) {
+    optionTexts.push(
+      '<option value="すべての保管場所">すべての保管場所</option>'
+    );
+  } else {
+    optionTexts.push(
+      '<option value="">保管場所を選択</option>'
+    );
+  }
+
+  STOCKTAKING_LOCATION_OPTIONS.forEach(
+    function (location) {
+      optionTexts.push(
+        `<option value="${location}">${location}</option>`
+      );
+    }
+  );
+
+  return optionTexts.join("");
+}
+
+function isStocktakingLocationOption(
+  location
+) {
+  return STOCKTAKING_LOCATION_OPTIONS.includes(
+    String(location || "").trim()
+  );
+}
+
 document.addEventListener(
   "DOMContentLoaded",
   initializeStocktaking
@@ -130,7 +176,7 @@ function createStocktakingScreens() {
     <h2>棚卸開始画面</h2>
 
     <p>
-      棚卸日、担当者、保管場所を入力してください。
+      棚卸日と担当者を入力し、保管場所をリストから選んでください。
     </p>
 
     <form id="stocktaking-setup-form">
@@ -161,17 +207,15 @@ function createStocktakingScreens() {
 
       <div>
         <label for="stocktaking-location">
-          保管場所
+          棚卸対象の保管場所
         </label>
 
-        <input
-          id="stocktaking-location"
-          type="text"
-          placeholder="例：架空倉庫A"
-        >
+        <select id="stocktaking-location">
+          ${createStocktakingLocationOptionsHtml(true)}
+        </select>
 
         <small>
-          空欄の場合は、すべての保管場所を対象にします。
+          全商品を対象にする場合は「すべての保管場所」を選びます。
         </small>
       </div>
 
@@ -661,7 +705,8 @@ function createStocktakingStyle() {
       min-width: 100px;
     }
 
-    .stocktaking-items-table input[type="text"] {
+    .stocktaking-items-table input[type="text"],
+    .stocktaking-items-table select {
       min-width: 180px;
     }
 
@@ -694,7 +739,8 @@ function createStocktakingStyle() {
       background-color: #ffffff;
     }
 
-    .stocktaking-location-entry input {
+    .stocktaking-location-entry input,
+    .stocktaking-location-entry select {
       width: 100%;
       min-width: 0;
       margin: 0;
@@ -1142,7 +1188,8 @@ function createStocktakingStyle() {
       }
 
       .stocktaking-items-table input[type="text"],
-      .stocktaking-items-table input[type="number"] {
+      .stocktaking-items-table input[type="number"],
+      .stocktaking-items-table select {
         min-width: 0;
         width: 100%;
         margin: 0;
@@ -2218,16 +2265,48 @@ function renderStocktakingLocationEntries(
         entry.id;
 
       const locationInput =
-        document.createElement("input");
+        document.createElement("select");
 
-      locationInput.type =
-        "text";
+      locationInput.innerHTML =
+        createStocktakingLocationOptionsHtml(
+          false
+        );
 
-      locationInput.placeholder =
-        "保管場所";
+      const savedLocation =
+        String(
+          entry.location || ""
+        ).trim();
 
-      locationInput.value =
-        entry.location || "";
+      if (
+        savedLocation !== "" &&
+        !isStocktakingLocationOption(
+          savedLocation
+        )
+      ) {
+        const oldLocationOption =
+          document.createElement(
+            "option"
+          );
+
+        oldLocationOption.value =
+          savedLocation;
+
+        oldLocationOption.textContent =
+          `${savedLocation}（一覧外・選び直してください）`;
+
+        oldLocationOption.disabled =
+          true;
+
+        oldLocationOption.selected =
+          true;
+
+        locationInput.appendChild(
+          oldLocationOption
+        );
+      } else {
+        locationInput.value =
+          savedLocation;
+      }
 
       locationInput.classList.add(
         "stocktaking-location-name-input"
@@ -2290,10 +2369,12 @@ function renderStocktakingLocationEntries(
         item.locationBreakdown.length === 1;
 
       locationInput.addEventListener(
-        "input",
+        "change",
         function () {
           entry.location =
-            locationInput.value.trim();
+            String(
+              locationInput.value || ""
+            ).trim();
 
           refreshStocktakingItemFromLocations(
             item
@@ -2654,7 +2735,24 @@ function validateStocktakingLocationEntries() {
 
       if (location === "") {
         alert(
-          `「${item.productName}」の保管場所を入力してください。`
+          `「${item.productName}」の保管場所をリストから選択してください。`
+        );
+
+        focusStocktakingLocationEntry(
+          entry.id,
+          "location"
+        );
+
+        return false;
+      }
+
+      if (
+        !isStocktakingLocationOption(
+          location
+        )
+      ) {
+        alert(
+          `「${item.productName}」の保管場所を、指定されたリストから選び直してください。`
         );
 
         focusStocktakingLocationEntry(
@@ -2761,7 +2859,13 @@ function focusStocktakingLocationEntry(
       });
 
       input.focus();
-      input.select();
+
+      if (
+        typeof input.select ===
+        "function"
+      ) {
+        input.select();
+      }
 
       break;
     }

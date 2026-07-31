@@ -956,6 +956,10 @@ function createStocktakingStyle() {
         box-sizing: border-box;
       }
 
+      .stocktaking-product-card-row[hidden] {
+        display: none !important;
+      }
+
       .stocktaking-product-card-row.stocktaking-row-match {
         border-color: #81c784;
       }
@@ -2995,7 +2999,13 @@ function filterStocktakingItems() {
       row.hidden = !matches;
 
       if (matches) {
+        row.style.removeProperty(
+          "display"
+        );
+
         displayedCount += 1;
+      } else {
+        row.style.display = "none";
       }
     }
   );

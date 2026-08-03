@@ -3,7 +3,7 @@
 const DATABASE_NAME =
   "barcodeInventoryDatabase";
 
-const DATABASE_VERSION = 5;
+const DATABASE_VERSION = 6;
 
 const PRODUCT_STORE_NAME =
   "products";
@@ -16,6 +16,9 @@ const STOCKTAKING_STORE_NAME =
 
 const STOCKTAKING_SUBMISSION_STORE_NAME =
   "stocktakingSubmissions";
+
+const STOCKTAKING_AGGREGATION_REFLECTION_STORE_NAME =
+  "stocktakingAggregationReflections";
 
 function openDatabase() {
   return new Promise(function (
@@ -192,6 +195,44 @@ function openDatabase() {
           submissionStore.createIndex(
             "importedAt",
             "importedAt",
+            {
+              unique: false
+            }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            STOCKTAKING_AGGREGATION_REFLECTION_STORE_NAME
+          )
+        ) {
+          const reflectionStore =
+            database.createObjectStore(
+              STOCKTAKING_AGGREGATION_REFLECTION_STORE_NAME,
+              {
+                keyPath: "reflectionId"
+              }
+            );
+
+          reflectionStore.createIndex(
+            "stocktakingDate",
+            "stocktakingDate",
+            {
+              unique: false
+            }
+          );
+
+          reflectionStore.createIndex(
+            "sourceKey",
+            "sourceKey",
+            {
+              unique: true
+            }
+          );
+
+          reflectionStore.createIndex(
+            "reflectedAt",
+            "reflectedAt",
             {
               unique: false
             }
@@ -1088,3 +1129,166 @@ async function deleteStocktakingSubmission(
   });
 }
 
+
+
+async function completeStocktakingAggregationReflection(
+  reflection,
+  updatedProducts,
+  movements
+) {
+  const database =
+    await openDatabase();
+
+  return new Promise(function (
+    resolve,
+    reject
+  ) {
+    const transaction =
+      database.transaction(
+        [
+          PRODUCT_STORE_NAME,
+          MOVEMENT_STORE_NAME,
+          STOCKTAKING_AGGREGATION_REFLECTION_STORE_NAME
+        ],
+        "readwrite"
+      );
+
+    const productStore =
+      transaction.objectStore(
+        PRODUCT_STORE_NAME
+      );
+
+    const movementStore =
+      transaction.objectStore(
+        MOVEMENT_STORE_NAME
+      );
+
+    const reflectionStore =
+      transaction.objectStore(
+        STOCKTAKING_AGGREGATION_REFLECTION_STORE_NAME
+      );
+
+    updatedProducts.forEach(
+      function (product) {
+        productStore.put(product);
+      }
+    );
+
+    movements.forEach(
+      function (movement) {
+        movementStore.add(movement);
+      }
+    );
+
+    reflectionStore.add(reflection);
+
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve();
+      };
+
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
+
+    transaction.onabort =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
+  });
+}
+
+async function getAllStocktakingAggregationReflections() {
+  const database =
+    await openDatabase();
+
+  return new Promise(function (
+    resolve,
+    reject
+  ) {
+    const transaction =
+      database.transaction(
+        STOCKTAKING_AGGREGATION_REFLECTION_STORE_NAME,
+        "readonly"
+      );
+
+    const store =
+      transaction.objectStore(
+        STOCKTAKING_AGGREGATION_REFLECTION_STORE_NAME
+      );
+
+    const request = store.getAll();
+    let reflections = [];
+
+    request.onsuccess = function () {
+      reflections = request.result || [];
+    };
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve(reflections);
+    };
+
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+  });
+}
+
+async function getStocktakingAggregationReflectionBySourceKey(
+  sourceKey
+) {
+  const database =
+    await openDatabase();
+
+  return new Promise(function (
+    resolve,
+    reject
+  ) {
+    const transaction =
+      database.transaction(
+        STOCKTAKING_AGGREGATION_REFLECTION_STORE_NAME,
+        "readonly"
+      );
+
+    const store =
+      transaction.objectStore(
+        STOCKTAKING_AGGREGATION_REFLECTION_STORE_NAME
+      );
+
+    const index =
+      store.index("sourceKey");
+
+    const request =
+      index.get(sourceKey);
+
+    let reflection = null;
+
+    request.onsuccess = function () {
+      reflection = request.result || null;
+    };
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve(reflection);
+    };
+
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+  });
+}

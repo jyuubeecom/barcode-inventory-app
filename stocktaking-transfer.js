@@ -7,7 +7,7 @@ const STOCKTAKING_SUBMISSION_FORMAT_VERSION =
   1;
 
 const STOCKTAKING_TRANSFER_APP_VERSION =
-  "v20";
+  "v21";
 
 let stocktakingAggregationScreen = null;
 let stocktakingSubmissionFileInput = null;
@@ -21,9 +21,18 @@ let stocktakingAggregationSummary = null;
 let stocktakingAggregationBody = null;
 let exportStocktakingAggregationCsvButton = null;
 
+let stocktakingReflectionPersonInput = null;
+let previewStocktakingReflectionButton = null;
+let applyStocktakingReflectionButton = null;
+let exportStocktakingReflectionCsvButton = null;
+let stocktakingReflectionMessage = null;
+let stocktakingReflectionBody = null;
+
 let selectedStocktakingSubmissionFiles = [];
 let importedStocktakingSubmissions = [];
 let currentStocktakingAggregationRows = [];
+let currentStocktakingReflectionPreview = null;
+let latestStocktakingReflection = null;
 
 window.stocktakingTransferApp = {
   exportSession: exportStocktakingSubmission
@@ -257,6 +266,83 @@ function createStocktakingAggregationScreen() {
       </button>
     </section>
 
+    <section class="stocktaking-aggregation-panel stocktaking-reflection-panel">
+      <h3>4. 集約結果を現在庫へ反映する</h3>
+
+      <p class="stocktaking-aggregation-safety">
+        棚卸日を1日選び、反映内容を確認してから現在庫へ反映します。要確認・未確認・保管場所「未確認」が1件でもある場合は反映できません。
+      </p>
+
+      <label for="stocktaking-reflection-person">
+        集約担当者（必須）
+      </label>
+
+      <input
+        id="stocktaking-reflection-person"
+        type="text"
+        placeholder="例：集約担当者"
+        autocomplete="name"
+      >
+
+      <div class="stocktaking-reflection-actions">
+        <button
+          id="preview-stocktaking-reflection-button"
+          type="button"
+        >
+          反映内容を確認する
+        </button>
+
+        <button
+          id="apply-stocktaking-reflection-button"
+          type="button"
+          disabled
+        >
+          現在庫へ反映する
+        </button>
+
+        <button
+          id="export-stocktaking-reflection-csv-button"
+          type="button"
+          disabled
+        >
+          反映結果をCSV出力する
+        </button>
+      </div>
+
+      <p
+        id="stocktaking-reflection-message"
+        class="stocktaking-aggregation-message"
+      >
+        棚卸日を選び、「反映内容を確認する」を押してください。
+      </p>
+
+      <div class="stocktaking-aggregation-table-area">
+        <table class="stocktaking-reflection-preview-table">
+          <thead>
+            <tr>
+              <th>判定</th>
+              <th>社内コード</th>
+              <th>商品コード</th>
+              <th>商品名</th>
+              <th>現在庫</th>
+              <th>集約実在庫</th>
+              <th>変更数量</th>
+              <th>保管場所別内訳</th>
+              <th>確認内容</th>
+            </tr>
+          </thead>
+
+          <tbody id="stocktaking-reflection-body">
+            <tr>
+              <td colspan="9">
+                反映内容はまだ確認されていません。
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <button
       id="back-home-from-stocktaking-aggregation"
       type="button"
@@ -319,6 +405,36 @@ function createStocktakingAggregationScreen() {
       "#export-stocktaking-aggregation-csv-button"
     );
 
+  stocktakingReflectionPersonInput =
+    document.querySelector(
+      "#stocktaking-reflection-person"
+    );
+
+  previewStocktakingReflectionButton =
+    document.querySelector(
+      "#preview-stocktaking-reflection-button"
+    );
+
+  applyStocktakingReflectionButton =
+    document.querySelector(
+      "#apply-stocktaking-reflection-button"
+    );
+
+  exportStocktakingReflectionCsvButton =
+    document.querySelector(
+      "#export-stocktaking-reflection-csv-button"
+    );
+
+  stocktakingReflectionMessage =
+    document.querySelector(
+      "#stocktaking-reflection-message"
+    );
+
+  stocktakingReflectionBody =
+    document.querySelector(
+      "#stocktaking-reflection-body"
+    );
+
   stocktakingSubmissionFileInput.addEventListener(
     "change",
     previewSelectedStocktakingSubmissionFiles
@@ -337,6 +453,33 @@ function createStocktakingAggregationScreen() {
   exportStocktakingAggregationCsvButton.addEventListener(
     "click",
     exportStocktakingAggregationCsv
+  );
+
+  previewStocktakingReflectionButton.addEventListener(
+    "click",
+    previewStocktakingReflection
+  );
+
+  applyStocktakingReflectionButton.addEventListener(
+    "click",
+    applyStocktakingReflection
+  );
+
+  exportStocktakingReflectionCsvButton.addEventListener(
+    "click",
+    exportStocktakingReflectionCsv
+  );
+
+  stocktakingReflectionPersonInput.addEventListener(
+    "input",
+    function () {
+      if (currentStocktakingReflectionPreview) {
+        currentStocktakingReflectionPreview = null;
+        applyStocktakingReflectionButton.disabled = true;
+        stocktakingReflectionMessage.textContent =
+          "担当者を変更しました。もう一度、反映内容を確認してください。";
+      }
+    }
   );
 
   document.querySelector(
@@ -431,6 +574,74 @@ function createStocktakingAggregationStyle() {
 
     .stocktaking-aggregation-result-table {
       min-width: 1550px;
+    }
+
+
+    .stocktaking-reflection-preview-table {
+      width: 100%;
+      min-width: 1350px;
+      border-collapse: collapse;
+    }
+
+    .stocktaking-reflection-preview-table th,
+    .stocktaking-reflection-preview-table td {
+      padding: 10px;
+      border: 1px solid #cfd8dc;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .stocktaking-reflection-preview-table th {
+      background-color: #37474f;
+      color: #ffffff;
+      white-space: nowrap;
+    }
+
+    #stocktaking-reflection-person {
+      width: 100%;
+      max-width: 620px;
+      min-height: 48px;
+      margin: 8px 0 14px;
+      padding: 9px;
+      font-size: 17px;
+      box-sizing: border-box;
+    }
+
+    .stocktaking-reflection-actions {
+      display: grid;
+      grid-template-columns:
+        repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin: 10px 0 14px;
+    }
+
+    .stocktaking-reflection-actions button {
+      width: 100%;
+      margin: 0;
+    }
+
+    #preview-stocktaking-reflection-button {
+      background-color: #455a64;
+    }
+
+    #apply-stocktaking-reflection-button {
+      background-color: #c62828;
+    }
+
+    #export-stocktaking-reflection-csv-button {
+      background-color: #2e7d32;
+    }
+
+    .stocktaking-reflection-ok {
+      background-color: #e8f5e9;
+    }
+
+    .stocktaking-reflection-no-change {
+      background-color: #e3f2fd;
+    }
+
+    .stocktaking-reflection-blocked {
+      background-color: #ffebee;
     }
 
     .stocktaking-submission-preview-table th,
@@ -1277,6 +1488,9 @@ function updateStocktakingAggregationResults() {
   exportStocktakingAggregationCsvButton.disabled =
     currentStocktakingAggregationRows.length ===
     0;
+
+  invalidateStocktakingReflectionPreview();
+  loadExistingStocktakingReflectionForCurrentSelection();
 }
 
 function buildStocktakingAggregationRows(
@@ -1496,12 +1710,24 @@ function buildStocktakingAggregationRows(
       }
 
       let hasLocationConflict = false;
+      let hasUnconfirmedLocation = false;
       let actualStockTotal = 0;
       let hasActualStock = false;
       const locationBreakdownTexts = [];
 
       group.locations.forEach(
         function (locationGroup) {
+          if (
+            normalizeTransferText(
+              locationGroup.location
+            ) === "未確認"
+          ) {
+            hasUnconfirmedLocation = true;
+            warnings.push(
+              "保管場所が「未確認」の商品です。"
+            );
+          }
+
           const quantities =
             Array.from(
               new Set(
@@ -1613,6 +1839,12 @@ function buildStocktakingAggregationRows(
           group.submissionIds.size,
         bulkZeroCount:
           group.bulkZeroSubmissionIds.size,
+        sourceSubmissionIds:
+          Array.from(
+            group.submissionIds
+          ).sort(),
+        hasUnconfirmedLocation:
+          hasUnconfirmedLocation,
         warnings:
           Array.from(
             new Set(warnings)
@@ -1942,6 +2174,878 @@ function exportStocktakingAggregationCsv() {
     csvText,
     `棚卸集約結果_${sanitizeTransferFileNamePart(datePart)}.csv`,
     "text/csv;charset=utf-8"
+  );
+}
+
+
+function invalidateStocktakingReflectionPreview() {
+  currentStocktakingReflectionPreview = null;
+
+  if (applyStocktakingReflectionButton) {
+    applyStocktakingReflectionButton.disabled = true;
+  }
+
+  if (stocktakingReflectionBody) {
+    stocktakingReflectionBody.innerHTML = `
+      <tr>
+        <td colspan="9">
+          反映内容はまだ確認されていません。
+        </td>
+      </tr>
+    `;
+  }
+
+  if (stocktakingReflectionMessage) {
+    stocktakingReflectionMessage.textContent =
+      "棚卸日を選び、「反映内容を確認する」を押してください。";
+  }
+}
+
+function getSelectedStocktakingAggregationSubmissions() {
+  const selectedDate =
+    stocktakingAggregationDateFilter
+      ? stocktakingAggregationDateFilter.value
+      : "";
+
+  if (selectedDate === "") {
+    return [];
+  }
+
+  return importedStocktakingSubmissions.filter(
+    function (submission) {
+      return (
+        submission.stocktaking.stocktakingDate ===
+        selectedDate
+      );
+    }
+  );
+}
+
+function createStocktakingAggregationSourceKey(
+  stocktakingDate,
+  submissions
+) {
+  const ids = submissions
+    .map(function (submission) {
+      return submission.submissionId;
+    })
+    .sort();
+
+  return (
+    `${stocktakingDate}::${ids.join("|")}`
+  );
+}
+
+async function loadExistingStocktakingReflectionForCurrentSelection() {
+  latestStocktakingReflection = null;
+
+  if (!exportStocktakingReflectionCsvButton) {
+    return;
+  }
+
+  exportStocktakingReflectionCsvButton.disabled = true;
+
+  const selectedDate =
+    stocktakingAggregationDateFilter
+      ? stocktakingAggregationDateFilter.value
+      : "";
+
+  const submissions =
+    getSelectedStocktakingAggregationSubmissions();
+
+  if (
+    selectedDate === "" ||
+    submissions.length === 0
+  ) {
+    return;
+  }
+
+  const sourceKey =
+    createStocktakingAggregationSourceKey(
+      selectedDate,
+      submissions
+    );
+
+  try {
+    const reflection =
+      await getStocktakingAggregationReflectionBySourceKey(
+        sourceKey
+      );
+
+    if (!reflection) {
+      return;
+    }
+
+    latestStocktakingReflection = reflection;
+    exportStocktakingReflectionCsvButton.disabled = false;
+
+    stocktakingReflectionMessage.textContent =
+      `この提出組み合わせは、${formatTransferDateTime(reflection.reflectedAt)}に現在庫へ反映済みです。`;
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function previewStocktakingReflection() {
+  const selectedDate =
+    stocktakingAggregationDateFilter.value;
+
+  const person =
+    stocktakingReflectionPersonInput.value.trim();
+
+  if (selectedDate === "") {
+    alert(
+      "反映する棚卸日を1日選択してください。\n\n「すべての棚卸日」のままでは反映できません。"
+    );
+
+    stocktakingAggregationDateFilter.focus();
+    return;
+  }
+
+  if (person === "") {
+    alert(
+      "集約担当者を入力してください。"
+    );
+
+    stocktakingReflectionPersonInput.focus();
+    return;
+  }
+
+  const submissions =
+    getSelectedStocktakingAggregationSubmissions();
+
+  if (submissions.length === 0) {
+    alert(
+      "選択した棚卸日の提出データがありません。"
+    );
+    return;
+  }
+
+  const rows =
+    buildStocktakingAggregationRows(
+      submissions
+    );
+
+  if (rows.length === 0) {
+    alert(
+      "反映内容を作成できる集約結果がありません。"
+    );
+    return;
+  }
+
+  previewStocktakingReflectionButton.disabled = true;
+  applyStocktakingReflectionButton.disabled = true;
+  stocktakingReflectionMessage.textContent =
+    "商品データと集約結果を照合しています。";
+
+  try {
+    const products =
+      await getAllProducts();
+
+    const productMap = new Map();
+
+    products.forEach(function (product) {
+      productMap.set(
+        String(product.internalCode || ""),
+        product
+      );
+    });
+
+    const sourceKey =
+      createStocktakingAggregationSourceKey(
+        selectedDate,
+        submissions
+      );
+
+    const existingReflection =
+      await getStocktakingAggregationReflectionBySourceKey(
+        sourceKey
+      );
+
+    const previewRows = rows.map(
+      function (row) {
+        return createStocktakingReflectionPreviewRow(
+          row,
+          productMap.get(row.internalCode) || null
+        );
+      }
+    );
+
+    const blockedCount =
+      previewRows.filter(function (row) {
+        return row.blockers.length > 0;
+      }).length;
+
+    const changedCount =
+      previewRows.filter(function (row) {
+        return (
+          row.blockers.length === 0 &&
+          row.changeQuantity !== 0
+        );
+      }).length;
+
+    const noChangeCount =
+      previewRows.filter(function (row) {
+        return (
+          row.blockers.length === 0 &&
+          row.changeQuantity === 0
+        );
+      }).length;
+
+    const globalBlockers = [];
+
+    if (existingReflection) {
+      globalBlockers.push(
+        "同じ提出データの組み合わせは、すでに現在庫へ反映済みです。"
+      );
+    }
+
+    currentStocktakingReflectionPreview = {
+      stocktakingDate: selectedDate,
+      person: person,
+      sourceKey: sourceKey,
+      submissionIds:
+        submissions
+          .map(function (submission) {
+            return submission.submissionId;
+          })
+          .sort(),
+      createdAt: new Date().toISOString(),
+      rows: previewRows,
+      blockedCount: blockedCount,
+      changedCount: changedCount,
+      noChangeCount: noChangeCount,
+      globalBlockers: globalBlockers,
+      canApply:
+        blockedCount === 0 &&
+        globalBlockers.length === 0
+    };
+
+    renderStocktakingReflectionPreview(
+      currentStocktakingReflectionPreview
+    );
+
+    applyStocktakingReflectionButton.disabled =
+      !currentStocktakingReflectionPreview.canApply;
+  } catch (error) {
+    console.error(error);
+
+    currentStocktakingReflectionPreview = null;
+
+    stocktakingReflectionMessage.textContent =
+      "反映内容を確認できませんでした。";
+
+    alert(
+      "商品データと集約結果を照合できませんでした。"
+    );
+  } finally {
+    previewStocktakingReflectionButton.disabled = false;
+  }
+}
+
+function createStocktakingReflectionPreviewRow(
+  aggregationRow,
+  product
+) {
+  const blockers = [];
+  const warnings = [];
+
+  if (!product) {
+    blockers.push(
+      "集約用パソコンの商品一覧に社内コードが登録されていません。"
+    );
+  }
+
+  if (
+    aggregationRow.result === "要確認" ||
+    aggregationRow.result === "未確認" ||
+    aggregationRow.actualStock === null ||
+    aggregationRow.registeredStock === null
+  ) {
+    blockers.push(
+      "集約結果が要確認または未確認です。"
+    );
+  }
+
+  if (aggregationRow.hasUnconfirmedLocation) {
+    blockers.push(
+      "保管場所が「未確認」のため反映できません。"
+    );
+  }
+
+  let currentStock = null;
+  let productStatus = "";
+
+  if (product) {
+    currentStock =
+      normalizeTransferNonNegativeInteger(
+        product.stock,
+        0
+      );
+
+    productStatus =
+      String(
+        product.productStatus ||
+        "通常商品"
+      ).trim();
+
+    if (productStatus === "廃盤") {
+      blockers.push(
+        "集約用パソコンの商品が廃盤に設定されています。"
+      );
+    }
+
+    if (
+      aggregationRow.registeredStock !== null &&
+      currentStock !== aggregationRow.registeredStock
+    ) {
+      blockers.push(
+        `棚卸開始時の登録在庫${aggregationRow.registeredStock}個と、現在庫${currentStock}個が一致しません。棚卸後に入出庫または修正された可能性があります。`
+      );
+    }
+
+    if (
+      normalizeTransferText(product.productCode) !==
+      normalizeTransferText(aggregationRow.productCode)
+    ) {
+      warnings.push(
+        "商品コードが提出データと現在の商品情報で異なります。"
+      );
+    }
+
+    if (
+      normalizeTransferText(product.productName) !==
+      normalizeTransferText(aggregationRow.productName)
+    ) {
+      warnings.push(
+        "商品名が提出データと現在の商品情報で異なります。"
+      );
+    }
+  }
+
+  if (aggregationRow.warnings) {
+    warnings.push(
+      aggregationRow.warnings
+    );
+  }
+
+  const afterStock =
+    aggregationRow.actualStock;
+
+  const changeQuantity =
+    currentStock === null ||
+    afterStock === null
+      ? null
+      : afterStock - currentStock;
+
+  let judgment = "反映不可";
+
+  if (blockers.length === 0) {
+    judgment =
+      changeQuantity === 0
+        ? "変更なし"
+        : "反映可能";
+  }
+
+  return {
+    judgment: judgment,
+    stocktakingDate:
+      aggregationRow.stocktakingDate,
+    internalCode:
+      aggregationRow.internalCode,
+    productCode:
+      product
+        ? String(product.productCode || "")
+        : aggregationRow.productCode,
+    productName:
+      product
+        ? String(product.productName || "")
+        : aggregationRow.productName,
+    beforeStock: currentStock,
+    afterStock: afterStock,
+    changeQuantity: changeQuantity,
+    locationBreakdown:
+      aggregationRow.locationBreakdown,
+    people:
+      aggregationRow.people,
+    submissionCount:
+      aggregationRow.submissionCount,
+    bulkZeroCount:
+      aggregationRow.bulkZeroCount,
+    warnings:
+      Array.from(new Set(warnings)).filter(Boolean),
+    blockers:
+      Array.from(new Set(blockers)).filter(Boolean),
+    product: product
+  };
+}
+
+function renderStocktakingReflectionPreview(
+  preview
+) {
+  stocktakingReflectionBody.innerHTML = "";
+
+  preview.rows.forEach(function (previewRow) {
+    const row = document.createElement("tr");
+
+    if (previewRow.blockers.length > 0) {
+      row.classList.add(
+        "stocktaking-reflection-blocked"
+      );
+    } else if (previewRow.changeQuantity === 0) {
+      row.classList.add(
+        "stocktaking-reflection-no-change"
+      );
+    } else {
+      row.classList.add(
+        "stocktaking-reflection-ok"
+      );
+    }
+
+    appendTransferCell(row, previewRow.judgment);
+    appendTransferCell(row, previewRow.internalCode);
+    appendTransferCell(
+      row,
+      previewRow.productCode || "未登録"
+    );
+    appendTransferCell(
+      row,
+      previewRow.productName || "未登録"
+    );
+    appendTransferCell(
+      row,
+      previewRow.beforeStock === null
+        ? "確認不可"
+        : previewRow.beforeStock
+    );
+    appendTransferCell(
+      row,
+      previewRow.afterStock === null
+        ? "確認不可"
+        : previewRow.afterStock
+    );
+    appendTransferCell(
+      row,
+      previewRow.changeQuantity === null
+        ? "確認不可"
+        : formatTransferSignedNumber(
+            previewRow.changeQuantity
+          )
+    );
+    appendTransferCell(
+      row,
+      previewRow.locationBreakdown || "未確認"
+    );
+
+    const checkTexts = [];
+
+    previewRow.blockers.forEach(
+      function (message) {
+        checkTexts.push(`反映不可：${message}`);
+      }
+    );
+
+    previewRow.warnings.forEach(
+      function (message) {
+        checkTexts.push(`注意：${message}`);
+      }
+    );
+
+    if (checkTexts.length === 0) {
+      checkTexts.push("問題なし");
+    }
+
+    appendTransferCell(
+      row,
+      checkTexts.join(" / ")
+    );
+
+    stocktakingReflectionBody.appendChild(row);
+  });
+
+  const messageParts = [
+    `棚卸日：${preview.stocktakingDate}`,
+    `対象商品：${preview.rows.length}件`,
+    `在庫変更：${preview.changedCount}件`,
+    `変更なし：${preview.noChangeCount}件`,
+    `反映不可：${preview.blockedCount}件`
+  ];
+
+  if (preview.globalBlockers.length > 0) {
+    messageParts.push(
+      preview.globalBlockers.join(" / ")
+    );
+  } else if (preview.canApply) {
+    messageParts.push(
+      "すべての確認が完了しました。「現在庫へ反映する」を押せます。"
+    );
+  } else {
+    messageParts.push(
+      "反映不可の商品を修正してから、提出ファイルを取り込み直してください。"
+    );
+  }
+
+  stocktakingReflectionMessage.textContent =
+    messageParts.join(" / ");
+}
+
+async function applyStocktakingReflection() {
+  const preview =
+    currentStocktakingReflectionPreview;
+
+  if (!preview || !preview.canApply) {
+    alert(
+      "先に「反映内容を確認する」を押し、反映可能な状態にしてください。"
+    );
+    return;
+  }
+
+  const currentPerson =
+    stocktakingReflectionPersonInput.value.trim();
+
+  if (
+    currentPerson === "" ||
+    currentPerson !== preview.person
+  ) {
+    alert(
+      "集約担当者が変更されています。もう一度、反映内容を確認してください。"
+    );
+    applyStocktakingReflectionButton.disabled = true;
+    return;
+  }
+
+  const freshProducts =
+    await getAllProducts();
+
+  const freshProductMap = new Map();
+
+  freshProducts.forEach(function (product) {
+    freshProductMap.set(
+      String(product.internalCode || ""),
+      product
+    );
+  });
+
+  const freshRows =
+    currentStocktakingAggregationRows.map(
+      function (row) {
+        return createStocktakingReflectionPreviewRow(
+          row,
+          freshProductMap.get(row.internalCode) || null
+        );
+      }
+    );
+
+  const freshBlocked =
+    freshRows.some(function (row) {
+      return row.blockers.length > 0;
+    });
+
+  if (freshBlocked) {
+    alert(
+      "確認後に商品データまたは在庫が変更されました。もう一度、反映内容を確認してください。"
+    );
+    invalidateStocktakingReflectionPreview();
+    return;
+  }
+
+  const changedRows =
+    freshRows.filter(function (row) {
+      return row.changeQuantity !== 0;
+    });
+
+  const confirmed = window.confirm(
+    "集約結果を現在庫へ反映しますか？\n\n" +
+    `棚卸日：${preview.stocktakingDate}\n` +
+    `集約担当者：${preview.person}\n` +
+    `対象商品：${freshRows.length}件\n` +
+    `在庫を変更する商品：${changedRows.length}件\n` +
+    `変更なし：${freshRows.length - changedRows.length}件\n\n` +
+    "反映すると商品一覧の現在庫が更新され、入出庫履歴に「棚卸集約調整」として記録されます。"
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  applyStocktakingReflectionButton.disabled = true;
+  previewStocktakingReflectionButton.disabled = true;
+
+  try {
+    const reflectedAt =
+      new Date().toISOString();
+
+    const reflectionId =
+      createStocktakingReflectionId();
+
+    const updatedProducts = [];
+    const movements = [];
+
+    freshRows.forEach(function (row, index) {
+      if (
+        row.changeQuantity === 0 ||
+        !row.product
+      ) {
+        return;
+      }
+
+      const updatedProduct = {
+        ...row.product,
+        stock: row.afterStock,
+        updatedAt: reflectedAt
+      };
+
+      updatedProducts.push(updatedProduct);
+
+      const memoParts = [
+        `集約棚卸日：${preview.stocktakingDate}`,
+        `場所別：${row.locationBreakdown || "未確認"}`,
+        `提出数：${row.submissionCount}件`,
+        `集約担当者：${preview.person}`,
+        `反映番号：${reflectionId}`
+      ];
+
+      if (row.bulkZeroCount > 0) {
+        memoParts.push(
+          `一括0入力提出：${row.bulkZeroCount}件`
+        );
+      }
+
+      movements.push({
+        id:
+          createStocktakingReflectionMovementId(
+            reflectionId,
+            index
+          ),
+        dateTime: reflectedAt,
+        internalCode:
+          row.internalCode,
+        productCode:
+          row.productCode,
+        productName:
+          row.productName,
+        type: "棚卸集約調整",
+        quantity:
+          row.changeQuantity,
+        beforeStock:
+          row.beforeStock,
+        afterStock:
+          row.afterStock,
+        person:
+          preview.person,
+        reason:
+          "複数端末の棚卸結果を反映",
+        memo:
+          memoParts.join(" / ")
+      });
+    });
+
+    const reflection = {
+      reflectionId: reflectionId,
+      sourceKey: preview.sourceKey,
+      stocktakingDate:
+        preview.stocktakingDate,
+      reflectedAt: reflectedAt,
+      person: preview.person,
+      submissionIds:
+        preview.submissionIds,
+      itemCount:
+        freshRows.length,
+      changedCount:
+        changedRows.length,
+      rows:
+        freshRows.map(function (row) {
+          return {
+            judgment:
+              row.changeQuantity === 0
+                ? "変更なし"
+                : "反映済み",
+            internalCode:
+              row.internalCode,
+            productCode:
+              row.productCode,
+            productName:
+              row.productName,
+            beforeStock:
+              row.beforeStock,
+            afterStock:
+              row.afterStock,
+            changeQuantity:
+              row.changeQuantity,
+            locationBreakdown:
+              row.locationBreakdown,
+            people:
+              row.people,
+            submissionCount:
+              row.submissionCount,
+            bulkZeroCount:
+              row.bulkZeroCount,
+            warnings:
+              row.warnings.join(" / ")
+          };
+        })
+    };
+
+    await completeStocktakingAggregationReflection(
+      reflection,
+      updatedProducts,
+      movements
+    );
+
+    if (
+      window.inventoryApp &&
+      typeof window.inventoryApp.applyUpdatedProduct ===
+        "function"
+    ) {
+      updatedProducts.forEach(function (product) {
+        window.inventoryApp.applyUpdatedProduct(
+          product
+        );
+      });
+    }
+
+    latestStocktakingReflection = reflection;
+    currentStocktakingReflectionPreview = null;
+
+    exportStocktakingReflectionCsvButton.disabled = false;
+    applyStocktakingReflectionButton.disabled = true;
+
+    stocktakingReflectionMessage.textContent =
+      `現在庫へ反映しました。反映日時：${formatTransferDateTime(reflectedAt)} / 在庫変更：${changedRows.length}件 / 変更なし：${freshRows.length - changedRows.length}件`;
+
+    alert(
+      "集約結果を現在庫へ反映しました。\n\n" +
+      `在庫変更：${changedRows.length}件\n` +
+      `変更なし：${freshRows.length - changedRows.length}件\n\n` +
+      "入出庫履歴には「棚卸集約調整」として記録されています。"
+    );
+  } catch (error) {
+    console.error(error);
+
+    if (
+      error &&
+      error.name === "ConstraintError"
+    ) {
+      alert(
+        "同じ提出データの組み合わせは、すでに現在庫へ反映されています。"
+      );
+    } else {
+      alert(
+        "現在庫へ反映できませんでした。商品データは途中まで変更されないよう、一括処理を取り消しています。"
+      );
+    }
+  } finally {
+    previewStocktakingReflectionButton.disabled = false;
+  }
+}
+
+function exportStocktakingReflectionCsv() {
+  const reflection =
+    latestStocktakingReflection;
+
+  if (
+    !reflection ||
+    !Array.isArray(reflection.rows)
+  ) {
+    alert(
+      "CSV出力する反映結果がありません。"
+    );
+    return;
+  }
+
+  const headers = [
+    "反映日時",
+    "棚卸日",
+    "集約担当者",
+    "反映結果",
+    "社内コード",
+    "商品コード",
+    "商品名",
+    "反映前在庫",
+    "反映後在庫",
+    "変更数量",
+    "保管場所別内訳",
+    "棚卸担当者",
+    "提出数",
+    "一括0入力提出数",
+    "注意"
+  ];
+
+  const csvRows = [headers];
+
+  reflection.rows.forEach(function (row) {
+    csvRows.push([
+      formatTransferDateTime(
+        reflection.reflectedAt
+      ),
+      reflection.stocktakingDate,
+      reflection.person,
+      row.judgment,
+      row.internalCode,
+      row.productCode,
+      row.productName,
+      row.beforeStock,
+      row.afterStock,
+      row.changeQuantity,
+      row.locationBreakdown,
+      row.people,
+      row.submissionCount,
+      row.bulkZeroCount,
+      row.warnings || ""
+    ]);
+  });
+
+  const csvText =
+    "\uFEFF" +
+    csvRows
+      .map(function (row) {
+        return row
+          .map(escapeTransferCsvValue)
+          .join(",");
+      })
+      .join("\r\n");
+
+  downloadTransferTextFile(
+    csvText,
+    `棚卸反映結果_${sanitizeTransferFileNamePart(reflection.stocktakingDate)}_${sanitizeTransferFileNamePart(reflection.person)}.csv`,
+    "text/csv;charset=utf-8"
+  );
+}
+
+function formatTransferSignedNumber(value) {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue)) {
+    return "確認不可";
+  }
+
+  if (numberValue > 0) {
+    return `＋${numberValue}`;
+  }
+
+  return String(numberValue);
+}
+
+function createStocktakingReflectionId() {
+  const randomText = Math.random()
+    .toString(36)
+    .slice(2, 10);
+
+  return (
+    `aggregation-reflection-${Date.now()}-${randomText}`
+  );
+}
+
+function createStocktakingReflectionMovementId(
+  reflectionId,
+  index
+) {
+  const randomText = Math.random()
+    .toString(36)
+    .slice(2, 8);
+
+  return (
+    `${reflectionId}-movement-${index}-${randomText}`
   );
 }
 

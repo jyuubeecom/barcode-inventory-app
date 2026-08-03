@@ -2673,3 +2673,875 @@ window.inventoryApp = {
   getSelectedDetailInternalCode:
     getSelectedDetailInternalCode
 };
+
+/* =========================================================
+   v23 商品一覧：折りたたみ・ページ切替・固定移動メニュー
+   ========================================================= */
+let productListCurrentPage = 1;
+let productListPageSize = 20;
+let productListLastFilterSignature = "";
+let productListLastFilteredCount = 0;
+let productLifecycleFilterSelect = null;
+let productStockFilterSelect = null;
+let productPageSizeSelect = null;
+let productListFilterDetails = null;
+let productListResultsDetails = null;
+let productListPagerStatusElements = [];
+let productListPreviousButtons = [];
+let productListNextButtons = [];
+let productListFirstButtons = [];
+let productListLastButtons = [];
+
+window.addEventListener(
+  "DOMContentLoaded",
+  function () {
+    window.setTimeout(
+      createProductListUsabilityControls,
+      0
+    );
+  }
+);
+
+function createProductListUsabilityControls() {
+  if (
+    !listScreen ||
+    document.querySelector(
+      "#product-list-sticky-navigation"
+    )
+  ) {
+    return;
+  }
+
+  const searchArea =
+    productSearchInput.parentElement;
+
+  searchArea.id =
+    "product-list-search-area";
+
+  productListFilterDetails =
+    document.createElement("details");
+
+  productListFilterDetails.id =
+    "product-list-filter-details";
+
+  productListFilterDetails.open = true;
+
+  const filterSummary =
+    document.createElement("summary");
+
+  filterSummary.textContent =
+    "1. 検索・絞り込み";
+
+  productListFilterDetails.appendChild(
+    filterSummary
+  );
+
+  listScreen.insertBefore(
+    productListFilterDetails,
+    searchArea
+  );
+
+  productListFilterDetails.appendChild(
+    searchArea
+  );
+
+  createProductListFilterControls(
+    searchArea
+  );
+
+  const tableArea =
+    listScreen.querySelector(
+      ".product-list-table-area"
+    );
+
+  productListResultsDetails =
+    document.createElement("details");
+
+  productListResultsDetails.id =
+    "product-list-results-details";
+
+  productListResultsDetails.open = true;
+
+  const resultsSummary =
+    document.createElement("summary");
+
+  resultsSummary.textContent =
+    "2. 商品一覧";
+
+  productListResultsDetails.appendChild(
+    resultsSummary
+  );
+
+  listScreen.insertBefore(
+    productListResultsDetails,
+    tableArea
+  );
+
+  productListResultsDetails.appendChild(
+    createProductListPager("top")
+  );
+
+  productListResultsDetails.appendChild(
+    tableArea
+  );
+
+  productListResultsDetails.appendChild(
+    createProductListPager("bottom")
+  );
+
+  const navigation =
+    createProductListStickyNavigation();
+
+  listScreen.insertBefore(
+    navigation,
+    productListFilterDetails
+  );
+
+  createProductListUsabilityStyle();
+  displayCurrentProducts();
+}
+
+function createProductListFilterControls(
+  searchArea
+) {
+  const filterGrid =
+    document.createElement("div");
+
+  filterGrid.classList.add(
+    "product-list-filter-grid"
+  );
+
+  const lifecycleArea =
+    document.createElement("div");
+
+  const lifecycleLabel =
+    document.createElement("label");
+
+  lifecycleLabel.htmlFor =
+    "product-lifecycle-filter";
+
+  lifecycleLabel.textContent =
+    "商品状態";
+
+  productLifecycleFilterSelect =
+    document.createElement("select");
+
+  productLifecycleFilterSelect.id =
+    "product-lifecycle-filter";
+
+  productLifecycleFilterSelect.innerHTML = `
+    <option value="all">すべて</option>
+    <option value="active">通常商品のみ</option>
+    <option value="discontinued">廃盤のみ</option>
+  `;
+
+  lifecycleArea.appendChild(
+    lifecycleLabel
+  );
+
+  lifecycleArea.appendChild(
+    productLifecycleFilterSelect
+  );
+
+  const stockArea =
+    document.createElement("div");
+
+  const stockLabel =
+    document.createElement("label");
+
+  stockLabel.htmlFor =
+    "product-stock-filter";
+
+  stockLabel.textContent =
+    "在庫状態";
+
+  productStockFilterSelect =
+    document.createElement("select");
+
+  productStockFilterSelect.id =
+    "product-stock-filter";
+
+  productStockFilterSelect.innerHTML = `
+    <option value="all">すべて</option>
+    <option value="normal">正常</option>
+    <option value="low">要補充</option>
+    <option value="out">在庫切れ</option>
+    <option value="discontinued">廃盤</option>
+  `;
+
+  stockArea.appendChild(stockLabel);
+  stockArea.appendChild(
+    productStockFilterSelect
+  );
+
+  const pageSizeArea =
+    document.createElement("div");
+
+  const pageSizeLabel =
+    document.createElement("label");
+
+  pageSizeLabel.htmlFor =
+    "product-page-size";
+
+  pageSizeLabel.textContent =
+    "1ページの表示件数";
+
+  productPageSizeSelect =
+    document.createElement("select");
+
+  productPageSizeSelect.id =
+    "product-page-size";
+
+  productPageSizeSelect.innerHTML = `
+    <option value="20">20件</option>
+    <option value="50">50件</option>
+    <option value="100">100件</option>
+  `;
+
+  pageSizeArea.appendChild(
+    pageSizeLabel
+  );
+
+  pageSizeArea.appendChild(
+    productPageSizeSelect
+  );
+
+  filterGrid.appendChild(
+    lifecycleArea
+  );
+
+  filterGrid.appendChild(stockArea);
+  filterGrid.appendChild(pageSizeArea);
+
+  searchArea.insertBefore(
+    filterGrid,
+    clearSearchButton
+  );
+
+  productLifecycleFilterSelect.addEventListener(
+    "change",
+    displayCurrentProducts
+  );
+
+  productStockFilterSelect.addEventListener(
+    "change",
+    displayCurrentProducts
+  );
+
+  productPageSizeSelect.addEventListener(
+    "change",
+    function () {
+      productListPageSize =
+        Number(productPageSizeSelect.value) ||
+        20;
+
+      productListCurrentPage = 1;
+      displayCurrentProducts();
+    }
+  );
+}
+
+function createProductListStickyNavigation() {
+  const navigation =
+    document.createElement("nav");
+
+  navigation.id =
+    "product-list-sticky-navigation";
+
+  navigation.setAttribute(
+    "aria-label",
+    "商品一覧の画面移動"
+  );
+
+  const buttons = [
+    {
+      text: "検索・絞り込み",
+      action: function () {
+        openAndScrollProductListDetails(
+          productListFilterDetails
+        );
+      }
+    },
+    {
+      text: "商品一覧",
+      action: function () {
+        openAndScrollProductListDetails(
+          productListResultsDetails
+        );
+      }
+    },
+    {
+      text: "前へ",
+      pageAction: "previous"
+    },
+    {
+      text: "次へ",
+      pageAction: "next"
+    },
+    {
+      text: "一番上へ",
+      action: function () {
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth"
+        });
+      }
+    }
+  ];
+
+  buttons.forEach(function (buttonData) {
+    const button =
+      document.createElement("button");
+
+    button.type = "button";
+    button.textContent = buttonData.text;
+
+    if (buttonData.pageAction) {
+      addProductListPageButton(
+        button,
+        buttonData.pageAction
+      );
+    } else {
+      button.addEventListener(
+        "click",
+        buttonData.action
+      );
+    }
+
+    navigation.appendChild(button);
+  });
+
+  return navigation;
+}
+
+function createProductListPager(position) {
+  const pager =
+    document.createElement("div");
+
+  pager.classList.add(
+    "product-list-pager",
+    `product-list-pager-${position}`
+  );
+
+  const firstButton =
+    createProductListPageButton(
+      "最初",
+      "first"
+    );
+
+  const previousButton =
+    createProductListPageButton(
+      "前へ",
+      "previous"
+    );
+
+  const status =
+    document.createElement("strong");
+
+  status.classList.add(
+    "product-list-page-status"
+  );
+
+  productListPagerStatusElements.push(
+    status
+  );
+
+  const nextButton =
+    createProductListPageButton(
+      "次へ",
+      "next"
+    );
+
+  const lastButton =
+    createProductListPageButton(
+      "最後",
+      "last"
+    );
+
+  pager.appendChild(firstButton);
+  pager.appendChild(previousButton);
+  pager.appendChild(status);
+  pager.appendChild(nextButton);
+  pager.appendChild(lastButton);
+
+  return pager;
+}
+
+function createProductListPageButton(
+  textOrButton,
+  action
+) {
+  const button =
+    typeof textOrButton === "string"
+      ? document.createElement("button")
+      : textOrButton;
+
+  button.type = "button";
+
+  if (typeof textOrButton === "string") {
+    button.textContent = textOrButton;
+  }
+
+  addProductListPageButton(
+    button,
+    action
+  );
+
+  return button;
+}
+
+function addProductListPageButton(
+  button,
+  action
+) {
+  button.dataset.pageAction = action;
+
+  if (action === "first") {
+    productListFirstButtons.push(button);
+  } else if (action === "previous") {
+    productListPreviousButtons.push(button);
+  } else if (action === "next") {
+    productListNextButtons.push(button);
+  } else if (action === "last") {
+    productListLastButtons.push(button);
+  }
+
+  button.addEventListener(
+    "click",
+    function () {
+      const totalPages = Math.max(
+        1,
+        Math.ceil(
+          productListLastFilteredCount /
+          productListPageSize
+        )
+      );
+
+      if (action === "first") {
+        productListCurrentPage = 1;
+      } else if (action === "previous") {
+        productListCurrentPage = Math.max(
+          1,
+          productListCurrentPage - 1
+        );
+      } else if (action === "next") {
+        productListCurrentPage = Math.min(
+          totalPages,
+          productListCurrentPage + 1
+        );
+      } else if (action === "last") {
+        productListCurrentPage = totalPages;
+      }
+
+      displayCurrentProducts();
+      openAndScrollProductListDetails(
+        productListResultsDetails
+      );
+    }
+  );
+}
+
+function openAndScrollProductListDetails(
+  detailsElement
+) {
+  if (!detailsElement) {
+    return;
+  }
+
+  detailsElement.open = true;
+
+  window.setTimeout(
+    function () {
+      detailsElement.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    },
+    30
+  );
+}
+
+function getFilteredProducts() {
+  const keyword = normalizeText(
+    productSearchInput.value
+  );
+
+  const lifecycleFilter =
+    productLifecycleFilterSelect
+      ? productLifecycleFilterSelect.value
+      : "all";
+
+  const stockFilter =
+    productStockFilterSelect
+      ? productStockFilterSelect.value
+      : "all";
+
+  return products.filter(
+    function (product) {
+      const lifecycleStatus =
+        getProductLifecycleStatus(product);
+
+      const stockStatus =
+        getStockStatus(product);
+
+      if (
+        lifecycleFilter === "active" &&
+        lifecycleStatus !== "通常商品"
+      ) {
+        return false;
+      }
+
+      if (
+        lifecycleFilter ===
+          "discontinued" &&
+        lifecycleStatus !== "廃盤"
+      ) {
+        return false;
+      }
+
+      const stockFilterMap = {
+        normal: "正常",
+        low: "要補充",
+        out: "在庫切れ",
+        discontinued: "廃盤"
+      };
+
+      if (
+        stockFilter !== "all" &&
+        stockStatus !==
+          stockFilterMap[stockFilter]
+      ) {
+        return false;
+      }
+
+      if (keyword === "") {
+        return true;
+      }
+
+      const searchableValues = [
+        product.internalCode,
+        product.productCode,
+        product.productName,
+        product.janCode,
+        product.category,
+        product.location,
+        product.supplier,
+        stockStatus,
+        lifecycleStatus
+      ];
+
+      return searchableValues.some(
+        function (value) {
+          return normalizeText(value).includes(
+            keyword
+          );
+        }
+      );
+    }
+  );
+}
+
+function displayCurrentProducts() {
+  const keyword =
+    productSearchInput.value.trim();
+
+  const lifecycleFilter =
+    productLifecycleFilterSelect
+      ? productLifecycleFilterSelect.value
+      : "all";
+
+  const stockFilter =
+    productStockFilterSelect
+      ? productStockFilterSelect.value
+      : "all";
+
+  const sortType =
+    productSortSelect
+      ? productSortSelect.value
+      : "internal-code";
+
+  const signature = [
+    normalizeText(keyword),
+    lifecycleFilter,
+    stockFilter,
+    sortType,
+    productListPageSize
+  ].join("|");
+
+  if (
+    productListLastFilterSignature !== "" &&
+    signature !==
+      productListLastFilterSignature
+  ) {
+    productListCurrentPage = 1;
+  }
+
+  productListLastFilterSignature =
+    signature;
+
+  const filteredProducts =
+    getFilteredProducts();
+
+  const sortedProducts =
+    sortDisplayedProducts(
+      filteredProducts
+    );
+
+  productListLastFilteredCount =
+    sortedProducts.length;
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      sortedProducts.length /
+      productListPageSize
+    )
+  );
+
+  productListCurrentPage = Math.min(
+    Math.max(1, productListCurrentPage),
+    totalPages
+  );
+
+  const startIndex =
+    (productListCurrentPage - 1) *
+    productListPageSize;
+
+  const pageProducts =
+    sortedProducts.slice(
+      startIndex,
+      startIndex + productListPageSize
+    );
+
+  displayProducts(pageProducts);
+
+  updateProductListSearchMessage(
+    sortedProducts.length,
+    keyword,
+    startIndex,
+    pageProducts.length
+  );
+
+  updateProductListPager(
+    sortedProducts.length,
+    totalPages,
+    startIndex,
+    pageProducts.length
+  );
+}
+
+function updateProductListSearchMessage(
+  totalCount,
+  keyword,
+  startIndex,
+  pageCount
+) {
+  const rangeText =
+    totalCount === 0
+      ? "0件"
+      : `${startIndex + 1}～${startIndex + pageCount}件を表示`;
+
+  if (keyword === "") {
+    searchResultMessage.textContent =
+      `条件に一致する商品：${totalCount}件（${rangeText}）`;
+    return;
+  }
+
+  searchResultMessage.textContent =
+    `「${keyword}」の検索結果：${totalCount}件（${rangeText}）`;
+}
+
+function updateProductListPager(
+  totalCount,
+  totalPages,
+  startIndex,
+  pageCount
+) {
+  const rangeText =
+    totalCount === 0
+      ? "0件"
+      : `${startIndex + 1}～${startIndex + pageCount}件 / ${totalCount}件`;
+
+  const statusText =
+    `${rangeText}　${productListCurrentPage} / ${totalPages}ページ`;
+
+  productListPagerStatusElements.forEach(
+    function (element) {
+      element.textContent = statusText;
+    }
+  );
+
+  const isFirstPage =
+    productListCurrentPage <= 1;
+
+  const isLastPage =
+    productListCurrentPage >=
+    totalPages;
+
+  productListFirstButtons.forEach(
+    function (button) {
+      button.disabled = isFirstPage;
+    }
+  );
+
+  productListPreviousButtons.forEach(
+    function (button) {
+      button.disabled = isFirstPage;
+    }
+  );
+
+  productListNextButtons.forEach(
+    function (button) {
+      button.disabled = isLastPage;
+    }
+  );
+
+  productListLastButtons.forEach(
+    function (button) {
+      button.disabled = isLastPage;
+    }
+  );
+}
+
+function createProductListUsabilityStyle() {
+  if (
+    document.querySelector(
+      "#product-list-usability-style"
+    )
+  ) {
+    return;
+  }
+
+  const styleElement =
+    document.createElement("style");
+
+  styleElement.id =
+    "product-list-usability-style";
+
+  styleElement.textContent = `
+    #product-list-sticky-navigation {
+      position: sticky;
+      top: 0;
+      z-index: 35;
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      margin: 12px 0;
+      padding: 9px;
+      overflow-x: auto;
+      border: 1px solid #90caf9;
+      border-radius: 12px;
+      background-color: rgba(255, 255, 255, 0.97);
+      box-shadow: 0 3px 12px rgba(38, 50, 56, 0.14);
+      box-sizing: border-box;
+    }
+
+    #product-list-sticky-navigation button {
+      flex: 0 0 auto;
+      margin: 0;
+      padding: 10px 14px;
+      font-size: 15px;
+    }
+
+    #product-list-filter-details,
+    #product-list-results-details {
+      margin: 16px 0;
+      border: 2px solid #90caf9;
+      border-radius: 12px;
+      background-color: #ffffff;
+      overflow: clip;
+      scroll-margin-top: 82px;
+    }
+
+    #product-list-filter-details > summary,
+    #product-list-results-details > summary {
+      padding: 14px 16px;
+      background-color: #e3f2fd;
+      color: #0d47a1;
+      font-size: 19px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    #product-list-search-area {
+      padding: 14px;
+    }
+
+    .product-list-filter-grid {
+      display: grid;
+      grid-template-columns:
+        repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin: 14px 0;
+    }
+
+    .product-list-filter-grid label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+
+    .product-list-filter-grid select {
+      width: 100%;
+      min-height: 46px;
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .product-list-pager {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px;
+      background-color: #f7fbff;
+    }
+
+    .product-list-pager button {
+      margin: 0;
+      padding: 9px 13px;
+      font-size: 15px;
+    }
+
+    .product-list-page-status {
+      min-width: 220px;
+      text-align: center;
+    }
+
+    @media (max-width: 700px) {
+      #product-list-sticky-navigation {
+        margin-left: 0;
+        margin-right: 0;
+      }
+
+      #product-list-filter-details,
+      #product-list-results-details {
+        margin-left: 0;
+        margin-right: 0;
+      }
+
+      .product-list-pager {
+        display: grid;
+        grid-template-columns:
+          repeat(4, minmax(0, 1fr));
+      }
+
+      .product-list-page-status {
+        grid-column: 1 / -1;
+        grid-row: 1;
+        min-width: 0;
+      }
+
+      .product-list-pager button {
+        width: 100%;
+        padding: 10px 4px;
+        font-size: 14px;
+      }
+    }
+  `;
+
+  document.head.appendChild(
+    styleElement
+  );
+}

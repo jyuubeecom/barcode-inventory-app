@@ -4853,3 +4853,967 @@ function createStocktakingMovementId(
     `stocktaking-movement-${Date.now()}-${index}-${randomText}`
   );
 }
+
+/* =========================================================
+   v23 棚卸中：折りたたみ・ページ切替・固定移動メニュー
+   ========================================================= */
+let stocktakingListCurrentPage = 1;
+let stocktakingListPageSize = 20;
+let stocktakingListLastFilterSignature = "";
+let stocktakingListLastFilteredCount = 0;
+let stocktakingInfoDetails = null;
+let stocktakingItemsDetails = null;
+let stocktakingActionsDetails = null;
+let stocktakingPageSizeSelect = null;
+let stocktakingPagerStatusElements = [];
+let stocktakingPreviousButtons = [];
+let stocktakingNextButtons = [];
+let stocktakingFirstButtons = [];
+let stocktakingLastButtons = [];
+
+window.addEventListener(
+  "DOMContentLoaded",
+  function () {
+    window.setTimeout(
+      createStocktakingUsabilityControls,
+      0
+    );
+  }
+);
+
+function createStocktakingUsabilityControls() {
+  if (
+    !stocktakingActiveScreen ||
+    document.querySelector(
+      "#stocktaking-sticky-navigation"
+    )
+  ) {
+    return;
+  }
+
+  const title =
+    stocktakingActiveScreen.querySelector(
+      "h2"
+    );
+
+  const navigation =
+    createStocktakingStickyNavigation();
+
+  title.insertAdjacentElement(
+    "afterend",
+    navigation
+  );
+
+  stocktakingInfoDetails =
+    createStocktakingDetailsSection(
+      "stocktaking-info-details",
+      "1. 棚卸情報・検索"
+    );
+
+  navigation.insertAdjacentElement(
+    "afterend",
+    stocktakingInfoDetails
+  );
+
+  [
+    stocktakingActiveScreen.querySelector(
+      ".stocktaking-notice"
+    ),
+    stocktakingActiveScreen.querySelector(
+      ".stocktaking-info-table"
+    ),
+    stocktakingActiveScreen.querySelector(
+      ".stocktaking-summary"
+    ),
+    stocktakingActiveScreen.querySelector(
+      ".stocktaking-search-area"
+    ),
+    stocktakingCameraScanButton,
+    stocktakingActiveScreen.querySelector(
+      ".stocktaking-bulk-zero-area"
+    )
+  ].forEach(function (element) {
+    if (element) {
+      stocktakingInfoDetails.appendChild(
+        element
+      );
+    }
+  });
+
+  addStocktakingPageSizeControl();
+
+  stocktakingItemsDetails =
+    createStocktakingDetailsSection(
+      "stocktaking-items-details",
+      "2. 棚卸商品一覧"
+    );
+
+  stocktakingInfoDetails.insertAdjacentElement(
+    "afterend",
+    stocktakingItemsDetails
+  );
+
+  const tableArea =
+    stocktakingActiveScreen.querySelector(
+      ".stocktaking-table-area"
+    );
+
+  stocktakingItemsDetails.appendChild(
+    createStocktakingPager("top")
+  );
+
+  stocktakingItemsDetails.appendChild(
+    tableArea
+  );
+
+  stocktakingItemsDetails.appendChild(
+    createStocktakingPager("bottom")
+  );
+
+  stocktakingActionsDetails =
+    createStocktakingDetailsSection(
+      "stocktaking-actions-details",
+      "3. 保存・確定"
+    );
+
+  stocktakingItemsDetails.insertAdjacentElement(
+    "afterend",
+    stocktakingActionsDetails
+  );
+
+  [
+    stocktakingSaveMessage,
+    stocktakingActiveScreen.querySelector(
+      ".stocktaking-reflect-area"
+    ),
+    saveStocktakingItemsButton,
+    confirmStocktakingButton,
+    backHomeFromStocktakingButton,
+    deleteStocktakingButton
+  ].forEach(function (element) {
+    if (element) {
+      stocktakingActionsDetails.appendChild(
+        element
+      );
+    }
+  });
+
+  stocktakingActiveScreen.appendChild(
+    createStocktakingStickyActionBar()
+  );
+
+  createStocktakingUsabilityStyle();
+  filterStocktakingItems();
+}
+
+function createStocktakingDetailsSection(
+  id,
+  title
+) {
+  const details =
+    document.createElement("details");
+
+  details.id = id;
+  details.open = true;
+
+  const summary =
+    document.createElement("summary");
+
+  summary.textContent = title;
+
+  details.appendChild(summary);
+
+  return details;
+}
+
+function createStocktakingStickyNavigation() {
+  const navigation =
+    document.createElement("nav");
+
+  navigation.id =
+    "stocktaking-sticky-navigation";
+
+  navigation.setAttribute(
+    "aria-label",
+    "棚卸中の画面移動"
+  );
+
+  const buttonDataList = [
+    {
+      text: "情報・検索",
+      action: function () {
+        openAndScrollStocktakingDetails(
+          stocktakingInfoDetails
+        );
+      }
+    },
+    {
+      text: "商品一覧",
+      action: function () {
+        openAndScrollStocktakingDetails(
+          stocktakingItemsDetails
+        );
+      }
+    },
+    {
+      text: "保存・確定",
+      action: function () {
+        openAndScrollStocktakingDetails(
+          stocktakingActionsDetails
+        );
+      }
+    },
+    {
+      text: "前へ",
+      pageAction: "previous"
+    },
+    {
+      text: "次へ",
+      pageAction: "next"
+    },
+    {
+      text: "一番上へ",
+      action: function () {
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth"
+        });
+      }
+    }
+  ];
+
+  buttonDataList.forEach(
+    function (buttonData) {
+      const button =
+        document.createElement("button");
+
+      button.type = "button";
+      button.textContent =
+        buttonData.text;
+
+      if (buttonData.pageAction) {
+        addStocktakingPageButton(
+          button,
+          buttonData.pageAction
+        );
+      } else {
+        button.addEventListener(
+          "click",
+          buttonData.action
+        );
+      }
+
+      navigation.appendChild(button);
+    }
+  );
+
+  return navigation;
+}
+
+function addStocktakingPageSizeControl() {
+  const searchArea =
+    stocktakingActiveScreen.querySelector(
+      ".stocktaking-search-area"
+    );
+
+  if (!searchArea) {
+    return;
+  }
+
+  const area =
+    document.createElement("div");
+
+  area.classList.add(
+    "stocktaking-page-size-area"
+  );
+
+  const label =
+    document.createElement("label");
+
+  label.htmlFor =
+    "stocktaking-page-size";
+
+  label.textContent =
+    "1ページの表示件数";
+
+  stocktakingPageSizeSelect =
+    document.createElement("select");
+
+  stocktakingPageSizeSelect.id =
+    "stocktaking-page-size";
+
+  stocktakingPageSizeSelect.innerHTML = `
+    <option value="20">20件</option>
+    <option value="50">50件</option>
+    <option value="100">100件</option>
+  `;
+
+  area.appendChild(label);
+  area.appendChild(
+    stocktakingPageSizeSelect
+  );
+
+  const message =
+    stocktakingSearchMessage;
+
+  searchArea.insertBefore(
+    area,
+    message
+  );
+
+  stocktakingPageSizeSelect.addEventListener(
+    "change",
+    function () {
+      stocktakingListPageSize =
+        Number(
+          stocktakingPageSizeSelect.value
+        ) || 20;
+
+      stocktakingListCurrentPage = 1;
+      filterStocktakingItems();
+    }
+  );
+}
+
+function createStocktakingPager(position) {
+  const pager =
+    document.createElement("div");
+
+  pager.classList.add(
+    "stocktaking-list-pager",
+    `stocktaking-list-pager-${position}`
+  );
+
+  const firstButton =
+    createStocktakingPageButton(
+      "最初",
+      "first"
+    );
+
+  const previousButton =
+    createStocktakingPageButton(
+      "前へ",
+      "previous"
+    );
+
+  const status =
+    document.createElement("strong");
+
+  status.classList.add(
+    "stocktaking-list-page-status"
+  );
+
+  stocktakingPagerStatusElements.push(
+    status
+  );
+
+  const nextButton =
+    createStocktakingPageButton(
+      "次へ",
+      "next"
+    );
+
+  const lastButton =
+    createStocktakingPageButton(
+      "最後",
+      "last"
+    );
+
+  pager.appendChild(firstButton);
+  pager.appendChild(previousButton);
+  pager.appendChild(status);
+  pager.appendChild(nextButton);
+  pager.appendChild(lastButton);
+
+  return pager;
+}
+
+function createStocktakingPageButton(
+  text,
+  action
+) {
+  const button =
+    document.createElement("button");
+
+  button.type = "button";
+  button.textContent = text;
+
+  addStocktakingPageButton(
+    button,
+    action
+  );
+
+  return button;
+}
+
+function addStocktakingPageButton(
+  button,
+  action
+) {
+  button.dataset.pageAction = action;
+
+  if (action === "first") {
+    stocktakingFirstButtons.push(button);
+  } else if (action === "previous") {
+    stocktakingPreviousButtons.push(button);
+  } else if (action === "next") {
+    stocktakingNextButtons.push(button);
+  } else if (action === "last") {
+    stocktakingLastButtons.push(button);
+  }
+
+  button.addEventListener(
+    "click",
+    function () {
+      const totalPages = Math.max(
+        1,
+        Math.ceil(
+          stocktakingListLastFilteredCount /
+          stocktakingListPageSize
+        )
+      );
+
+      if (action === "first") {
+        stocktakingListCurrentPage = 1;
+      } else if (action === "previous") {
+        stocktakingListCurrentPage =
+          Math.max(
+            1,
+            stocktakingListCurrentPage - 1
+          );
+      } else if (action === "next") {
+        stocktakingListCurrentPage =
+          Math.min(
+            totalPages,
+            stocktakingListCurrentPage + 1
+          );
+      } else if (action === "last") {
+        stocktakingListCurrentPage =
+          totalPages;
+      }
+
+      filterStocktakingItems();
+      openAndScrollStocktakingDetails(
+        stocktakingItemsDetails
+      );
+    }
+  );
+}
+
+function openAndScrollStocktakingDetails(
+  detailsElement
+) {
+  if (!detailsElement) {
+    return;
+  }
+
+  detailsElement.open = true;
+
+  window.setTimeout(
+    function () {
+      detailsElement.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    },
+    30
+  );
+}
+
+function createStocktakingStickyActionBar() {
+  const bar =
+    document.createElement("div");
+
+  bar.id =
+    "stocktaking-sticky-action-bar";
+
+  const saveProxy =
+    document.createElement("button");
+
+  saveProxy.type = "button";
+  saveProxy.textContent =
+    "入力内容を保存";
+
+  saveProxy.addEventListener(
+    "click",
+    function () {
+      saveStocktakingItemsButton.click();
+    }
+  );
+
+  const confirmProxy =
+    document.createElement("button");
+
+  confirmProxy.type = "button";
+  confirmProxy.textContent =
+    "棚卸を確認・確定";
+
+  confirmProxy.addEventListener(
+    "click",
+    function () {
+      confirmStocktakingButton.click();
+    }
+  );
+
+  bar.appendChild(saveProxy);
+  bar.appendChild(confirmProxy);
+
+  return bar;
+}
+
+function filterStocktakingItems() {
+  if (
+    !stocktakingItemsBody ||
+    !currentStocktaking
+  ) {
+    return;
+  }
+
+  const keyword =
+    normalizeStocktakingText(
+      stocktakingProductSearchInput.value
+    );
+
+  const filterType =
+    stocktakingDisplayFilter
+      ? stocktakingDisplayFilter.value
+      : "all";
+
+  const signature = [
+    keyword,
+    filterType,
+    stocktakingListPageSize
+  ].join("|");
+
+  if (
+    stocktakingListLastFilterSignature !== "" &&
+    signature !==
+      stocktakingListLastFilterSignature
+  ) {
+    stocktakingListCurrentPage = 1;
+  }
+
+  stocktakingListLastFilterSignature =
+    signature;
+
+  const rows = Array.from(
+    stocktakingItemsBody.querySelectorAll(
+      "tr[data-internal-code]"
+    )
+  );
+
+  const matchedRows = rows.filter(
+    function (row) {
+      const keywordMatches =
+        keyword === "" ||
+        row.dataset.searchText.includes(
+          keyword
+        );
+
+      const item =
+        currentStocktaking.items.find(
+          function (currentItem) {
+            return (
+              currentItem.internalCode ===
+              row.dataset.internalCode
+            );
+          }
+        );
+
+      let filterMatches = true;
+
+      if (filterType === "unchecked") {
+        filterMatches =
+          Boolean(item) &&
+          item.actualStock === "";
+      } else if (
+        filterType === "bulk-zero"
+      ) {
+        filterMatches =
+          Boolean(item) &&
+          item.bulkZeroApplied === true;
+      }
+
+      return (
+        keywordMatches &&
+        filterMatches
+      );
+    }
+  );
+
+  stocktakingListLastFilteredCount =
+    matchedRows.length;
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      matchedRows.length /
+      stocktakingListPageSize
+    )
+  );
+
+  stocktakingListCurrentPage = Math.min(
+    Math.max(
+      1,
+      stocktakingListCurrentPage
+    ),
+    totalPages
+  );
+
+  const startIndex =
+    (stocktakingListCurrentPage - 1) *
+    stocktakingListPageSize;
+
+  const pageRows = new Set(
+    matchedRows.slice(
+      startIndex,
+      startIndex + stocktakingListPageSize
+    )
+  );
+
+  rows.forEach(function (row) {
+    const visible = pageRows.has(row);
+
+    row.hidden = !visible;
+
+    if (visible) {
+      row.style.removeProperty("display");
+    } else {
+      row.style.display = "none";
+    }
+  });
+
+  let filterLabel =
+    "すべての商品";
+
+  if (filterType === "unchecked") {
+    filterLabel =
+      "未確認の商品";
+  } else if (
+    filterType === "bulk-zero"
+  ) {
+    filterLabel =
+      "一括0入力の商品";
+  }
+
+  const pageCount = pageRows.size;
+
+  const rangeText =
+    matchedRows.length === 0
+      ? "0件"
+      : `${startIndex + 1}～${startIndex + pageCount}件を表示`;
+
+  if (keyword === "") {
+    stocktakingSearchMessage.textContent =
+      `${filterLabel}：${matchedRows.length}件（${rangeText}）`;
+  } else {
+    stocktakingSearchMessage.textContent =
+      `「${stocktakingProductSearchInput.value.trim()}」の検索結果：${matchedRows.length}件（${filterLabel}・${rangeText}）`;
+  }
+
+  updateStocktakingListPager(
+    matchedRows.length,
+    totalPages,
+    startIndex,
+    pageCount
+  );
+}
+
+function updateStocktakingListPager(
+  totalCount,
+  totalPages,
+  startIndex,
+  pageCount
+) {
+  const rangeText =
+    totalCount === 0
+      ? "0件"
+      : `${startIndex + 1}～${startIndex + pageCount}件 / ${totalCount}件`;
+
+  const statusText =
+    `${rangeText}　${stocktakingListCurrentPage} / ${totalPages}ページ`;
+
+  stocktakingPagerStatusElements.forEach(
+    function (element) {
+      element.textContent = statusText;
+    }
+  );
+
+  const isFirstPage =
+    stocktakingListCurrentPage <= 1;
+
+  const isLastPage =
+    stocktakingListCurrentPage >=
+    totalPages;
+
+  stocktakingFirstButtons.forEach(
+    function (button) {
+      button.disabled = isFirstPage;
+    }
+  );
+
+  stocktakingPreviousButtons.forEach(
+    function (button) {
+      button.disabled = isFirstPage;
+    }
+  );
+
+  stocktakingNextButtons.forEach(
+    function (button) {
+      button.disabled = isLastPage;
+    }
+  );
+
+  stocktakingLastButtons.forEach(
+    function (button) {
+      button.disabled = isLastPage;
+    }
+  );
+}
+
+function focusFirstUncheckedItem() {
+  const uncheckedItem =
+    currentStocktaking.items.find(
+      function (item) {
+        return item.actualStock === "";
+      }
+    );
+
+  if (!uncheckedItem) {
+    return;
+  }
+
+  stocktakingProductSearchInput.value =
+    uncheckedItem.internalCode;
+
+  stocktakingDisplayFilter.value =
+    "unchecked";
+
+  stocktakingListCurrentPage = 1;
+  filterStocktakingItems();
+
+  openAndScrollStocktakingDetails(
+    stocktakingItemsDetails
+  );
+
+  window.setTimeout(
+    function () {
+      focusStocktakingActualInput(
+        uncheckedItem.internalCode
+      );
+    },
+    120
+  );
+}
+
+function createStocktakingUsabilityStyle() {
+  if (
+    document.querySelector(
+      "#stocktaking-usability-style"
+    )
+  ) {
+    return;
+  }
+
+  const styleElement =
+    document.createElement("style");
+
+  styleElement.id =
+    "stocktaking-usability-style";
+
+  styleElement.textContent = `
+    #stocktaking-sticky-navigation {
+      position: sticky;
+      top: 0;
+      z-index: 45;
+      display: flex;
+      gap: 8px;
+      width: 100%;
+      margin: 12px 0;
+      padding: 9px;
+      overflow-x: auto;
+      border: 1px solid #b39ddb;
+      border-radius: 12px;
+      background-color: rgba(255, 255, 255, 0.97);
+      box-shadow: 0 3px 12px rgba(38, 50, 56, 0.16);
+      box-sizing: border-box;
+    }
+
+    #stocktaking-sticky-navigation button {
+      flex: 0 0 auto;
+      margin: 0;
+      padding: 10px 13px;
+      font-size: 15px;
+    }
+
+    #stocktaking-info-details,
+    #stocktaking-items-details,
+    #stocktaking-actions-details {
+      margin: 16px 0;
+      border: 2px solid #b39ddb;
+      border-radius: 12px;
+      background-color: #ffffff;
+      overflow: clip;
+      scroll-margin-top: 82px;
+    }
+
+    #stocktaking-info-details > summary,
+    #stocktaking-items-details > summary,
+    #stocktaking-actions-details > summary {
+      padding: 14px 16px;
+      background-color: #ede7f6;
+      color: #4a148c;
+      font-size: 19px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    #stocktaking-info-details > :not(summary),
+    #stocktaking-actions-details > :not(summary) {
+      margin-left: 14px;
+      margin-right: 14px;
+      width: calc(100% - 28px);
+      box-sizing: border-box;
+    }
+
+    #stocktaking-items-details .stocktaking-table-area {
+      padding-left: 12px;
+      padding-right: 12px;
+      box-sizing: border-box;
+    }
+
+    .stocktaking-page-size-area {
+      margin: 14px 0;
+      padding: 12px;
+      border: 1px solid #b39ddb;
+      border-radius: 9px;
+      background-color: #faf5fc;
+    }
+
+    .stocktaking-page-size-area label {
+      display: block;
+      margin-bottom: 7px;
+      font-weight: 700;
+    }
+
+    #stocktaking-page-size {
+      width: 100%;
+      max-width: 280px;
+      min-height: 46px;
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .stocktaking-list-pager {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px;
+      background-color: #faf5fc;
+    }
+
+    .stocktaking-list-pager button {
+      margin: 0;
+      padding: 9px 13px;
+      font-size: 15px;
+    }
+
+    .stocktaking-list-page-status {
+      min-width: 230px;
+      text-align: center;
+    }
+
+    #stocktaking-actions-details > button {
+      margin-top: 6px;
+      margin-bottom: 6px;
+    }
+
+    #stocktaking-actions-details > button:last-child {
+      margin-bottom: 14px;
+    }
+
+    #stocktaking-sticky-action-bar {
+      position: sticky;
+      bottom: 0;
+      z-index: 44;
+      display: grid;
+      grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      width: 100%;
+      margin-top: 14px;
+      padding: 9px;
+      border: 1px solid #b39ddb;
+      border-radius: 12px 12px 0 0;
+      background-color: rgba(255, 255, 255, 0.97);
+      box-shadow: 0 -3px 12px rgba(38, 50, 56, 0.14);
+      box-sizing: border-box;
+    }
+
+    #stocktaking-sticky-action-bar button {
+      width: 100%;
+      margin: 0;
+      padding: 12px 8px;
+      font-size: 16px;
+    }
+
+    #stocktaking-sticky-action-bar button:first-child {
+      background-color: #2e7d32;
+    }
+
+    #stocktaking-sticky-action-bar button:last-child {
+      background-color: #1565c0;
+    }
+
+    @media (max-width: 700px) {
+      #stocktaking-sticky-navigation,
+      #stocktaking-info-details,
+      #stocktaking-items-details,
+      #stocktaking-actions-details,
+      #stocktaking-sticky-action-bar {
+        margin-left: 12px;
+        margin-right: 12px;
+        width: calc(100% - 24px);
+      }
+
+      #stocktaking-info-details > :not(summary),
+      #stocktaking-actions-details > :not(summary) {
+        margin-left: 10px;
+        margin-right: 10px;
+        width: calc(100% - 20px);
+      }
+
+      .stocktaking-list-pager {
+        display: grid;
+        grid-template-columns:
+          repeat(4, minmax(0, 1fr));
+      }
+
+      .stocktaking-list-page-status {
+        grid-column: 1 / -1;
+        grid-row: 1;
+        min-width: 0;
+      }
+
+      .stocktaking-list-pager button {
+        width: 100%;
+        padding: 10px 4px;
+        font-size: 14px;
+      }
+
+      #stocktaking-actions-details > button {
+        width: calc(100% - 20px);
+      }
+
+      #stocktaking-sticky-action-bar button {
+        font-size: 14px;
+      }
+    }
+  `;
+
+  document.head.appendChild(
+    styleElement
+  );
+}

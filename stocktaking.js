@@ -38,6 +38,7 @@ let backHomeFromStocktakingButton = null;
 let deleteStocktakingButton = null;
 let applyBulkZeroButton = null;
 let undoBulkZeroButton = null;
+let bulkZeroLocationSelect = null;
 
 let currentStocktaking = null;
 let stocktakingHasUnsavedChanges = false;
@@ -54,8 +55,15 @@ const STOCKTAKING_LOCATION_OPTIONS =
     "本社2階　その他"
   ]);
 
+const STOCKTAKING_BULK_ZERO_UNCONFIRMED_LOCATION =
+  "未確認";
+
+const STOCKTAKING_BULK_ZERO_REGISTERED_LOCATION =
+  "__registered_location__";
+
 function createStocktakingLocationOptionsHtml(
-  includeAllLocations
+  includeAllLocations,
+  includeBulkZeroUnconfirmed
 ) {
   const optionTexts = [];
 
@@ -77,7 +85,60 @@ function createStocktakingLocationOptionsHtml(
     }
   );
 
+  if (includeBulkZeroUnconfirmed) {
+    optionTexts.push(
+      '<option value="未確認">未確認（現物の場所は未確認）</option>'
+    );
+  }
+
   return optionTexts.join("");
+}
+
+function createBulkZeroLocationOptionsHtml() {
+  const optionTexts = [
+    '<option value="未確認">未確認（現物の場所は未確認）</option>',
+    '<option value="__registered_location__">商品ごとの登録保管場所を使う</option>'
+  ];
+
+  STOCKTAKING_LOCATION_OPTIONS.forEach(
+    function (location) {
+      optionTexts.push(
+        `<option value="${location}">${location}</option>`
+      );
+    }
+  );
+
+  return optionTexts.join("");
+}
+
+function isBulkZeroUnconfirmedLocation(
+  location
+) {
+  return (
+    String(location || "").trim() ===
+    STOCKTAKING_BULK_ZERO_UNCONFIRMED_LOCATION
+  );
+}
+
+function isAllowedStocktakingItemLocation(
+  item,
+  location
+) {
+  if (
+    isStocktakingLocationOption(
+      location
+    )
+  ) {
+    return true;
+  }
+
+  return (
+    item &&
+    item.bulkZeroApplied === true &&
+    isBulkZeroUnconfirmedLocation(
+      location
+    )
+  );
 }
 
 function isStocktakingLocationOption(
@@ -358,6 +419,18 @@ function createStocktakingScreens() {
         手入力済みの商品は変更しません。
       </p>
 
+      <label for="stocktaking-bulk-zero-location">
+        一括0入力時の保管場所
+      </label>
+
+      <select id="stocktaking-bulk-zero-location">
+        ${createBulkZeroLocationOptionsHtml()}
+      </select>
+
+      <small>
+        「未確認」は、一括0入力した商品の現物保管場所をまだ確認していないことを表します。
+      </small>
+
       <div class="stocktaking-bulk-zero-buttons">
         <button
           id="apply-stocktaking-bulk-zero-button"
@@ -619,6 +692,11 @@ function getStocktakingElements() {
     document.querySelector(
       "#undo-stocktaking-bulk-zero-button"
     );
+
+  bulkZeroLocationSelect =
+    document.querySelector(
+      "#stocktaking-bulk-zero-location"
+    );
 }
 
 function addStocktakingEventListeners() {
@@ -772,6 +850,28 @@ function createStocktakingStyle() {
     .stocktaking-bulk-zero-area p {
       margin: 0 0 12px;
       line-height: 1.6;
+    }
+
+    .stocktaking-bulk-zero-area label {
+      display: block;
+      margin: 12px 0 6px;
+      font-weight: bold;
+    }
+
+    #stocktaking-bulk-zero-location {
+      width: 100%;
+      max-width: 520px;
+      min-height: 48px;
+      margin: 0 0 6px;
+      padding: 8px;
+      font-size: 17px;
+    }
+
+    .stocktaking-bulk-zero-area small {
+      display: block;
+      margin-bottom: 12px;
+      color: #6d4c41;
+      line-height: 1.5;
     }
 
     .stocktaking-bulk-zero-buttons {
@@ -1874,6 +1974,11 @@ async function showActiveStocktaking(
   stocktakingDisplayFilter.value =
     "all";
 
+  if (bulkZeroLocationSelect) {
+    bulkZeroLocationSelect.value =
+      STOCKTAKING_BULK_ZERO_UNCONFIRMED_LOCATION;
+  }
+
   stocktakingSaveMessage.textContent =
     "数量を入力したら、商品カード下部のボタンから保存して次の操作へ進めます。";
 
@@ -2476,19 +2581,24 @@ function renderStocktakingLocationEntries(
       const locationInput =
         document.createElement("select");
 
-      locationInput.innerHTML =
-        createStocktakingLocationOptionsHtml(
-          false
-        );
-
       const savedLocation =
         String(
           entry.location || ""
         ).trim();
 
+      locationInput.innerHTML =
+        createStocktakingLocationOptionsHtml(
+          false,
+          item.bulkZeroApplied === true ||
+          isBulkZeroUnconfirmedLocation(
+            savedLocation
+          )
+        );
+
       if (
         savedLocation !== "" &&
-        !isStocktakingLocationOption(
+        !isAllowedStocktakingItemLocation(
+          item,
           savedLocation
         )
       ) {
@@ -2968,7 +3078,8 @@ function validateStocktakingLocationEntries() {
       }
 
       if (
-        !isStocktakingLocationOption(
+        !isAllowedStocktakingItemLocation(
+          item,
           location
         )
       ) {
@@ -3438,7 +3549,7 @@ function clearStocktakingBulkZeroFlag(
   item.bulkZeroAppliedAt = "";
 }
 
-function getBulkZeroPreferredLocation(
+function getBulkZeroRegisteredLocation(
   item
 ) {
   const itemLocation =
@@ -3492,6 +3603,73 @@ function getBulkZeroPreferredLocation(
     : "";
 }
 
+function getSelectedBulkZeroLocation() {
+  if (!bulkZeroLocationSelect) {
+    return (
+      STOCKTAKING_BULK_ZERO_UNCONFIRMED_LOCATION
+    );
+  }
+
+  const selectedLocation =
+    String(
+      bulkZeroLocationSelect.value || ""
+    ).trim();
+
+  if (
+    selectedLocation ===
+    STOCKTAKING_BULK_ZERO_REGISTERED_LOCATION
+  ) {
+    return selectedLocation;
+  }
+
+  if (
+    isStocktakingLocationOption(
+      selectedLocation
+    ) ||
+    isBulkZeroUnconfirmedLocation(
+      selectedLocation
+    )
+  ) {
+    return selectedLocation;
+  }
+
+  return (
+    STOCKTAKING_BULK_ZERO_UNCONFIRMED_LOCATION
+  );
+}
+
+function getBulkZeroLocationForItem(
+  item,
+  selectedLocation
+) {
+  if (
+    selectedLocation ===
+    STOCKTAKING_BULK_ZERO_REGISTERED_LOCATION
+  ) {
+    return (
+      getBulkZeroRegisteredLocation(
+        item
+      ) ||
+      STOCKTAKING_BULK_ZERO_UNCONFIRMED_LOCATION
+    );
+  }
+
+  if (
+    isStocktakingLocationOption(
+      selectedLocation
+    ) ||
+    isBulkZeroUnconfirmedLocation(
+      selectedLocation
+    )
+  ) {
+    return selectedLocation;
+  }
+
+  return (
+    STOCKTAKING_BULK_ZERO_UNCONFIRMED_LOCATION
+  );
+}
+
 function getBulkZeroEligibleItems() {
   if (
     !currentStocktaking ||
@@ -3516,23 +3694,21 @@ function getBulkZeroEligibleItems() {
 
 function applyBulkZeroToStocktakingItem(
   item,
-  appliedAt
+  appliedAt,
+  selectedLocation
 ) {
-  const preferredLocation =
-    getBulkZeroPreferredLocation(
-      item
+  const bulkZeroLocation =
+    getBulkZeroLocationForItem(
+      item,
+      selectedLocation
     );
-
-  if (preferredLocation === "") {
-    return false;
-  }
 
   item.locationBreakdown = [
     {
       id:
         createStocktakingLocationEntryId(),
       location:
-        preferredLocation,
+        bulkZeroLocation,
       quantity: 0
     }
   ];
@@ -3559,51 +3735,27 @@ function handleApplyBulkZero() {
     return;
   }
 
-  const missingLocationItems =
-    eligibleItems.filter(
-      function (item) {
-        return (
-          getBulkZeroPreferredLocation(
-            item
-          ) === ""
-        );
-      }
-    );
+  const selectedLocation =
+    getSelectedBulkZeroLocation();
 
-  if (missingLocationItems.length > 0) {
-    const itemNames =
-      missingLocationItems
-        .slice(0, 5)
-        .map(
-          function (item) {
-            return item.productName;
-          }
-        )
-        .join("\n");
-
-    alert(
-      "保管場所を決められない商品があるため、一括入力できません。\n\n" +
-      itemNames +
-      (missingLocationItems.length > 5
-        ? "\nほか" +
-          (missingLocationItems.length - 5) +
-          "件"
-        : "") +
-      "\n\n商品情報の保管場所を確認してください。"
-    );
-
-    return;
-  }
+  const locationText =
+    selectedLocation ===
+    STOCKTAKING_BULK_ZERO_REGISTERED_LOCATION
+      ? "商品ごとの登録保管場所（登録場所がない商品は『未確認』）"
+      : selectedLocation;
 
   const isConfirmed =
     window.confirm(
       "登録在庫が0個で、まだ未確認の商品が" +
       eligibleItems.length +
       "件あります。\n\n" +
+      "保管場所：" +
+      locationText +
+      "\n\n" +
       "この" +
       eligibleItems.length +
       "件を実在庫0個として一括入力しますか？\n\n" +
-      "実際には商品が残っていないか、棚を確認してから使用してください。"
+      "『未確認』は、現物の保管場所をまだ確認していない記録です。"
     );
 
   if (!isConfirmed) {
@@ -3613,19 +3765,13 @@ function handleApplyBulkZero() {
   const appliedAt =
     new Date().toISOString();
 
-  let appliedCount = 0;
-
   eligibleItems.forEach(
     function (item) {
-      const applied =
-        applyBulkZeroToStocktakingItem(
-          item,
-          appliedAt
-        );
-
-      if (applied) {
-        appliedCount += 1;
-      }
+      applyBulkZeroToStocktakingItem(
+        item,
+        appliedAt,
+        selectedLocation
+      );
     }
   );
 
@@ -3639,8 +3785,8 @@ function handleApplyBulkZero() {
   markStocktakingAsUnsaved();
 
   stocktakingSaveMessage.textContent =
-    appliedCount +
-    "件を一括で0入力しました。内容を確認して保存してください。";
+    eligibleItems.length +
+    "件を一括で0入力しました。保管場所もまとめて設定しています。内容を確認して保存してください。";
 }
 
 function handleUndoBulkZero() {
@@ -3684,17 +3830,20 @@ function handleUndoBulkZero() {
 
   bulkZeroItems.forEach(
     function (item) {
-      if (
-        Array.isArray(
-          item.locationBreakdown
-        )
-      ) {
-        item.locationBreakdown.forEach(
-          function (entry) {
-            entry.quantity = "";
-          }
+      const restoredLocation =
+        getBulkZeroRegisteredLocation(
+          item
         );
-      }
+
+      item.locationBreakdown = [
+        {
+          id:
+            createStocktakingLocationEntryId(),
+          location:
+            restoredLocation,
+          quantity: ""
+        }
+      ];
 
       clearStocktakingBulkZeroFlag(
         item

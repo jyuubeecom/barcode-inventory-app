@@ -1,7 +1,7 @@
 "use strict";
 
 const CACHE_NAME =
-  "barcode-inventory-app-v23";
+  "barcode-inventory-app-v24";
 
 const APP_FILES = [
   "./",
@@ -19,6 +19,7 @@ const APP_FILES = [
   "./csv-update.js",
   "./backup.js",
   "./restore.js",
+  "./home-dashboard.js?v=24",
   "./pwa.js",
   "./manifest.json",
   "./apple-touch-icon.png",

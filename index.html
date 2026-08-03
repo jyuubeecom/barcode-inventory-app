@@ -30,58 +30,211 @@
 
   <main>
     <!-- ホーム画面 -->
-    <section id="home">
-      <h2>ホーム画面</h2>
+    <section id="home" class="home-dashboard">
+      <div class="home-dashboard-heading">
+        <div>
+          <span class="home-dashboard-kicker">
+            在庫・棚卸メニュー
+          </span>
 
-      <p>
-        登録商品数：
-        <span id="product-count">0</span>件
-      </p>
+          <h2>ホーム</h2>
 
-      <p>
-        総在庫数：
-        <span id="total-stock">0</span>個
-      </p>
+          <p class="home-dashboard-subtitle">
+            よく使う操作を上にまとめ、その他の機能は目的別に整理しています。
+          </p>
+        </div>
 
-      <p id="out-of-stock-summary">
-        在庫切れ：
-        <span id="out-of-stock-count">0</span>件
-      </p>
-
-      <p id="low-stock-summary">
-        要補充：
-        <span id="low-stock-count">0</span>件
-      </p>
-
-      <div>
-        <button
-          id="show-barcode-lookup-button"
-          type="button"
-        >
-          JANコードを入力して探す
-        </button>
-
-        <button
-          id="show-register-button"
-          type="button"
-        >
-          商品を登録する
-        </button>
-
-        <button
-          id="show-list-button"
-          type="button"
-        >
-          商品一覧を見る
-        </button>
-
-        <button
-          id="show-history-button"
-          type="button"
-        >
-          入出庫履歴を見る
-        </button>
+        <span class="home-version-badge">
+          画面版 v24
+        </span>
       </div>
+
+      <div
+        class="home-summary-grid"
+        aria-label="在庫の概要"
+      >
+        <article class="home-summary-card home-summary-products">
+          <span class="home-summary-label">
+            登録商品数
+          </span>
+
+          <strong>
+            <span id="product-count">0</span>
+            <small>件</small>
+          </strong>
+        </article>
+
+        <article class="home-summary-card home-summary-stock">
+          <span class="home-summary-label">
+            総在庫数
+          </span>
+
+          <strong>
+            <span id="total-stock">0</span>
+            <small>個</small>
+          </strong>
+        </article>
+
+        <article
+          id="out-of-stock-summary"
+          class="home-summary-card home-summary-out"
+        >
+          <span class="home-summary-label">
+            在庫切れ
+          </span>
+
+          <strong>
+            <span id="out-of-stock-count">0</span>
+            <small>件</small>
+          </strong>
+        </article>
+
+        <article
+          id="low-stock-summary"
+          class="home-summary-card home-summary-low"
+        >
+          <span class="home-summary-label">
+            要補充
+          </span>
+
+          <strong>
+            <span id="low-stock-count">0</span>
+            <small>件</small>
+          </strong>
+        </article>
+      </div>
+
+      <section
+        class="home-quick-section"
+        aria-labelledby="home-quick-title"
+      >
+        <div class="home-section-heading">
+          <div>
+            <h3 id="home-quick-title">
+              よく使う操作
+            </h3>
+
+            <p>
+              日常作業はこちらから始めます。
+            </p>
+          </div>
+        </div>
+
+        <div
+          id="home-quick-action-buttons"
+          class="home-action-grid"
+        >
+          <button
+            id="show-list-button"
+            type="button"
+          >
+            商品一覧を見る
+          </button>
+
+          <button
+            id="show-register-button"
+            type="button"
+          >
+            商品を登録する
+          </button>
+        </div>
+      </section>
+
+      <div class="home-function-grid">
+        <details
+          class="home-function-panel"
+          data-home-panel="product"
+          open
+        >
+          <summary>
+            商品データ
+          </summary>
+
+          <p class="home-panel-description">
+            手入力検索、商品CSVの出力・読込を行います。
+          </p>
+
+          <div
+            id="home-product-buttons"
+            class="home-panel-buttons"
+          >
+            <button
+              id="show-barcode-lookup-button"
+              type="button"
+            >
+              JANコードを入力して探す
+            </button>
+          </div>
+        </details>
+
+        <details
+          class="home-function-panel"
+          data-home-panel="inventory"
+          open
+        >
+          <summary>
+            入出庫・履歴
+          </summary>
+
+          <p class="home-panel-description">
+            在庫の動きと入出庫履歴を確認します。
+          </p>
+
+          <div
+            id="home-inventory-buttons"
+            class="home-panel-buttons"
+          >
+            <button
+              id="show-history-button"
+              type="button"
+            >
+              入出庫履歴を見る
+            </button>
+          </div>
+        </details>
+
+        <details
+          class="home-function-panel"
+          data-home-panel="stocktaking"
+          open
+        >
+          <summary>
+            棚卸・集約
+          </summary>
+
+          <p class="home-panel-description">
+            棚卸履歴、提出データの集約、結果出力を行います。
+          </p>
+
+          <div
+            id="home-stocktaking-buttons"
+            class="home-panel-buttons"
+          ></div>
+        </details>
+
+        <details
+          class="home-function-panel"
+          data-home-panel="backup"
+          open
+        >
+          <summary>
+            バックアップ・アプリ
+          </summary>
+
+          <p class="home-panel-description">
+            全データの保存・復元とアプリ追加を行います。
+          </p>
+
+          <div
+            id="home-backup-buttons"
+            class="home-panel-buttons"
+          ></div>
+        </details>
+      </div>
+
+      <p class="home-storage-note">
+        この画面の在庫データは、現在開いている端末内に保存されています。
+      </p>
     </section>
 
     <!-- JANコード手入力検索画面 -->
@@ -1111,5 +1264,6 @@
 <script src="pwa.js"></script>
 <script src="backup.js"></script>
 <script src="restore.js"></script>
+<script src="home-dashboard.js?v=24"></script>
 </body>
 </html>

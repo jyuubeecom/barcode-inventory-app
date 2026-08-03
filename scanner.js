@@ -858,12 +858,53 @@ function openBarcodeLookupScreen() {
   barcodeLookupMessage.textContent =
     "登録済みの商品を検索します。";
 
-  barcodeLookupCodeInput.focus();
+  scrollBarcodeLookupIntoView();
+}
 
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
+function scrollBarcodeLookupIntoView() {
+  window.requestAnimationFrame(
+    function () {
+      window.requestAnimationFrame(
+        function () {
+          if (
+            !barcodeLookupScreen ||
+            barcodeLookupScreen.hidden
+          ) {
+            return;
+          }
+
+          const header =
+            document.querySelector(
+              "header"
+            );
+
+          const headerOffset =
+            header
+              ? header.getBoundingClientRect()
+                  .height + 8
+              : 8;
+
+          const targetTop = Math.max(
+            0,
+            window.scrollY +
+              barcodeLookupScreen
+                .getBoundingClientRect()
+                .top -
+              headerOffset
+          );
+
+          window.scrollTo({
+            top: targetTop,
+            behavior: "auto"
+          });
+
+          barcodeLookupCodeInput.focus({
+            preventScroll: true
+          });
+        }
+      );
+    }
+  );
 }
 
 function closeBarcodeLookupScreen() {

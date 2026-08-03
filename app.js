@@ -397,6 +397,7 @@ async function initializeApp() {
 
   createProductSortControls();
   createProductLifecycleStyle();
+  createProductListResponsiveStyle();
 
   showScreen("home");
 
@@ -1392,6 +1393,403 @@ function createProductSortStyle() {
   );
 }
 
+function createProductListResponsiveStyle() {
+  if (
+    document.querySelector(
+      "#product-list-responsive-style"
+    )
+  ) {
+    return;
+  }
+
+  const styleElement =
+    document.createElement("style");
+
+  styleElement.id =
+    "product-list-responsive-style";
+
+  styleElement.textContent = `
+    #product-list .product-list-table-area {
+      width: 100%;
+      margin: 16px 0 22px;
+      overflow-x: auto;
+      border: 1px solid #cfd8dc;
+      border-radius: 12px;
+      background-color: #ffffff;
+      box-sizing: border-box;
+    }
+
+    #product-list .product-list-table {
+      width: 100%;
+      min-width: 1450px;
+      margin: 0;
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+
+    #product-list .product-list-table th,
+    #product-list .product-list-table td {
+      white-space: nowrap;
+    }
+
+    #product-list .product-list-table thead
+    .product-list-operation-cell {
+      position: sticky;
+      left: 0;
+      z-index: 5;
+      min-width: 170px;
+      background-color: #1565c0;
+      color: #ffffff;
+      box-shadow: 5px 0 9px rgba(38, 50, 56, 0.18);
+    }
+
+    #product-list .product-list-card-row
+    .product-list-operation-cell {
+      position: sticky;
+      left: 0;
+      z-index: 3;
+      min-width: 170px;
+      background-color: #ffffff;
+      box-shadow: 5px 0 9px rgba(38, 50, 56, 0.13);
+    }
+
+    #product-list .stock-out-row
+    .product-list-operation-cell {
+      background-color: #ffebee;
+    }
+
+    #product-list .stock-low-row
+    .product-list-operation-cell {
+      background-color: #fff8e1;
+    }
+
+    #product-list .product-discontinued-row
+    .product-list-operation-cell {
+      background-color: #f2f4f5;
+    }
+
+    .product-list-operation-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-width: 150px;
+    }
+
+    .product-list-operation-buttons button {
+      width: auto;
+      min-width: 46px;
+      margin: 0;
+      padding: 8px 10px;
+      border-radius: 7px;
+      font-size: 14px;
+      line-height: 1.2;
+    }
+
+    .product-list-detail-button {
+      background-color: #1565c0;
+    }
+
+    .product-list-edit-button {
+      background-color: #0277bd;
+    }
+
+    .product-list-delete-button {
+      background-color: #c62828;
+    }
+
+    .product-list-name-button {
+      width: auto;
+      max-width: 360px;
+      margin: 0;
+      padding: 3px 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: #0d47a1;
+      font: inherit;
+      font-weight: 700;
+      text-align: left;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      cursor: pointer;
+    }
+
+    .product-list-name-button:hover,
+    .product-list-name-button:focus-visible {
+      background: transparent;
+      color: #1565c0;
+      outline: 3px solid #90caf9;
+      outline-offset: 3px;
+    }
+
+    @media (max-width: 700px) {
+      #product-list .product-list-table-area {
+        overflow-x: visible;
+        border: 0;
+        border-radius: 0;
+        background-color: transparent;
+      }
+
+      #product-list .product-list-table,
+      #product-list .product-list-table tbody {
+        display: block;
+        width: 100%;
+        min-width: 0;
+      }
+
+      #product-list .product-list-table thead {
+        display: none;
+      }
+
+      #product-list #product-table-body {
+        display: grid;
+        gap: 16px;
+      }
+
+      #product-list #product-table-body > tr:not(.product-list-card-row) {
+        display: block;
+        width: 100%;
+      }
+
+      #product-list #product-table-body > tr:not(.product-list-card-row) td {
+        display: block;
+        width: 100%;
+        padding: 18px;
+        border: 1px solid #cfd8dc;
+        border-radius: 12px;
+        text-align: center;
+        box-sizing: border-box;
+      }
+
+      #product-list .product-list-card-row {
+        display: grid;
+        grid-template-columns:
+          minmax(0, 1fr)
+          minmax(0, 1fr);
+        grid-template-areas:
+          "name name"
+          "lifecycle stockstatus"
+          "internal internal"
+          "product product"
+          "jan jan"
+          "stock minstock"
+          "category category"
+          "location location"
+          "supplier supplier"
+          "operation operation";
+        gap: 0 10px;
+        width: 100%;
+        padding: 16px;
+        border: 2px solid #d7dee5;
+        border-radius: 16px;
+        background-color: #ffffff;
+        box-shadow: 0 4px 14px rgba(38, 50, 56, 0.12);
+        box-sizing: border-box;
+      }
+
+      #product-list .product-list-card-row.stock-out-row {
+        border-color: #ef9a9a;
+      }
+
+      #product-list .product-list-card-row.stock-low-row {
+        border-color: #ffcc80;
+      }
+
+      #product-list .product-list-card-row.product-discontinued-row {
+        border-color: #b0bec5;
+        background-color: #f7f8f9 !important;
+      }
+
+      #product-list .product-list-card-row > td {
+        display: block;
+        width: auto;
+        min-width: 0;
+        padding: 8px 0;
+        border: 0;
+        background: transparent;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        box-sizing: border-box;
+      }
+
+      #product-list .product-list-cell-product-name {
+        grid-area: name;
+        padding: 3px 0 13px;
+        border-bottom: 1px solid #e0e6ea;
+      }
+
+      #product-list .product-list-name-button {
+        width: 100%;
+        max-width: none;
+        padding: 0;
+        color: #17202a;
+        font-size: 23px;
+        font-weight: 800;
+        line-height: 1.35;
+        text-decoration-color: #90caf9;
+      }
+
+      #product-list .product-list-cell-internal-code {
+        grid-area: internal;
+      }
+
+      #product-list .product-list-cell-product-code {
+        grid-area: product;
+      }
+
+      #product-list .product-list-cell-jan-code {
+        grid-area: jan;
+      }
+
+      #product-list .product-list-cell-category {
+        grid-area: category;
+      }
+
+      #product-list .product-list-cell-location {
+        grid-area: location;
+      }
+
+      #product-list .product-list-cell-supplier {
+        grid-area: supplier;
+      }
+
+      #product-list .product-list-cell-internal-code,
+      #product-list .product-list-cell-product-code,
+      #product-list .product-list-cell-jan-code,
+      #product-list .product-list-cell-category,
+      #product-list .product-list-cell-location,
+      #product-list .product-list-cell-supplier {
+        display: grid;
+        grid-template-columns: 112px minmax(0, 1fr);
+        gap: 8px;
+        align-items: start;
+        color: #263238;
+        font-size: 16px;
+      }
+
+      #product-list .product-list-cell-internal-code::before,
+      #product-list .product-list-cell-product-code::before,
+      #product-list .product-list-cell-jan-code::before,
+      #product-list .product-list-cell-category::before,
+      #product-list .product-list-cell-location::before,
+      #product-list .product-list-cell-supplier::before {
+        content: attr(data-label);
+        color: #546e7a;
+        font-weight: 700;
+      }
+
+      #product-list .product-list-cell-stock,
+      #product-list .product-list-cell-min-stock {
+        margin-top: 10px;
+        padding: 12px 8px;
+        border-radius: 10px;
+        background-color: #e8f1fd;
+        color: #1565c0;
+        text-align: center;
+        font-size: 24px;
+        font-weight: 800;
+      }
+
+      #product-list .product-list-cell-stock {
+        grid-area: stock;
+      }
+
+      #product-list .product-list-cell-min-stock {
+        grid-area: minstock;
+        background-color: #f3e5f5;
+        color: #6a1b9a;
+      }
+
+      #product-list .product-list-cell-stock::before,
+      #product-list .product-list-cell-min-stock::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 5px;
+        color: #455a64;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      #product-list .product-list-cell-stock-status {
+        grid-area: stockstatus;
+        text-align: right;
+      }
+
+      #product-list .product-list-cell-product-status {
+        grid-area: lifecycle;
+      }
+
+      #product-list .product-list-cell-stock-status::before,
+      #product-list .product-list-cell-product-status::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 5px;
+        color: #546e7a;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      #product-list .product-list-operation-cell {
+        grid-area: operation;
+        position: static;
+        min-width: 0;
+        padding-top: 14px;
+        border-top: 1px solid #e0e6ea;
+        box-shadow: none;
+        background: transparent !important;
+      }
+
+      #product-list .product-list-operation-buttons {
+        display: grid;
+        grid-template-columns:
+          minmax(0, 1fr)
+          minmax(0, 1fr);
+        gap: 9px;
+        min-width: 0;
+      }
+
+      #product-list .product-list-operation-buttons button {
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+        padding: 13px 8px;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      #product-list .product-list-detail-button {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 390px) {
+      #product-list .product-list-card-row {
+        padding: 13px;
+      }
+
+      #product-list .product-list-name-button {
+        font-size: 20px;
+      }
+
+      #product-list .product-list-cell-internal-code,
+      #product-list .product-list-cell-product-code,
+      #product-list .product-list-cell-jan-code,
+      #product-list .product-list-cell-category,
+      #product-list .product-list-cell-location,
+      #product-list .product-list-cell-supplier {
+        grid-template-columns: 100px minmax(0, 1fr);
+        font-size: 15px;
+      }
+    }
+  `;
+
+  document.head.appendChild(
+    styleElement
+  );
+}
+
 function sortDisplayedProducts(
   targetProducts
 ) {
@@ -1662,8 +2060,20 @@ function displayProducts(displayedProducts) {
   displayedProducts.forEach(function (product) {
     const row = document.createElement("tr");
 
+    row.classList.add(
+      "product-list-card-row"
+    );
+
+    row.dataset.internalCode =
+      product.internalCode;
+
     const stockStatus =
       getStockStatus(product);
+
+    const lifecycleStatus =
+      getProductLifecycleStatus(
+        product
+      );
 
     if (stockStatus === "在庫切れ") {
       row.classList.add("stock-out-row");
@@ -1671,128 +2081,332 @@ function displayProducts(displayedProducts) {
       row.classList.add("stock-low-row");
     }
 
-    if (
-      getProductLifecycleStatus(
-        product
-      ) === "廃盤"
-    ) {
+    if (lifecycleStatus === "廃盤") {
       row.classList.add(
         "product-discontinued-row"
       );
     }
 
-    appendTableCell(
-      row,
-      product.internalCode
-    );
-
-    appendTableCell(
-      row,
-      product.productCode
-    );
-
-    appendTableCell(
-      row,
-      product.productName
-    );
-
-    appendTableCell(
-      row,
-      product.janCode || "未登録"
-    );
-
-    appendTableCell(
-      row,
-      product.stock
-    );
-
-    appendTableCell(
-      row,
-      getMinimumStock(product)
-    );
-
-    appendStockStatusCell(
-      row,
-      stockStatus
-    );
-
-    appendTableCell(
-      row,
-      product.category || "未登録"
-    );
-
-    appendTableCell(
-      row,
-      product.location || "未登録"
-    );
-
-    appendTableCell(
-      row,
-      product.supplier
-    );
-
-    appendProductLifecycleStatusCell(
-      row,
-      getProductLifecycleStatus(
+    row.appendChild(
+      createProductOperationCell(
         product
       )
     );
 
-    const operationCell =
-      document.createElement("td");
-
-    const detailButton =
-      document.createElement("button");
-
-    detailButton.type = "button";
-    detailButton.textContent = "詳細";
-
-    detailButton.addEventListener(
-      "click",
-      function () {
-        openDetailScreen(
-          product.internalCode
-        );
-      }
+    row.appendChild(
+      createProductListTextCell(
+        product.internalCode,
+        "社内コード",
+        "product-list-cell-internal-code"
+      )
     );
 
-    const editButton =
-      document.createElement("button");
-
-    editButton.type = "button";
-    editButton.textContent = "編集";
-
-    editButton.addEventListener(
-      "click",
-      function () {
-        openEditScreen(
-          product.internalCode
-        );
-      }
+    row.appendChild(
+      createProductListTextCell(
+        product.productCode,
+        "商品コード",
+        "product-list-cell-product-code"
+      )
     );
 
-    const deleteButton =
-      document.createElement("button");
-
-    deleteButton.type = "button";
-    deleteButton.textContent = "削除";
-
-    deleteButton.addEventListener(
-      "click",
-      function () {
-        handleDeleteProduct(
-          product.internalCode
-        );
-      }
+    row.appendChild(
+      createProductNameCell(
+        product
+      )
     );
 
-    operationCell.appendChild(detailButton);
-    operationCell.appendChild(editButton);
-    operationCell.appendChild(deleteButton);
+    row.appendChild(
+      createProductListTextCell(
+        product.janCode || "未登録",
+        "JANコード",
+        "product-list-cell-jan-code"
+      )
+    );
 
-    row.appendChild(operationCell);
+    row.appendChild(
+      createProductListTextCell(
+        product.stock,
+        "在庫数",
+        "product-list-cell-stock"
+      )
+    );
+
+    row.appendChild(
+      createProductListTextCell(
+        getMinimumStock(product),
+        "最低在庫数",
+        "product-list-cell-min-stock"
+      )
+    );
+
+    row.appendChild(
+      createProductListStockStatusCell(
+        stockStatus
+      )
+    );
+
+    row.appendChild(
+      createProductListTextCell(
+        product.category || "未登録",
+        "カテゴリー",
+        "product-list-cell-category"
+      )
+    );
+
+    row.appendChild(
+      createProductListTextCell(
+        product.location || "未登録",
+        "保管場所",
+        "product-list-cell-location"
+      )
+    );
+
+    row.appendChild(
+      createProductListTextCell(
+        product.supplier,
+        "仕入先",
+        "product-list-cell-supplier"
+      )
+    );
+
+    row.appendChild(
+      createProductListLifecycleCell(
+        lifecycleStatus
+      )
+    );
+
     productTableBody.appendChild(row);
   });
+}
+
+function createProductOperationCell(
+  product
+) {
+  const operationCell =
+    document.createElement("td");
+
+  operationCell.classList.add(
+    "product-list-operation-cell"
+  );
+
+  operationCell.dataset.label =
+    "操作";
+
+  const buttonArea =
+    document.createElement("div");
+
+  buttonArea.classList.add(
+    "product-list-operation-buttons"
+  );
+
+  const detailButton =
+    document.createElement("button");
+
+  detailButton.type = "button";
+  detailButton.textContent =
+    "詳細を見る";
+
+  detailButton.classList.add(
+    "product-list-detail-button"
+  );
+
+  detailButton.addEventListener(
+    "click",
+    function () {
+      openDetailScreen(
+        product.internalCode
+      );
+    }
+  );
+
+  const editButton =
+    document.createElement("button");
+
+  editButton.type = "button";
+  editButton.textContent = "編集";
+
+  editButton.classList.add(
+    "product-list-edit-button"
+  );
+
+  editButton.addEventListener(
+    "click",
+    function () {
+      openEditScreen(
+        product.internalCode
+      );
+    }
+  );
+
+  const deleteButton =
+    document.createElement("button");
+
+  deleteButton.type = "button";
+  deleteButton.textContent = "削除";
+
+  deleteButton.classList.add(
+    "product-list-delete-button"
+  );
+
+  deleteButton.addEventListener(
+    "click",
+    function () {
+      handleDeleteProduct(
+        product.internalCode
+      );
+    }
+  );
+
+  buttonArea.appendChild(
+    detailButton
+  );
+
+  buttonArea.appendChild(
+    editButton
+  );
+
+  buttonArea.appendChild(
+    deleteButton
+  );
+
+  operationCell.appendChild(
+    buttonArea
+  );
+
+  return operationCell;
+}
+
+function createProductNameCell(
+  product
+) {
+  const cell =
+    document.createElement("td");
+
+  cell.classList.add(
+    "product-list-cell-product-name"
+  );
+
+  cell.dataset.label =
+    "商品名";
+
+  const nameButton =
+    document.createElement("button");
+
+  nameButton.type = "button";
+
+  nameButton.textContent =
+    product.productName;
+
+  nameButton.classList.add(
+    "product-list-name-button"
+  );
+
+  nameButton.title =
+    "商品詳細を開く";
+
+  nameButton.addEventListener(
+    "click",
+    function () {
+      openDetailScreen(
+        product.internalCode
+      );
+    }
+  );
+
+  cell.appendChild(
+    nameButton
+  );
+
+  return cell;
+}
+
+function createProductListTextCell(
+  value,
+  label,
+  className
+) {
+  const cell =
+    document.createElement("td");
+
+  if (className) {
+    cell.classList.add(
+      className
+    );
+  }
+
+  cell.dataset.label =
+    label || "";
+
+  cell.textContent =
+    value;
+
+  return cell;
+}
+
+function createProductListStockStatusCell(
+  stockStatus
+) {
+  const cell =
+    document.createElement("td");
+
+  cell.classList.add(
+    "product-list-cell-stock-status"
+  );
+
+  cell.dataset.label =
+    "在庫状態";
+
+  const badge =
+    document.createElement("span");
+
+  badge.textContent = stockStatus;
+  badge.classList.add("status-badge");
+
+  if (stockStatus === "在庫切れ") {
+    badge.classList.add("status-out");
+  } else if (stockStatus === "要補充") {
+    badge.classList.add("status-low");
+  } else {
+    badge.classList.add("status-normal");
+  }
+
+  cell.appendChild(badge);
+
+  return cell;
+}
+
+function createProductListLifecycleCell(
+  productStatus
+) {
+  const cell =
+    document.createElement("td");
+
+  cell.classList.add(
+    "product-list-cell-product-status"
+  );
+
+  cell.dataset.label =
+    "商品状態";
+
+  const badge =
+    document.createElement("span");
+
+  badge.textContent =
+    productStatus;
+
+  badge.classList.add(
+    "product-lifecycle-badge"
+  );
+
+  badge.classList.add(
+    productStatus === "廃盤"
+      ? "product-lifecycle-discontinued"
+      : "product-lifecycle-active"
+  );
+
+  cell.appendChild(badge);
+
+  return cell;
 }
 
 function appendTableCell(row, value) {

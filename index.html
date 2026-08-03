@@ -351,32 +351,34 @@
         ホームへ戻る
       </button>
 
-      <table>
-        <thead>
-          <tr>
-            <th>社内コード</th>
-            <th>商品コード</th>
-            <th>商品名</th>
-            <th>JANコード</th>
-            <th>在庫数</th>
-            <th>最低在庫数</th>
-            <th>在庫状態</th>
-            <th>カテゴリー</th>
-            <th>保管場所</th>
-            <th>仕入先</th>
-            <th>商品状態</th>
-            <th>操作</th>
-          </tr>
-        </thead>
+      <div class="product-list-table-area">
+        <table class="product-list-table">
+          <thead>
+            <tr>
+              <th class="product-list-operation-cell">操作</th>
+              <th>社内コード</th>
+              <th>商品コード</th>
+              <th>商品名</th>
+              <th>JANコード</th>
+              <th>在庫数</th>
+              <th>最低在庫数</th>
+              <th>在庫状態</th>
+              <th>カテゴリー</th>
+              <th>保管場所</th>
+              <th>仕入先</th>
+              <th>商品状態</th>
+            </tr>
+          </thead>
 
-        <tbody id="product-table-body">
-          <tr>
-            <td colspan="12">
-              登録されている商品はありません。
-            </td>
-          </tr>
-        </tbody>
-      </table>
+          <tbody id="product-table-body">
+            <tr>
+              <td colspan="12">
+                登録されている商品はありません。
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <!-- 入出庫履歴画面 -->
@@ -1097,7 +1099,7 @@
   </main>
 
 <script src="storage.js"></script>
-<script src="app.js?v=15"></script>
+<script src="app.js?v=16"></script>
 <script src="inventory.js"></script>
 <script src="scanner.js?v=10"></script>
 <script src="stocktaking.js?v=15"></script>

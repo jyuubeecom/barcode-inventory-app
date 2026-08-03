@@ -458,10 +458,7 @@ function openCameraScanner(mode) {
   torchEnabled = false;
   barcodeDetected = false;
 
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
+  scrollCameraScannerIntoView();
 
   if (isStocktakingMode) {
     cameraAutoStartTimer =
@@ -483,6 +480,48 @@ function openCameraScanner(mode) {
         150
       );
   }
+}
+
+function scrollCameraScannerIntoView() {
+  window.requestAnimationFrame(
+    function () {
+      window.requestAnimationFrame(
+        function () {
+          if (
+            !cameraScannerScreen ||
+            cameraScannerScreen.hidden
+          ) {
+            return;
+          }
+
+          const header =
+            document.querySelector(
+              "header"
+            );
+
+          const headerOffset =
+            header
+              ? header.getBoundingClientRect()
+                  .height + 8
+              : 8;
+
+          const targetTop = Math.max(
+            0,
+            window.scrollY +
+              cameraScannerScreen
+                .getBoundingClientRect()
+                .top -
+              headerOffset
+          );
+
+          window.scrollTo({
+            top: targetTop,
+            behavior: "auto"
+          });
+        }
+      );
+    }
+  );
 }
 
 async function startCameraScan() {

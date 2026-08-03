@@ -49,6 +49,13 @@ let barcodeDetected = false;
 let torchEnabled = false;
 let cameraScannerMode = "normal";
 let cameraAutoStartTimer = null;
+let cameraCandidateValue = "";
+let cameraCandidateCount = 0;
+let cameraCandidateStartedAt = 0;
+let cameraBarcodeProcessing = false;
+
+const CAMERA_REQUIRED_CONFIRMATIONS = 2;
+const CAMERA_CONFIRMATION_WINDOW_MS = 1800;
 
 document.addEventListener(
   "DOMContentLoaded",
@@ -90,11 +97,22 @@ function initializeScanner() {
 }
 
 function createCameraScannerButton() {
-  if (
+  const existingCameraButton =
     document.querySelector(
       "#show-camera-scanner-button"
-    )
-  ) {
+    );
+
+  if (existingCameraButton) {
+    existingCameraButton.removeEventListener(
+      "click",
+      openCameraScannerScreen
+    );
+
+    existingCameraButton.addEventListener(
+      "click",
+      openCameraScannerScreen
+    );
+
     return;
   }
 
@@ -431,16 +449,14 @@ function openCameraScanner(mode) {
   cameraScannerMessage.textContent =
     isStocktakingMode
       ? "棚卸用カメラを自動で起動しています。"
-      : "「カメラを開始する」を押してください。";
+      : "カメラを自動で起動しています。";
 
   cameraTorchButton.disabled = true;
   cameraTorchButton.textContent =
     "ライトを点灯";
 
   cameraStartButton.textContent =
-    isStocktakingMode
-      ? "カメラを再開する"
-      : "カメラを開始する";
+    "カメラを再開する";
 
   cameraRetryButton.textContent =
     "読み取りをやり直す";
@@ -460,26 +476,20 @@ function openCameraScanner(mode) {
 
   scrollCameraScannerIntoView();
 
-  if (isStocktakingMode) {
-    cameraAutoStartTimer =
-      window.setTimeout(
-        function () {
-          cameraAutoStartTimer =
-            null;
+  cameraAutoStartTimer =
+    window.setTimeout(
+      function () {
+        cameraAutoStartTimer =
+          null;
 
-          if (
-            cameraScannerMode !==
-              "stocktaking" ||
-            cameraScannerScreen.hidden
-          ) {
-            return;
-          }
+        if (cameraScannerScreen.hidden) {
+          return;
+        }
 
-          startCameraScan();
-        },
-        150
-      );
-  }
+        startCameraScan();
+      },
+      180
+    );
 }
 
 function scrollCameraScannerIntoView() {
@@ -529,6 +539,10 @@ async function startCameraScan() {
 
   barcodeDetected = false;
   torchEnabled = false;
+  cameraCandidateValue = "";
+  cameraCandidateCount = 0;
+  cameraCandidateStartedAt = 0;
+  cameraBarcodeProcessing = false;
 
   cameraScannerResult.value = "";
 
@@ -607,17 +621,54 @@ function handleCameraDecode(
   error,
   controls
 ) {
-  if (!result || barcodeDetected) {
+  if (
+    !result ||
+    barcodeDetected ||
+    cameraBarcodeProcessing
+  ) {
     return;
   }
-
-  barcodeDetected = true;
 
   const detectedText =
     getResultText(result);
 
+  if (detectedText === "") {
+    return;
+  }
+
+  const now = Date.now();
+  const isSameCandidate =
+    cameraCandidateValue ===
+      detectedText &&
+    now - cameraCandidateStartedAt <=
+      CAMERA_CONFIRMATION_WINDOW_MS;
+
+  if (isSameCandidate) {
+    cameraCandidateCount += 1;
+  } else {
+    cameraCandidateValue =
+      detectedText;
+
+    cameraCandidateCount = 1;
+    cameraCandidateStartedAt = now;
+  }
+
   cameraScannerResult.value =
     detectedText;
+
+  if (
+    cameraCandidateCount <
+    CAMERA_REQUIRED_CONFIRMATIONS
+  ) {
+    cameraScannerMessage.textContent =
+      `読み取り確認中：${detectedText}　` +
+      "カメラを動かさず、そのまま合わせてください。";
+
+    return;
+  }
+
+  barcodeDetected = true;
+  cameraBarcodeProcessing = true;
 
   cameraScannerMessage.textContent =
     `読み取り成功：${detectedText}`;
@@ -631,9 +682,15 @@ function handleCameraDecode(
 
   cameraControls = null;
 
-  processBarcodeValue(
-    detectedText,
-    "camera"
+  Promise.resolve(
+    processBarcodeValue(
+      detectedText,
+      "camera"
+    )
+  ).finally(
+    function () {
+      cameraBarcodeProcessing = false;
+    }
   );
 }
 
@@ -869,28 +926,30 @@ async function processBarcodeValue(
   }
 
   try {
-    const savedProducts =
+    let savedProducts =
       await getAllProducts();
 
-    const matchingProducts =
-      savedProducts.filter(
-        function (product) {
-          const savedInternalCode =
-            normalizeBarcodeValue(
-              product.internalCode
-            );
-
-          const savedJanCode =
-            normalizeBarcodeValue(
-              product.janCode
-            );
-
-          return (
-            savedInternalCode === enteredCode ||
-            savedJanCode === enteredCode
-          );
-        }
+    let matchingProducts =
+      findMatchingProductsByBarcode(
+        savedProducts,
+        enteredCode
       );
+
+    if (
+      matchingProducts.length === 0 &&
+      inputMethod === "camera"
+    ) {
+      await waitForMilliseconds(250);
+
+      savedProducts =
+        await getAllProducts();
+
+      matchingProducts =
+        findMatchingProductsByBarcode(
+          savedProducts,
+          enteredCode
+        );
+    }
 
     if (matchingProducts.length > 1) {
       stopCameraScan();
@@ -1086,8 +1145,92 @@ function hideAllMainScreens() {
 function normalizeBarcodeValue(value) {
   return String(value || "")
     .normalize("NFKC")
+    .replace(
+      /[\u0000-\u001F\u007F-\u009F\u200B-\u200D\u2060\uFEFF]/g,
+      ""
+    )
     .replace(/\s+/g, "")
     .trim();
+}
+
+function findMatchingProductsByBarcode(
+  products,
+  enteredCode
+) {
+  const normalizedEnteredCode =
+    normalizeBarcodeValue(
+      enteredCode
+    );
+
+  return products.filter(
+    function (product) {
+      const savedInternalCode =
+        normalizeBarcodeValue(
+          product.internalCode
+        );
+
+      const savedJanCode =
+        normalizeBarcodeValue(
+          product.janCode
+        );
+
+      return (
+        savedInternalCode ===
+          normalizedEnteredCode ||
+        areEquivalentJanCodes(
+          savedJanCode,
+          normalizedEnteredCode
+        )
+      );
+    }
+  );
+}
+
+function areEquivalentJanCodes(
+  savedJanCode,
+  scannedCode
+) {
+  if (
+    savedJanCode === "" ||
+    scannedCode === ""
+  ) {
+    return false;
+  }
+
+  if (savedJanCode === scannedCode) {
+    return true;
+  }
+
+  const savedIsNumeric =
+    /^\d+$/.test(savedJanCode);
+
+  const scannedIsNumeric =
+    /^\d+$/.test(scannedCode);
+
+  if (!savedIsNumeric || !scannedIsNumeric) {
+    return false;
+  }
+
+  return (
+    savedJanCode.length === 13 &&
+    savedJanCode.startsWith("0") &&
+    savedJanCode.slice(1) === scannedCode
+  ) || (
+    scannedCode.length === 13 &&
+    scannedCode.startsWith("0") &&
+    scannedCode.slice(1) === savedJanCode
+  );
+}
+
+function waitForMilliseconds(milliseconds) {
+  return new Promise(
+    function (resolve) {
+      window.setTimeout(
+        resolve,
+        milliseconds
+      );
+    }
+  );
 }
 
 function loadZxingLibrary() {

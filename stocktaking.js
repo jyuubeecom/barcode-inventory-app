@@ -177,6 +177,16 @@ function createStocktakingStartButton() {
     stocktakingStartButton =
       existingButton;
 
+    stocktakingStartButton.removeEventListener(
+      "click",
+      openStocktakingStart
+    );
+
+    stocktakingStartButton.addEventListener(
+      "click",
+      openStocktakingStart
+    );
+
     return;
   }
 
@@ -1641,12 +1651,10 @@ function showStocktakingSetupScreen() {
   stocktakingDateInput.value =
     getTodayDateText();
 
-  stocktakingPersonInput.focus();
-
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
+  scrollStocktakingScreenIntoView(
+    stocktakingSetupScreen,
+    stocktakingPersonInput
+  );
 }
 
 async function handleStocktakingStart(
@@ -2002,10 +2010,9 @@ async function showActiveStocktaking(
 
   stocktakingActiveScreen.hidden = false;
 
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
+  scrollStocktakingScreenIntoView(
+    stocktakingActiveScreen
+  );
 }
 
 function normalizeStocktakingItem(item) {
@@ -4545,6 +4552,70 @@ function getValidStocktakingNumber(
   return numberValue;
 }
 
+function scrollStocktakingScreenIntoView(
+  screen,
+  focusElement
+) {
+  if (!screen || screen.hidden) {
+    return;
+  }
+
+  window.requestAnimationFrame(
+    function () {
+      window.requestAnimationFrame(
+        function () {
+          if (!screen || screen.hidden) {
+            return;
+          }
+
+          const header =
+            document.querySelector(
+              "header"
+            );
+
+          const headerOffset =
+            header
+              ? header.getBoundingClientRect()
+                  .height + 8
+              : 8;
+
+          const targetTop = Math.max(
+            0,
+            window.scrollY +
+              screen.getBoundingClientRect()
+                .top -
+              headerOffset
+          );
+
+          window.scrollTo({
+            top: targetTop,
+            behavior: "smooth"
+          });
+
+          if (
+            focusElement &&
+            typeof focusElement.focus ===
+              "function"
+          ) {
+            window.setTimeout(
+              function () {
+                try {
+                  focusElement.focus({
+                    preventScroll: true
+                  });
+                } catch (error) {
+                  focusElement.focus();
+                }
+              },
+              350
+            );
+          }
+        }
+      );
+    }
+  );
+}
+
 function hideAllMainScreensForStocktaking() {
   const allScreens =
     document.querySelectorAll(
@@ -4742,10 +4813,12 @@ function returnFromStocktakingScanner(
     );
   }
 
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
+  scrollStocktakingScreenIntoView(
+    stocktakingActiveScreen,
+    focusSearch
+      ? stocktakingProductSearchInput
+      : null
+  );
 }
 
 function focusStocktakingActualInput(

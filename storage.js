@@ -3,7 +3,7 @@
 const DATABASE_NAME =
   "barcodeInventoryDatabase";
 
-const DATABASE_VERSION = 4;
+const DATABASE_VERSION = 5;
 
 const PRODUCT_STORE_NAME =
   "products";
@@ -13,6 +13,9 @@ const MOVEMENT_STORE_NAME =
 
 const STOCKTAKING_STORE_NAME =
   "stocktakings";
+
+const STOCKTAKING_SUBMISSION_STORE_NAME =
+  "stocktakingSubmissions";
 
 function openDatabase() {
   return new Promise(function (
@@ -151,6 +154,44 @@ function openDatabase() {
           stocktakingStore.createIndex(
             "startedAt",
             "startedAt",
+            {
+              unique: false
+            }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            STOCKTAKING_SUBMISSION_STORE_NAME
+          )
+        ) {
+          const submissionStore =
+            database.createObjectStore(
+              STOCKTAKING_SUBMISSION_STORE_NAME,
+              {
+                keyPath: "submissionId"
+              }
+            );
+
+          submissionStore.createIndex(
+            "stocktakingDate",
+            "stocktakingDate",
+            {
+              unique: false
+            }
+          );
+
+          submissionStore.createIndex(
+            "sourceSessionId",
+            "sourceSessionId",
+            {
+              unique: false
+            }
+          );
+
+          submissionStore.createIndex(
+            "importedAt",
+            "importedAt",
             {
               unique: false
             }
@@ -901,3 +942,149 @@ async function completeStocktakingSession(
       };
   });
 }
+
+async function saveStocktakingSubmission(
+  submission
+) {
+  const database =
+    await openDatabase();
+
+  return new Promise(function (
+    resolve,
+    reject
+  ) {
+    const transaction =
+      database.transaction(
+        STOCKTAKING_SUBMISSION_STORE_NAME,
+        "readwrite"
+      );
+
+    const store =
+      transaction.objectStore(
+        STOCKTAKING_SUBMISSION_STORE_NAME
+      );
+
+    store.add(submission);
+
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve();
+      };
+
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
+
+    transaction.onabort =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
+  });
+}
+
+async function getAllStocktakingSubmissions() {
+  const database =
+    await openDatabase();
+
+  return new Promise(function (
+    resolve,
+    reject
+  ) {
+    const transaction =
+      database.transaction(
+        STOCKTAKING_SUBMISSION_STORE_NAME,
+        "readonly"
+      );
+
+    const store =
+      transaction.objectStore(
+        STOCKTAKING_SUBMISSION_STORE_NAME
+      );
+
+    const request =
+      store.getAll();
+
+    let submissions = [];
+
+    request.onsuccess =
+      function () {
+        submissions =
+          request.result || [];
+      };
+
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve(submissions);
+      };
+
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
+  });
+}
+
+async function deleteStocktakingSubmission(
+  submissionId
+) {
+  const database =
+    await openDatabase();
+
+  return new Promise(function (
+    resolve,
+    reject
+  ) {
+    const transaction =
+      database.transaction(
+        STOCKTAKING_SUBMISSION_STORE_NAME,
+        "readwrite"
+      );
+
+    const store =
+      transaction.objectStore(
+        STOCKTAKING_SUBMISSION_STORE_NAME
+      );
+
+    store.delete(submissionId);
+
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve();
+      };
+
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
+
+    transaction.onabort =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
+  });
+}
+

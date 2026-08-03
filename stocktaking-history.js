@@ -6,6 +6,7 @@ let stocktakingHistoryDetailScreen = null;
 let stocktakingHistoryBody = null;
 let stocktakingHistoryCount = null;
 let stocktakingHistoryDetailBody = null;
+let currentStocktakingHistoryDetailSession = null;
 
 document.addEventListener(
   "DOMContentLoaded",
@@ -184,6 +185,13 @@ function createStocktakingHistoryScreens() {
     </div>
 
     <button
+      id="export-stocktaking-submission-button"
+      type="button"
+    >
+      この棚卸の提出ファイルを出力
+    </button>
+
+    <button
       id="back-to-stocktaking-history"
       type="button"
     >
@@ -240,6 +248,39 @@ function createStocktakingHistoryScreens() {
   ).addEventListener(
     "click",
     returnHomeFromStocktakingHistory
+  );
+
+  document.querySelector(
+    "#export-stocktaking-submission-button"
+  ).addEventListener(
+    "click",
+    function () {
+      if (
+        !currentStocktakingHistoryDetailSession
+      ) {
+        alert(
+          "出力する棚卸履歴が見つかりません。"
+        );
+
+        return;
+      }
+
+      if (
+        !window.stocktakingTransferApp ||
+        typeof window.stocktakingTransferApp.exportSession !==
+          "function"
+      ) {
+        alert(
+          "棚卸提出ファイルの出力機能を開けませんでした。\n\n画面を更新して、もう一度お試しください。"
+        );
+
+        return;
+      }
+
+      window.stocktakingTransferApp.exportSession(
+        currentStocktakingHistoryDetailSession
+      );
+    }
   );
 }
 
@@ -379,6 +420,10 @@ function createStocktakingHistoryStyle() {
       font-size: 15px;
       background-color: #1565c0;
       white-space: nowrap;
+    }
+
+    #export-stocktaking-submission-button {
+      background-color: #00838f;
     }
 
     @media (max-width: 700px) {
@@ -674,6 +719,9 @@ function openStocktakingHistoryDetail(
 
     return;
   }
+
+  currentStocktakingHistoryDetailSession =
+    session;
 
   const counts =
     getSessionCounts(
@@ -1291,6 +1339,9 @@ function formatHistoryDateTime(
 }
 
 function returnToStocktakingHistoryList() {
+  currentStocktakingHistoryDetailSession =
+    null;
+
   stocktakingHistoryDetailScreen.hidden =
     true;
 
@@ -1304,6 +1355,9 @@ function returnToStocktakingHistoryList() {
 }
 
 function returnHomeFromStocktakingHistory() {
+  currentStocktakingHistoryDetailSession =
+    null;
+
   stocktakingHistoryScreen.hidden =
     true;
 

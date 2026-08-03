@@ -160,6 +160,11 @@ const locationInput =
 const supplierInput =
   document.querySelector("#supplier");
 
+const productStatusInput =
+  document.querySelector(
+    "#product-status"
+  );
+
 const editInternalCodeInput =
   document.querySelector(
     "#edit-internal-code"
@@ -201,6 +206,11 @@ const editLocationInput =
 const editSupplierInput =
   document.querySelector(
     "#edit-supplier"
+  );
+
+const editProductStatusInput =
+  document.querySelector(
+    "#edit-product-status"
   );
 
 const detailInternalCode =
@@ -249,6 +259,11 @@ const detailLocation =
 const detailSupplier =
   document.querySelector(
     "#detail-supplier"
+  );
+
+const detailProductStatus =
+  document.querySelector(
+    "#detail-product-status"
   );
 
 const detailUpdatedAt =
@@ -381,6 +396,7 @@ async function initializeApp() {
   );
 
   createProductSortControls();
+  createProductLifecycleStyle();
 
   showScreen("home");
 
@@ -487,6 +503,12 @@ async function handleProductSubmit(event) {
   const supplier =
     supplierInput.value.trim();
 
+  const productStatus =
+    getProductLifecycleStatus({
+      productStatus:
+        productStatusInput.value
+    });
+
   if (!Number.isInteger(stock) || stock < 0) {
     alert(
       "初期在庫数は0以上の整数で入力してください。"
@@ -555,6 +577,7 @@ async function handleProductSubmit(event) {
     category: category,
     location: location,
     supplier: supplier,
+    productStatus: productStatus,
     createdAt: currentDateTime,
     updatedAt: currentDateTime
   };
@@ -589,6 +612,8 @@ async function handleProductSubmit(event) {
     productForm.reset();
     stockInput.value = 0;
     minStockInput.value = 0;
+    productStatusInput.value =
+      "通常商品";
 
     productSearchInput.value = "";
 
@@ -848,6 +873,19 @@ function openDetailScreen(internalCode) {
   detailSupplier.textContent =
     selectedProduct.supplier;
 
+  const productLifecycleStatus =
+    getProductLifecycleStatus(
+      selectedProduct
+    );
+
+  detailProductStatus.textContent =
+    productLifecycleStatus;
+
+  detailProductStatus.className =
+    productLifecycleStatus === "廃盤"
+      ? "detail-product-discontinued"
+      : "detail-product-active";
+
   detailUpdatedAt.textContent =
     formatDateTime(selectedProduct.updatedAt);
 
@@ -895,6 +933,11 @@ function openEditScreen(internalCode) {
 
   editSupplierInput.value =
     selectedProduct.supplier;
+
+  editProductStatusInput.value =
+    getProductLifecycleStatus(
+      selectedProduct
+    );
 
   showScreen("edit");
   editProductCodeInput.focus();
@@ -947,6 +990,12 @@ async function handleEditProductSubmit(event) {
   const supplier =
     editSupplierInput.value.trim();
 
+  const productStatus =
+    getProductLifecycleStatus({
+      productStatus:
+        editProductStatusInput.value
+    });
+
   if (
     !Number.isInteger(minStock) ||
     minStock < 0
@@ -988,6 +1037,7 @@ async function handleEditProductSubmit(event) {
     category: category,
     location: location,
     supplier: supplier,
+    productStatus: productStatus,
     createdAt:
       currentProduct.createdAt ||
       new Date().toISOString(),
@@ -1116,8 +1166,42 @@ function normalizeProductData(product) {
     ),
     minStock: getValidStockNumber(
       product.minStock
-    )
+    ),
+    productStatus:
+      getProductLifecycleStatus(
+        product
+      )
   };
+}
+
+function getProductLifecycleStatus(
+  product
+) {
+  const savedStatus =
+    String(
+      product &&
+      product.productStatus
+        ? product.productStatus
+        : ""
+    )
+      .normalize("NFKC")
+      .trim()
+      .toLowerCase();
+
+  if (
+    savedStatus === "廃盤" ||
+    savedStatus ===
+      "discontinued" ||
+    savedStatus === "inactive" ||
+    (
+      product &&
+      product.discontinued === true
+    )
+  ) {
+    return "廃盤";
+  }
+
+  return "通常商品";
 }
 
 function getValidStockNumber(value) {
@@ -1499,7 +1583,10 @@ function getFilteredProducts() {
         product.category,
         product.location,
         product.supplier,
-        getStockStatus(product)
+        getStockStatus(product),
+        getProductLifecycleStatus(
+          product
+        )
       ];
 
       return searchableValues.some(
@@ -1556,7 +1643,7 @@ function displayProducts(displayedProducts) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
 
-    cell.colSpan = 11;
+    cell.colSpan = 12;
 
     if (products.length === 0) {
       cell.textContent =
@@ -1582,6 +1669,16 @@ function displayProducts(displayedProducts) {
       row.classList.add("stock-out-row");
     } else if (stockStatus === "要補充") {
       row.classList.add("stock-low-row");
+    }
+
+    if (
+      getProductLifecycleStatus(
+        product
+      ) === "廃盤"
+    ) {
+      row.classList.add(
+        "product-discontinued-row"
+      );
     }
 
     appendTableCell(
@@ -1632,6 +1729,13 @@ function displayProducts(displayedProducts) {
     appendTableCell(
       row,
       product.supplier
+    );
+
+    appendProductLifecycleStatusCell(
+      row,
+      getProductLifecycleStatus(
+        product
+      )
     );
 
     const operationCell =
@@ -1718,6 +1822,102 @@ function appendStockStatusCell(
 
   cell.appendChild(badge);
   row.appendChild(cell);
+}
+
+function appendProductLifecycleStatusCell(
+  row,
+  productStatus
+) {
+  const cell =
+    document.createElement("td");
+
+  const badge =
+    document.createElement("span");
+
+  badge.textContent =
+    productStatus;
+
+  badge.classList.add(
+    "product-lifecycle-badge"
+  );
+
+  badge.classList.add(
+    productStatus === "廃盤"
+      ? "product-lifecycle-discontinued"
+      : "product-lifecycle-active"
+  );
+
+  cell.appendChild(badge);
+  row.appendChild(cell);
+}
+
+function createProductLifecycleStyle() {
+  if (
+    document.querySelector(
+      "#product-lifecycle-style"
+    )
+  ) {
+    return;
+  }
+
+  const styleElement =
+    document.createElement("style");
+
+  styleElement.id =
+    "product-lifecycle-style";
+
+  styleElement.textContent = `
+    .product-lifecycle-badge {
+      display: inline-block;
+      min-width: 74px;
+      padding: 6px 10px;
+      border-radius: 20px;
+      text-align: center;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    .product-lifecycle-active {
+      background-color: #e8f5e9;
+      color: #1b5e20;
+    }
+
+    .product-lifecycle-discontinued {
+      background-color: #eceff1;
+      color: #455a64;
+      border: 1px solid #90a4ae;
+    }
+
+    .product-discontinued-row {
+      background-color: #f2f4f5 !important;
+      color: #546e7a;
+    }
+
+    .detail-product-active,
+    .detail-product-discontinued {
+      display: inline-block;
+      min-width: 80px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      text-align: center;
+      font-weight: bold;
+    }
+
+    .detail-product-active {
+      background-color: #e8f5e9;
+      color: #1b5e20;
+    }
+
+    .detail-product-discontinued {
+      background-color: #eceff1;
+      color: #455a64;
+      border: 1px solid #90a4ae;
+    }
+  `;
+
+  document.head.appendChild(
+    styleElement
+  );
 }
 
 function updateSummary() {

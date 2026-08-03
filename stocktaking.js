@@ -1524,6 +1524,32 @@ async function handleStocktakingStart(
   }
 }
 
+function isDiscontinuedStocktakingProduct(
+  product
+) {
+  const savedStatus =
+    String(
+      product &&
+      product.productStatus
+        ? product.productStatus
+        : ""
+    )
+      .normalize("NFKC")
+      .trim()
+      .toLowerCase();
+
+  return (
+    savedStatus === "廃盤" ||
+    savedStatus ===
+      "discontinued" ||
+    savedStatus === "inactive" ||
+    (
+      product &&
+      product.discontinued === true
+    )
+  );
+}
+
 function getStocktakingTargetProducts(
   allProducts,
   location
@@ -1536,6 +1562,14 @@ function getStocktakingTargetProducts(
   const targetProducts =
     allProducts.filter(
       function (product) {
+        if (
+          isDiscontinuedStocktakingProduct(
+            product
+          )
+        ) {
+          return false;
+        }
+
         if (
           location ===
           "すべての保管場所"

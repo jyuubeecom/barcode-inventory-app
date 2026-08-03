@@ -278,6 +278,29 @@
           >
         </div>
 
+        <div>
+          <label for="product-status">
+            商品状態
+          </label>
+
+          <select
+            id="product-status"
+            name="productStatus"
+          >
+            <option value="通常商品">
+              通常商品
+            </option>
+
+            <option value="廃盤">
+              廃盤
+            </option>
+          </select>
+
+          <small>
+            廃盤にすると、新しく開始する棚卸には表示されません。
+          </small>
+        </div>
+
         <button type="submit">
           商品を登録する
         </button>
@@ -341,13 +364,14 @@
             <th>カテゴリー</th>
             <th>保管場所</th>
             <th>仕入先</th>
+            <th>商品状態</th>
             <th>操作</th>
           </tr>
         </thead>
 
         <tbody id="product-table-body">
           <tr>
-            <td colspan="11">
+            <td colspan="12">
               登録されている商品はありません。
             </td>
           </tr>
@@ -457,6 +481,11 @@
           <tr>
             <th>仕入先</th>
             <td id="detail-supplier"></td>
+          </tr>
+
+          <tr>
+            <th>商品状態</th>
+            <td id="detail-product-status"></td>
           </tr>
 
           <tr>
@@ -1031,6 +1060,28 @@
           >
         </div>
 
+        <div>
+          <label for="edit-product-status">
+            商品状態
+          </label>
+
+          <select
+            id="edit-product-status"
+          >
+            <option value="通常商品">
+              通常商品
+            </option>
+
+            <option value="廃盤">
+              廃盤
+            </option>
+          </select>
+
+          <small>
+            廃盤にすると、新しく開始する棚卸には表示されません。
+          </small>
+        </div>
+
         <button type="submit">
           変更内容を保存する
         </button>
@@ -1046,10 +1097,10 @@
   </main>
 
 <script src="storage.js"></script>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=15"></script>
 <script src="inventory.js"></script>
 <script src="scanner.js?v=10"></script>
-<script src="stocktaking.js?v=14"></script>
+<script src="stocktaking.js?v=15"></script>
 <script src="stocktaking-history.js?v=9"></script>
 <script src="csv.js?v=9"></script>
 <script src="csv-import.js"></script>

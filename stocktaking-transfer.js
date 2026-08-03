@@ -7,7 +7,7 @@ const STOCKTAKING_SUBMISSION_FORMAT_VERSION =
   1;
 
 const STOCKTAKING_TRANSFER_APP_VERSION =
-  "v21";
+  "v22";
 
 let stocktakingAggregationScreen = null;
 let stocktakingSubmissionFileInput = null;
@@ -27,6 +27,18 @@ let applyStocktakingReflectionButton = null;
 let exportStocktakingReflectionCsvButton = null;
 let stocktakingReflectionMessage = null;
 let stocktakingReflectionBody = null;
+
+let stocktakingSubmissionPreviewPagination = null;
+let stocktakingImportedSubmissionPagination = null;
+let stocktakingAggregationPagination = null;
+let stocktakingReflectionPagination = null;
+
+const STOCKTAKING_TRANSFER_PAGE_SIZE = 20;
+
+let stocktakingSubmissionPreviewPage = 1;
+let stocktakingImportedSubmissionPage = 1;
+let stocktakingAggregationPage = 1;
+let stocktakingReflectionPage = 1;
 
 let selectedStocktakingSubmissionFiles = [];
 let importedStocktakingSubmissions = [];
@@ -121,227 +133,324 @@ function createStocktakingAggregationScreen() {
     </p>
 
     <p class="stocktaking-aggregation-safety">
-      試験版では集約結果を現在庫へ自動反映しません。画面とCSVで内容を確認してください。
+      現在庫は自動では変更されません。反映内容を確認し、「現在庫へ反映する」を押した場合だけ変更されます。
     </p>
 
-    <section class="stocktaking-aggregation-panel">
-      <h3>1. 提出ファイルを選ぶ</h3>
-
-      <label for="stocktaking-submission-file-input">
-        棚卸提出ファイル（複数選択できます）
-      </label>
-
-      <input
-        id="stocktaking-submission-file-input"
-        type="file"
-        accept=".json,application/json"
-        multiple
+    <nav
+      id="stocktaking-aggregation-jump-nav"
+      class="stocktaking-aggregation-jump-nav"
+      aria-label="集約画面の移動"
+    >
+      <button
+        type="button"
+        data-stocktaking-panel-target="stocktaking-panel-files"
       >
-
-      <p
-        id="stocktaking-submission-preview-message"
-        class="stocktaking-aggregation-message"
-      >
-        まだファイルを選択していません。
-      </p>
-
-      <div class="stocktaking-aggregation-table-area">
-        <table class="stocktaking-submission-preview-table">
-          <thead>
-            <tr>
-              <th>ファイル名</th>
-              <th>棚卸日</th>
-              <th>担当者</th>
-              <th>保管場所</th>
-              <th>商品数</th>
-              <th>確認結果</th>
-            </tr>
-          </thead>
-
-          <tbody id="stocktaking-submission-preview-body">
-            <tr>
-              <td colspan="6">
-                ファイルを選択すると確認結果が表示されます。
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        ファイル取込
+      </button>
 
       <button
-        id="import-stocktaking-submissions-button"
         type="button"
-        disabled
+        data-stocktaking-panel-target="stocktaking-panel-imported"
       >
-        選択した提出ファイルを取り込む
+        取込済み
       </button>
-    </section>
-
-    <section class="stocktaking-aggregation-panel">
-      <h3>2. 取り込み済みの提出</h3>
-
-      <p
-        id="stocktaking-imported-submission-message"
-        class="stocktaking-aggregation-message"
-      >
-        取り込み済みの提出を読み込んでいます。
-      </p>
-
-      <div class="stocktaking-aggregation-table-area">
-        <table class="stocktaking-imported-submission-table">
-          <thead>
-            <tr>
-              <th>棚卸日</th>
-              <th>担当者</th>
-              <th>保管場所</th>
-              <th>状態</th>
-              <th>商品数</th>
-              <th>取込日時</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-
-          <tbody id="stocktaking-imported-submission-body">
-            <tr>
-              <td colspan="7">
-                取り込み済みの提出はありません。
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="stocktaking-aggregation-panel">
-      <h3>3. 集約結果を確認する</h3>
-
-      <label for="stocktaking-aggregation-date-filter">
-        棚卸日で絞り込む
-      </label>
-
-      <select id="stocktaking-aggregation-date-filter">
-        <option value="">すべての棚卸日</option>
-      </select>
-
-      <div
-        id="stocktaking-aggregation-summary"
-        class="stocktaking-aggregation-summary"
-      ></div>
-
-      <div class="stocktaking-aggregation-table-area">
-        <table class="stocktaking-aggregation-result-table">
-          <thead>
-            <tr>
-              <th>棚卸日</th>
-              <th>結果</th>
-              <th>社内コード</th>
-              <th>商品コード</th>
-              <th>商品名</th>
-              <th>登録在庫</th>
-              <th>集約実在庫</th>
-              <th>差異</th>
-              <th>保管場所別内訳</th>
-              <th>担当者</th>
-              <th>提出数</th>
-              <th>警告</th>
-            </tr>
-          </thead>
-
-          <tbody id="stocktaking-aggregation-body">
-            <tr>
-              <td colspan="12">
-                提出ファイルを取り込むと集約結果が表示されます。
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
 
       <button
-        id="export-stocktaking-aggregation-csv-button"
         type="button"
-        disabled
+        data-stocktaking-panel-target="stocktaking-panel-results"
       >
-        集約結果をCSV出力する
+        集約結果
       </button>
-    </section>
 
-    <section class="stocktaking-aggregation-panel stocktaking-reflection-panel">
-      <h3>4. 集約結果を現在庫へ反映する</h3>
-
-      <p class="stocktaking-aggregation-safety">
-        棚卸日を1日選び、反映内容を確認してから現在庫へ反映します。要確認・未確認・保管場所「未確認」が1件でもある場合は反映できません。
-      </p>
-
-      <label for="stocktaking-reflection-person">
-        集約担当者（必須）
-      </label>
-
-      <input
-        id="stocktaking-reflection-person"
-        type="text"
-        placeholder="例：集約担当者"
-        autocomplete="name"
+      <button
+        type="button"
+        data-stocktaking-panel-target="stocktaking-panel-reflection"
       >
+        反映確認
+      </button>
 
-      <div class="stocktaking-reflection-actions">
-        <button
-          id="preview-stocktaking-reflection-button"
-          type="button"
+      <button
+        id="stocktaking-aggregation-top-button"
+        type="button"
+      >
+        一番上へ
+      </button>
+    </nav>
+
+    <details
+      id="stocktaking-panel-files"
+      class="stocktaking-aggregation-panel"
+      open
+    >
+      <summary>
+        <span>1. 提出ファイルを選ぶ</span>
+        <small>JSONの選択・確認・取込</small>
+      </summary>
+
+      <div class="stocktaking-aggregation-panel-content">
+        <label for="stocktaking-submission-file-input">
+          棚卸提出ファイル（複数選択できます）
+        </label>
+
+        <input
+          id="stocktaking-submission-file-input"
+          type="file"
+          accept=".json,application/json"
+          multiple
         >
-          反映内容を確認する
-        </button>
+
+        <p
+          id="stocktaking-submission-preview-message"
+          class="stocktaking-aggregation-message"
+        >
+          まだファイルを選択していません。
+        </p>
+
+        <div class="stocktaking-aggregation-table-area">
+          <table class="stocktaking-submission-preview-table">
+            <thead>
+              <tr>
+                <th>ファイル名</th>
+                <th>棚卸日</th>
+                <th>担当者</th>
+                <th>保管場所</th>
+                <th>商品数</th>
+                <th>確認結果</th>
+              </tr>
+            </thead>
+
+            <tbody id="stocktaking-submission-preview-body">
+              <tr>
+                <td colspan="6">
+                  ファイルを選択すると確認結果が表示されます。
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div
+          id="stocktaking-submission-preview-pagination"
+          class="stocktaking-pagination"
+        ></div>
 
         <button
-          id="apply-stocktaking-reflection-button"
+          id="import-stocktaking-submissions-button"
           type="button"
           disabled
         >
-          現在庫へ反映する
+          選択した提出ファイルを取り込む
         </button>
+      </div>
+    </details>
+
+    <details
+      id="stocktaking-panel-imported"
+      class="stocktaking-aggregation-panel"
+    >
+      <summary>
+        <span>2. 取り込み済みの提出</span>
+        <small>提出ファイルの確認・削除</small>
+      </summary>
+
+      <div class="stocktaking-aggregation-panel-content">
+        <p
+          id="stocktaking-imported-submission-message"
+          class="stocktaking-aggregation-message"
+        >
+          取り込み済みの提出を読み込んでいます。
+        </p>
+
+        <div class="stocktaking-aggregation-table-area">
+          <table class="stocktaking-imported-submission-table">
+            <thead>
+              <tr>
+                <th>棚卸日</th>
+                <th>担当者</th>
+                <th>保管場所</th>
+                <th>状態</th>
+                <th>商品数</th>
+                <th>取込日時</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+
+            <tbody id="stocktaking-imported-submission-body">
+              <tr>
+                <td colspan="7">
+                  取り込み済みの提出はありません。
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div
+          id="stocktaking-imported-submission-pagination"
+          class="stocktaking-pagination"
+        ></div>
+      </div>
+    </details>
+
+    <details
+      id="stocktaking-panel-results"
+      class="stocktaking-aggregation-panel"
+    >
+      <summary>
+        <span>3. 集約結果を確認する</span>
+        <small>20件ずつ表示</small>
+      </summary>
+
+      <div class="stocktaking-aggregation-panel-content">
+        <label for="stocktaking-aggregation-date-filter">
+          棚卸日で絞り込む
+        </label>
+
+        <select id="stocktaking-aggregation-date-filter">
+          <option value="">すべての棚卸日</option>
+        </select>
+
+        <div
+          id="stocktaking-aggregation-summary"
+          class="stocktaking-aggregation-summary"
+        ></div>
+
+        <div class="stocktaking-aggregation-table-area">
+          <table class="stocktaking-aggregation-result-table">
+            <thead>
+              <tr>
+                <th>棚卸日</th>
+                <th>結果</th>
+                <th>社内コード</th>
+                <th>商品コード</th>
+                <th>商品名</th>
+                <th>登録在庫</th>
+                <th>集約実在庫</th>
+                <th>差異</th>
+                <th>保管場所別内訳</th>
+                <th>担当者</th>
+                <th>提出数</th>
+                <th>警告</th>
+              </tr>
+            </thead>
+
+            <tbody id="stocktaking-aggregation-body">
+              <tr>
+                <td colspan="12">
+                  提出ファイルを取り込むと集約結果が表示されます。
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div
+          id="stocktaking-aggregation-pagination"
+          class="stocktaking-pagination"
+        ></div>
 
         <button
-          id="export-stocktaking-reflection-csv-button"
+          id="export-stocktaking-aggregation-csv-button"
           type="button"
           disabled
         >
-          反映結果をCSV出力する
+          集約結果をCSV出力する
         </button>
       </div>
+    </details>
 
-      <p
-        id="stocktaking-reflection-message"
-        class="stocktaking-aggregation-message"
-      >
-        棚卸日を選び、「反映内容を確認する」を押してください。
-      </p>
+    <details
+      id="stocktaking-panel-reflection"
+      class="stocktaking-aggregation-panel stocktaking-reflection-panel"
+    >
+      <summary>
+        <span>4. 集約結果を現在庫へ反映する</span>
+        <small>確認表も20件ずつ表示</small>
+      </summary>
 
-      <div class="stocktaking-aggregation-table-area">
-        <table class="stocktaking-reflection-preview-table">
-          <thead>
-            <tr>
-              <th>判定</th>
-              <th>社内コード</th>
-              <th>商品コード</th>
-              <th>商品名</th>
-              <th>現在庫</th>
-              <th>集約実在庫</th>
-              <th>変更数量</th>
-              <th>保管場所別内訳</th>
-              <th>確認内容</th>
-            </tr>
-          </thead>
+      <div class="stocktaking-aggregation-panel-content">
+        <p class="stocktaking-aggregation-safety">
+          棚卸日を1日選び、反映内容を確認してから現在庫へ反映します。要確認・未確認・保管場所「未確認」が1件でもある場合は反映できません。
+        </p>
 
-          <tbody id="stocktaking-reflection-body">
-            <tr>
-              <td colspan="9">
-                反映内容はまだ確認されていません。
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <label for="stocktaking-reflection-person">
+          集約担当者（必須）
+        </label>
+
+        <input
+          id="stocktaking-reflection-person"
+          type="text"
+          placeholder="例：集約担当者"
+          autocomplete="name"
+        >
+
+        <p
+          id="stocktaking-reflection-message"
+          class="stocktaking-aggregation-message"
+        >
+          棚卸日を選び、「反映内容を確認する」を押してください。
+        </p>
+
+        <div class="stocktaking-aggregation-table-area">
+          <table class="stocktaking-reflection-preview-table">
+            <thead>
+              <tr>
+                <th>判定</th>
+                <th>社内コード</th>
+                <th>商品コード</th>
+                <th>商品名</th>
+                <th>現在庫</th>
+                <th>集約実在庫</th>
+                <th>変更数量</th>
+                <th>保管場所別内訳</th>
+                <th>確認内容</th>
+              </tr>
+            </thead>
+
+            <tbody id="stocktaking-reflection-body">
+              <tr>
+                <td colspan="9">
+                  反映内容はまだ確認されていません。
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div
+          id="stocktaking-reflection-pagination"
+          class="stocktaking-pagination"
+        ></div>
       </div>
-    </section>
+    </details>
+
+    <div
+      class="stocktaking-sticky-action-bar"
+      aria-label="現在庫への反映操作"
+    >
+      <button
+        id="preview-stocktaking-reflection-button"
+        type="button"
+      >
+        反映内容を確認する
+      </button>
+
+      <button
+        id="apply-stocktaking-reflection-button"
+        type="button"
+        disabled
+      >
+        現在庫へ反映する
+      </button>
+
+      <button
+        id="export-stocktaking-reflection-csv-button"
+        type="button"
+        disabled
+      >
+        反映結果をCSV出力する
+      </button>
+    </div>
 
     <button
       id="back-home-from-stocktaking-aggregation"
@@ -435,6 +544,26 @@ function createStocktakingAggregationScreen() {
       "#stocktaking-reflection-body"
     );
 
+  stocktakingSubmissionPreviewPagination =
+    document.querySelector(
+      "#stocktaking-submission-preview-pagination"
+    );
+
+  stocktakingImportedSubmissionPagination =
+    document.querySelector(
+      "#stocktaking-imported-submission-pagination"
+    );
+
+  stocktakingAggregationPagination =
+    document.querySelector(
+      "#stocktaking-aggregation-pagination"
+    );
+
+  stocktakingReflectionPagination =
+    document.querySelector(
+      "#stocktaking-reflection-pagination"
+    );
+
   stocktakingSubmissionFileInput.addEventListener(
     "change",
     previewSelectedStocktakingSubmissionFiles
@@ -447,7 +576,11 @@ function createStocktakingAggregationScreen() {
 
   stocktakingAggregationDateFilter.addEventListener(
     "change",
-    updateStocktakingAggregationResults
+    function () {
+      stocktakingAggregationPage = 1;
+      stocktakingReflectionPage = 1;
+      updateStocktakingAggregationResults();
+    }
   );
 
   exportStocktakingAggregationCsvButton.addEventListener(
@@ -482,6 +615,28 @@ function createStocktakingAggregationScreen() {
     }
   );
 
+  stocktakingAggregationScreen
+    .querySelectorAll(
+      "[data-stocktaking-panel-target]"
+    )
+    .forEach(function (button) {
+      button.addEventListener(
+        "click",
+        function () {
+          openStocktakingAggregationPanel(
+            button.dataset.stocktakingPanelTarget
+          );
+        }
+      );
+    });
+
+  document.querySelector(
+    "#stocktaking-aggregation-top-button"
+  ).addEventListener(
+    "click",
+    scrollToStocktakingAggregationTop
+  );
+
   document.querySelector(
     "#back-home-from-stocktaking-aggregation"
   ).addEventListener(
@@ -511,6 +666,10 @@ function createStocktakingAggregationStyle() {
       background-color: #00695c;
     }
 
+    #stocktaking-aggregation {
+      padding-bottom: 112px;
+    }
+
     .stocktaking-aggregation-notice,
     .stocktaking-aggregation-safety,
     .stocktaking-aggregation-message {
@@ -534,21 +693,92 @@ function createStocktakingAggregationStyle() {
       color: #0d47a1;
     }
 
-    .stocktaking-aggregation-panel {
-      margin: 22px 0;
-      padding: 18px;
+    .stocktaking-aggregation-jump-nav {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      display: grid;
+      grid-template-columns:
+        repeat(5, minmax(0, 1fr));
+      gap: 7px;
+      margin: 14px 0 18px;
+      padding: 9px;
+      border: 1px solid #80cbc4;
+      border-radius: 12px;
+      background-color: rgba(255, 255, 255, 0.97);
+      box-shadow: 0 4px 14px rgba(38, 50, 56, 0.14);
+      backdrop-filter: blur(7px);
+    }
+
+    .stocktaking-aggregation-jump-nav button {
+      min-height: 43px;
+      margin: 0;
+      padding: 8px 6px;
+      background-color: #00695c;
+      font-size: 14px;
+      line-height: 1.25;
+    }
+
+    #stocktaking-aggregation-top-button {
+      background-color: #546e7a;
+    }
+
+    details.stocktaking-aggregation-panel {
+      margin: 16px 0;
+      padding: 0;
       border: 2px solid #80cbc4;
       border-radius: 12px;
       background-color: #fbffff;
+      scroll-margin-top: 76px;
+      overflow: clip;
     }
 
-    .stocktaking-aggregation-panel h3 {
-      margin-top: 0;
+    details.stocktaking-aggregation-panel > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 56px;
+      padding: 13px 16px;
+      background-color: #e0f2f1;
       color: #00695c;
+      cursor: pointer;
+      font-size: 19px;
+      font-weight: 800;
+      list-style: none;
+      user-select: none;
+    }
+
+    details.stocktaking-aggregation-panel > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    details.stocktaking-aggregation-panel > summary::after {
+      content: "＋";
+      flex: 0 0 auto;
+      color: #00695c;
+      font-size: 24px;
+      font-weight: 900;
+    }
+
+    details.stocktaking-aggregation-panel[open] > summary::after {
+      content: "－";
+    }
+
+    details.stocktaking-aggregation-panel > summary small {
+      margin-left: auto;
+      color: #455a64;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .stocktaking-aggregation-panel-content {
+      padding: 18px;
     }
 
     #stocktaking-submission-file-input,
-    #stocktaking-aggregation-date-filter {
+    #stocktaking-aggregation-date-filter,
+    #stocktaking-reflection-person {
       width: 100%;
       max-width: 620px;
       min-height: 48px;
@@ -562,6 +792,7 @@ function createStocktakingAggregationStyle() {
       width: 100%;
       overflow-x: auto;
       margin: 14px 0;
+      border-radius: 8px;
     }
 
     .stocktaking-submission-preview-table,
@@ -575,7 +806,6 @@ function createStocktakingAggregationStyle() {
     .stocktaking-aggregation-result-table {
       min-width: 1550px;
     }
-
 
     .stocktaking-reflection-preview-table {
       width: 100%;
@@ -597,27 +827,33 @@ function createStocktakingAggregationStyle() {
       white-space: nowrap;
     }
 
-    #stocktaking-reflection-person {
-      width: 100%;
-      max-width: 620px;
-      min-height: 48px;
-      margin: 8px 0 14px;
+    .stocktaking-sticky-action-bar {
+      position: fixed;
+      left: 50%;
+      bottom: 10px;
+      z-index: 60;
+      display: grid;
+      grid-template-columns:
+        repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      width: min(1000px, calc(100% - 24px));
       padding: 9px;
-      font-size: 17px;
+      border: 2px solid #b0bec5;
+      border-radius: 13px;
+      background-color: rgba(255, 255, 255, 0.97);
+      box-shadow: 0 7px 22px rgba(38, 50, 56, 0.25);
+      transform: translateX(-50%);
+      backdrop-filter: blur(8px);
       box-sizing: border-box;
     }
 
-    .stocktaking-reflection-actions {
-      display: grid;
-      grid-template-columns:
-        repeat(auto-fit, minmax(220px, 1fr));
-      gap: 10px;
-      margin: 10px 0 14px;
-    }
-
-    .stocktaking-reflection-actions button {
+    .stocktaking-sticky-action-bar button {
       width: 100%;
+      min-height: 48px;
       margin: 0;
+      padding: 8px;
+      font-size: 15px;
+      line-height: 1.25;
     }
 
     #preview-stocktaking-reflection-button {
@@ -630,6 +866,51 @@ function createStocktakingAggregationStyle() {
 
     #export-stocktaking-reflection-csv-button {
       background-color: #2e7d32;
+    }
+
+    .stocktaking-pagination {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-height: 46px;
+      margin: 10px 0 16px;
+      padding: 8px;
+      border-radius: 9px;
+      background-color: #f1f8f7;
+    }
+
+    .stocktaking-pagination:empty {
+      display: none;
+    }
+
+    .stocktaking-pagination button {
+      width: auto;
+      min-width: 44px;
+      min-height: 38px;
+      margin: 0;
+      padding: 7px 10px;
+      background-color: #00796b;
+      font-size: 14px;
+    }
+
+    .stocktaking-pagination button:disabled {
+      background-color: #b0bec5;
+      cursor: not-allowed;
+    }
+
+    .stocktaking-pagination select {
+      min-height: 38px;
+      margin: 0;
+      padding: 5px 8px;
+      font-size: 15px;
+    }
+
+    .stocktaking-pagination-info {
+      min-width: 150px;
+      text-align: center;
+      font-weight: 700;
     }
 
     .stocktaking-reflection-ok {
@@ -749,13 +1030,68 @@ function createStocktakingAggregationStyle() {
       #stocktaking-aggregation {
         padding-left: 12px;
         padding-right: 12px;
+        padding-bottom: 118px;
       }
 
-      .stocktaking-aggregation-panel {
+      .stocktaking-aggregation-jump-nav {
+        grid-template-columns:
+          repeat(3, minmax(0, 1fr));
+        top: 0;
+      }
+
+      .stocktaking-aggregation-jump-nav button {
+        font-size: 13px;
+      }
+
+      details.stocktaking-aggregation-panel > summary {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
+        padding: 12px 13px;
+        font-size: 17px;
+      }
+
+      details.stocktaking-aggregation-panel > summary::after {
+        position: absolute;
+        right: 16px;
+      }
+
+      details.stocktaking-aggregation-panel > summary small {
+        margin-left: 0;
+        padding-right: 30px;
+      }
+
+      .stocktaking-aggregation-panel-content {
         padding: 13px;
       }
 
-      #stocktaking-aggregation button {
+      .stocktaking-sticky-action-bar {
+        bottom: 6px;
+        gap: 5px;
+        width: calc(100% - 12px);
+        padding: 6px;
+      }
+
+      .stocktaking-sticky-action-bar button {
+        min-height: 54px;
+        padding: 6px 4px;
+        font-size: 12px;
+      }
+
+      .stocktaking-pagination {
+        justify-content: stretch;
+      }
+
+      .stocktaking-pagination button {
+        flex: 1 1 64px;
+      }
+
+      .stocktaking-pagination-info {
+        flex: 1 0 100%;
+        order: -1;
+      }
+
+      #stocktaking-aggregation > button {
         width: 100%;
         margin: 6px 0;
       }
@@ -936,11 +1272,250 @@ function createStocktakingSubmissionFileName(
   );
 }
 
+function openStocktakingAggregationPanel(
+  panelId,
+  shouldScroll = true
+) {
+  const panel =
+    document.getElementById(panelId);
+
+  if (!panel) {
+    return;
+  }
+
+  panel.open = true;
+
+  if (!shouldScroll) {
+    return;
+  }
+
+  window.setTimeout(
+    function () {
+      panel.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    },
+    30
+  );
+}
+
+function scrollToStocktakingAggregationTop() {
+  if (!stocktakingAggregationScreen) {
+    return;
+  }
+
+  stocktakingAggregationScreen.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
+}
+
+function resetStocktakingAggregationPanels() {
+  const panelIds = [
+    "stocktaking-panel-files",
+    "stocktaking-panel-imported",
+    "stocktaking-panel-results",
+    "stocktaking-panel-reflection"
+  ];
+
+  panelIds.forEach(function (panelId, index) {
+    const panel =
+      document.getElementById(panelId);
+
+    if (panel) {
+      panel.open = index === 0;
+    }
+  });
+}
+
+function getStocktakingPaginationData(
+  items,
+  requestedPage
+) {
+  const totalItems = items.length;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      totalItems /
+      STOCKTAKING_TRANSFER_PAGE_SIZE
+    )
+  );
+
+  const page = Math.min(
+    Math.max(1, Number(requestedPage) || 1),
+    totalPages
+  );
+
+  const startIndex =
+    (page - 1) *
+    STOCKTAKING_TRANSFER_PAGE_SIZE;
+
+  const endIndex = Math.min(
+    startIndex +
+      STOCKTAKING_TRANSFER_PAGE_SIZE,
+    totalItems
+  );
+
+  return {
+    page: page,
+    totalPages: totalPages,
+    totalItems: totalItems,
+    startIndex: startIndex,
+    endIndex: endIndex,
+    items: items.slice(
+      startIndex,
+      endIndex
+    )
+  };
+}
+
+function renderStocktakingPagination(
+  container,
+  pageData,
+  onPageChange
+) {
+  if (!container) {
+    return;
+  }
+
+  container.innerHTML = "";
+
+  if (pageData.totalItems === 0) {
+    return;
+  }
+
+  const info =
+    document.createElement("span");
+
+  info.classList.add(
+    "stocktaking-pagination-info"
+  );
+
+  info.textContent =
+    `${pageData.startIndex + 1}〜${pageData.endIndex}件 / ` +
+    `${pageData.totalItems}件`;
+
+  container.appendChild(info);
+
+  const firstButton =
+    createStocktakingPaginationButton(
+      "最初",
+      pageData.page === 1,
+      function () {
+        onPageChange(1);
+      }
+    );
+
+  const previousButton =
+    createStocktakingPaginationButton(
+      "前へ",
+      pageData.page === 1,
+      function () {
+        onPageChange(
+          pageData.page - 1
+        );
+      }
+    );
+
+  const pageSelect =
+    document.createElement("select");
+
+  pageSelect.setAttribute(
+    "aria-label",
+    "表示ページ"
+  );
+
+  for (
+    let pageNumber = 1;
+    pageNumber <= pageData.totalPages;
+    pageNumber += 1
+  ) {
+    const option =
+      document.createElement("option");
+
+    option.value = String(pageNumber);
+    option.textContent =
+      `${pageNumber} / ${pageData.totalPages}ページ`;
+
+    pageSelect.appendChild(option);
+  }
+
+  pageSelect.value =
+    String(pageData.page);
+
+  pageSelect.addEventListener(
+    "change",
+    function () {
+      onPageChange(
+        Number(pageSelect.value)
+      );
+    }
+  );
+
+  const nextButton =
+    createStocktakingPaginationButton(
+      "次へ",
+      pageData.page ===
+        pageData.totalPages,
+      function () {
+        onPageChange(
+          pageData.page + 1
+        );
+      }
+    );
+
+  const lastButton =
+    createStocktakingPaginationButton(
+      "最後",
+      pageData.page ===
+        pageData.totalPages,
+      function () {
+        onPageChange(
+          pageData.totalPages
+        );
+      }
+    );
+
+  container.appendChild(firstButton);
+  container.appendChild(previousButton);
+  container.appendChild(pageSelect);
+  container.appendChild(nextButton);
+  container.appendChild(lastButton);
+}
+
+function createStocktakingPaginationButton(
+  label,
+  disabled,
+  clickHandler
+) {
+  const button =
+    document.createElement("button");
+
+  button.type = "button";
+  button.textContent = label;
+  button.disabled = disabled;
+
+  button.addEventListener(
+    "click",
+    clickHandler
+  );
+
+  return button;
+}
+
 async function openStocktakingAggregationScreen() {
   hideAllScreensForStocktakingAggregation();
 
   stocktakingAggregationScreen.hidden =
     false;
+
+  stocktakingSubmissionPreviewPage = 1;
+  stocktakingImportedSubmissionPage = 1;
+  stocktakingAggregationPage = 1;
+  stocktakingReflectionPage = 1;
+
+  resetStocktakingAggregationPanels();
 
   selectedStocktakingSubmissionFiles = [];
 
@@ -958,6 +1533,8 @@ async function openStocktakingAggregationScreen() {
 }
 
 async function previewSelectedStocktakingSubmissionFiles() {
+  stocktakingSubmissionPreviewPage = 1;
+
   const files =
     Array.from(
       stocktakingSubmissionFileInput.files || []
@@ -1089,12 +1666,30 @@ function renderStocktakingSubmissionPreview() {
     importStocktakingSubmissionsButton.disabled =
       true;
 
+    if (stocktakingSubmissionPreviewPagination) {
+      stocktakingSubmissionPreviewPagination.innerHTML = "";
+    }
+
     return;
   }
 
-  let importableCount = 0;
+  const importableCount =
+    selectedStocktakingSubmissionFiles.filter(
+      function (preview) {
+        return preview.valid;
+      }
+    ).length;
 
-  selectedStocktakingSubmissionFiles.forEach(
+  const pageData =
+    getStocktakingPaginationData(
+      selectedStocktakingSubmissionFiles,
+      stocktakingSubmissionPreviewPage
+    );
+
+  stocktakingSubmissionPreviewPage =
+    pageData.page;
+
+  pageData.items.forEach(
     function (preview) {
       const row =
         document.createElement("tr");
@@ -1103,8 +1698,6 @@ function renderStocktakingSubmissionPreview() {
         row.classList.add(
           "stocktaking-transfer-valid"
         );
-
-        importableCount += 1;
       } else if (preview.duplicate) {
         row.classList.add(
           "stocktaking-transfer-warning"
@@ -1172,6 +1765,19 @@ function renderStocktakingSubmissionPreview() {
 
   importStocktakingSubmissionsButton.disabled =
     importableCount === 0;
+
+  renderStocktakingPagination(
+    stocktakingSubmissionPreviewPagination,
+    pageData,
+    function (pageNumber) {
+      stocktakingSubmissionPreviewPage =
+        pageNumber;
+      renderStocktakingSubmissionPreview();
+      openStocktakingAggregationPanel(
+        "stocktaking-panel-files"
+      );
+    }
+  );
 }
 
 async function importSelectedStocktakingSubmissions() {
@@ -1241,6 +1847,10 @@ async function importSelectedStocktakingSubmissions() {
 
   renderStocktakingSubmissionPreview();
   await reloadImportedStocktakingSubmissions();
+
+  openStocktakingAggregationPanel(
+    "stocktaking-panel-results"
+  );
 }
 
 async function reloadImportedStocktakingSubmissions() {
@@ -1295,10 +1905,23 @@ function renderImportedStocktakingSubmissions() {
       </tr>
     `;
 
+    if (stocktakingImportedSubmissionPagination) {
+      stocktakingImportedSubmissionPagination.innerHTML = "";
+    }
+
     return;
   }
 
-  importedStocktakingSubmissions.forEach(
+  const pageData =
+    getStocktakingPaginationData(
+      importedStocktakingSubmissions,
+      stocktakingImportedSubmissionPage
+    );
+
+  stocktakingImportedSubmissionPage =
+    pageData.page;
+
+  pageData.items.forEach(
     function (submission) {
       const stocktaking =
         submission.stocktaking;
@@ -1373,6 +1996,19 @@ function renderImportedStocktakingSubmissions() {
 
       stocktakingImportedSubmissionBody.appendChild(
         row
+      );
+    }
+  );
+
+  renderStocktakingPagination(
+    stocktakingImportedSubmissionPagination,
+    pageData,
+    function (pageNumber) {
+      stocktakingImportedSubmissionPage =
+        pageNumber;
+      renderImportedStocktakingSubmissions();
+      openStocktakingAggregationPanel(
+        "stocktaking-panel-imported"
       );
     }
   );
@@ -1452,6 +2088,8 @@ function rebuildStocktakingAggregationDateFilter() {
 }
 
 function updateStocktakingAggregationResults() {
+  stocktakingAggregationPage = 1;
+
   const selectedDate =
     stocktakingAggregationDateFilter
       ? stocktakingAggregationDateFilter.value
@@ -1993,108 +2631,138 @@ function renderStocktakingAggregationRows(
       </tr>
     `;
 
+    if (stocktakingAggregationPagination) {
+      stocktakingAggregationPagination.innerHTML = "";
+    }
+
     return;
   }
 
-  rows.forEach(function (resultRow) {
-    const row =
-      document.createElement("tr");
+  const pageData =
+    getStocktakingPaginationData(
+      rows,
+      stocktakingAggregationPage
+    );
 
-    if (
-      resultRow.result === "要確認" ||
-      resultRow.result === "未確認"
-    ) {
-      row.classList.add(
-        "stocktaking-transfer-warning"
+  stocktakingAggregationPage =
+    pageData.page;
+
+  pageData.items.forEach(
+    function (resultRow) {
+      const row =
+        document.createElement("tr");
+
+      if (
+        resultRow.result === "要確認" ||
+        resultRow.result === "未確認"
+      ) {
+        row.classList.add(
+          "stocktaking-transfer-warning"
+        );
+      } else if (
+        resultRow.result === "在庫不足"
+      ) {
+        row.classList.add(
+          "stocktaking-transfer-error"
+        );
+      } else {
+        row.classList.add(
+          "stocktaking-transfer-valid"
+        );
+      }
+
+      appendTransferCell(
+        row,
+        resultRow.stocktakingDate
       );
-    } else if (
-      resultRow.result === "在庫不足"
-    ) {
-      row.classList.add(
-        "stocktaking-transfer-error"
+
+      appendTransferResultCell(
+        row,
+        resultRow.result
       );
-    } else {
-      row.classList.add(
-        "stocktaking-transfer-valid"
+
+      appendTransferCell(
+        row,
+        resultRow.internalCode ||
+        "未登録"
+      );
+
+      appendTransferCell(
+        row,
+        resultRow.productCode ||
+        "未登録"
+      );
+
+      appendTransferCell(
+        row,
+        resultRow.productName ||
+        "未登録"
+      );
+
+      appendTransferCell(
+        row,
+        resultRow.registeredStock ===
+          null
+          ? "要確認"
+          : resultRow.registeredStock
+      );
+
+      appendTransferCell(
+        row,
+        resultRow.actualStock === null
+          ? "要確認"
+          : resultRow.actualStock
+      );
+
+      appendTransferCell(
+        row,
+        formatTransferDifference(
+          resultRow.difference
+        )
+      );
+
+      appendTransferCell(
+        row,
+        resultRow.locationBreakdown ||
+        "未確認"
+      );
+
+      appendTransferCell(
+        row,
+        resultRow.people
+      );
+
+      appendTransferCell(
+        row,
+        `${resultRow.submissionCount}件`
+      );
+
+      appendTransferCell(
+        row,
+        resultRow.warnings ||
+        "なし"
+      );
+
+      stocktakingAggregationBody.appendChild(
+        row
       );
     }
+  );
 
-    appendTransferCell(
-      row,
-      resultRow.stocktakingDate
-    );
-
-    appendTransferResultCell(
-      row,
-      resultRow.result
-    );
-
-    appendTransferCell(
-      row,
-      resultRow.internalCode ||
-      "未登録"
-    );
-
-    appendTransferCell(
-      row,
-      resultRow.productCode ||
-      "未登録"
-    );
-
-    appendTransferCell(
-      row,
-      resultRow.productName ||
-      "未登録"
-    );
-
-    appendTransferCell(
-      row,
-      resultRow.registeredStock ===
-        null
-        ? "要確認"
-        : resultRow.registeredStock
-    );
-
-    appendTransferCell(
-      row,
-      resultRow.actualStock === null
-        ? "要確認"
-        : resultRow.actualStock
-    );
-
-    appendTransferCell(
-      row,
-      formatTransferDifference(
-        resultRow.difference
-      )
-    );
-
-    appendTransferCell(
-      row,
-      resultRow.locationBreakdown ||
-      "未確認"
-    );
-
-    appendTransferCell(
-      row,
-      resultRow.people
-    );
-
-    appendTransferCell(
-      row,
-      `${resultRow.submissionCount}件`
-    );
-
-    appendTransferCell(
-      row,
-      resultRow.warnings ||
-      "なし"
-    );
-
-    stocktakingAggregationBody.appendChild(
-      row
-    );
-  });
+  renderStocktakingPagination(
+    stocktakingAggregationPagination,
+    pageData,
+    function (pageNumber) {
+      stocktakingAggregationPage =
+        pageNumber;
+      renderStocktakingAggregationRows(
+        rows
+      );
+      openStocktakingAggregationPanel(
+        "stocktaking-panel-results"
+      );
+    }
+  );
 }
 
 function exportStocktakingAggregationCsv() {
@@ -2180,6 +2848,7 @@ function exportStocktakingAggregationCsv() {
 
 function invalidateStocktakingReflectionPreview() {
   currentStocktakingReflectionPreview = null;
+  stocktakingReflectionPage = 1;
 
   if (applyStocktakingReflectionButton) {
     applyStocktakingReflectionButton.disabled = true;
@@ -2198,6 +2867,10 @@ function invalidateStocktakingReflectionPreview() {
   if (stocktakingReflectionMessage) {
     stocktakingReflectionMessage.textContent =
       "棚卸日を選び、「反映内容を確認する」を押してください。";
+  }
+
+  if (stocktakingReflectionPagination) {
+    stocktakingReflectionPagination.innerHTML = "";
   }
 }
 
@@ -2287,6 +2960,13 @@ async function loadExistingStocktakingReflectionForCurrentSelection() {
 }
 
 async function previewStocktakingReflection() {
+  openStocktakingAggregationPanel(
+    "stocktaking-panel-reflection",
+    false
+  );
+
+  stocktakingReflectionPage = 1;
+
   const selectedDate =
     stocktakingAggregationDateFilter.value;
 
@@ -2585,83 +3265,132 @@ function renderStocktakingReflectionPreview(
 ) {
   stocktakingReflectionBody.innerHTML = "";
 
-  preview.rows.forEach(function (previewRow) {
-    const row = document.createElement("tr");
+  const pageData =
+    getStocktakingPaginationData(
+      preview.rows,
+      stocktakingReflectionPage
+    );
 
-    if (previewRow.blockers.length > 0) {
-      row.classList.add(
-        "stocktaking-reflection-blocked"
+  stocktakingReflectionPage =
+    pageData.page;
+
+  pageData.items.forEach(
+    function (previewRow) {
+      const row =
+        document.createElement("tr");
+
+      if (previewRow.blockers.length > 0) {
+        row.classList.add(
+          "stocktaking-reflection-blocked"
+        );
+      } else if (
+        previewRow.changeQuantity === 0
+      ) {
+        row.classList.add(
+          "stocktaking-reflection-no-change"
+        );
+      } else {
+        row.classList.add(
+          "stocktaking-reflection-ok"
+        );
+      }
+
+      appendTransferCell(
+        row,
+        previewRow.judgment
       );
-    } else if (previewRow.changeQuantity === 0) {
-      row.classList.add(
-        "stocktaking-reflection-no-change"
+
+      appendTransferCell(
+        row,
+        previewRow.internalCode
       );
-    } else {
-      row.classList.add(
-        "stocktaking-reflection-ok"
+
+      appendTransferCell(
+        row,
+        previewRow.productCode || "未登録"
+      );
+
+      appendTransferCell(
+        row,
+        previewRow.productName || "未登録"
+      );
+
+      appendTransferCell(
+        row,
+        previewRow.beforeStock === null
+          ? "確認不可"
+          : previewRow.beforeStock
+      );
+
+      appendTransferCell(
+        row,
+        previewRow.afterStock === null
+          ? "確認不可"
+          : previewRow.afterStock
+      );
+
+      appendTransferCell(
+        row,
+        previewRow.changeQuantity === null
+          ? "確認不可"
+          : formatTransferSignedNumber(
+              previewRow.changeQuantity
+            )
+      );
+
+      appendTransferCell(
+        row,
+        previewRow.locationBreakdown ||
+        "未確認"
+      );
+
+      const checkTexts = [];
+
+      previewRow.blockers.forEach(
+        function (message) {
+          checkTexts.push(
+            `反映不可：${message}`
+          );
+        }
+      );
+
+      previewRow.warnings.forEach(
+        function (message) {
+          checkTexts.push(
+            `注意：${message}`
+          );
+        }
+      );
+
+      if (checkTexts.length === 0) {
+        checkTexts.push("問題なし");
+      }
+
+      appendTransferCell(
+        row,
+        checkTexts.join(" / ")
+      );
+
+      stocktakingReflectionBody.appendChild(
+        row
       );
     }
+  );
 
-    appendTransferCell(row, previewRow.judgment);
-    appendTransferCell(row, previewRow.internalCode);
-    appendTransferCell(
-      row,
-      previewRow.productCode || "未登録"
-    );
-    appendTransferCell(
-      row,
-      previewRow.productName || "未登録"
-    );
-    appendTransferCell(
-      row,
-      previewRow.beforeStock === null
-        ? "確認不可"
-        : previewRow.beforeStock
-    );
-    appendTransferCell(
-      row,
-      previewRow.afterStock === null
-        ? "確認不可"
-        : previewRow.afterStock
-    );
-    appendTransferCell(
-      row,
-      previewRow.changeQuantity === null
-        ? "確認不可"
-        : formatTransferSignedNumber(
-            previewRow.changeQuantity
-          )
-    );
-    appendTransferCell(
-      row,
-      previewRow.locationBreakdown || "未確認"
-    );
-
-    const checkTexts = [];
-
-    previewRow.blockers.forEach(
-      function (message) {
-        checkTexts.push(`反映不可：${message}`);
-      }
-    );
-
-    previewRow.warnings.forEach(
-      function (message) {
-        checkTexts.push(`注意：${message}`);
-      }
-    );
-
-    if (checkTexts.length === 0) {
-      checkTexts.push("問題なし");
+  renderStocktakingPagination(
+    stocktakingReflectionPagination,
+    pageData,
+    function (pageNumber) {
+      stocktakingReflectionPage =
+        pageNumber;
+      renderStocktakingReflectionPreview(
+        preview
+      );
+      openStocktakingAggregationPanel(
+        "stocktaking-panel-reflection"
+      );
     }
-
-    appendTransferCell(
-      row,
-      checkTexts.join(" / ")
-    );
-
-    stocktakingReflectionBody.appendChild(row);
-  });
+  );
 
   const messageParts = [
     `棚卸日：${preview.stocktakingDate}`,
@@ -2687,6 +3416,11 @@ function renderStocktakingReflectionPreview(
 
   stocktakingReflectionMessage.textContent =
     messageParts.join(" / ");
+
+  openStocktakingAggregationPanel(
+    "stocktaking-panel-reflection",
+    false
+  );
 }
 
 async function applyStocktakingReflection() {

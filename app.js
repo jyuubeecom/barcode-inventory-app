@@ -849,7 +849,13 @@ function openDetailScreen(internalCode) {
 
   detailStockStatus.className = "";
 
-  if (getStockStatus(selectedProduct) === "在庫切れ") {
+  if (getStockStatus(selectedProduct) === "廃盤") {
+    detailStockStatus.classList.add(
+      "detail-status-discontinued"
+    );
+  } else if (
+    getStockStatus(selectedProduct) === "在庫切れ"
+  ) {
     detailStockStatus.classList.add(
       "detail-status-out"
     );
@@ -1225,6 +1231,13 @@ function getMinimumStock(product) {
 }
 
 function getStockStatus(product) {
+  if (
+    getProductLifecycleStatus(product) ===
+    "廃盤"
+  ) {
+    return "廃盤";
+  }
+
   const currentStock =
     getValidStockNumber(product.stock);
 
@@ -2362,7 +2375,11 @@ function createProductListStockStatusCell(
   badge.textContent = stockStatus;
   badge.classList.add("status-badge");
 
-  if (stockStatus === "在庫切れ") {
+  if (stockStatus === "廃盤") {
+    badge.classList.add(
+      "status-discontinued"
+    );
+  } else if (stockStatus === "在庫切れ") {
     badge.classList.add("status-out");
   } else if (stockStatus === "要補充") {
     badge.classList.add("status-low");
@@ -2426,7 +2443,11 @@ function appendStockStatusCell(
   badge.textContent = stockStatus;
   badge.classList.add("status-badge");
 
-  if (stockStatus === "在庫切れ") {
+  if (stockStatus === "廃盤") {
+    badge.classList.add(
+      "status-discontinued"
+    );
+  } else if (stockStatus === "在庫切れ") {
     badge.classList.add("status-out");
   } else if (stockStatus === "要補充") {
     badge.classList.add("status-low");
@@ -2496,10 +2517,31 @@ function createProductLifecycleStyle() {
       color: #1b5e20;
     }
 
-    .product-lifecycle-discontinued {
+    .product-lifecycle-discontinued,
+    .status-discontinued,
+    .detail-status-discontinued {
       background-color: #eceff1;
       color: #455a64;
       border: 1px solid #90a4ae;
+    }
+
+    .status-discontinued {
+      display: inline-block;
+      min-width: 74px;
+      padding: 6px 10px;
+      border-radius: 20px;
+      text-align: center;
+      font-weight: bold;
+      white-space: nowrap;
+    }
+
+    .detail-status-discontinued {
+      display: inline-block;
+      min-width: 80px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      text-align: center;
+      font-weight: bold;
     }
 
     .product-discontinued-row {

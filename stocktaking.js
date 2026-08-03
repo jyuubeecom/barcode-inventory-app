@@ -22,8 +22,10 @@ let stocktakingSummaryUnchecked = null;
 let stocktakingSummaryMatch = null;
 let stocktakingSummaryShortage = null;
 let stocktakingSummarySurplus = null;
+let stocktakingSummaryBulkZero = null;
 
 let stocktakingProductSearchInput = null;
+let stocktakingDisplayFilter = null;
 let stocktakingSearchMessage = null;
 let stocktakingCameraScanButton = null;
 let stocktakingItemsBody = null;
@@ -34,6 +36,8 @@ let confirmStocktakingButton = null;
 let cancelStocktakingSetupButton = null;
 let backHomeFromStocktakingButton = null;
 let deleteStocktakingButton = null;
+let applyBulkZeroButton = null;
+let undoBulkZeroButton = null;
 
 let currentStocktaking = null;
 let stocktakingHasUnsavedChanges = false;
@@ -306,6 +310,11 @@ function createStocktakingScreens() {
         在庫過剰：
         <strong id="stocktaking-summary-surplus">0</strong>件
       </p>
+
+      <p class="stocktaking-summary-bulk-zero">
+        一括0入力：
+        <strong id="stocktaking-summary-bulk-zero">0</strong>件
+      </p>
     </div>
 
     <div class="stocktaking-search-area">
@@ -319,6 +328,16 @@ function createStocktakingScreens() {
         placeholder="商品名・社内コード・商品コード・JANコード"
       >
 
+      <label for="stocktaking-display-filter">
+        表示を絞り込む
+      </label>
+
+      <select id="stocktaking-display-filter">
+        <option value="all">すべての商品</option>
+        <option value="unchecked">未確認の商品だけ</option>
+        <option value="bulk-zero">一括0入力の商品だけ</option>
+      </select>
+
       <p id="stocktaking-search-message">
         棚卸対象の商品をすべて表示しています。
       </p>
@@ -330,6 +349,31 @@ function createStocktakingScreens() {
     >
       JAN・社内コードのバーコードを読み取る
     </button>
+
+    <div class="stocktaking-bulk-zero-area">
+      <h3>登録在庫0の商品をまとめて入力</h3>
+
+      <p>
+        登録在庫が0個で、まだ未確認の商品だけを実在庫0個にします。
+        手入力済みの商品は変更しません。
+      </p>
+
+      <div class="stocktaking-bulk-zero-buttons">
+        <button
+          id="apply-stocktaking-bulk-zero-button"
+          type="button"
+        >
+          登録在庫0・未確認の商品を一括で0入力
+        </button>
+
+        <button
+          id="undo-stocktaking-bulk-zero-button"
+          type="button"
+        >
+          一括0入力を取り消す
+        </button>
+      </div>
+    </div>
 
     <div class="stocktaking-table-area">
       <table class="stocktaking-items-table">
@@ -511,9 +555,19 @@ function getStocktakingElements() {
       "#stocktaking-summary-surplus"
     );
 
+  stocktakingSummaryBulkZero =
+    document.querySelector(
+      "#stocktaking-summary-bulk-zero"
+    );
+
   stocktakingProductSearchInput =
     document.querySelector(
       "#stocktaking-product-search"
+    );
+
+  stocktakingDisplayFilter =
+    document.querySelector(
+      "#stocktaking-display-filter"
     );
 
   stocktakingSearchMessage =
@@ -555,6 +609,16 @@ function getStocktakingElements() {
     document.querySelector(
       "#delete-stocktaking-button"
     );
+
+  applyBulkZeroButton =
+    document.querySelector(
+      "#apply-stocktaking-bulk-zero-button"
+    );
+
+  undoBulkZeroButton =
+    document.querySelector(
+      "#undo-stocktaking-bulk-zero-button"
+    );
 }
 
 function addStocktakingEventListeners() {
@@ -591,6 +655,21 @@ function addStocktakingEventListeners() {
   stocktakingProductSearchInput.addEventListener(
     "input",
     filterStocktakingItems
+  );
+
+  stocktakingDisplayFilter.addEventListener(
+    "change",
+    filterStocktakingItems
+  );
+
+  applyBulkZeroButton.addEventListener(
+    "click",
+    handleApplyBulkZero
+  );
+
+  undoBulkZeroButton.addEventListener(
+    "click",
+    handleUndoBulkZero
   );
 
   stocktakingCameraScanButton.addEventListener(
@@ -674,6 +753,65 @@ function createStocktakingStyle() {
       border-radius: 8px;
       background-color: #e3f2fd;
       font-weight: bold;
+    }
+
+    .stocktaking-bulk-zero-area {
+      margin: 18px 0;
+      padding: 16px;
+      border: 2px solid #ef6c00;
+      border-radius: 12px;
+      background-color: #fff8e1;
+    }
+
+    .stocktaking-bulk-zero-area h3 {
+      margin: 0 0 8px;
+      color: #e65100;
+      font-size: 20px;
+    }
+
+    .stocktaking-bulk-zero-area p {
+      margin: 0 0 12px;
+      line-height: 1.6;
+    }
+
+    .stocktaking-bulk-zero-buttons {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    #apply-stocktaking-bulk-zero-button {
+      margin: 0;
+      background-color: #ef6c00;
+    }
+
+    #undo-stocktaking-bulk-zero-button {
+      margin: 0;
+      background-color: #546e7a;
+    }
+
+    .stocktaking-summary-bulk-zero {
+      background-color: #fff3e0 !important;
+      color: #e65100;
+    }
+
+    #stocktaking-display-filter {
+      width: 100%;
+      max-width: 440px;
+      min-height: 48px;
+      margin: 8px 0 4px;
+      padding: 8px;
+      font-size: 17px;
+    }
+
+    .stocktaking-row-bulk-zero {
+      outline: 3px solid #7e57c2;
+      outline-offset: -3px;
+    }
+
+    .stocktaking-badge-bulk-zero {
+      background-color: #d1c4e9;
+      color: #4527a0;
     }
 
     .stocktaking-table-area {
@@ -909,12 +1047,24 @@ function createStocktakingStyle() {
       #stocktaking-active > table,
       #stocktaking-active > .stocktaking-summary,
       #stocktaking-active > .stocktaking-search-area,
+      #stocktaking-active > .stocktaking-bulk-zero-area,
       #stocktaking-active > fieldset,
       #stocktaking-active > button {
         margin-left: 12px;
         margin-right: 12px;
         width: calc(100% - 24px);
         box-sizing: border-box;
+      }
+
+      .stocktaking-bulk-zero-buttons {
+        grid-template-columns: 1fr;
+      }
+
+      .stocktaking-bulk-zero-buttons button {
+        width: 100%;
+        min-height: 52px;
+        margin: 0;
+        font-size: 16px;
       }
 
       .stocktaking-info-table th {
@@ -1641,7 +1791,9 @@ function createStocktakingItems(
         difference: null,
         result: "未確認",
         memo: "",
-        checkedAt: ""
+        checkedAt: "",
+        bulkZeroApplied: false,
+        bulkZeroAppliedAt: ""
       };
     }
   );
@@ -1718,6 +1870,9 @@ async function showActiveStocktaking(
 
   stocktakingProductSearchInput.value =
     "";
+
+  stocktakingDisplayFilter.value =
+    "all";
 
   stocktakingSaveMessage.textContent =
     "数量を入力したら、商品カード下部のボタンから保存して次の操作へ進めます。";
@@ -1801,7 +1956,15 @@ function normalizeStocktakingItem(item) {
         : (
             item.checkedAt ||
             new Date().toISOString()
-          )
+          ),
+    bulkZeroApplied:
+      actualStock !== "" &&
+      item.bulkZeroApplied === true,
+    bulkZeroAppliedAt:
+      actualStock !== "" &&
+      item.bulkZeroApplied === true
+        ? (item.bulkZeroAppliedAt || "")
+        : ""
   };
 }
 
@@ -1870,9 +2033,17 @@ function createStocktakingItemRow(
         item.productCode,
         item.productName,
         item.janCode,
-        item.location
+        item.location,
+        item.bulkZeroApplied
+          ? "一括0入力"
+          : ""
       ].join(" ")
     );
+
+  row.dataset.bulkZero =
+    item.bulkZeroApplied
+      ? "true"
+      : "false";
 
   const resultCell =
     document.createElement("td");
@@ -2160,6 +2331,10 @@ function createStocktakingItemRow(
   addLocationButton.addEventListener(
     "click",
     function () {
+      clearStocktakingBulkZeroFlag(
+        item
+      );
+
       item.locationBreakdown.push({
         id:
           createStocktakingLocationEntryId(),
@@ -2405,6 +2580,10 @@ function renderStocktakingLocationEntries(
       locationInput.addEventListener(
         "change",
         function () {
+          clearStocktakingBulkZeroFlag(
+            item
+          );
+
           entry.location =
             String(
               locationInput.value || ""
@@ -2429,6 +2608,10 @@ function renderStocktakingLocationEntries(
       quantityInput.addEventListener(
         "input",
         function () {
+          clearStocktakingBulkZeroFlag(
+            item
+          );
+
           entry.quantity =
             quantityInput.value.trim();
 
@@ -2451,6 +2634,10 @@ function renderStocktakingLocationEntries(
       removeButton.addEventListener(
         "click",
         function () {
+          clearStocktakingBulkZeroFlag(
+            item
+          );
+
           if (
             item.locationBreakdown.length <= 1
           ) {
@@ -2970,31 +3157,70 @@ function updateStocktakingRowAppearance(
     "stocktaking-row-unchecked",
     "stocktaking-row-match",
     "stocktaking-row-shortage",
-    "stocktaking-row-surplus"
+    "stocktaking-row-surplus",
+    "stocktaking-row-bulk-zero"
   );
 
   resultBadge.classList.remove(
     "stocktaking-badge-unchecked",
     "stocktaking-badge-match",
     "stocktaking-badge-shortage",
-    "stocktaking-badge-surplus"
+    "stocktaking-badge-surplus",
+    "stocktaking-badge-bulk-zero"
   );
-
-  resultBadge.textContent =
-    item.result;
 
   differenceCell.textContent =
     formatStocktakingDifference(
       item.difference
     );
 
-  if (
-    item.result === "差異なし"
-  ) {
+  if (item.result === "差異なし") {
     row.classList.add(
       "stocktaking-row-match"
     );
+  } else if (
+    item.result === "在庫不足"
+  ) {
+    row.classList.add(
+      "stocktaking-row-shortage"
+    );
+  } else if (
+    item.result === "在庫過剰"
+  ) {
+    row.classList.add(
+      "stocktaking-row-surplus"
+    );
+  } else {
+    row.classList.add(
+      "stocktaking-row-unchecked"
+    );
+  }
 
+  if (item.bulkZeroApplied) {
+    row.classList.add(
+      "stocktaking-row-bulk-zero"
+    );
+
+    row.dataset.bulkZero =
+      "true";
+
+    resultBadge.textContent =
+      "一括0入力";
+
+    resultBadge.classList.add(
+      "stocktaking-badge-bulk-zero"
+    );
+
+    return;
+  }
+
+  row.dataset.bulkZero =
+    "false";
+
+  resultBadge.textContent =
+    item.result;
+
+  if (item.result === "差異なし") {
     resultBadge.classList.add(
       "stocktaking-badge-match"
     );
@@ -3002,13 +3228,7 @@ function updateStocktakingRowAppearance(
     return;
   }
 
-  if (
-    item.result === "在庫不足"
-  ) {
-    row.classList.add(
-      "stocktaking-row-shortage"
-    );
-
+  if (item.result === "在庫不足") {
     resultBadge.classList.add(
       "stocktaking-badge-shortage"
     );
@@ -3016,23 +3236,13 @@ function updateStocktakingRowAppearance(
     return;
   }
 
-  if (
-    item.result === "在庫過剰"
-  ) {
-    row.classList.add(
-      "stocktaking-row-surplus"
-    );
-
+  if (item.result === "在庫過剰") {
     resultBadge.classList.add(
       "stocktaking-badge-surplus"
     );
 
     return;
   }
-
-  row.classList.add(
-    "stocktaking-row-unchecked"
-  );
 
   resultBadge.classList.add(
     "stocktaking-badge-unchecked"
@@ -3086,6 +3296,15 @@ function getStocktakingCounts() {
             "在庫過剰"
           );
         }
+      ).length,
+    bulkZero:
+      checkedItems.filter(
+        function (item) {
+          return (
+            item.bulkZeroApplied ===
+            true
+          );
+        }
       ).length
   };
 }
@@ -3111,6 +3330,9 @@ function updateStocktakingSummary() {
 
   stocktakingSummarySurplus.textContent =
     counts.surplus;
+
+  stocktakingSummaryBulkZero.textContent =
+    counts.bulkZero;
 }
 
 function filterStocktakingItems() {
@@ -3118,6 +3340,11 @@ function filterStocktakingItems() {
     normalizeStocktakingText(
       stocktakingProductSearchInput.value
     );
+
+  const filterType =
+    stocktakingDisplayFilter
+      ? stocktakingDisplayFilter.value
+      : "all";
 
   const rows =
     stocktakingItemsBody.querySelectorAll(
@@ -3128,11 +3355,39 @@ function filterStocktakingItems() {
 
   rows.forEach(
     function (row) {
-      const matches =
+      const keywordMatches =
         keyword === "" ||
         row.dataset.searchText.includes(
           keyword
         );
+
+      const item =
+        currentStocktaking.items.find(
+          function (currentItem) {
+            return (
+              currentItem.internalCode ===
+              row.dataset.internalCode
+            );
+          }
+        );
+
+      let filterMatches = true;
+
+      if (filterType === "unchecked") {
+        filterMatches =
+          Boolean(item) &&
+          item.actualStock === "";
+      } else if (
+        filterType === "bulk-zero"
+      ) {
+        filterMatches =
+          Boolean(item) &&
+          item.bulkZeroApplied === true;
+      }
+
+      const matches =
+        keywordMatches &&
+        filterMatches;
 
       row.hidden = !matches;
 
@@ -3148,15 +3403,321 @@ function filterStocktakingItems() {
     }
   );
 
+  let filterLabel =
+    "すべての商品";
+
+  if (filterType === "unchecked") {
+    filterLabel =
+      "未確認の商品";
+  } else if (
+    filterType === "bulk-zero"
+  ) {
+    filterLabel =
+      "一括0入力の商品";
+  }
+
   if (keyword === "") {
     stocktakingSearchMessage.textContent =
-      `棚卸対象の商品をすべて表示しています。${displayedCount}件`;
+      `${filterLabel}を表示しています。${displayedCount}件`;
 
     return;
   }
 
   stocktakingSearchMessage.textContent =
-    `「${stocktakingProductSearchInput.value.trim()}」の検索結果：${displayedCount}件`;
+    `「${stocktakingProductSearchInput.value.trim()}」の検索結果：${displayedCount}件（${filterLabel}）`;
+}
+
+function clearStocktakingBulkZeroFlag(
+  item
+) {
+  if (!item) {
+    return;
+  }
+
+  item.bulkZeroApplied = false;
+  item.bulkZeroAppliedAt = "";
+}
+
+function getBulkZeroPreferredLocation(
+  item
+) {
+  const itemLocation =
+    String(
+      item && item.location
+        ? item.location
+        : ""
+    ).trim();
+
+  if (
+    isStocktakingLocationOption(
+      itemLocation
+    )
+  ) {
+    return itemLocation;
+  }
+
+  const sessionLocation =
+    String(
+      currentStocktaking &&
+      currentStocktaking.location
+        ? currentStocktaking.location
+        : ""
+    ).trim();
+
+  if (
+    isStocktakingLocationOption(
+      sessionLocation
+    )
+  ) {
+    return sessionLocation;
+  }
+
+  const existingEntry =
+    Array.isArray(
+      item.locationBreakdown
+    )
+      ? item.locationBreakdown.find(
+          function (entry) {
+            return isStocktakingLocationOption(
+              entry.location
+            );
+          }
+        )
+      : null;
+
+  return existingEntry
+    ? String(
+        existingEntry.location || ""
+      ).trim()
+    : "";
+}
+
+function getBulkZeroEligibleItems() {
+  if (
+    !currentStocktaking ||
+    !Array.isArray(
+      currentStocktaking.items
+    )
+  ) {
+    return [];
+  }
+
+  return currentStocktaking.items.filter(
+    function (item) {
+      return (
+        getValidStocktakingNumber(
+          item.registeredStock
+        ) === 0 &&
+        item.actualStock === ""
+      );
+    }
+  );
+}
+
+function applyBulkZeroToStocktakingItem(
+  item,
+  appliedAt
+) {
+  const preferredLocation =
+    getBulkZeroPreferredLocation(
+      item
+    );
+
+  if (preferredLocation === "") {
+    return false;
+  }
+
+  item.locationBreakdown = [
+    {
+      id:
+        createStocktakingLocationEntryId(),
+      location:
+        preferredLocation,
+      quantity: 0
+    }
+  ];
+
+  refreshStocktakingItemFromLocations(
+    item
+  );
+
+  item.bulkZeroApplied = true;
+  item.bulkZeroAppliedAt = appliedAt;
+
+  return true;
+}
+
+function handleApplyBulkZero() {
+  const eligibleItems =
+    getBulkZeroEligibleItems();
+
+  if (eligibleItems.length === 0) {
+    alert(
+      "登録在庫が0個で、まだ未確認の商品はありません。"
+    );
+
+    return;
+  }
+
+  const missingLocationItems =
+    eligibleItems.filter(
+      function (item) {
+        return (
+          getBulkZeroPreferredLocation(
+            item
+          ) === ""
+        );
+      }
+    );
+
+  if (missingLocationItems.length > 0) {
+    const itemNames =
+      missingLocationItems
+        .slice(0, 5)
+        .map(
+          function (item) {
+            return item.productName;
+          }
+        )
+        .join("\n");
+
+    alert(
+      "保管場所を決められない商品があるため、一括入力できません。\n\n" +
+      itemNames +
+      (missingLocationItems.length > 5
+        ? "\nほか" +
+          (missingLocationItems.length - 5) +
+          "件"
+        : "") +
+      "\n\n商品情報の保管場所を確認してください。"
+    );
+
+    return;
+  }
+
+  const isConfirmed =
+    window.confirm(
+      "登録在庫が0個で、まだ未確認の商品が" +
+      eligibleItems.length +
+      "件あります。\n\n" +
+      "この" +
+      eligibleItems.length +
+      "件を実在庫0個として一括入力しますか？\n\n" +
+      "実際には商品が残っていないか、棚を確認してから使用してください。"
+    );
+
+  if (!isConfirmed) {
+    return;
+  }
+
+  const appliedAt =
+    new Date().toISOString();
+
+  let appliedCount = 0;
+
+  eligibleItems.forEach(
+    function (item) {
+      const applied =
+        applyBulkZeroToStocktakingItem(
+          item,
+          appliedAt
+        );
+
+      if (applied) {
+        appliedCount += 1;
+      }
+    }
+  );
+
+  stocktakingProductSearchInput.value =
+    "";
+
+  stocktakingDisplayFilter.value =
+    "bulk-zero";
+
+  renderStocktakingItems();
+  markStocktakingAsUnsaved();
+
+  stocktakingSaveMessage.textContent =
+    appliedCount +
+    "件を一括で0入力しました。内容を確認して保存してください。";
+}
+
+function handleUndoBulkZero() {
+  if (
+    !currentStocktaking ||
+    !Array.isArray(
+      currentStocktaking.items
+    )
+  ) {
+    return;
+  }
+
+  const bulkZeroItems =
+    currentStocktaking.items.filter(
+      function (item) {
+        return (
+          item.bulkZeroApplied === true
+        );
+      }
+    );
+
+  if (bulkZeroItems.length === 0) {
+    alert(
+      "取り消せる一括0入力はありません。"
+    );
+
+    return;
+  }
+
+  const isConfirmed =
+    window.confirm(
+      "一括0入力した" +
+      bulkZeroItems.length +
+      "件を未確認へ戻しますか？\n\n" +
+      "手入力へ変更した商品は対象になりません。"
+    );
+
+  if (!isConfirmed) {
+    return;
+  }
+
+  bulkZeroItems.forEach(
+    function (item) {
+      if (
+        Array.isArray(
+          item.locationBreakdown
+        )
+      ) {
+        item.locationBreakdown.forEach(
+          function (entry) {
+            entry.quantity = "";
+          }
+        );
+      }
+
+      clearStocktakingBulkZeroFlag(
+        item
+      );
+
+      refreshStocktakingItemFromLocations(
+        item
+      );
+    }
+  );
+
+  stocktakingProductSearchInput.value =
+    "";
+
+  stocktakingDisplayFilter.value =
+    "all";
+
+  renderStocktakingItems();
+  markStocktakingAsUnsaved();
+
+  stocktakingSaveMessage.textContent =
+    bulkZeroItems.length +
+    "件の一括0入力を取り消しました。内容を確認して保存してください。";
 }
 
 function markStocktakingAsUnsaved() {
@@ -3390,7 +3951,8 @@ async function handleConfirmStocktaking() {
     `確認済み：${counts.checked}件\n` +
     `差異なし：${counts.match}件\n` +
     `在庫不足：${counts.shortage}件\n` +
-    `在庫過剰：${counts.surplus}件\n\n` +
+    `在庫過剰：${counts.surplus}件\n` +
+    `一括0入力：${counts.bulkZero}件\n\n` +
     `在庫処理：${reflectText}\n\n` +
     "確定後は、この棚卸を編集できません。";
 
@@ -3550,6 +4112,12 @@ async function handleConfirmStocktaking() {
           ) {
             memoParts.push(
               `場所別：${locationBreakdownText}`
+            );
+          }
+
+          if (item.bulkZeroApplied) {
+            memoParts.push(
+              "入力方法：一括0入力"
             );
           }
 

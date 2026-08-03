@@ -45,7 +45,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v25
+          画面版 v26
         </span>
       </div>
 
@@ -162,7 +162,7 @@
               id="show-barcode-lookup-button"
               type="button"
             >
-              JANコードを入力して探す
+              社内コード・JANコードで探す
             </button>
           </div>
         </details>
@@ -237,15 +237,15 @@
       </p>
     </section>
 
-    <!-- JANコード手入力検索画面 -->
+    <!-- 社内コード・JANコード手入力検索画面 -->
     <section
       id="barcode-lookup"
       hidden
     >
-      <h2>JANコード手入力検索</h2>
+      <h2>社内コード・JANコード手入力検索</h2>
 
       <p>
-        商品のJANコードを入力してください。
+        商品の社内コードまたはJANコードを入力してください。
       </p>
 
       <p>
@@ -256,15 +256,15 @@
       <form id="barcode-lookup-form">
         <div>
           <label for="barcode-lookup-code">
-            JANコード（必須）
+            社内コードまたはJANコード（必須）
           </label>
 
           <input
             id="barcode-lookup-code"
             type="text"
-            inputmode="numeric"
+            inputmode="text"
             autocomplete="off"
-            placeholder="例：4901234567890"
+            placeholder="例：1000000933 / 4901234567890"
             required
           >
         </div>
@@ -1254,7 +1254,7 @@
 <script src="storage.js"></script>
 <script src="app.js?v=23"></script>
 <script src="inventory.js"></script>
-<script src="scanner.js?v=11"></script>
+<script src="scanner.js?v=12"></script>
 <script src="stocktaking.js?v=23"></script>
 <script src="stocktaking-history.js?v=20"></script>
 <script src="stocktaking-transfer.js?v=22"></script>

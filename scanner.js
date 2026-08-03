@@ -827,7 +827,7 @@ async function handleBarcodeLookup(event) {
 
   if (enteredCode === "") {
     alert(
-      "JANコードを入力してください。"
+      "社内コードまたはJANコードを入力してください。"
     );
 
     barcodeLookupCodeInput.focus();
@@ -875,12 +875,20 @@ async function processBarcodeValue(
     const matchingProducts =
       savedProducts.filter(
         function (product) {
+          const savedInternalCode =
+            normalizeBarcodeValue(
+              product.internalCode
+            );
+
           const savedJanCode =
             normalizeBarcodeValue(
               product.janCode
             );
 
-          return savedJanCode === enteredCode;
+          return (
+            savedInternalCode === enteredCode ||
+            savedJanCode === enteredCode
+          );
         }
       );
 
@@ -888,7 +896,7 @@ async function processBarcodeValue(
       stopCameraScan();
 
       const message =
-        "同じJANコードの商品が複数登録されています。";
+        "社内コードまたはJANコードが複数の商品に一致しました。";
 
       barcodeLookupMessage.textContent =
         message;
@@ -937,7 +945,7 @@ async function processBarcodeValue(
         cameraScannerScreen.hidden = false;
       } else {
         barcodeLookupMessage.textContent =
-          "未登録のJANコードです。";
+          "未登録の社内コード・JANコードです。";
 
         barcodeLookupCodeInput.focus();
         barcodeLookupCodeInput.select();

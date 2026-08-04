@@ -645,6 +645,7 @@ async function handleProductSubmit(event) {
 
 async function openMovementHistoryScreen() {
   showScreen("history");
+  moveToMovementHistoryScreen();
 
   movementHistoryCount.textContent =
     "履歴を読み込んでいます。";
@@ -694,6 +695,22 @@ async function openMovementHistoryScreen() {
       "入出庫履歴を読み込めませんでした。"
     );
   }
+}
+
+
+function moveToMovementHistoryScreen() {
+  window.requestAnimationFrame(
+    function () {
+      if (!historyScreen) {
+        return;
+      }
+
+      historyScreen.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    }
+  );
 }
 
 function displayStockMovements(movements) {

@@ -47,12 +47,18 @@ const STOCKTAKING_LOCATION_OPTIONS =
   Object.freeze([
     "酒本倉庫1階",
     "酒本倉庫2階",
-    "本社1階",
-    "本社1階　企画",
-    "本社1階　その他",
-    "本社2階",
-    "本社2階　企画",
-    "本社2階　その他"
+    "本社1階　A区",
+    "本社1階　B区",
+    "本社1階　C区",
+    "本社1階　D区",
+    "本社1階　E区",
+    "本社1階　F区",
+    "本社2階　A区",
+    "本社2階　B区",
+    "本社2階　C区",
+    "本社2階　D区",
+    "本社2階　E区",
+    "本社2階　F区"
   ]);
 
 const STOCKTAKING_BULK_ZERO_UNCONFIRMED_LOCATION =

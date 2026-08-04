@@ -1,7 +1,7 @@
 "use strict";
 
 const CACHE_NAME =
-  "barcode-inventory-app-v29";
+  "barcode-inventory-app-v30";
 
 const APP_FILES = [
   "./",
@@ -11,7 +11,7 @@ const APP_FILES = [
   "./app.js?v=29",
   "./inventory.js",
   "./scanner.js?v=14",
-  "./stocktaking.js?v=24",
+  "./stocktaking.js?v=30",
   "./stocktaking-history.js?v=20",
   "./stocktaking-transfer.js?v=22",
   "./csv.js?v=9",

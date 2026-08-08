@@ -3,6 +3,9 @@
 const ZXING_SCRIPT_URL =
   "https://unpkg.com/@zxing/browser@0.2.1";
 
+const LOCAL_SCANNER_ADAPTER_VERSION =
+  "native-barcode-detector-adapter-v1";
+
 const showBarcodeLookupButton =
   document.querySelector(
     "#show-barcode-lookup-button"
@@ -1275,8 +1278,22 @@ function waitForMilliseconds(milliseconds) {
 }
 
 function loadZxingLibrary() {
-  if (window.ZXingBrowser) {
+  if (
+    window.ZXingBrowser &&
+    (
+      !window.ZXingBrowser.__localAdapter ||
+      "BarcodeDetector" in window
+    )
+  ) {
     return Promise.resolve();
+  }
+
+  if (
+    window.ZXingBrowser &&
+    window.ZXingBrowser.__localAdapter &&
+    !("BarcodeDetector" in window)
+  ) {
+    delete window.ZXingBrowser;
   }
 
   return new Promise(

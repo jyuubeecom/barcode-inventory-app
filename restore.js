@@ -1,9 +1,7 @@
+
 "use strict";
 
-document.addEventListener(
-  "DOMContentLoaded",
-  initializeRestoreFunction
-);
+document.addEventListener("DOMContentLoaded", initializeRestoreFunction);
 
 function initializeRestoreFunction() {
   createRestoreControls();
@@ -11,630 +9,220 @@ function initializeRestoreFunction() {
 }
 
 function createRestoreControls() {
-  if (
-    document.querySelector(
-      "#restore-full-backup-button"
-    )
-  ) {
-    return;
-  }
+  if (document.querySelector("#restore-full-backup-button")) return;
+  const homeScreen = document.querySelector("#home");
+  if (!homeScreen) return;
 
-  const homeScreen =
-    document.querySelector(
-      "#home"
-    );
+  const button = document.createElement("button");
+  button.id = "restore-full-backup-button";
+  button.type = "button";
+  button.textContent = "バックアップから復元する";
 
-  if (!homeScreen) {
-    console.error(
-      "ホーム画面が見つからないため、復元ボタンを追加できません。"
-    );
+  const input = document.createElement("input");
+  input.id = "restore-backup-file";
+  input.type = "file";
+  input.accept = ".json,application/json";
+  input.hidden = true;
 
-    return;
-  }
-
-  const button =
-    document.createElement("button");
-
-  button.id =
-    "restore-full-backup-button";
-
-  button.type =
-    "button";
-
-  button.textContent =
-    "バックアップから復元する";
-
-  const fileInput =
-    document.createElement("input");
-
-  fileInput.id =
-    "restore-backup-file";
-
-  fileInput.type =
-    "file";
-
-  fileInput.accept =
-    ".json,application/json";
-
-  fileInput.hidden =
-    true;
-
-  button.addEventListener(
-    "click",
-    function () {
-      fileInput.value =
-        "";
-
-      fileInput.click();
-    }
-  );
-
-  fileInput.addEventListener(
-    "change",
-    handleRestoreFileSelection
-  );
-
-  homeScreen.appendChild(
-    button
-  );
-
-  homeScreen.appendChild(
-    fileInput
-  );
+  button.addEventListener("click", function () {
+    input.value = "";
+    input.click();
+  });
+  input.addEventListener("change", handleRestoreFileSelection);
+  homeScreen.appendChild(button);
+  homeScreen.appendChild(input);
 }
 
 function createRestoreStyle() {
-  if (
-    document.querySelector(
-      "#restore-style"
-    )
-  ) {
-    return;
-  }
-
-  const style =
-    document.createElement("style");
-
-  style.id =
-    "restore-style";
-
+  const style = document.createElement("style");
+  style.id = "restore-style";
   style.textContent = `
-    #restore-full-backup-button {
-      background-color: #ef6c00;
-    }
-
-    #restore-full-backup-button:disabled {
-      background-color: #b0bec5;
-      color: #eceff1;
-      cursor: not-allowed;
-    }
+    #restore-full-backup-button { background-color: #ef6c00; }
+    #restore-full-backup-button:disabled { background-color: #b0bec5; }
   `;
-
-  document.head.appendChild(
-    style
-  );
+  document.head.appendChild(style);
 }
 
-async function handleRestoreFileSelection(
-  event
-) {
-  const file =
-    event.target.files[0];
+async function handleRestoreFileSelection(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const button = document.querySelector("#restore-full-backup-button");
 
-  if (!file) {
+  if (file.size > 50 * 1024 * 1024) {
+    alert("50MB以下のバックアップファイルを選んでください。");
+    event.target.value = "";
     return;
   }
 
-  const button =
-    document.querySelector(
-      "#restore-full-backup-button"
-    );
-
-  if (
-    file.size >
-    50 * 1024 * 1024
-  ) {
-    alert(
-      "選択したファイルが大きすぎます。\n\n" +
-      "50MB以下のバックアップファイルを選んでください。"
-    );
-
-    event.target.value =
-      "";
-
-    return;
-  }
-
-  if (button) {
-    button.disabled =
-      true;
-
-    button.textContent =
-      "バックアップを確認しています...";
-  }
+  button.disabled = true;
+  button.textContent = "バックアップを確認しています...";
 
   try {
-    const fileText =
-      await readTextFile(
-        file
-      );
+    const text = await file.text();
+    const raw = JSON.parse(text);
+    const backup = normalizeAndValidateBackup(raw);
+    const c = backup.counts;
 
-    const backupData =
-      JSON.parse(
-        fileText
-      );
-
-    validateBackupData(
-      backupData
+    const first = window.confirm(
+      "次のバックアップを復元します。\n\n" +
+      `作成日時：${formatBackupDate(backup.exportedAt)}\n` +
+      `商品：${c.products}件\n` +
+      `入出庫履歴：${c.stockMovements}件\n` +
+      `棚卸履歴：${c.stocktakings}件\n` +
+      `集約提出データ：${c.stocktakingSubmissions}件\n` +
+      `集約反映履歴：${c.aggregationReflections}件\n\n` +
+      "現在のデータはすべて置き換えられます。\n" +
+      "現在のデータを残す場合は、先にバックアップしてください。\n\n" +
+      "復元を続けますか？"
     );
+    if (!first) return;
 
-    const products =
-      backupData.data.products;
-
-    const stockMovements =
-      backupData.data.stockMovements;
-
-    const stocktakings =
-      backupData.data.stocktakings;
-
-    const backupDateText =
-      formatBackupDate(
-        backupData.exportedAt
-      );
-
-    const firstConfirmed =
-      window.confirm(
-        "次のバックアップを読み込みます。\n\n" +
-        `作成日時：${backupDateText}\n` +
-        `商品：${products.length}件\n` +
-        `入出庫履歴：${stockMovements.length}件\n` +
-        `棚卸履歴：${stocktakings.length}件\n\n` +
-        "現在この端末に保存されているデータは、すべて置き換えられます。\n\n" +
-        "復元を続けますか？"
-      );
-
-    if (!firstConfirmed) {
-      return;
-    }
-
-    const finalConfirmed =
-      window.confirm(
-        "最終確認です。\n\n" +
-        "現在のデータを消して、選択したバックアップの内容へ置き換えます。\n\n" +
-        "この操作を開始した後は元に戻せません。\n" +
-        "現在のデータを残したい場合は、先にバックアップしてください。\n\n" +
-        "本当に復元しますか？"
-      );
-
-    if (!finalConfirmed) {
-      return;
-    }
-
-    if (button) {
-      button.textContent =
-        "データを復元しています...";
-    }
-
-    await replaceAllDataFromBackup(
-      products,
-      stockMovements,
-      stocktakings
+    const final = window.confirm(
+      "最終確認です。\n\n" +
+      "現在のデータを消してバックアップへ置き換えます。\n" +
+      "この操作は元に戻せません。\n\n本当に復元しますか？"
     );
+    if (!final) return;
 
+    button.textContent = "データを復元しています...";
+    await replaceAllDataFromBackupV31(backup, file.name);
+    restoreAppSettings(backup.data.appSettings);
     alert(
       "バックアップから復元しました。\n\n" +
-      `商品：${products.length}件\n` +
-      `入出庫履歴：${stockMovements.length}件\n` +
-      `棚卸履歴：${stocktakings.length}件\n\n` +
+      `商品：${c.products}件\n` +
+      `入出庫履歴：${c.stockMovements}件\n` +
+      `棚卸履歴：${c.stocktakings}件\n` +
+      `集約提出データ：${c.stocktakingSubmissions}件\n` +
+      `集約反映履歴：${c.aggregationReflections}件\n\n` +
       "画面を更新します。"
     );
-
-    window.location.reload();
+    location.reload();
   } catch (error) {
-    console.error(
-      "バックアップ復元エラー",
-      error
-    );
-
-    const message =
-      createRestoreErrorMessage(
-        error
-      );
-
-    alert(
-      message
-    );
+    console.error("バックアップ復元エラー", error);
+    const detail = error instanceof SyntaxError
+      ? "JSONファイルの内容が壊れています。"
+      : (error.message || "原因を確認できませんでした。");
+    alert("バックアップを復元できませんでした。\n\n" + detail + "\n\n現在のデータは変更されていません。");
   } finally {
-    event.target.value =
-      "";
-
-    if (button) {
-      button.disabled =
-        false;
-
-      button.textContent =
-        "バックアップから復元する";
-    }
+    event.target.value = "";
+    button.disabled = false;
+    button.textContent = "バックアップから復元する";
   }
 }
 
-function readTextFile(
-  file
-) {
-  return new Promise(function (
-    resolve,
-    reject
-  ) {
-    const reader =
-      new FileReader();
+function normalizeAndValidateBackup(raw) {
+  if (!raw || raw.backupType !== "barcode-inventory-app") {
+    throw new Error("このアプリで作成したバックアップではありません。");
+  }
+  if (![1, 2].includes(raw.backupVersion)) {
+    throw new Error("対応していないバックアップ形式です。");
+  }
+  const data = raw.data || {};
+  const normalized = {
+    ...raw,
+    data: {
+      products: Array.isArray(data.products) ? data.products : null,
+      stockMovements: Array.isArray(data.stockMovements) ? data.stockMovements : null,
+      stocktakings: Array.isArray(data.stocktakings) ? data.stocktakings : null,
+      stocktakingSubmissions: Array.isArray(data.stocktakingSubmissions) ? data.stocktakingSubmissions : [],
+      aggregationReflections: Array.isArray(data.aggregationReflections) ? data.aggregationReflections : [],
+      appSettings: data.appSettings && typeof data.appSettings === "object" ? data.appSettings : {},
+      restoreLogs: Array.isArray(data.restoreLogs) ? data.restoreLogs : []
+    }
+  };
 
-    reader.onload =
-      function () {
-        resolve(
-          String(
-            reader.result || ""
-          )
-        );
-      };
+  if (!normalized.data.products || !normalized.data.stockMovements || !normalized.data.stocktakings) {
+    throw new Error("バックアップの基本データが不足しています。");
+  }
+  validateProductRecordsV31(normalized.data.products);
+  validateUniqueKeyRecords(normalized.data.stockMovements, "id", "入出庫履歴");
+  validateUniqueKeyRecords(normalized.data.stocktakings, "id", "棚卸履歴");
+  validateUniqueKeyRecords(normalized.data.stocktakingSubmissions, "submissionId", "集約提出データ");
+  validateUniqueKeyRecords(normalized.data.aggregationReflections, "reflectionId", "集約反映履歴");
+  normalized.counts = {
+    products: normalized.data.products.length,
+    stockMovements: normalized.data.stockMovements.length,
+    stocktakings: normalized.data.stocktakings.length,
+    stocktakingSubmissions: normalized.data.stocktakingSubmissions.length,
+    aggregationReflections: normalized.data.aggregationReflections.length,
+    restoreLogs: normalized.data.restoreLogs.length
+  };
+  return normalized;
+}
 
-    reader.onerror =
-      function () {
-        reject(
-          new Error(
-            "ファイルを読み込めませんでした。"
-          )
-        );
-      };
-
-    reader.readAsText(
-      file,
-      "UTF-8"
-    );
+function validateProductRecordsV31(records) {
+  const keys = new Set();
+  records.forEach(function (record, index) {
+    if (!record || typeof record !== "object") throw new Error(`商品${index + 1}件目が正しくありません。`);
+    const key = String(record.internalCode || "").trim();
+    if (!key) throw new Error(`商品${index + 1}件目に社内コードがありません。`);
+    if (keys.has(key)) throw new Error(`社内コード「${key}」が重複しています。`);
+    keys.add(key);
   });
 }
 
-function validateBackupData(
-  backupData
-) {
-  if (
-    !backupData ||
-    typeof backupData !==
-      "object"
-  ) {
-    throw new Error(
-      "バックアップの内容が正しくありません。"
-    );
-  }
-
-  if (
-    backupData.backupType !==
-      "barcode-inventory-app"
-  ) {
-    throw new Error(
-      "このアプリで作成したバックアップではありません。"
-    );
-  }
-
-  if (
-    backupData.backupVersion !==
-      1
-  ) {
-    throw new Error(
-      "対応していないバックアップ形式です。"
-    );
-  }
-
-  if (
-    !backupData.data ||
-    typeof backupData.data !==
-      "object"
-  ) {
-    throw new Error(
-      "バックアップ内にデータがありません。"
-    );
-  }
-
-  const products =
-    backupData.data.products;
-
-  const stockMovements =
-    backupData.data.stockMovements;
-
-  const stocktakings =
-    backupData.data.stocktakings;
-
-  if (
-    !Array.isArray(
-      products
-    ) ||
-    !Array.isArray(
-      stockMovements
-    ) ||
-    !Array.isArray(
-      stocktakings
-    )
-  ) {
-    throw new Error(
-      "バックアップのデータ形式が正しくありません。"
-    );
-  }
-
-  validateProductRecords(
-    products
-  );
-
-  validateIdRecords(
-    stockMovements,
-    "入出庫履歴"
-  );
-
-  validateIdRecords(
-    stocktakings,
-    "棚卸履歴"
-  );
+function validateUniqueKeyRecords(records, keyName, label) {
+  const keys = new Set();
+  records.forEach(function (record, index) {
+    if (!record || typeof record !== "object") throw new Error(`${label}${index + 1}件目が正しくありません。`);
+    const key = record[keyName];
+    if (key === undefined || key === null || key === "") throw new Error(`${label}${index + 1}件目に識別番号がありません。`);
+    const text = String(key);
+    if (keys.has(text)) throw new Error(`${label}内で識別番号「${text}」が重複しています。`);
+    keys.add(text);
+  });
 }
 
-function validateProductRecords(
-  products
-) {
-  const internalCodes =
-    new Set();
+async function replaceAllDataFromBackupV31(backup, fileName) {
+  const db = await openDatabase();
+  const d = backup.data;
+  const storeNames = [
+    PRODUCT_STORE_NAME,
+    MOVEMENT_STORE_NAME,
+    STOCKTAKING_STORE_NAME,
+    STOCKTAKING_SUBMISSION_STORE_NAME,
+    STOCKTAKING_AGGREGATION_REFLECTION_STORE_NAME,
+    RESTORE_LOG_STORE_NAME
+  ];
 
-  products.forEach(
-    function (
-      product,
-      index
-    ) {
-      if (
-        !product ||
-        typeof product !==
-          "object"
-      ) {
-        throw new Error(
-          `商品${index + 1}件目の内容が正しくありません。`
-        );
-      }
-
-      const internalCode =
-        String(
-          product.internalCode || ""
-        ).trim();
-
-      if (!internalCode) {
-        throw new Error(
-          `商品${index + 1}件目に社内コードがありません。`
-        );
-      }
-
-      if (
-        internalCodes.has(
-          internalCode
-        )
-      ) {
-        throw new Error(
-          `商品データ内で社内コード「${internalCode}」が重複しています。`
-        );
-      }
-
-      internalCodes.add(
-        internalCode
-      );
-    }
-  );
-}
-
-function validateIdRecords(
-  records,
-  recordName
-) {
-  const ids =
-    new Set();
-
-  records.forEach(
-    function (
-      record,
-      index
-    ) {
-      if (
-        !record ||
-        typeof record !==
-          "object"
-      ) {
-        throw new Error(
-          `${recordName}${index + 1}件目の内容が正しくありません。`
-        );
-      }
-
-      if (
-        record.id ===
-          undefined ||
-        record.id ===
-          null ||
-        record.id ===
-          ""
-      ) {
-        throw new Error(
-          `${recordName}${index + 1}件目にIDがありません。`
-        );
-      }
-
-      const idKey =
-        String(
-          record.id
-        );
-
-      if (
-        ids.has(
-          idKey
-        )
-      ) {
-        throw new Error(
-          `${recordName}内でID「${idKey}」が重複しています。`
-        );
-      }
-
-      ids.add(
-        idKey
-      );
-    }
-  );
-}
-
-async function replaceAllDataFromBackup(
-  products,
-  stockMovements,
-  stocktakings
-) {
-  const database =
-    await openDatabase();
-
-  return new Promise(function (
-    resolve,
-    reject
-  ) {
-    let transaction;
-
+  return new Promise(function (resolve, reject) {
+    let tx;
     try {
-      transaction =
-        database.transaction(
-          [
-            PRODUCT_STORE_NAME,
-            MOVEMENT_STORE_NAME,
-            STOCKTAKING_STORE_NAME
-          ],
-          "readwrite"
-        );
-
-      const productStore =
-        transaction.objectStore(
-          PRODUCT_STORE_NAME
-        );
-
-      const movementStore =
-        transaction.objectStore(
-          MOVEMENT_STORE_NAME
-        );
-
-      const stocktakingStore =
-        transaction.objectStore(
-          STOCKTAKING_STORE_NAME
-        );
-
-      productStore.clear();
-      movementStore.clear();
-      stocktakingStore.clear();
-
-      products.forEach(
-        function (product) {
-          productStore.put(
-            product
-          );
-        }
-      );
-
-      stockMovements.forEach(
-        function (movement) {
-          movementStore.put(
-            movement
-          );
-        }
-      );
-
-      stocktakings.forEach(
-        function (stocktaking) {
-          stocktakingStore.put(
-            stocktaking
-          );
-        }
-      );
+      tx = db.transaction(storeNames, "readwrite");
+      storeNames.forEach(function (name) { tx.objectStore(name).clear(); });
+      d.products.forEach(function (r) { tx.objectStore(PRODUCT_STORE_NAME).put(r); });
+      d.stockMovements.forEach(function (r) { tx.objectStore(MOVEMENT_STORE_NAME).put(r); });
+      d.stocktakings.forEach(function (r) { tx.objectStore(STOCKTAKING_STORE_NAME).put(r); });
+      d.stocktakingSubmissions.forEach(function (r) { tx.objectStore(STOCKTAKING_SUBMISSION_STORE_NAME).put(r); });
+      d.aggregationReflections.forEach(function (r) { tx.objectStore(STOCKTAKING_AGGREGATION_REFLECTION_STORE_NAME).put(r); });
+      d.restoreLogs.forEach(function (r) { tx.objectStore(RESTORE_LOG_STORE_NAME).put(r); });
+      tx.objectStore(RESTORE_LOG_STORE_NAME).put({
+        id: `restore-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        restoredAt: new Date().toISOString(),
+        sourceFileName: fileName,
+        sourceExportedAt: backup.exportedAt || "",
+        sourceBackupVersion: backup.backupVersion,
+        counts: backup.counts
+      });
     } catch (error) {
-      database.close();
+      db.close();
       reject(error);
       return;
     }
-
-    transaction.oncomplete =
-      function () {
-        database.close();
-        resolve();
-      };
-
-    transaction.onerror =
-      function () {
-        const error =
-          transaction.error ||
-          new Error(
-            "データの復元中にエラーが発生しました。"
-          );
-
-        database.close();
-        reject(error);
-      };
-
-    transaction.onabort =
-      function () {
-        const error =
-          transaction.error ||
-          new Error(
-            "データの復元が中断されました。"
-          );
-
-        database.close();
-        reject(error);
-      };
+    tx.oncomplete = function () { db.close(); resolve(); };
+    tx.onerror = function () { const error = tx.error; db.close(); reject(error); };
+    tx.onabort = tx.onerror;
   });
 }
 
-function formatBackupDate(
-  exportedAt
-) {
-  if (!exportedAt) {
-    return "記録なし";
-  }
-
-  const date =
-    new Date(
-      exportedAt
-    );
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return String(
-      exportedAt
-    );
-  }
-
-  return date.toLocaleString(
-    "ja-JP"
-  );
+function restoreAppSettings(settings) {
+  if (!settings || typeof settings !== "object") return;
+  Object.entries(settings).forEach(function (entry) {
+    localStorage.setItem(entry[0], entry[1]);
+  });
 }
 
-function createRestoreErrorMessage(
-  error
-) {
-  if (
-    error instanceof
-      SyntaxError
-  ) {
-    return (
-      "バックアップファイルを読み込めませんでした。\n\n" +
-      "JSONファイルの内容が壊れている可能性があります。\n" +
-      "このアプリで保存したバックアップファイルを選んでください。"
-    );
-  }
-
-  const detail =
-    error &&
-    error.message
-      ? error.message
-      : "原因を確認できませんでした。";
-
-  return (
-    "バックアップを復元できませんでした。\n\n" +
-    detail +
-    "\n\n現在のデータは変更されていません。"
-  );
+function formatBackupDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? (value || "記録なし") : date.toLocaleString("ja-JP");
 }

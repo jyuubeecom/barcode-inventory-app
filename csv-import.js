@@ -1199,7 +1199,7 @@ function createPreviewRow(item) {
     item.lineNumber
   );
 
-  appendStatusCell(
+  appendCsvImportStatusCell(
     row,
     item.status
   );
@@ -1278,7 +1278,7 @@ function appendPreviewCell(
   row.appendChild(cell);
 }
 
-function appendStatusCell(
+function appendCsvImportStatusCell(
   row,
   status
 ) {

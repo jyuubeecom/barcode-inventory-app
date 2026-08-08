@@ -9,6 +9,7 @@ const HOME_DASHBOARD_GROUPS = Object.freeze({
   ],
   "home-product-buttons": [
     "show-barcode-lookup-button",
+    "show-unassigned-location-button",
     "export-products-csv-button",
     "show-csv-import-button"
   ],
@@ -35,6 +36,7 @@ const HOME_DASHBOARD_ACTION_CLASSES = Object.freeze({
   "show-stocktaking-button": "home-action-stocktaking",
   "show-register-button": "home-action-register",
   "show-barcode-lookup-button": "home-action-search",
+  "show-unassigned-location-button": "home-action-location",
   "show-history-button": "home-action-history",
   "show-stocktaking-history-button": "home-action-stocktaking-history",
   "show-stocktaking-aggregation-button": "home-action-aggregation",

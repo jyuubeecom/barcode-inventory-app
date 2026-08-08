@@ -17,8 +17,10 @@
   <link
     rel="apple-touch-icon"
     sizes="180x180"
-    href="apple-touch-icon.png"
+    href="icons/icon-192.png"
   >
+
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
 
   <title>バーコード在庫・棚卸管理</title>
 </head>
@@ -45,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v30
+          画面版 v31
         </span>
       </div>
 
@@ -163,6 +165,13 @@
               type="button"
             >
               社内コード・JANコードで探す
+            </button>
+
+            <button
+              id="show-unassigned-location-button"
+              type="button"
+            >
+              区画未設定商品一覧
             </button>
           </div>
         </details>
@@ -286,6 +295,70 @@
       </form>
     </section>
 
+    <!-- 区画未設定商品一覧 -->
+    <section id="unassigned-location-products" hidden>
+      <h2>区画未設定商品一覧</h2>
+
+      <p>
+        古い保管場所、または保管場所が空欄の商品を確認し、
+        正しい区画へまとめて変更します。
+      </p>
+
+      <div class="unassigned-location-controls">
+        <label for="unassigned-location-search">商品を検索</label>
+        <input
+          id="unassigned-location-search"
+          type="search"
+          placeholder="社内コード・商品コード・商品名・現在の保管場所"
+        >
+
+        <label for="bulk-location-destination">変更先の保管場所</label>
+        <select id="bulk-location-destination">
+          <option value="">選択してください</option>
+          <option value="酒本倉庫1階">酒本倉庫1階</option>
+          <option value="酒本倉庫2階">酒本倉庫2階</option>
+          <option value="本社1階　A区">本社1階　A区</option>
+          <option value="本社1階　B区">本社1階　B区</option>
+          <option value="本社1階　C区">本社1階　C区</option>
+          <option value="本社1階　D区">本社1階　D区</option>
+          <option value="本社1階　E区">本社1階　E区</option>
+          <option value="本社1階　F区">本社1階　F区</option>
+          <option value="本社2階　A区">本社2階　A区</option>
+          <option value="本社2階　B区">本社2階　B区</option>
+          <option value="本社2階　C区">本社2階　C区</option>
+          <option value="本社2階　D区">本社2階　D区</option>
+          <option value="本社2階　E区">本社2階　E区</option>
+          <option value="本社2階　F区">本社2階　F区</option>
+        </select>
+
+        <div class="unassigned-location-actions">
+          <button id="select-visible-unassigned-products" type="button">表示中をすべて選択</button>
+          <button id="clear-unassigned-product-selection" type="button">選択を解除</button>
+          <button id="apply-bulk-location-button" type="button">選択商品をまとめて変更</button>
+        </div>
+      </div>
+
+      <p id="unassigned-location-summary">読み込み中です。</p>
+
+      <div class="unassigned-location-table-area">
+        <table>
+          <thead>
+            <tr>
+              <th>選択</th>
+              <th>社内コード</th>
+              <th>商品コード</th>
+              <th>商品名</th>
+              <th>現在の保管場所</th>
+              <th>商品状態</th>
+            </tr>
+          </thead>
+          <tbody id="unassigned-location-table-body"></tbody>
+        </table>
+      </div>
+
+      <button id="back-home-from-unassigned-location" type="button">ホームへ戻る</button>
+    </section>
+
     <!-- 商品登録画面 -->
     <section
       id="product-register"
@@ -315,7 +388,7 @@
 
         <div>
           <label for="product-code">
-            商品コード（必須）
+            商品コード（任意・重複可）
           </label>
 
           <input
@@ -323,7 +396,6 @@
             name="productCode"
             type="text"
             placeholder="例：SH-1001"
-            required
           >
         </div>
 
@@ -406,15 +478,30 @@
 
         <div>
           <label for="location">
-            保管場所
+            保管場所（必須）
           </label>
 
-          <input
+          <select
             id="location"
             name="location"
-            type="text"
-            placeholder="例：倉庫A"
+            required
           >
+            <option value="">選択してください</option>
+            <option value="酒本倉庫1階">酒本倉庫1階</option>
+            <option value="酒本倉庫2階">酒本倉庫2階</option>
+            <option value="本社1階　A区">本社1階　A区</option>
+            <option value="本社1階　B区">本社1階　B区</option>
+            <option value="本社1階　C区">本社1階　C区</option>
+            <option value="本社1階　D区">本社1階　D区</option>
+            <option value="本社1階　E区">本社1階　E区</option>
+            <option value="本社1階　F区">本社1階　F区</option>
+            <option value="本社2階　A区">本社2階　A区</option>
+            <option value="本社2階　B区">本社2階　B区</option>
+            <option value="本社2階　C区">本社2階　C区</option>
+            <option value="本社2階　D区">本社2階　D区</option>
+            <option value="本社2階　E区">本社2階　E区</option>
+            <option value="本社2階　F区">本社2階　F区</option>
+          </select>
         </div>
 
         <div>
@@ -1121,13 +1208,12 @@
 
         <div>
           <label for="edit-product-code">
-            商品コード（必須）
+            商品コード（任意・重複可）
           </label>
 
           <input
             id="edit-product-code"
             type="text"
-            required
           >
         </div>
 
@@ -1194,13 +1280,29 @@
 
         <div>
           <label for="edit-location">
-            保管場所
+            保管場所（必須）
           </label>
 
-          <input
+          <select
             id="edit-location"
-            type="text"
+            required
           >
+            <option value="">選択してください</option>
+            <option value="酒本倉庫1階">酒本倉庫1階</option>
+            <option value="酒本倉庫2階">酒本倉庫2階</option>
+            <option value="本社1階　A区">本社1階　A区</option>
+            <option value="本社1階　B区">本社1階　B区</option>
+            <option value="本社1階　C区">本社1階　C区</option>
+            <option value="本社1階　D区">本社1階　D区</option>
+            <option value="本社1階　E区">本社1階　E区</option>
+            <option value="本社1階　F区">本社1階　F区</option>
+            <option value="本社2階　A区">本社2階　A区</option>
+            <option value="本社2階　B区">本社2階　B区</option>
+            <option value="本社2階　C区">本社2階　C区</option>
+            <option value="本社2階　D区">本社2階　D区</option>
+            <option value="本社2階　E区">本社2階　E区</option>
+            <option value="本社2階　F区">本社2階　F区</option>
+          </select>
         </div>
 
         <div>
@@ -1252,18 +1354,20 @@
   </main>
 
 <script src="storage.js"></script>
-<script src="app.js?v=29"></script>
+<script src="app.js?v=31"></script>
 <script src="inventory.js"></script>
-<script src="scanner.js?v=14"></script>
-<script src="stocktaking.js?v=30"></script>
-<script src="stocktaking-history.js?v=20"></script>
-<script src="stocktaking-transfer.js?v=22"></script>
-<script src="csv.js?v=9"></script>
-<script src="csv-import.js"></script>
-<script src="csv-update.js"></script>
-<script src="pwa.js"></script>
-<script src="backup.js"></script>
-<script src="restore.js"></script>
-<script src="home-dashboard.js?v=24"></script>
+<script src="libs/barcode-detector-zxing-adapter.js?v=31"></script>
+<script src="scanner.js?v=31"></script>
+<script src="stocktaking.js?v=31"></script>
+<script src="stocktaking-history.js?v=31"></script>
+<script src="stocktaking-transfer.js?v=31"></script>
+<script src="csv.js?v=31"></script>
+<script src="csv-import.js?v=31"></script>
+<script src="csv-update.js?v=31"></script>
+<script src="pwa.js?v=31"></script>
+<script src="backup.js?v=31"></script>
+<script src="restore.js?v=31"></script>
+<script src="location-management.js?v=31"></script>
+<script src="home-dashboard.js?v=31"></script>
 </body>
 </html>

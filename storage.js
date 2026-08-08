@@ -3,7 +3,7 @@
 const DATABASE_NAME =
   "barcodeInventoryDatabase";
 
-const DATABASE_VERSION = 6;
+const DATABASE_VERSION = 7;
 
 const PRODUCT_STORE_NAME =
   "products";
@@ -19,6 +19,9 @@ const STOCKTAKING_SUBMISSION_STORE_NAME =
 
 const STOCKTAKING_AGGREGATION_REFLECTION_STORE_NAME =
   "stocktakingAggregationReflections";
+
+const RESTORE_LOG_STORE_NAME =
+  "restoreLogs";
 
 function openDatabase() {
   return new Promise(function (
@@ -236,6 +239,24 @@ function openDatabase() {
             {
               unique: false
             }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            RESTORE_LOG_STORE_NAME
+          )
+        ) {
+          const restoreLogStore =
+            database.createObjectStore(
+              RESTORE_LOG_STORE_NAME,
+              { keyPath: "id" }
+            );
+
+          restoreLogStore.createIndex(
+            "restoredAt",
+            "restoredAt",
+            { unique: false }
           );
         }
       };
@@ -1290,5 +1311,68 @@ async function getStocktakingAggregationReflectionBySourceKey(
       database.close();
       reject(error);
     };
+  });
+}
+
+
+async function getAllRecordsFromStore(storeName) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      storeName,
+      "readonly"
+    );
+    const store = transaction.objectStore(storeName);
+    const request = store.getAll();
+    let records = [];
+
+    request.onsuccess = function () {
+      records = request.result || [];
+    };
+    transaction.oncomplete = function () {
+      database.close();
+      resolve(records);
+    };
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+  });
+}
+
+async function getAllRestoreLogs() {
+  return getAllRecordsFromStore(
+    RESTORE_LOG_STORE_NAME
+  );
+}
+
+async function updateProductsInBatch(updatedProducts) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      PRODUCT_STORE_NAME,
+      "readwrite"
+    );
+    const store = transaction.objectStore(
+      PRODUCT_STORE_NAME
+    );
+
+    updatedProducts.forEach(function (product) {
+      store.put(product);
+    });
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+    transaction.onabort = transaction.onerror;
   });
 }

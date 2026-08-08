@@ -384,6 +384,11 @@ function createStocktakingHistoryStyle() {
       color: #1b5e20;
     }
 
+    .history-cancelled {
+      background-color: #eceff1;
+      color: #b71c1c;
+    }
+
     .history-shortage {
       background-color: #ffcdd2;
       color: #b71c1c;
@@ -611,7 +616,7 @@ function displayStocktakingHistory() {
           "記録なし"
       );
 
-      appendStatusCell(
+      appendStocktakingHistoryStatusCell(
         row,
         session.status || "不明"
       );
@@ -1023,7 +1028,7 @@ function appendTextCell(
   );
 }
 
-function appendStatusCell(
+function appendStocktakingHistoryStatusCell(
   row,
   status
 ) {
@@ -1037,11 +1042,13 @@ function appendStatusCell(
     "stocktaking-history-badge"
   );
 
-  badge.classList.add(
-    status === "確定済み"
-      ? "history-completed"
-      : "history-open"
-  );
+  if (status === "確定済み") {
+    badge.classList.add("history-completed");
+  } else if (status === "取消" || status === "無効") {
+    badge.classList.add("history-cancelled");
+  } else {
+    badge.classList.add("history-open");
+  }
 
   badge.textContent =
     status;

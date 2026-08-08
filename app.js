@@ -29,6 +29,11 @@ const stockAdjustScreen =
 const editScreen =
   document.querySelector("#product-edit");
 
+const unassignedLocationScreen =
+  document.querySelector(
+    "#unassigned-location-products"
+  );
+
 const showRegisterButton =
   document.querySelector(
     "#show-register-button"
@@ -432,6 +437,10 @@ function showScreen(screenName) {
   stockAdjustScreen.hidden = true;
   editScreen.hidden = true;
 
+  if (unassignedLocationScreen) {
+    unassignedLocationScreen.hidden = true;
+  }
+
   if (screenName === "register") {
     registerScreen.hidden = false;
     return;
@@ -469,6 +478,13 @@ function showScreen(screenName) {
 
   if (screenName === "edit") {
     editScreen.hidden = false;
+    return;
+  }
+
+  if (screenName === "unassignedLocation") {
+    if (unassignedLocationScreen) {
+      unassignedLocationScreen.hidden = false;
+    }
     return;
   }
 
@@ -548,22 +564,6 @@ async function handleProductSubmit(event) {
     return;
   }
 
-  const duplicateProductCode = products.find(
-    function (product) {
-      return (
-        product.productCode === productCode
-      );
-    }
-  );
-
-  if (duplicateProductCode) {
-    alert(
-      "同じ商品コードの商品がすでに登録されています。"
-    );
-
-    productCodeInput.focus();
-    return;
-  }
 
   const currentDateTime =
     new Date().toISOString();
@@ -631,7 +631,7 @@ async function handleProductSubmit(event) {
       error.name === "ConstraintError"
     ) {
       alert(
-        "同じ社内コードまたは商品コードが登録されています。"
+        "同じ社内コードの商品がすでに登録されています。"
       );
 
       return;
@@ -953,7 +953,11 @@ function openEditScreen(internalCode) {
     selectedProduct.category || "";
 
   editLocationInput.value =
-    selectedProduct.location || "";
+    isValidProductLocation(
+      selectedProduct.location
+    )
+      ? selectedProduct.location
+      : "";
 
   editSupplierInput.value =
     selectedProduct.supplier;
@@ -1032,24 +1036,6 @@ async function handleEditProductSubmit(event) {
     return;
   }
 
-  const duplicateProductCode = products.find(
-    function (product) {
-      return (
-        product.productCode === productCode &&
-        product.internalCode !==
-          editingInternalCode
-      );
-    }
-  );
-
-  if (duplicateProductCode) {
-    alert(
-      "同じ商品コードの商品がすでに登録されています。"
-    );
-
-    editProductCodeInput.focus();
-    return;
-  }
 
   const updatedProduct = {
     internalCode: editingInternalCode,
@@ -1154,6 +1140,29 @@ function getProductByInternalCode(
         product.internalCode === internalCode
       );
     }
+  );
+}
+
+const PRODUCT_LOCATION_OPTIONS = Object.freeze([
+  "酒本倉庫1階",
+  "酒本倉庫2階",
+  "本社1階　A区",
+  "本社1階　B区",
+  "本社1階　C区",
+  "本社1階　D区",
+  "本社1階　E区",
+  "本社1階　F区",
+  "本社2階　A区",
+  "本社2階　B区",
+  "本社2階　C区",
+  "本社2階　D区",
+  "本社2階　E区",
+  "本社2階　F区"
+]);
+
+function isValidProductLocation(value) {
+  return PRODUCT_LOCATION_OPTIONS.includes(
+    String(value || "").trim()
   );
 }
 
@@ -2688,7 +2697,11 @@ window.inventoryApp = {
   applyUpdatedProduct:
     applyUpdatedProduct,
   getSelectedDetailInternalCode:
-    getSelectedDetailInternalCode
+    getSelectedDetailInternalCode,
+  productLocationOptions:
+    PRODUCT_LOCATION_OPTIONS,
+  isValidProductLocation:
+    isValidProductLocation
 };
 
 /* =========================================================

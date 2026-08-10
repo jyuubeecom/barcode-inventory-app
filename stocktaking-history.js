@@ -305,6 +305,11 @@ function createStocktakingHistoryStyle() {
       background-color: #455a64;
     }
 
+    #stocktaking-history,
+    #stocktaking-history-detail {
+      scroll-margin-top: 90px;
+    }
+
     .stocktaking-history-message {
       padding: 12px;
       border-radius: 8px;
@@ -510,10 +515,27 @@ async function openStocktakingHistoryScreen() {
     );
   }
 
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
+  moveToStocktakingHistorySection(
+    stocktakingHistoryScreen
+  );
+}
+
+function moveToStocktakingHistorySection(
+  targetScreen
+) {
+  if (!targetScreen) {
+    return;
+  }
+
+  window.setTimeout(
+    function () {
+      targetScreen.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    },
+    50
+  );
 }
 
 async function loadAllStocktakingSessions() {
@@ -838,10 +860,9 @@ function openStocktakingHistoryDetail(
   stocktakingHistoryDetailScreen.hidden =
     false;
 
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
+  moveToStocktakingHistorySection(
+    stocktakingHistoryDetailScreen
+  );
 }
 
 function displayStocktakingHistoryItems(
@@ -1355,10 +1376,9 @@ function returnToStocktakingHistoryList() {
   stocktakingHistoryScreen.hidden =
     false;
 
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
+  moveToStocktakingHistorySection(
+    stocktakingHistoryScreen
+  );
 }
 
 function returnHomeFromStocktakingHistory() {

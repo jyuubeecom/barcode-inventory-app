@@ -30,7 +30,19 @@ window.addEventListener("DOMContentLoaded", function () {
   showButton.addEventListener("click", function () {
     window.inventoryApp.showScreen("unassignedLocation");
     renderUnassignedLocationProducts();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    const targetScreen = document.querySelector(
+      "#unassigned-location-products"
+    );
+
+    window.requestAnimationFrame(function () {
+      if (targetScreen) {
+        targetScreen.scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
+      }
+    });
   });
 
   backButton.addEventListener("click", function () {
@@ -210,6 +222,7 @@ function createLocationManagementStyle() {
   style.id = "location-management-style";
   style.textContent = `
     #show-unassigned-location-button { background-color: #6a1b9a; }
+    #unassigned-location-products { scroll-margin-top: 12px; }
     .unassigned-location-controls {
       display: grid; gap: 10px; margin-bottom: 16px;
     }

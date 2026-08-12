@@ -377,11 +377,15 @@ function getSelectedShippingSchedule() {
 function getShippingAllocationRows(schedule) {
   if (!schedule || !isShippingIsoDate(schedule.warehouseArrivalDate)) return [];
 
+  const targetPeriod = getShippingTargetPeriod(schedule);
+  if (!targetPeriod.valid) return [];
+
   const monthKey = schedule.warehouseArrivalDate.slice(0, 7);
   const averageContext = buildShippingAverageContext(monthKey);
   const actualByProduct = aggregateShippingActuals(averageContext.monthKeys);
-  const planByProduct = aggregateShippingPlansForMonth(monthKey);
+  const planByProduct = aggregateShippingPlansForRange(targetPeriod.startDate, targetPeriod.endDate);
   const priorScheduleIds = getPriorShippingScheduleIds(schedule);
+  const periodDays = targetPeriod.days;
 
   return shippingScheduleProducts
     .filter(function (product) {
@@ -391,8 +395,9 @@ function getShippingAllocationRows(schedule) {
       const internalCode = String(product.internalCode || "").trim();
       const sixMonthSales = actualByProduct.get(internalCode) || 0;
       const monthlyAverage = Math.max(0, Math.ceil(sixMonthSales / 6));
+      const periodSalesEstimate = Math.max(0, Math.ceil((monthlyAverage / 30) * periodDays));
       const plannedQuantity = planByProduct.get(internalCode) || 0;
-      const requiredQuantity = Math.max(0, Math.ceil(monthlyAverage + plannedQuantity));
+      const requiredQuantity = Math.max(0, Math.ceil(periodSalesEstimate + plannedQuantity));
       const currentStock = getShippingNumber(product.stock);
       const priorAllocated = getAllocatedQuantityForProductInSchedules(internalCode, priorScheduleIds);
       const recommendedQuantity = Math.max(0, requiredQuantity - currentStock - priorAllocated);
@@ -405,6 +410,7 @@ function getShippingAllocationRows(schedule) {
         currentStock: currentStock,
         sixMonthSales: sixMonthSales,
         monthlyAverage: monthlyAverage,
+        periodSalesEstimate: periodSalesEstimate,
         plannedQuantity: plannedQuantity,
         requiredQuantity: requiredQuantity,
         priorAllocated: priorAllocated,
@@ -413,7 +419,11 @@ function getShippingAllocationRows(schedule) {
         location: product.location || "",
         averageStartMonth: averageContext.startMonth,
         averageEndMonth: averageContext.endMonth,
-        targetMonth: monthKey
+        targetStartDate: targetPeriod.startDate,
+        targetEndDate: targetPeriod.endDate,
+        targetDays: targetPeriod.days,
+        nextScheduleId: targetPeriod.nextSchedule ? targetPeriod.nextSchedule.id : "",
+        nextScheduleName: targetPeriod.nextSchedule ? targetPeriod.nextSchedule.name : ""
       };
     })
     .filter(function (row) {
@@ -457,7 +467,7 @@ function renderShippingAllocationTable() {
   body.innerHTML = "";
 
   if (!schedule) {
-    summary.textContent = "船便を選択すると、倉庫到着月に必要な商品を自動計算します。";
+    summary.textContent = "船便を選択すると、今回の倉庫到着日から次便の倉庫到着日前日までを自動計算します。";
     if (info) info.textContent = "";
     if (saveButton) saveButton.disabled = true;
     if (printButton) printButton.disabled = true;
@@ -467,15 +477,42 @@ function renderShippingAllocationTable() {
     return;
   }
 
+  const targetPeriod = getShippingTargetPeriod(schedule);
   const monthKey = schedule.warehouseArrivalDate.slice(0, 7);
   const averageContext = buildShippingAverageContext(monthKey);
+
+  if (!targetPeriod.valid) {
+    if (info) {
+      info.innerHTML =
+        `<strong>${escapeShippingHtml(schedule.name)}</strong><br>` +
+        `出港 ${escapeShippingHtml(formatShippingDate(schedule.departureDate))} / ` +
+        `入港 ${escapeShippingHtml(formatShippingDate(schedule.arrivalDate))} / ` +
+        `倉庫到着 ${escapeShippingHtml(formatShippingDate(schedule.warehouseArrivalDate))}<br>` +
+        `<span class="shipping-target-warning">次の船便が未登録のため、対象期間を確定できません。</span>`;
+    }
+    summary.textContent = "次の船便の倉庫到着日を登録すると、不足数量を自動計算できます。";
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 12;
+    cell.textContent = "次の船便が未登録です。先に次便のスケジュールを登録してください。";
+    row.appendChild(cell);
+    body.appendChild(row);
+    if (saveButton) saveButton.disabled = true;
+    if (printButton) printButton.disabled = true;
+    pageStatus.textContent = "1 / 1ページ";
+    if (prev) prev.disabled = true;
+    if (next) next.disabled = true;
+    return;
+  }
+
   if (info) {
     info.innerHTML =
       `<strong>${escapeShippingHtml(schedule.name)}</strong><br>` +
       `出港 ${escapeShippingHtml(formatShippingDate(schedule.departureDate))} / ` +
       `入港 ${escapeShippingHtml(formatShippingDate(schedule.arrivalDate))} / ` +
       `倉庫到着 ${escapeShippingHtml(formatShippingDate(schedule.warehouseArrivalDate))}<br>` +
-      `判定対象月：${escapeShippingHtml(formatShippingMonth(monthKey))} / ` +
+      `対象期間：${escapeShippingHtml(formatShippingDate(targetPeriod.startDate))} ～ ${escapeShippingHtml(formatShippingDate(targetPeriod.endDate))}（${targetPeriod.days.toLocaleString("ja-JP")}日）<br>` +
+      `次便：${escapeShippingHtml(targetPeriod.nextSchedule.name)} / 倉庫到着 ${escapeShippingHtml(formatShippingDate(targetPeriod.nextSchedule.warehouseArrivalDate))}<br>` +
       `月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の6か月平均`;
   }
 
@@ -500,8 +537,8 @@ function renderShippingAllocationTable() {
   if (visible.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 11;
-    cell.textContent = "この船便の倉庫到着月で不足する商品はありません。";
+    cell.colSpan = 12;
+    cell.textContent = "この船便の対象期間で不足する商品はありません。";
     row.appendChild(cell);
     body.appendChild(row);
   } else {
@@ -512,6 +549,7 @@ function renderShippingAllocationTable() {
       appendShippingScheduleCell(row, item.productCode || "-");
       appendShippingScheduleCell(row, item.productName || "");
       appendShippingScheduleCell(row, `${item.monthlyAverage.toLocaleString("ja-JP")}個`);
+      appendShippingScheduleCell(row, `${item.periodSalesEstimate.toLocaleString("ja-JP")}個`);
       appendShippingScheduleCell(row, `${formatShippingQuantity(item.plannedQuantity)}個`);
       appendShippingScheduleCell(row, `${item.currentStock.toLocaleString("ja-JP")}個`);
       appendShippingScheduleCell(row, `${item.priorAllocated.toLocaleString("ja-JP")}個`);
@@ -634,6 +672,12 @@ function printShippingAllocationList() {
     return;
   }
 
+  const targetPeriod = getShippingTargetPeriod(schedule);
+  if (!targetPeriod.valid) {
+    alert("次の船便が未登録のため、対象期間を確定できません。先に次便のスケジュールを登録してください。");
+    return;
+  }
+
   const saved = getSavedAllocationsForSchedule(schedule.id);
   if (saved.length === 0) {
     alert("この船便には保存済みの振分商品がありません。先に振分数量を保存してください。");
@@ -656,6 +700,7 @@ function printShippingAllocationList() {
         productCode: allocation.productCode || product.productCode || "",
         productName: allocation.productName || product.productName || "",
         monthlyAverage: computed ? computed.monthlyAverage : "",
+        periodSalesEstimate: computed ? computed.periodSalesEstimate : "",
         plannedQuantity: computed ? computed.plannedQuantity : "",
         currentStock: computed ? computed.currentStock : getShippingNumber(product.stock),
         priorAllocated: computed ? computed.priorAllocated : "",
@@ -671,8 +716,7 @@ function printShippingAllocationList() {
     });
 
   const totalQuantity = printRows.reduce(function (sum, row) { return sum + row.quantity; }, 0);
-  const targetMonth = schedule.warehouseArrivalDate.slice(0, 7);
-  const averageContext = buildShippingAverageContext(targetMonth);
+  const averageContext = buildShippingAverageContext(schedule.warehouseArrivalDate.slice(0, 7));
   const printDate = formatShippingDateForPrint(new Date());
 
   const tableRows = printRows.map(function (row, index) {
@@ -683,6 +727,7 @@ function printShippingAllocationList() {
         <td>${escapeShippingHtml(row.productCode || "-")}</td>
         <td>${escapeShippingHtml(row.productName)}</td>
         <td class="num">${formatShippingPrintNumber(row.monthlyAverage)}</td>
+        <td class="num">${formatShippingPrintNumber(row.periodSalesEstimate)}</td>
         <td class="num">${formatShippingPrintNumber(row.plannedQuantity)}</td>
         <td class="num">${formatShippingPrintNumber(row.currentStock)}</td>
         <td class="num">${formatShippingPrintNumber(row.priorAllocated)}</td>
@@ -699,21 +744,21 @@ function printShippingAllocationList() {
 <meta charset="utf-8">
 <title>${escapeShippingHtml(schedule.name)} 船積リスト</title>
 <style>
-  @page { size: A4 landscape; margin: 10mm; }
+  @page { size: A4 landscape; margin: 8mm; }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: "Yu Gothic", "Meiryo", sans-serif; color: #111; font-size: 10pt; }
-  h1 { margin: 0 0 8px; font-size: 17pt; }
-  .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 12px; margin-bottom: 10px; }
-  .meta div { border-bottom: 1px solid #aaa; padding: 4px 0; }
-  .note { margin: 8px 0 10px; padding: 6px 8px; background: #f3f4f6; font-size: 9pt; }
+  body { margin: 0; font-family: "Yu Gothic", "Meiryo", sans-serif; color: #111; font-size: 9.5pt; }
+  h1 { margin: 0 0 7px; font-size: 16pt; }
+  .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px 10px; margin-bottom: 8px; }
+  .meta div { border-bottom: 1px solid #aaa; padding: 3px 0; }
+  .note { margin: 7px 0 9px; padding: 5px 7px; background: #f3f4f6; font-size: 8.5pt; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-  th, td { border: 1px solid #777; padding: 4px 5px; vertical-align: middle; word-break: break-word; }
-  th { background: #e8eef4; font-size: 8.5pt; }
-  td { font-size: 8.5pt; }
+  th, td { border: 1px solid #777; padding: 3px 4px; vertical-align: middle; word-break: break-word; }
+  th { background: #e8eef4; font-size: 7.6pt; }
+  td { font-size: 7.8pt; }
   .num { text-align: right; }
-  .strong { font-weight: 700; font-size: 9.5pt; }
-  .total { margin-top: 8px; text-align: right; font-size: 11pt; font-weight: 700; }
-  .footer { margin-top: 8px; font-size: 8pt; color: #444; }
+  .strong { font-weight: 700; font-size: 8.8pt; }
+  .total { margin-top: 7px; text-align: right; font-size: 10.5pt; font-weight: 700; }
+  .footer { margin-top: 7px; font-size: 7.5pt; color: #444; }
 </style>
 </head>
 <body>
@@ -723,31 +768,38 @@ function printShippingAllocationList() {
     <div><strong>入港日：</strong>${escapeShippingHtml(formatShippingDate(schedule.arrivalDate))}</div>
     <div><strong>倉庫到着日：</strong>${escapeShippingHtml(formatShippingDate(schedule.warehouseArrivalDate))}</div>
     <div><strong>印刷日：</strong>${escapeShippingHtml(printDate)}</div>
+    <div><strong>対象期間：</strong>${escapeShippingHtml(formatShippingDate(targetPeriod.startDate))} ～ ${escapeShippingHtml(formatShippingDate(targetPeriod.endDate))}</div>
+    <div><strong>対象日数：</strong>${targetPeriod.days.toLocaleString("ja-JP")}日</div>
+    <div><strong>次便：</strong>${escapeShippingHtml(targetPeriod.nextSchedule.name)}</div>
+    <div><strong>次便倉庫到着：</strong>${escapeShippingHtml(formatShippingDate(targetPeriod.nextSchedule.warehouseArrivalDate))}</div>
   </div>
   <div class="note">
-    判定対象：${escapeShippingHtml(formatShippingMonth(targetMonth))}　／　月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の6か月平均　／　必要数＝月平均＋当月販売予定
+    月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の6か月平均。
+    期間販売見込＝月平均÷30日×対象日数（小数切り上げ）。
+    期間指定の販売予定は、対象期間と重なる日数分を按分して小数切り上げしています。
   </div>
   <table>
     <thead>
       <tr>
         <th style="width:3%">No</th>
-        <th style="width:7%">社内コード</th>
-        <th style="width:8%">商品コード</th>
-        <th style="width:18%">商品名</th>
-        <th style="width:7%">月平均</th>
-        <th style="width:8%">当月予定</th>
-        <th style="width:7%">現在庫</th>
-        <th style="width:8%">前便振分</th>
-        <th style="width:7%">必要数</th>
-        <th style="width:7%">推奨</th>
-        <th style="width:8%">今回数量</th>
-        <th style="width:12%">保管場所</th>
+        <th style="width:6%">社内コード</th>
+        <th style="width:7%">商品コード</th>
+        <th style="width:15%">商品名</th>
+        <th style="width:6%">月平均</th>
+        <th style="width:7%">期間見込</th>
+        <th style="width:7%">期間予定</th>
+        <th style="width:6%">現在庫</th>
+        <th style="width:7%">前便振分</th>
+        <th style="width:6%">必要数</th>
+        <th style="width:6%">推奨</th>
+        <th style="width:7%">今回数量</th>
+        <th style="width:11%">保管場所</th>
       </tr>
     </thead>
     <tbody>${tableRows}</tbody>
   </table>
   <div class="total">振分商品：${printRows.length.toLocaleString("ja-JP")}件　／　振分数量合計：${totalQuantity.toLocaleString("ja-JP")}個</div>
-  <div class="footer">バーコード在庫・棚卸管理アプリ v43</div>
+  <div class="footer">バーコード在庫・棚卸管理アプリ v44</div>
 </body>
 </html>`;
 
@@ -810,21 +862,56 @@ function aggregateShippingActuals(monthKeys) {
   return result;
 }
 
-function aggregateShippingPlansForMonth(monthKey) {
-  const result = new Map();
-  if (!/^\d{4}-\d{2}$/.test(String(monthKey || ""))) return result;
-  const monthStart = `${monthKey}-01`;
-  const monthEnd = getShippingLastDateOfMonth(monthKey);
+function aggregateShippingPlansForRange(startDate, endDate) {
+  const raw = new Map();
+  if (!isShippingIsoDate(startDate) || !isShippingIsoDate(endDate) || startDate > endDate) return new Map();
 
   shippingScheduleSalesPlans.forEach(function (plan) {
-    if (!shippingPlanOverlapsRange(plan, monthStart, monthEnd)) return;
     const code = String(plan.internalCode || "").trim();
     if (!code) return;
     const quantity = Number(plan.quantity || 0);
-    if (!Number.isFinite(quantity)) return;
-    result.set(code, (result.get(code) || 0) + quantity);
+    if (!Number.isFinite(quantity) || quantity === 0) return;
+
+    const planRange = getShippingPlanDateRange(plan);
+    if (!planRange) return;
+
+    const overlapStart = planRange.startDate > startDate ? planRange.startDate : startDate;
+    const overlapEnd = planRange.endDate < endDate ? planRange.endDate : endDate;
+    if (overlapStart > overlapEnd) return;
+
+    let contribution = quantity;
+    if (planRange.startDate !== planRange.endDate) {
+      const totalDays = getShippingInclusiveDayCount(planRange.startDate, planRange.endDate);
+      const overlapDays = getShippingInclusiveDayCount(overlapStart, overlapEnd);
+      if (totalDays <= 0 || overlapDays <= 0) return;
+      contribution = quantity * (overlapDays / totalDays);
+    }
+
+    raw.set(code, (raw.get(code) || 0) + contribution);
   });
-  return result;
+
+  const rounded = new Map();
+  raw.forEach(function (value, code) {
+    rounded.set(code, Math.ceil(value));
+  });
+  return rounded;
+}
+
+function getShippingPlanDateRange(plan) {
+  const type = getShippingPlanType(plan);
+  if (type === "date") {
+    return { startDate: plan.shippingDate, endDate: plan.shippingDate };
+  }
+  if (type === "period") {
+    return { startDate: plan.shippingStartDate, endDate: plan.shippingEndDate };
+  }
+  if (type === "month") {
+    return {
+      startDate: `${plan.shippingMonth}-01`,
+      endDate: getShippingLastDateOfMonth(plan.shippingMonth)
+    };
+  }
+  return null;
 }
 
 function shippingPlanOverlapsRange(plan, startDate, endDate) {
@@ -848,11 +935,83 @@ function getShippingPlanType(plan) {
   return "unknown";
 }
 
+function getShippingTargetPeriod(currentSchedule) {
+  if (!currentSchedule || !isShippingIsoDate(currentSchedule.warehouseArrivalDate)) {
+    return { valid: false, startDate: "", endDate: "", days: 0, nextSchedule: null };
+  }
+
+  const currentDate = currentSchedule.warehouseArrivalDate;
+  const nextSchedule = shippingScheduleRecords
+    .filter(function (record) {
+      return record.id !== currentSchedule.id &&
+        isShippingIsoDate(record.warehouseArrivalDate) &&
+        record.warehouseArrivalDate > currentDate;
+    })
+    .sort(compareShippingScheduleChronology)[0] || null;
+
+  if (!nextSchedule) {
+    return { valid: false, startDate: currentDate, endDate: "", days: 0, nextSchedule: null };
+  }
+
+  const endDate = addShippingDays(nextSchedule.warehouseArrivalDate, -1);
+  const days = getShippingInclusiveDayCount(currentDate, endDate);
+  if (!isShippingIsoDate(endDate) || days <= 0) {
+    return { valid: false, startDate: currentDate, endDate: endDate, days: 0, nextSchedule: nextSchedule };
+  }
+
+  return {
+    valid: true,
+    startDate: currentDate,
+    endDate: endDate,
+    days: days,
+    nextSchedule: nextSchedule
+  };
+}
+
+function getShippingInclusiveDayCount(startDate, endDate) {
+  if (!isShippingIsoDate(startDate) || !isShippingIsoDate(endDate) || startDate > endDate) return 0;
+  const start = parseShippingIsoDate(startDate);
+  const end = parseShippingIsoDate(endDate);
+  if (!start || !end) return 0;
+  return Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
+}
+
+function addShippingDays(value, days) {
+  const date = parseShippingIsoDate(value);
+  if (!date) return "";
+  date.setUTCDate(date.getUTCDate() + Number(days || 0));
+  return formatShippingIsoDate(date);
+}
+
+function parseShippingIsoDate(value) {
+  if (!isShippingIsoDate(value)) return null;
+  const parts = String(value).split("-").map(Number);
+  const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+  if (
+    date.getUTCFullYear() !== parts[0] ||
+    date.getUTCMonth() !== parts[1] - 1 ||
+    date.getUTCDate() !== parts[2]
+  ) return null;
+  return date;
+}
+
+function formatShippingIsoDate(date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
 function getPriorShippingScheduleIds(currentSchedule) {
-  const ordered = shippingScheduleRecords.slice().sort(compareShippingScheduleChronology);
-  const index = ordered.findIndex(function (record) { return record.id === currentSchedule.id; });
-  if (index <= 0) return new Set();
-  return new Set(ordered.slice(0, index).map(function (record) { return record.id; }));
+  const currentDate = String(currentSchedule && currentSchedule.warehouseArrivalDate || "");
+  if (!isShippingIsoDate(currentDate)) return new Set();
+
+  return new Set(
+    shippingScheduleRecords
+      .filter(function (record) {
+        return record.id !== currentSchedule.id &&
+          isShippingIsoDate(record.warehouseArrivalDate) &&
+          record.warehouseArrivalDate < currentDate;
+      })
+      .map(function (record) { return record.id; })
+  );
 }
 
 function compareShippingScheduleChronology(a, b) {
@@ -1041,6 +1200,10 @@ function createShippingScheduleStyle() {
       padding: 12px 14px;
       border-radius: 10px;
       background: #e0f2f1;
+      font-weight: 700;
+    }
+    #shipping-schedule .shipping-target-warning {
+      color: #c62828;
       font-weight: 700;
     }
     #shipping-schedule .shipping-allocation-note {

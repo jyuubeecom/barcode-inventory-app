@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v43
+          画面版 v44
         </span>
       </div>
 
@@ -713,7 +713,7 @@
       <h2>船便スケジュール・商品振分け</h2>
 
       <p>
-        出港日・入港日・倉庫到着日を登録し、倉庫到着月の「6か月平均販売数＋当月販売予定数」から不足商品と推奨数量を自動計算します。
+        出港日・入港日・倉庫到着日を登録し、「今回の倉庫到着日～次便の倉庫到着日前日」の販売見込と販売予定から不足商品と推奨数量を自動計算します。
       </p>
 
       <div class="shipping-schedule-shortcuts">
@@ -797,10 +797,12 @@
         </div>
 
         <div id="shipping-allocation-schedule-info" class="shipping-allocation-info"></div>
-        <div id="shipping-allocation-summary" class="shipping-allocation-summary">船便を選択すると、倉庫到着月に必要な商品を自動計算します。</div>
+        <div id="shipping-allocation-summary" class="shipping-allocation-summary">船便を選択すると、今回の倉庫到着日から次便の倉庫到着日前日までに必要な商品を自動計算します。</div>
 
         <div class="shipping-allocation-note">
-          推奨数量 ＝ 「直前6か月の月平均販売数 ＋ 倉庫到着月の販売予定数」－ 現在庫 － 前の船便への振分数量です。<br>
+          対象期間は「今回の倉庫到着日 ～ 次便の倉庫到着日前日」です。<br>
+          期間販売見込 ＝ 直前6か月の月平均販売数 ÷ 30日 × 対象日数（小数切り上げ）。<br>
+          推奨数量 ＝ 「期間販売見込 ＋ 対象期間の販売予定数」－ 現在庫 － 前の船便への振分数量です。<br>
           「今回の船便」には推奨数量を初期表示します。積まない商品は0個に変更してから保存してください。
         </div>
 
@@ -812,7 +814,8 @@
                 <th>商品コード</th>
                 <th>商品名</th>
                 <th>月平均販売数</th>
-                <th>当月販売予定</th>
+                <th>期間販売見込</th>
+                <th>期間販売予定</th>
                 <th>現在庫</th>
                 <th>前便振分済</th>
                 <th>必要数</th>
@@ -1963,7 +1966,7 @@
 <script src="sales-actual.js?v=39"></script>
 <script src="purchase-required.js?v=40"></script>
 <script src="shipping-wish.js?v=42"></script>
-<script src="shipping-schedule.js?v=43"></script>
+<script src="shipping-schedule.js?v=44"></script>
 <script src="backup.js?v=42"></script>
 <script src="restore.js?v=42"></script>
 <script src="location-management.js?v=32"></script>

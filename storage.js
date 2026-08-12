@@ -3,7 +3,7 @@
 const DATABASE_NAME =
   "barcodeInventoryDatabase";
 
-const DATABASE_VERSION = 7;
+const DATABASE_VERSION = 8;
 
 const PRODUCT_STORE_NAME =
   "products";
@@ -22,6 +22,9 @@ const STOCKTAKING_AGGREGATION_REFLECTION_STORE_NAME =
 
 const RESTORE_LOG_STORE_NAME =
   "restoreLogs";
+
+const SALES_PLAN_STORE_NAME =
+  "salesPlans";
 
 function openDatabase() {
   return new Promise(function (
@@ -256,6 +259,36 @@ function openDatabase() {
           restoreLogStore.createIndex(
             "restoredAt",
             "restoredAt",
+            { unique: false }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            SALES_PLAN_STORE_NAME
+          )
+        ) {
+          const salesPlanStore =
+            database.createObjectStore(
+              SALES_PLAN_STORE_NAME,
+              { keyPath: "id" }
+            );
+
+          salesPlanStore.createIndex(
+            "internalCode",
+            "internalCode",
+            { unique: false }
+          );
+
+          salesPlanStore.createIndex(
+            "shippingMonth",
+            "shippingMonth",
+            { unique: false }
+          );
+
+          salesPlanStore.createIndex(
+            "customerName",
+            "customerName",
             { unique: false }
           );
         }
@@ -1375,4 +1408,86 @@ async function updateProductsInBatch(updatedProducts) {
     };
     transaction.onabort = transaction.onerror;
   });
+}
+
+
+async function saveSalesPlan(record) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      SALES_PLAN_STORE_NAME,
+      "readwrite"
+    );
+    transaction.objectStore(
+      SALES_PLAN_STORE_NAME
+    ).add(record);
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function updateSalesPlan(record) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      SALES_PLAN_STORE_NAME,
+      "readwrite"
+    );
+    transaction.objectStore(
+      SALES_PLAN_STORE_NAME
+    ).put(record);
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function deleteSalesPlan(id) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      SALES_PLAN_STORE_NAME,
+      "readwrite"
+    );
+    transaction.objectStore(
+      SALES_PLAN_STORE_NAME
+    ).delete(id);
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function getAllSalesPlans() {
+  return getAllRecordsFromStore(
+    SALES_PLAN_STORE_NAME
+  );
 }

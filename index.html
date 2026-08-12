@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v33
+          画面版 v34
         </span>
       </div>
 
@@ -204,6 +204,32 @@
 
         <details
           class="home-function-panel"
+          data-home-panel="sales"
+          open
+        >
+          <summary>
+            販売・発注
+          </summary>
+
+          <p class="home-panel-description">
+            販売予定や、今後追加する発注関連機能を管理します。
+          </p>
+
+          <div
+            id="home-sales-buttons"
+            class="home-panel-buttons"
+          >
+            <button
+              id="show-sales-plan-button"
+              type="button"
+            >
+              販売予定表
+            </button>
+          </div>
+        </details>
+
+        <details
+          class="home-function-panel"
           data-home-panel="stocktaking"
           open
         >
@@ -244,6 +270,114 @@
       <p class="home-storage-note">
         この画面の在庫データは、現在開いている端末内に保存されています。
       </p>
+    </section>
+
+    <!-- 販売予定表 -->
+    <section id="sales-plan" hidden>
+      <h2>販売予定表</h2>
+
+      <p>
+        今後の販売・出荷予定を登録します。
+        商品は社内コードから登録済み商品を呼び出します。
+      </p>
+
+      <div id="sales-plan-form-area" class="sales-plan-card">
+        <h3>販売予定を登録する</h3>
+
+        <form id="sales-plan-form">
+          <div class="sales-plan-form-grid">
+            <div>
+              <label for="sales-plan-customer">取引先名（必須）</label>
+              <input id="sales-plan-customer" type="text" required placeholder="例：テスト商事">
+            </div>
+
+            <div>
+              <label for="sales-plan-shipping-month">出荷時期（必須）</label>
+              <input id="sales-plan-shipping-month" type="month" required>
+            </div>
+
+            <div class="sales-plan-full">
+              <label for="sales-plan-internal-code">社内コード（必須）</label>
+              <div class="sales-plan-product-row">
+                <input
+                  id="sales-plan-internal-code"
+                  type="text"
+                  list="sales-plan-product-list"
+                  autocomplete="off"
+                  required
+                  placeholder="社内コードを入力または選択"
+                >
+                <button id="sales-plan-product-lookup-button" type="button">商品を読み込む</button>
+              </div>
+              <datalist id="sales-plan-product-list"></datalist>
+            </div>
+
+            <div>
+              <label for="sales-plan-product-code">商品コード</label>
+              <input id="sales-plan-product-code" class="sales-plan-readonly" type="text" readonly>
+            </div>
+
+            <div>
+              <label for="sales-plan-product-name">商品名</label>
+              <input id="sales-plan-product-name" class="sales-plan-readonly" type="text" readonly>
+            </div>
+
+            <div>
+              <label for="sales-plan-quantity">数量（必須）</label>
+              <input id="sales-plan-quantity" type="number" min="1" step="1" value="1" required>
+            </div>
+          </div>
+
+          <div class="sales-plan-form-actions">
+            <button id="save-sales-plan-button" type="submit">販売予定を登録する</button>
+            <button id="cancel-sales-plan-edit-button" type="button" hidden>編集をやめる</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="sales-plan-list-area" class="sales-plan-card">
+        <h3>登録済みの販売予定</h3>
+
+        <div class="sales-plan-filter-row">
+          <div>
+            <label for="sales-plan-search">検索</label>
+            <input id="sales-plan-search" type="search" placeholder="取引先名・社内コード・商品コード・商品名">
+          </div>
+          <div>
+            <label for="sales-plan-month-filter">出荷月で絞り込み</label>
+            <input id="sales-plan-month-filter" type="month">
+          </div>
+        </div>
+
+        <div id="sales-plan-summary" class="sales-plan-summary-box">
+          登録：0件 / 予定数量合計：0個
+        </div>
+
+        <div class="sales-plan-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>出荷時期</th>
+                <th>取引先名</th>
+                <th>社内コード</th>
+                <th>商品コード</th>
+                <th>商品名</th>
+                <th>数量</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="sales-plan-table-body"></tbody>
+          </table>
+        </div>
+
+        <div class="sales-plan-pager">
+          <button id="sales-plan-prev-page" type="button">前へ</button>
+          <strong id="sales-plan-page-status">1 / 1ページ</strong>
+          <button id="sales-plan-next-page" type="button">次へ</button>
+        </div>
+      </div>
+
+      <button id="back-home-from-sales-plan" type="button">ホームへ戻る</button>
     </section>
 
     <!-- 社内コード・JANコード手入力検索画面 -->
@@ -1353,7 +1487,7 @@
     </section>
   </main>
 
-<script src="storage.js"></script>
+<script src="storage.js?v=34"></script>
 <script src="app.js?v=31"></script>
 <script src="inventory.js"></script>
 <script src="libs/barcode-detector-zxing-adapter.js?v=31"></script>
@@ -1365,9 +1499,10 @@
 <script src="csv-import.js?v=31"></script>
 <script src="csv-update.js?v=31"></script>
 <script src="pwa.js?v=31"></script>
-<script src="backup.js?v=31"></script>
-<script src="restore.js?v=31"></script>
+<script src="sales-plan.js?v=34"></script>
+<script src="backup.js?v=34"></script>
+<script src="restore.js?v=34"></script>
 <script src="location-management.js?v=32"></script>
-<script src="home-dashboard.js?v=31"></script>
+<script src="home-dashboard.js?v=34"></script>
 </body>
 </html>

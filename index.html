@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v37
+          画面版 v38
         </span>
       </div>
 
@@ -232,6 +232,20 @@
             >
               販売予定一覧を見る
             </button>
+
+            <button
+              id="show-sales-actual-import-button"
+              type="button"
+            >
+              販売実績CSVを読み込む
+            </button>
+
+            <button
+              id="show-purchase-required-button"
+              type="button"
+            >
+              発注が必要な商品一覧
+            </button>
           </div>
         </details>
 
@@ -412,6 +426,141 @@
       </div>
 
       <button id="back-home-from-sales-plan" type="button">ホームへ戻る</button>
+    </section>
+
+    <!-- 販売実績CSV読込 -->
+    <section id="sales-actual-import" hidden>
+      <h2>販売実績CSVを読み込む</h2>
+
+      <p>
+        日々の販売実績CSVを取り込み、発注判定に使用する販売数を蓄積します。
+        商品はA列の社内コードだけで照合します。
+      </p>
+
+      <div class="sales-actual-card">
+        <h3>1. CSVを選ぶ</h3>
+        <div class="sales-actual-map">
+          <strong>今回使用する列</strong><br>
+          A列：社内コード（CSV上の見出しは「商品コード」）<br>
+          F列：出荷日<br>
+          G列：出荷数量<br>
+          L列：明細区分が「売上」の行だけ取込<br>
+          B列・C列の商品名は照合には使用しません。
+        </div>
+        <p>
+          <label for="sales-actual-file">販売実績CSV</label>
+          <input id="sales-actual-file" type="file" accept=".csv,text/csv">
+        </p>
+      </div>
+
+      <div class="sales-actual-card">
+        <h3>2. 取込内容を確認する</h3>
+        <div id="sales-actual-preview-summary" class="sales-actual-preview-summary">
+          CSVを選ぶと、取り込み前に内容を確認できます。
+        </div>
+        <div id="sales-actual-preview-warnings" class="sales-actual-warnings"></div>
+        <div class="sales-actual-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>出荷日</th>
+                <th>社内コード</th>
+                <th>商品名</th>
+                <th>取引先名</th>
+                <th>数量</th>
+                <th>商品照合</th>
+              </tr>
+            </thead>
+            <tbody id="sales-actual-preview-body"></tbody>
+          </table>
+        </div>
+        <div class="sales-actual-actions">
+          <button id="import-sales-actual-button" type="button" disabled>このCSVを取り込む</button>
+          <button id="clear-sales-actual-preview-button" type="button">選択を解除</button>
+        </div>
+      </div>
+
+      <div class="sales-actual-card">
+        <h3>3. 取込履歴</h3>
+        <p id="sales-actual-history-empty">まだ販売実績CSVを取り込んでいません。</p>
+        <div class="sales-actual-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>取込日時</th>
+                <th>ファイル名</th>
+                <th>帳票期間</th>
+                <th>取込件数</th>
+                <th>未登録商品</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="sales-actual-import-history-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <button id="back-home-from-sales-actual" type="button">ホームへ戻る</button>
+    </section>
+
+    <!-- 発注が必要な商品一覧 -->
+    <section id="purchase-required" hidden>
+      <h2>発注が必要な商品一覧</h2>
+
+      <p>
+        「前月までの直近6か月の月平均販売数 × 3か月 ＋ 今後3か月の販売予定数」
+        より現在庫が少ない商品を自動表示します。廃盤商品は対象外です。
+      </p>
+
+      <div class="purchase-required-card">
+        <div id="purchase-required-summary" class="purchase-required-summary">
+          発注判定を計算します。
+        </div>
+        <div id="purchase-required-coverage" class="purchase-required-coverage"></div>
+        <p>
+          <button id="refresh-purchase-required-button" type="button">最新データで再計算する</button>
+        </p>
+      </div>
+
+      <div id="purchase-required-list-area" class="purchase-required-card">
+        <div class="purchase-required-filter">
+          <div>
+            <label for="purchase-required-search">商品を検索</label>
+            <input id="purchase-required-search" type="search" placeholder="社内コード・商品コード・商品名・保管場所">
+          </div>
+          <strong id="purchase-required-filter-count">表示：0商品</strong>
+        </div>
+
+        <div class="purchase-required-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>不足数</th>
+                <th>社内コード</th>
+                <th>商品コード</th>
+                <th>商品名</th>
+                <th>現在庫</th>
+                <th>6か月販売合計</th>
+                <th>月平均販売数</th>
+                <th>月平均×3</th>
+                <th>今後3か月販売予定</th>
+                <th>必要在庫数</th>
+                <th>保管場所</th>
+                <th>判定</th>
+              </tr>
+            </thead>
+            <tbody id="purchase-required-table-body"></tbody>
+          </table>
+        </div>
+
+        <div class="purchase-required-pager">
+          <button id="purchase-required-prev-page" type="button">前へ</button>
+          <strong id="purchase-required-page-status">1 / 1ページ</strong>
+          <button id="purchase-required-next-page" type="button">次へ</button>
+        </div>
+      </div>
+
+      <button id="back-home-from-purchase-required" type="button">ホームへ戻る</button>
     </section>
 
     <!-- 社内コード・JANコード手入力検索画面 -->
@@ -1521,7 +1670,7 @@
     </section>
   </main>
 
-<script src="storage.js?v=34"></script>
+<script src="storage.js?v=38"></script>
 <script src="app.js?v=31"></script>
 <script src="inventory.js"></script>
 <script src="libs/barcode-detector-zxing-adapter.js?v=31"></script>
@@ -1534,9 +1683,11 @@
 <script src="csv-update.js?v=31"></script>
 <script src="pwa.js?v=31"></script>
 <script src="sales-plan.js?v=37"></script>
-<script src="backup.js?v=34"></script>
-<script src="restore.js?v=34"></script>
+<script src="sales-actual.js?v=38"></script>
+<script src="purchase-required.js?v=38"></script>
+<script src="backup.js?v=38"></script>
+<script src="restore.js?v=38"></script>
 <script src="location-management.js?v=32"></script>
-<script src="home-dashboard.js?v=37"></script>
+<script src="home-dashboard.js?v=38"></script>
 </body>
 </html>

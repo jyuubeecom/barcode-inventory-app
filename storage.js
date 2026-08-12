@@ -3,7 +3,7 @@
 const DATABASE_NAME =
   "barcodeInventoryDatabase";
 
-const DATABASE_VERSION = 8;
+const DATABASE_VERSION = 9;
 
 const PRODUCT_STORE_NAME =
   "products";
@@ -25,6 +25,12 @@ const RESTORE_LOG_STORE_NAME =
 
 const SALES_PLAN_STORE_NAME =
   "salesPlans";
+
+const SALES_ACTUAL_STORE_NAME =
+  "salesActuals";
+
+const SALES_IMPORT_BATCH_STORE_NAME =
+  "salesImportBatches";
 
 function openDatabase() {
   return new Promise(function (
@@ -289,6 +295,66 @@ function openDatabase() {
           salesPlanStore.createIndex(
             "customerName",
             "customerName",
+            { unique: false }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            SALES_ACTUAL_STORE_NAME
+          )
+        ) {
+          const salesActualStore =
+            database.createObjectStore(
+              SALES_ACTUAL_STORE_NAME,
+              { keyPath: "id" }
+            );
+
+          salesActualStore.createIndex(
+            "internalCode",
+            "internalCode",
+            { unique: false }
+          );
+
+          salesActualStore.createIndex(
+            "saleDate",
+            "saleDate",
+            { unique: false }
+          );
+
+          salesActualStore.createIndex(
+            "batchId",
+            "batchId",
+            { unique: false }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            SALES_IMPORT_BATCH_STORE_NAME
+          )
+        ) {
+          const salesImportBatchStore =
+            database.createObjectStore(
+              SALES_IMPORT_BATCH_STORE_NAME,
+              { keyPath: "batchId" }
+            );
+
+          salesImportBatchStore.createIndex(
+            "fileFingerprint",
+            "fileFingerprint",
+            { unique: true }
+          );
+
+          salesImportBatchStore.createIndex(
+            "importedAt",
+            "importedAt",
+            { unique: false }
+          );
+
+          salesImportBatchStore.createIndex(
+            "reportStartDate",
+            "reportStartDate",
             { unique: false }
           );
         }
@@ -1491,3 +1557,97 @@ async function getAllSalesPlans() {
     SALES_PLAN_STORE_NAME
   );
 }
+
+async function getAllSalesActuals() {
+  return getAllRecordsFromStore(
+    SALES_ACTUAL_STORE_NAME
+  );
+}
+
+async function getAllSalesImportBatches() {
+  return getAllRecordsFromStore(
+    SALES_IMPORT_BATCH_STORE_NAME
+  );
+}
+
+async function saveSalesActualImportBatch(batchRecord, salesRecords) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      [
+        SALES_ACTUAL_STORE_NAME,
+        SALES_IMPORT_BATCH_STORE_NAME
+      ],
+      "readwrite"
+    );
+
+    const salesStore = transaction.objectStore(
+      SALES_ACTUAL_STORE_NAME
+    );
+    const batchStore = transaction.objectStore(
+      SALES_IMPORT_BATCH_STORE_NAME
+    );
+
+    batchStore.add(batchRecord);
+    salesRecords.forEach(function (record) {
+      salesStore.add(record);
+    });
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function deleteSalesActualImportBatch(batchId) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      [
+        SALES_ACTUAL_STORE_NAME,
+        SALES_IMPORT_BATCH_STORE_NAME
+      ],
+      "readwrite"
+    );
+
+    const salesStore = transaction.objectStore(
+      SALES_ACTUAL_STORE_NAME
+    );
+    const batchStore = transaction.objectStore(
+      SALES_IMPORT_BATCH_STORE_NAME
+    );
+    const index = salesStore.index("batchId");
+    const request = index.openCursor(IDBKeyRange.only(batchId));
+
+    request.onsuccess = function () {
+      const cursor = request.result;
+      if (!cursor) {
+        batchStore.delete(batchId);
+        return;
+      }
+      cursor.delete();
+      cursor.continue();
+    };
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+    transaction.onabort = transaction.onerror;
+  });
+}
+

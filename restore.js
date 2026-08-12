@@ -71,7 +71,9 @@ async function handleRestoreFileSelection(event) {
       `棚卸履歴：${c.stocktakings}件\n` +
       `集約提出データ：${c.stocktakingSubmissions}件\n` +
       `集約反映履歴：${c.aggregationReflections}件\n` +
-      `販売予定：${c.salesPlans}件\n\n` +
+      `販売予定：${c.salesPlans}件\n` +
+      `販売実績：${c.salesActuals}件\n` +
+      `販売実績CSV取込履歴：${c.salesImportBatches}件\n\n` +
       "現在のデータはすべて置き換えられます。\n" +
       "現在のデータを残す場合は、先にバックアップしてください。\n\n" +
       "復元を続けますか？"
@@ -95,7 +97,9 @@ async function handleRestoreFileSelection(event) {
       `棚卸履歴：${c.stocktakings}件\n` +
       `集約提出データ：${c.stocktakingSubmissions}件\n` +
       `集約反映履歴：${c.aggregationReflections}件\n` +
-      `販売予定：${c.salesPlans}件\n\n` +
+      `販売予定：${c.salesPlans}件\n` +
+      `販売実績：${c.salesActuals}件\n` +
+      `販売実績CSV取込履歴：${c.salesImportBatches}件\n\n` +
       "画面を更新します。"
     );
     location.reload();
@@ -116,7 +120,7 @@ function normalizeAndValidateBackup(raw) {
   if (!raw || raw.backupType !== "barcode-inventory-app") {
     throw new Error("このアプリで作成したバックアップではありません。");
   }
-  if (![1, 2, 3].includes(raw.backupVersion)) {
+  if (![1, 2, 3, 4].includes(raw.backupVersion)) {
     throw new Error("対応していないバックアップ形式です。");
   }
   const data = raw.data || {};
@@ -129,6 +133,8 @@ function normalizeAndValidateBackup(raw) {
       stocktakingSubmissions: Array.isArray(data.stocktakingSubmissions) ? data.stocktakingSubmissions : [],
       aggregationReflections: Array.isArray(data.aggregationReflections) ? data.aggregationReflections : [],
       salesPlans: Array.isArray(data.salesPlans) ? data.salesPlans : [],
+      salesActuals: Array.isArray(data.salesActuals) ? data.salesActuals : [],
+      salesImportBatches: Array.isArray(data.salesImportBatches) ? data.salesImportBatches : [],
       appSettings: data.appSettings && typeof data.appSettings === "object" ? data.appSettings : {},
       restoreLogs: Array.isArray(data.restoreLogs) ? data.restoreLogs : []
     }
@@ -143,6 +149,8 @@ function normalizeAndValidateBackup(raw) {
   validateUniqueKeyRecords(normalized.data.stocktakingSubmissions, "submissionId", "集約提出データ");
   validateUniqueKeyRecords(normalized.data.aggregationReflections, "reflectionId", "集約反映履歴");
   validateUniqueKeyRecords(normalized.data.salesPlans, "id", "販売予定");
+  validateUniqueKeyRecords(normalized.data.salesActuals, "id", "販売実績");
+  validateUniqueKeyRecords(normalized.data.salesImportBatches, "batchId", "販売実績CSV取込履歴");
   normalized.counts = {
     products: normalized.data.products.length,
     stockMovements: normalized.data.stockMovements.length,
@@ -150,6 +158,8 @@ function normalizeAndValidateBackup(raw) {
     stocktakingSubmissions: normalized.data.stocktakingSubmissions.length,
     aggregationReflections: normalized.data.aggregationReflections.length,
     salesPlans: normalized.data.salesPlans.length,
+    salesActuals: normalized.data.salesActuals.length,
+    salesImportBatches: normalized.data.salesImportBatches.length,
     restoreLogs: normalized.data.restoreLogs.length
   };
   return normalized;
@@ -188,6 +198,8 @@ async function replaceAllDataFromBackupV31(backup, fileName) {
     STOCKTAKING_SUBMISSION_STORE_NAME,
     STOCKTAKING_AGGREGATION_REFLECTION_STORE_NAME,
     SALES_PLAN_STORE_NAME,
+    SALES_ACTUAL_STORE_NAME,
+    SALES_IMPORT_BATCH_STORE_NAME,
     RESTORE_LOG_STORE_NAME
   ];
 
@@ -202,6 +214,8 @@ async function replaceAllDataFromBackupV31(backup, fileName) {
       d.stocktakingSubmissions.forEach(function (r) { tx.objectStore(STOCKTAKING_SUBMISSION_STORE_NAME).put(r); });
       d.aggregationReflections.forEach(function (r) { tx.objectStore(STOCKTAKING_AGGREGATION_REFLECTION_STORE_NAME).put(r); });
       d.salesPlans.forEach(function (r) { tx.objectStore(SALES_PLAN_STORE_NAME).put(r); });
+      d.salesActuals.forEach(function (r) { tx.objectStore(SALES_ACTUAL_STORE_NAME).put(r); });
+      d.salesImportBatches.forEach(function (r) { tx.objectStore(SALES_IMPORT_BATCH_STORE_NAME).put(r); });
       d.restoreLogs.forEach(function (r) { tx.objectStore(RESTORE_LOG_STORE_NAME).put(r); });
       tx.objectStore(RESTORE_LOG_STORE_NAME).put({
         id: `restore-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

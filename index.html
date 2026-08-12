@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v34
+          画面版 v35
         </span>
       </div>
 
@@ -291,10 +291,32 @@
               <input id="sales-plan-customer" type="text" required placeholder="例：テスト商事">
             </div>
 
-            <div>
-              <label for="sales-plan-shipping-month">出荷時期（必須）</label>
-              <input id="sales-plan-shipping-month" type="month" required>
+            <div class="sales-plan-full">
+              <label for="sales-plan-shipping-type">出荷日の指定方法（必須）</label>
+              <select id="sales-plan-shipping-type" required>
+                <option value="date">何月何日に出荷</option>
+                <option value="period">何月何日から何月何日まで</option>
+              </select>
             </div>
+
+            <div id="sales-plan-shipping-date-area">
+              <label for="sales-plan-shipping-date">出荷日（必須）</label>
+              <input id="sales-plan-shipping-date" type="date">
+            </div>
+
+            <div id="sales-plan-shipping-period-start-area" hidden>
+              <label for="sales-plan-shipping-start-date">出荷期間の開始日（必須）</label>
+              <input id="sales-plan-shipping-start-date" type="date">
+            </div>
+
+            <div id="sales-plan-shipping-period-end-area" hidden>
+              <label for="sales-plan-shipping-end-date">出荷期間の終了日（必須）</label>
+              <input id="sales-plan-shipping-end-date" type="date">
+            </div>
+
+            <p id="sales-plan-shipping-note" class="sales-plan-full sales-plan-shipping-note">
+              「何月何日に出荷」または「何月何日から何月何日まで」を選んで登録します。
+            </p>
 
             <div class="sales-plan-full">
               <label for="sales-plan-internal-code">社内コード（必須）</label>
@@ -1499,7 +1521,7 @@
 <script src="csv-import.js?v=31"></script>
 <script src="csv-update.js?v=31"></script>
 <script src="pwa.js?v=31"></script>
-<script src="sales-plan.js?v=34"></script>
+<script src="sales-plan.js?v=35"></script>
 <script src="backup.js?v=34"></script>
 <script src="restore.js?v=34"></script>
 <script src="location-management.js?v=32"></script>

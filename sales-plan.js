@@ -16,6 +16,7 @@ async function initializeSalesPlanFeature() {
   const cancelEditButton = document.querySelector("#cancel-sales-plan-edit-button");
   const searchInput = document.querySelector("#sales-plan-search");
   const monthFilter = document.querySelector("#sales-plan-month-filter");
+  const shippingType = document.querySelector("#sales-plan-shipping-type");
   const prevButton = document.querySelector("#sales-plan-prev-page");
   const nextButton = document.querySelector("#sales-plan-next-page");
 
@@ -27,6 +28,7 @@ async function initializeSalesPlanFeature() {
   lookupButton.addEventListener("click", loadSalesPlanProduct);
   form.addEventListener("submit", saveSalesPlanFromForm);
   cancelEditButton.addEventListener("click", resetSalesPlanForm);
+  shippingType.addEventListener("change", updateSalesPlanShippingFields);
   searchInput.addEventListener("input", function () {
     salesPlanCurrentPage = 1;
     renderSalesPlanTable();
@@ -50,6 +52,8 @@ async function initializeSalesPlanFeature() {
       scrollSalesPlanTableIntoView();
     }
   });
+
+  updateSalesPlanShippingFields();
 }
 
 async function openSalesPlanScreen() {
@@ -137,11 +141,82 @@ function findSalesPlanProduct(internalCode) {
   }) || null;
 }
 
+function updateSalesPlanShippingFields() {
+  const typeSelect = document.querySelector("#sales-plan-shipping-type");
+  const dateArea = document.querySelector("#sales-plan-shipping-date-area");
+  const startArea = document.querySelector("#sales-plan-shipping-period-start-area");
+  const endArea = document.querySelector("#sales-plan-shipping-period-end-area");
+  const dateInput = document.querySelector("#sales-plan-shipping-date");
+  const startInput = document.querySelector("#sales-plan-shipping-start-date");
+  const endInput = document.querySelector("#sales-plan-shipping-end-date");
+
+  if (!typeSelect || !dateArea || !startArea || !endArea) return;
+
+  const isPeriod = typeSelect.value === "period";
+  dateArea.hidden = isPeriod;
+  startArea.hidden = !isPeriod;
+  endArea.hidden = !isPeriod;
+
+  dateInput.required = !isPeriod;
+  startInput.required = isPeriod;
+  endInput.required = isPeriod;
+}
+
+function readSalesPlanShippingFromForm() {
+  const shippingType = document.querySelector("#sales-plan-shipping-type").value;
+  const shippingDate = document.querySelector("#sales-plan-shipping-date").value;
+  const shippingStartDate = document.querySelector("#sales-plan-shipping-start-date").value;
+  const shippingEndDate = document.querySelector("#sales-plan-shipping-end-date").value;
+
+  if (shippingType === "date") {
+    if (!isIsoDate(shippingDate)) {
+      alert("出荷日を選択してください。");
+      document.querySelector("#sales-plan-shipping-date").focus();
+      return null;
+    }
+    return {
+      shippingType: "date",
+      shippingDate: shippingDate,
+      shippingStartDate: "",
+      shippingEndDate: "",
+      shippingMonth: shippingDate.slice(0, 7)
+    };
+  }
+
+  if (shippingType === "period") {
+    if (!isIsoDate(shippingStartDate)) {
+      alert("出荷期間の開始日を選択してください。");
+      document.querySelector("#sales-plan-shipping-start-date").focus();
+      return null;
+    }
+    if (!isIsoDate(shippingEndDate)) {
+      alert("出荷期間の終了日を選択してください。");
+      document.querySelector("#sales-plan-shipping-end-date").focus();
+      return null;
+    }
+    if (shippingEndDate < shippingStartDate) {
+      alert("出荷期間の終了日は、開始日以降の日付を選択してください。");
+      document.querySelector("#sales-plan-shipping-end-date").focus();
+      return null;
+    }
+    return {
+      shippingType: "period",
+      shippingDate: "",
+      shippingStartDate: shippingStartDate,
+      shippingEndDate: shippingEndDate,
+      shippingMonth: shippingStartDate.slice(0, 7)
+    };
+  }
+
+  alert("出荷日の指定方法を選択してください。");
+  document.querySelector("#sales-plan-shipping-type").focus();
+  return null;
+}
+
 async function saveSalesPlanFromForm(event) {
   event.preventDefault();
 
   const customerName = document.querySelector("#sales-plan-customer").value.trim();
-  const shippingMonth = document.querySelector("#sales-plan-shipping-month").value;
   const internalCode = document.querySelector("#sales-plan-internal-code").value.trim();
   const quantity = Number(document.querySelector("#sales-plan-quantity").value);
   const product = findSalesPlanProduct(internalCode);
@@ -151,11 +226,10 @@ async function saveSalesPlanFromForm(event) {
     document.querySelector("#sales-plan-customer").focus();
     return;
   }
-  if (!/^\d{4}-\d{2}$/.test(shippingMonth)) {
-    alert("出荷時期を選択してください。");
-    document.querySelector("#sales-plan-shipping-month").focus();
-    return;
-  }
+
+  const shipping = readSalesPlanShippingFromForm();
+  if (!shipping) return;
+
   if (!product) {
     alert("登録済みの商品を社内コードから選んでください。");
     document.querySelector("#sales-plan-internal-code").focus();
@@ -175,7 +249,11 @@ async function saveSalesPlanFromForm(event) {
   const record = {
     id: salesPlanEditingId || createSalesPlanId(),
     customerName: customerName,
-    shippingMonth: shippingMonth,
+    shippingType: shipping.shippingType,
+    shippingDate: shipping.shippingDate,
+    shippingStartDate: shipping.shippingStartDate,
+    shippingEndDate: shipping.shippingEndDate,
+    shippingMonth: shipping.shippingMonth,
     internalCode: product.internalCode,
     productCode: product.productCode || "",
     productName: product.productName || "",
@@ -209,11 +287,36 @@ function editSalesPlan(id) {
 
   salesPlanEditingId = id;
   document.querySelector("#sales-plan-customer").value = record.customerName || "";
-  document.querySelector("#sales-plan-shipping-month").value = record.shippingMonth || "";
   document.querySelector("#sales-plan-internal-code").value = record.internalCode || "";
   document.querySelector("#sales-plan-product-code").value = record.productCode || "";
   document.querySelector("#sales-plan-product-name").value = record.productName || "";
   document.querySelector("#sales-plan-quantity").value = record.quantity || 1;
+
+  const type = getSalesPlanShippingType(record);
+  const typeSelect = document.querySelector("#sales-plan-shipping-type");
+  const dateInput = document.querySelector("#sales-plan-shipping-date");
+  const startInput = document.querySelector("#sales-plan-shipping-start-date");
+  const endInput = document.querySelector("#sales-plan-shipping-end-date");
+  dateInput.value = "";
+  startInput.value = "";
+  endInput.value = "";
+
+  if (type === "period") {
+    typeSelect.value = "period";
+    startInput.value = record.shippingStartDate || "";
+    endInput.value = record.shippingEndDate || "";
+  } else if (type === "date") {
+    typeSelect.value = "date";
+    dateInput.value = record.shippingDate || "";
+  } else {
+    typeSelect.value = "date";
+    alert(
+      "この予定はv34で登録した『月指定』のデータです。\n" +
+      `${formatSalesPlanMonth(record.shippingMonth)} の正しい出荷日、または出荷期間を選び直して保存してください。`
+    );
+  }
+
+  updateSalesPlanShippingFields();
   document.querySelector("#save-sales-plan-button").textContent = "変更を保存する";
   document.querySelector("#cancel-sales-plan-edit-button").hidden = false;
   document.querySelector("#sales-plan-form-area").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -224,7 +327,7 @@ async function removeSalesPlan(id) {
   if (!record) return;
 
   const confirmed = window.confirm(
-    `${record.productName}\n${formatSalesPlanMonth(record.shippingMonth)} / ${record.quantity}個\n\nこの販売予定を削除しますか？`
+    `${record.productName}\n${formatSalesPlanShipping(record)} / ${record.quantity}個\n\nこの販売予定を削除しますか？`
   );
   if (!confirmed) return;
 
@@ -242,6 +345,8 @@ function resetSalesPlanForm() {
   salesPlanEditingId = "";
   const form = document.querySelector("#sales-plan-form");
   form.reset();
+  document.querySelector("#sales-plan-shipping-type").value = "date";
+  updateSalesPlanShippingFields();
   clearSalesPlanProductFields();
   document.querySelector("#save-sales-plan-button").textContent = "販売予定を登録する";
   document.querySelector("#cancel-sales-plan-edit-button").hidden = true;
@@ -257,7 +362,7 @@ function getFilteredSalesPlans() {
   const month = document.querySelector("#sales-plan-month-filter").value;
 
   return salesPlanRecords.filter(function (record) {
-    const matchesMonth = !month || record.shippingMonth === month;
+    const matchesMonth = !month || salesPlanMatchesMonth(record, month);
     if (!matchesMonth) return false;
     if (!keyword) return true;
 
@@ -287,7 +392,7 @@ function renderSalesPlanTable() {
   pageItems.forEach(function (record) {
     const row = document.createElement("tr");
     row.innerHTML = `
-      <td>${escapeSalesPlanHtml(formatSalesPlanMonth(record.shippingMonth))}</td>
+      <td>${escapeSalesPlanHtml(formatSalesPlanShipping(record))}</td>
       <td>${escapeSalesPlanHtml(record.customerName)}</td>
       <td>${escapeSalesPlanHtml(record.internalCode)}</td>
       <td>${escapeSalesPlanHtml(record.productCode || "未登録")}</td>
@@ -335,17 +440,113 @@ function getSalesPlanTotalPages() {
 }
 
 function compareSalesPlans(a, b) {
-  const monthCompare = String(a.shippingMonth || "").localeCompare(String(b.shippingMonth || ""));
-  if (monthCompare !== 0) return monthCompare;
+  const dateCompare = getSalesPlanSortDate(a).localeCompare(getSalesPlanSortDate(b));
+  if (dateCompare !== 0) return dateCompare;
   const customerCompare = String(a.customerName || "").localeCompare(String(b.customerName || ""), "ja");
   if (customerCompare !== 0) return customerCompare;
   return String(a.internalCode || "").localeCompare(String(b.internalCode || ""), "ja", { numeric: true });
+}
+
+function getSalesPlanShippingType(record) {
+  if (record && record.shippingType === "date" && isIsoDate(record.shippingDate)) return "date";
+  if (
+    record &&
+    record.shippingType === "period" &&
+    isIsoDate(record.shippingStartDate) &&
+    isIsoDate(record.shippingEndDate)
+  ) return "period";
+  if (record && isIsoDate(record.shippingDate)) return "date";
+  if (record && isIsoDate(record.shippingStartDate) && isIsoDate(record.shippingEndDate)) return "period";
+  if (record && /^\d{4}-\d{2}$/.test(String(record.shippingMonth || ""))) return "month";
+  return "unknown";
+}
+
+function getSalesPlanSortDate(record) {
+  const type = getSalesPlanShippingType(record);
+  if (type === "date") return record.shippingDate;
+  if (type === "period") return record.shippingStartDate;
+  if (type === "month") return `${record.shippingMonth}-01`;
+  return "9999-12-31";
+}
+
+function formatSalesPlanShipping(record) {
+  const type = getSalesPlanShippingType(record);
+  if (type === "date") return formatSalesPlanDate(record.shippingDate);
+  if (type === "period") {
+    return `${formatSalesPlanDate(record.shippingStartDate)} ～ ${formatSalesPlanDate(record.shippingEndDate)}`;
+  }
+  if (type === "month") return `${formatSalesPlanMonth(record.shippingMonth)}（旧形式）`;
+  return "未設定";
+}
+
+function formatSalesPlanDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+  if (!match) return value || "未設定";
+  return `${match[1]}/${match[2]}/${match[3]}`;
 }
 
 function formatSalesPlanMonth(value) {
   const match = /^(\d{4})-(\d{2})$/.exec(String(value || ""));
   if (!match) return value || "未設定";
   return `${match[1]}年${Number(match[2])}月`;
+}
+
+function salesPlanMatchesMonth(record, month) {
+  if (!/^\d{4}-\d{2}$/.test(String(month || ""))) return true;
+  const type = getSalesPlanShippingType(record);
+  if (type === "date") return record.shippingDate.slice(0, 7) === month;
+  if (type === "month") return record.shippingMonth === month;
+  if (type === "period") {
+    const monthStart = `${month}-01`;
+    const monthEnd = getLastDateOfMonth(month);
+    return record.shippingStartDate <= monthEnd && record.shippingEndDate >= monthStart;
+  }
+  return false;
+}
+
+function getLastDateOfMonth(month) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(month || ""));
+  if (!match) return "";
+  const year = Number(match[1]);
+  const monthNumber = Number(match[2]);
+  const lastDay = new Date(year, monthNumber, 0).getDate();
+  return `${match[1]}-${match[2]}-${String(lastDay).padStart(2, "0")}`;
+}
+
+function salesPlanOverlapsDateRange(record, startDate, endDate) {
+  if (!isIsoDate(startDate) || !isIsoDate(endDate) || endDate < startDate) return false;
+  const type = getSalesPlanShippingType(record);
+  if (type === "date") return record.shippingDate >= startDate && record.shippingDate <= endDate;
+  if (type === "period") {
+    return record.shippingStartDate <= endDate && record.shippingEndDate >= startDate;
+  }
+  if (type === "month") {
+    const monthStart = `${record.shippingMonth}-01`;
+    const monthEnd = getLastDateOfMonth(record.shippingMonth);
+    return monthStart <= endDate && monthEnd >= startDate;
+  }
+  return false;
+}
+
+function getSalesPlansInDateRange(startDate, endDate) {
+  return salesPlanRecords.filter(function (record) {
+    return salesPlanOverlapsDateRange(record, startDate, endDate);
+  });
+}
+
+function getUpcomingSalesPlanQuantityByInternalCode(internalCode, startDate, endDate) {
+  const target = String(internalCode || "").trim();
+  return getSalesPlansInDateRange(startDate, endDate)
+    .filter(function (record) { return String(record.internalCode || "").trim() === target; })
+    .reduce(function (sum, record) { return sum + Number(record.quantity || 0); }, 0);
+}
+
+function isIsoDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return false;
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  return date.getFullYear() === year && date.getMonth() + 1 === month && date.getDate() === day;
 }
 
 function createSalesPlanId() {
@@ -357,7 +558,7 @@ function escapeSalesPlanHtml(value) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
+    .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
 
@@ -376,6 +577,7 @@ function createSalesPlanStyle() {
     .sales-plan-form-grid .sales-plan-full { grid-column: 1 / -1; }
     .sales-plan-product-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
     .sales-plan-readonly { background: #eef3f6; }
+    .sales-plan-shipping-note { margin: -4px 0 0; padding: 10px 12px; border-radius: 8px; background: #e3f2fd; color: #164e63; }
     .sales-plan-form-actions, .sales-plan-filter-row, .sales-plan-pager { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .sales-plan-filter-row > * { flex: 1 1 230px; }
     .sales-plan-table-wrap { overflow-x: auto; margin-top: 12px; }
@@ -401,5 +603,7 @@ function createSalesPlanStyle() {
 
 window.salesPlanFeature = {
   getAllSalesPlans: function () { return salesPlanRecords.slice(); },
+  getPlansInDateRange: getSalesPlansInDateRange,
+  getUpcomingQuantityByInternalCode: getUpcomingSalesPlanQuantityByInternalCode,
   refresh: refreshSalesPlanData
 };

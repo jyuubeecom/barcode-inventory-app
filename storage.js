@@ -3,7 +3,7 @@
 const DATABASE_NAME =
   "barcodeInventoryDatabase";
 
-const DATABASE_VERSION = 9;
+const DATABASE_VERSION = 10;
 
 const PRODUCT_STORE_NAME =
   "products";
@@ -31,6 +31,9 @@ const SALES_ACTUAL_STORE_NAME =
 
 const SALES_IMPORT_BATCH_STORE_NAME =
   "salesImportBatches";
+
+const SHIPPING_WISH_STORE_NAME =
+  "shippingWishes";
 
 function openDatabase() {
   return new Promise(function (
@@ -355,6 +358,36 @@ function openDatabase() {
           salesImportBatchStore.createIndex(
             "reportStartDate",
             "reportStartDate",
+            { unique: false }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            SHIPPING_WISH_STORE_NAME
+          )
+        ) {
+          const shippingWishStore =
+            database.createObjectStore(
+              SHIPPING_WISH_STORE_NAME,
+              { keyPath: "id" }
+            );
+
+          shippingWishStore.createIndex(
+            "internalCode",
+            "internalCode",
+            { unique: false }
+          );
+
+          shippingWishStore.createIndex(
+            "desiredMonth",
+            "desiredMonth",
+            { unique: false }
+          );
+
+          shippingWishStore.createIndex(
+            "status",
+            "status",
             { unique: false }
           );
         }
@@ -1651,3 +1684,85 @@ async function deleteSalesActualImportBatch(batchId) {
   });
 }
 
+
+
+async function saveShippingWish(record) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      SHIPPING_WISH_STORE_NAME,
+      "readwrite"
+    );
+    transaction.objectStore(
+      SHIPPING_WISH_STORE_NAME
+    ).add(record);
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function updateShippingWish(record) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      SHIPPING_WISH_STORE_NAME,
+      "readwrite"
+    );
+    transaction.objectStore(
+      SHIPPING_WISH_STORE_NAME
+    ).put(record);
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function deleteShippingWish(id) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      SHIPPING_WISH_STORE_NAME,
+      "readwrite"
+    );
+    transaction.objectStore(
+      SHIPPING_WISH_STORE_NAME
+    ).delete(id);
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function getAllShippingWishes() {
+  return getAllRecordsFromStore(
+    SHIPPING_WISH_STORE_NAME
+  );
+}

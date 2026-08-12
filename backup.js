@@ -33,7 +33,7 @@ function createBackupStyle() {
 async function exportFullBackup() {
   const button = document.querySelector("#export-full-backup-button");
   const confirmed = window.confirm(
-    "商品・在庫・入出庫履歴・棚卸履歴・集約データ・販売予定・販売実績を保存します。\n\n" +
+    "商品・在庫・入出庫履歴・棚卸履歴・集約データ・販売予定・販売実績・船積希望を保存します。\n\n" +
     "バックアップには会社の在庫情報が含まれます。\n" +
     "第三者が見られる場所には保存しないでください。\n\n" +
     "バックアップを作成しますか？"
@@ -44,7 +44,7 @@ async function exportFullBackup() {
   button.textContent = "バックアップを作成しています...";
 
   try {
-    const [productsData, movements, stocktakings, submissions, reflections, salesPlans, salesActuals, salesImportBatches, restoreLogs] =
+    const [productsData, movements, stocktakings, submissions, reflections, salesPlans, salesActuals, salesImportBatches, shippingWishes, restoreLogs] =
       await Promise.all([
         getAllProducts(),
         getAllStockMovements(),
@@ -54,6 +54,7 @@ async function exportFullBackup() {
         getAllSalesPlans(),
         getAllSalesActuals(),
         getAllSalesImportBatches(),
+        getAllShippingWishes(),
         getAllRestoreLogs()
       ]);
 
@@ -61,8 +62,8 @@ async function exportFullBackup() {
     const appSettings = collectAppSettingsForBackup();
     const backupData = {
       backupType: "barcode-inventory-app",
-      backupVersion: 4,
-      appVersion: "v38",
+      backupVersion: 5,
+      appVersion: "v41",
       appName: "バーコード在庫・棚卸管理",
       exportedAt: exportedAt.toISOString(),
       counts: {
@@ -74,6 +75,7 @@ async function exportFullBackup() {
         salesPlans: salesPlans.length,
         salesActuals: salesActuals.length,
         salesImportBatches: salesImportBatches.length,
+        shippingWishes: shippingWishes.length,
         restoreLogs: restoreLogs.length
       },
       data: {
@@ -85,6 +87,7 @@ async function exportFullBackup() {
         salesPlans: salesPlans,
         salesActuals: salesActuals,
         salesImportBatches: salesImportBatches,
+        shippingWishes: shippingWishes,
         appSettings: appSettings,
         restoreLogs: restoreLogs
       }
@@ -102,7 +105,8 @@ async function exportFullBackup() {
       `集約反映履歴：${reflections.length}件\n` +
       `販売予定：${salesPlans.length}件\n` +
       `販売実績：${salesActuals.length}件\n` +
-      `販売実績CSV取込履歴：${salesImportBatches.length}件\n\n` +
+      `販売実績CSV取込履歴：${salesImportBatches.length}件\n` +
+      `船積希望：${shippingWishes.length}件\n\n` +
       `ファイル名：${fileName}`
     );
   } catch (error) {

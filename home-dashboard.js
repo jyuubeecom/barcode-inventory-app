@@ -21,7 +21,9 @@ const HOME_DASHBOARD_GROUPS = Object.freeze({
     "show-sales-plan-button",
     "show-sales-plan-list-button",
     "show-sales-actual-import-button",
-    "show-purchase-required-button"
+    "show-purchase-required-button",
+    "show-shipping-wish-button",
+    "show-shipping-wish-list-button"
   ],
   "home-stocktaking-buttons": [
     "show-stocktaking-history-button",
@@ -48,6 +50,8 @@ const HOME_DASHBOARD_ACTION_CLASSES = Object.freeze({
   "show-sales-plan-list-button": "home-action-sales-list",
   "show-sales-actual-import-button": "home-action-sales-import",
   "show-purchase-required-button": "home-action-purchase-required",
+  "show-shipping-wish-button": "home-action-shipping-wish",
+  "show-shipping-wish-list-button": "home-action-shipping-wish-list",
   "show-stocktaking-history-button": "home-action-stocktaking-history",
   "show-stocktaking-aggregation-button": "home-action-aggregation",
   "export-products-csv-button": "home-action-export",
@@ -606,6 +610,14 @@ function createHomeDashboardStyle() {
 
     #home .home-action-purchase-required {
       background-color: #ef6c00 !important;
+    }
+
+    #home .home-action-shipping-wish {
+      background-color: #5e35b1 !important;
+    }
+
+    #home .home-action-shipping-wish-list {
+      background-color: #3949ab !important;
     }
 
     @media (max-width: 900px) {

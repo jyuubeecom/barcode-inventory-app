@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v36
+          画面版 v37
         </span>
       </div>
 
@@ -223,7 +223,14 @@
               id="show-sales-plan-button"
               type="button"
             >
-              販売予定表
+              販売予定を登録する
+            </button>
+
+            <button
+              id="show-sales-plan-list-button"
+              type="button"
+            >
+              販売予定一覧を見る
             </button>
           </div>
         </details>
@@ -280,6 +287,11 @@
         今後の販売・出荷予定を登録します。
         商品は社内コードから登録済み商品を呼び出します。
       </p>
+
+      <div class="sales-plan-screen-shortcuts" aria-label="販売予定表の画面移動">
+        <button id="jump-sales-plan-form-button" type="button">販売予定を登録する</button>
+        <button id="jump-sales-plan-list-button" type="button">販売予定一覧を見る</button>
+      </div>
 
       <div id="sales-plan-form-area" class="sales-plan-card">
         <h3>販売予定を登録する</h3>
@@ -1521,10 +1533,10 @@
 <script src="csv-import.js?v=31"></script>
 <script src="csv-update.js?v=31"></script>
 <script src="pwa.js?v=31"></script>
-<script src="sales-plan.js?v=36"></script>
+<script src="sales-plan.js?v=37"></script>
 <script src="backup.js?v=34"></script>
 <script src="restore.js?v=34"></script>
 <script src="location-management.js?v=32"></script>
-<script src="home-dashboard.js?v=34"></script>
+<script src="home-dashboard.js?v=37"></script>
 </body>
 </html>

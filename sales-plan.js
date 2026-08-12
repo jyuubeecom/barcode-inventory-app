@@ -10,6 +10,9 @@ window.addEventListener("DOMContentLoaded", initializeSalesPlanFeature);
 
 async function initializeSalesPlanFeature() {
   const showButton = document.querySelector("#show-sales-plan-button");
+  const showListButton = document.querySelector("#show-sales-plan-list-button");
+  const jumpFormButton = document.querySelector("#jump-sales-plan-form-button");
+  const jumpListButton = document.querySelector("#jump-sales-plan-list-button");
   const backButton = document.querySelector("#back-home-from-sales-plan");
   const form = document.querySelector("#sales-plan-form");
   const lookupButton = document.querySelector("#sales-plan-product-lookup-button");
@@ -24,6 +27,9 @@ async function initializeSalesPlanFeature() {
 
   createSalesPlanStyle();
   showButton.addEventListener("click", openSalesPlanScreen);
+  if (showListButton) showListButton.addEventListener("click", openSalesPlanListScreen);
+  if (jumpFormButton) jumpFormButton.addEventListener("click", scrollSalesPlanFormIntoView);
+  if (jumpListButton) jumpListButton.addEventListener("click", scrollSalesPlanTableIntoView);
   backButton.addEventListener("click", closeSalesPlanScreen);
   lookupButton.addEventListener("click", loadSalesPlanProduct);
   form.addEventListener("submit", saveSalesPlanFromForm);
@@ -57,18 +63,35 @@ async function initializeSalesPlanFeature() {
 }
 
 async function openSalesPlanScreen() {
+  await showSalesPlanScreen();
+  scrollSalesPlanFormIntoView();
+}
+
+async function openSalesPlanListScreen() {
+  await showSalesPlanScreen();
+  scrollSalesPlanTableIntoView();
+}
+
+async function showSalesPlanScreen() {
   document.querySelectorAll("main > section").forEach(function (section) {
     section.hidden = true;
   });
+
   const screen = document.querySelector("#sales-plan");
   screen.hidden = false;
-  screen.scrollIntoView({ behavior: "smooth", block: "start" });
 
   try {
     await refreshSalesPlanData();
   } catch (error) {
     console.error("販売予定表読込エラー", error);
     alert("販売予定表を読み込めませんでした。");
+  }
+}
+
+function scrollSalesPlanFormIntoView() {
+  const formArea = document.querySelector("#sales-plan-form-area");
+  if (formArea) {
+    formArea.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 }
 
@@ -583,7 +606,10 @@ function escapeSalesPlanHtml(value) {
 }
 
 function scrollSalesPlanTableIntoView() {
-  document.querySelector("#sales-plan-list-area").scrollIntoView({ behavior: "smooth", block: "start" });
+  const listArea = document.querySelector("#sales-plan-list-area");
+  if (listArea) {
+    listArea.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 function createSalesPlanStyle() {
@@ -601,6 +627,9 @@ function createSalesPlanStyle() {
     #sales-plan-shipping-date-area[hidden],
     #sales-plan-shipping-period-start-area[hidden],
     #sales-plan-shipping-period-end-area[hidden] { display: none !important; }
+    .sales-plan-screen-shortcuts { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; }
+    .sales-plan-screen-shortcuts button { flex: 1 1 220px; margin: 0; }
+    #jump-sales-plan-list-button { background: #00695c; }
     .sales-plan-form-actions, .sales-plan-filter-row, .sales-plan-pager { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .sales-plan-filter-row > * { flex: 1 1 230px; }
     .sales-plan-table-wrap { overflow-x: auto; margin-top: 12px; }
@@ -614,6 +643,7 @@ function createSalesPlanStyle() {
     .sales-plan-summary-box { background: #e8f5e9; border-radius: 10px; padding: 12px 14px; font-weight: 700; margin-top: 12px; }
     .sales-plan-pager { justify-content: center; margin-top: 14px; }
     #show-sales-plan-button { background: #00897b; }
+    #show-sales-plan-list-button { background: #00695c; }
     @media (max-width: 720px) {
       .sales-plan-form-grid { grid-template-columns: 1fr; }
       .sales-plan-form-grid .sales-plan-full { grid-column: auto; }

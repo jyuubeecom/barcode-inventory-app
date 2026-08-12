@@ -18,7 +18,8 @@ const HOME_DASHBOARD_GROUPS = Object.freeze({
     "export-movements-csv-button"
   ],
   "home-sales-buttons": [
-    "show-sales-plan-button"
+    "show-sales-plan-button",
+    "show-sales-plan-list-button"
   ],
   "home-stocktaking-buttons": [
     "show-stocktaking-history-button",
@@ -42,6 +43,7 @@ const HOME_DASHBOARD_ACTION_CLASSES = Object.freeze({
   "show-unassigned-location-button": "home-action-location",
   "show-history-button": "home-action-history",
   "show-sales-plan-button": "home-action-sales",
+  "show-sales-plan-list-button": "home-action-sales-list",
   "show-stocktaking-history-button": "home-action-stocktaking-history",
   "show-stocktaking-aggregation-button": "home-action-aggregation",
   "export-products-csv-button": "home-action-export",
@@ -588,6 +590,10 @@ function createHomeDashboardStyle() {
       #home .home-action-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+    }
+
+    #home .home-action-sales-list {
+      background-color: #00695c;
     }
 
     @media (max-width: 900px) {

@@ -3,7 +3,7 @@
 const DATABASE_NAME =
   "barcodeInventoryDatabase";
 
-const DATABASE_VERSION = 11;
+const DATABASE_VERSION = 12;
 
 const PRODUCT_STORE_NAME =
   "products";
@@ -40,6 +40,9 @@ const SHIPPING_SCHEDULE_STORE_NAME =
 
 const SHIPPING_ALLOCATION_STORE_NAME =
   "shippingAllocations";
+
+const SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME =
+  "shippingWarehouseAllocations";
 
 function openDatabase() {
   return new Promise(function (
@@ -448,6 +451,36 @@ function openDatabase() {
           shippingAllocationStore.createIndex(
             "internalCode",
             "internalCode",
+            { unique: false }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME
+          )
+        ) {
+          const shippingWarehouseAllocationStore =
+            database.createObjectStore(
+              SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME,
+              { keyPath: "id" }
+            );
+
+          shippingWarehouseAllocationStore.createIndex(
+            "scheduleId",
+            "scheduleId",
+            { unique: false }
+          );
+
+          shippingWarehouseAllocationStore.createIndex(
+            "internalCode",
+            "internalCode",
+            { unique: false }
+          );
+
+          shippingWarehouseAllocationStore.createIndex(
+            "destination",
+            "destination",
             { unique: false }
           );
         }
@@ -1891,20 +1924,66 @@ async function deleteShippingAllocation(id) {
   });
 }
 
+async function getAllShippingWarehouseAllocations() {
+  return getAllRecordsFromStore(SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME);
+}
+
+async function saveShippingWarehouseAllocation(record) {
+  const database = await openDatabase();
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME,
+      "readwrite"
+    );
+    transaction.objectStore(SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME).put(record);
+    transaction.oncomplete = function () { database.close(); resolve(); };
+    transaction.onerror = function () { const error = transaction.error; database.close(); reject(error); };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function deleteShippingWarehouseAllocation(id) {
+  const database = await openDatabase();
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME,
+      "readwrite"
+    );
+    transaction.objectStore(SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME).delete(id);
+    transaction.oncomplete = function () { database.close(); resolve(); };
+    transaction.onerror = function () { const error = transaction.error; database.close(); reject(error); };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
 async function deleteShippingScheduleWithAllocations(scheduleId) {
   const database = await openDatabase();
   return new Promise(function (resolve, reject) {
     const transaction = database.transaction(
-      [SHIPPING_SCHEDULE_STORE_NAME, SHIPPING_ALLOCATION_STORE_NAME],
+      [
+        SHIPPING_SCHEDULE_STORE_NAME,
+        SHIPPING_ALLOCATION_STORE_NAME,
+        SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME
+      ],
       "readwrite"
     );
     const scheduleStore = transaction.objectStore(SHIPPING_SCHEDULE_STORE_NAME);
     const allocationStore = transaction.objectStore(SHIPPING_ALLOCATION_STORE_NAME);
-    const index = allocationStore.index("scheduleId");
-    const request = index.openCursor(IDBKeyRange.only(scheduleId));
+    const warehouseStore = transaction.objectStore(SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME);
+    const allocationIndex = allocationStore.index("scheduleId");
+    const warehouseIndex = warehouseStore.index("scheduleId");
+    const allocationRequest = allocationIndex.openCursor(IDBKeyRange.only(scheduleId));
+    const warehouseRequest = warehouseIndex.openCursor(IDBKeyRange.only(scheduleId));
 
-    request.onsuccess = function () {
-      const cursor = request.result;
+    allocationRequest.onsuccess = function () {
+      const cursor = allocationRequest.result;
+      if (!cursor) return;
+      cursor.delete();
+      cursor.continue();
+    };
+
+    warehouseRequest.onsuccess = function () {
+      const cursor = warehouseRequest.result;
       if (!cursor) {
         scheduleStore.delete(scheduleId);
         return;

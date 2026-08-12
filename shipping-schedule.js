@@ -2,11 +2,29 @@
 
 const SHIPPING_SCHEDULE_PAGE_SIZE = 20;
 const SHIPPING_ALLOCATION_PAGE_SIZE = 20;
+const SHIPPING_DESTINATION_LOCATIONS = [
+  "酒本倉庫1階",
+  "酒本倉庫2階",
+  "本社1階　A区",
+  "本社1階　B区",
+  "本社1階　C区",
+  "本社1階　D区",
+  "本社1階　E区",
+  "本社1階　F区",
+  "本社2階　A区",
+  "本社2階　B区",
+  "本社2階　C区",
+  "本社2階　D区",
+  "本社2階　E区",
+  "本社2階　F区"
+];
 let shippingScheduleRecords = [];
 let shippingScheduleAllocations = [];
 let shippingScheduleProducts = [];
 let shippingScheduleSalesActuals = [];
 let shippingScheduleSalesPlans = [];
+let shippingWarehouseAllocations = [];
+let shippingWarehouseEditingInternalCode = "";
 let shippingScheduleEditingId = "";
 let shippingScheduleCurrentPage = 1;
 let shippingAllocationCurrentPage = 1;
@@ -16,11 +34,13 @@ window.addEventListener("DOMContentLoaded", initializeShippingScheduleFeature);
 function initializeShippingScheduleFeature() {
   const showScheduleButton = document.querySelector("#show-shipping-schedule-button");
   const showAllocationButton = document.querySelector("#show-shipping-allocation-button");
+  const showWarehouseButton = document.querySelector("#show-shipping-warehouse-allocation-button");
   const form = document.querySelector("#shipping-schedule-form");
   const backButton = document.querySelector("#back-home-from-shipping-schedule");
   const cancelEditButton = document.querySelector("#cancel-shipping-schedule-edit-button");
   const jumpFormButton = document.querySelector("#jump-shipping-schedule-form-button");
   const jumpAllocationButton = document.querySelector("#jump-shipping-allocation-button");
+  const jumpWarehouseButton = document.querySelector("#jump-shipping-warehouse-button");
   const scheduleSelect = document.querySelector("#shipping-allocation-schedule");
   const allocationSearch = document.querySelector("#shipping-allocation-search");
   const saveVisibleButton = document.querySelector("#save-visible-shipping-allocations");
@@ -29,6 +49,13 @@ function initializeShippingScheduleFeature() {
   const nextSchedule = document.querySelector("#shipping-schedule-next-page");
   const prevAllocation = document.querySelector("#shipping-allocation-prev-page");
   const nextAllocation = document.querySelector("#shipping-allocation-next-page");
+  const warehouseScheduleSelect = document.querySelector("#shipping-warehouse-schedule");
+  const warehouseSearch = document.querySelector("#shipping-warehouse-search");
+  const warehouseSaveButton = document.querySelector("#save-shipping-warehouse-allocation");
+  const warehouseCancelButton = document.querySelector("#cancel-shipping-warehouse-allocation");
+  const warehouseFillCurrentButton = document.querySelector("#shipping-warehouse-fill-current-location");
+  const warehouseClearButton = document.querySelector("#shipping-warehouse-clear-inputs");
+  const warehousePrintButton = document.querySelector("#print-shipping-warehouse-list");
 
   if (!showScheduleButton || !form) return;
 
@@ -42,10 +69,16 @@ function initializeShippingScheduleFeature() {
       openShippingScheduleScreen("allocation");
     });
   }
+  if (showWarehouseButton) {
+    showWarehouseButton.addEventListener("click", function () {
+      openShippingScheduleScreen("warehouse");
+    });
+  }
   if (backButton) backButton.addEventListener("click", closeShippingScheduleScreen);
   if (cancelEditButton) cancelEditButton.addEventListener("click", resetShippingScheduleForm);
   if (jumpFormButton) jumpFormButton.addEventListener("click", scrollShippingScheduleFormIntoView);
   if (jumpAllocationButton) jumpAllocationButton.addEventListener("click", scrollShippingAllocationIntoView);
+  if (jumpWarehouseButton) jumpWarehouseButton.addEventListener("click", scrollShippingWarehouseIntoView);
   form.addEventListener("submit", saveShippingScheduleFromForm);
 
   if (scheduleSelect) {
@@ -62,6 +95,22 @@ function initializeShippingScheduleFeature() {
   }
   if (saveVisibleButton) saveVisibleButton.addEventListener("click", saveVisibleShippingAllocations);
   if (printButton) printButton.addEventListener("click", printShippingAllocationList);
+
+  if (warehouseScheduleSelect) {
+    warehouseScheduleSelect.addEventListener("change", function () {
+      shippingWarehouseEditingInternalCode = "";
+      hideShippingWarehouseEditor();
+      renderShippingWarehouseProductTable();
+    });
+  }
+  if (warehouseSearch) {
+    warehouseSearch.addEventListener("input", renderShippingWarehouseProductTable);
+  }
+  if (warehouseSaveButton) warehouseSaveButton.addEventListener("click", saveShippingWarehouseEditor);
+  if (warehouseCancelButton) warehouseCancelButton.addEventListener("click", hideShippingWarehouseEditor);
+  if (warehouseFillCurrentButton) warehouseFillCurrentButton.addEventListener("click", fillShippingWarehouseCurrentLocation);
+  if (warehouseClearButton) warehouseClearButton.addEventListener("click", clearShippingWarehouseInputs);
+  if (warehousePrintButton) warehousePrintButton.addEventListener("click", printShippingWarehouseList);
 
   if (prevSchedule) {
     prevSchedule.addEventListener("click", function () {
@@ -117,6 +166,7 @@ async function openShippingScheduleScreen(target) {
   }
 
   if (target === "allocation") scrollShippingAllocationIntoView();
+  else if (target === "warehouse") scrollShippingWarehouseIntoView();
   else scrollShippingScheduleFormIntoView();
 }
 
@@ -143,22 +193,31 @@ function scrollShippingAllocationIntoView() {
   if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+function scrollShippingWarehouseIntoView() {
+  const target = document.querySelector("#shipping-warehouse-area");
+  if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 async function refreshShippingScheduleData() {
   const results = await Promise.all([
     getAllShippingSchedules(),
     getAllShippingAllocations(),
     getAllProducts(),
     getAllSalesActuals(),
-    getAllSalesPlans()
+    getAllSalesPlans(),
+    getAllShippingWarehouseAllocations()
   ]);
   shippingScheduleRecords = results[0].slice().sort(compareShippingSchedules);
   shippingScheduleAllocations = results[1].slice();
   shippingScheduleProducts = results[2].slice();
   shippingScheduleSalesActuals = results[3].slice();
   shippingScheduleSalesPlans = results[4].slice();
+  shippingWarehouseAllocations = results[5].slice();
   renderShippingScheduleTable();
   populateShippingScheduleSelect();
+  populateShippingWarehouseScheduleSelect();
   renderShippingAllocationTable();
+  renderShippingWarehouseProductTable();
 }
 
 async function saveShippingScheduleFromForm(event) {
@@ -249,8 +308,9 @@ async function removeShippingSchedule(id) {
   const confirmed = window.confirm(
     `船便「${record.name}」を削除しますか？\n\n` +
     `出港日：${formatShippingDate(record.departureDate)}\n` +
-    `振分商品：${getUniqueAllocationProductCount(allocations)}件 / ${allocatedQuantity.toLocaleString("ja-JP")}個\n\n` +
-    "削除すると、この船便への商品振分けも解除されます。"
+    `振分商品：${getUniqueAllocationProductCount(allocations)}件 / ${allocatedQuantity.toLocaleString("ja-JP")}個\n` +
+    `倉庫別振分け：${getShippingWarehouseRecordsForSchedule(id).length}件\n\n` +
+    "削除すると、この船便への商品振分けと倉庫別振分けも解除されます。"
   );
   if (!confirmed) return;
 
@@ -607,6 +667,16 @@ async function saveVisibleShippingAllocations() {
       return;
     }
 
+    const warehouseAllocated = getShippingWarehouseAllocatedQuantity(schedule.id, internalCode);
+    if (quantity < warehouseAllocated) {
+      alert(
+        `${product.productName || internalCode} は倉庫へ ${warehouseAllocated.toLocaleString("ja-JP")}個 振分け済みです。\n\n` +
+        `今回の船便数量を ${quantity.toLocaleString("ja-JP")}個 に減らす前に、先に「倉庫別に振り分ける」で倉庫数量を減らしてください。`
+      );
+      input.focus();
+      return;
+    }
+
     const currentQuantity = getCurrentScheduleAllocationQuantity(schedule.id, internalCode);
     const recommendedQuantity = Number(input.dataset.recommendedQuantity || 0);
     if (quantity > recommendedQuantity && quantity !== currentQuantity) overRecommendedCount += 1;
@@ -799,7 +869,7 @@ function printShippingAllocationList() {
     <tbody>${tableRows}</tbody>
   </table>
   <div class="total">振分商品：${printRows.length.toLocaleString("ja-JP")}件　／　振分数量合計：${totalQuantity.toLocaleString("ja-JP")}個</div>
-  <div class="footer">バーコード在庫・棚卸管理アプリ v44</div>
+  <div class="footer">バーコード在庫・棚卸管理アプリ v47</div>
 </body>
 </html>`;
 
@@ -826,6 +896,453 @@ function printShippingAllocationList() {
     } finally {
       window.setTimeout(function () { iframe.remove(); }, 1500);
     }
+  }, 300);
+}
+
+
+function populateShippingWarehouseScheduleSelect() {
+  const select = document.querySelector("#shipping-warehouse-schedule");
+  if (!select) return;
+  const previous = select.value;
+  select.innerHTML = '<option value="">船便を選択してください</option>';
+
+  shippingScheduleRecords.forEach(function (record) {
+    const saved = getSavedAllocationsForSchedule(record.id);
+    const option = document.createElement("option");
+    option.value = record.id;
+    option.textContent = `${record.name}｜倉庫 ${formatShippingDate(record.warehouseArrivalDate)}｜船積 ${saved.length}商品`;
+    select.appendChild(option);
+  });
+
+  if (previous && shippingScheduleRecords.some(function (record) { return record.id === previous; })) {
+    select.value = previous;
+  }
+}
+
+function getSelectedShippingWarehouseSchedule() {
+  const scheduleId = document.querySelector("#shipping-warehouse-schedule")?.value || "";
+  return shippingScheduleRecords.find(function (record) { return record.id === scheduleId; }) || null;
+}
+
+function getShippingWarehouseRecordsForSchedule(scheduleId) {
+  return shippingWarehouseAllocations.filter(function (record) {
+    return record.scheduleId === scheduleId && Number(record.quantity) > 0;
+  });
+}
+
+function getShippingWarehouseRecordsForProduct(scheduleId, internalCode) {
+  return shippingWarehouseAllocations.filter(function (record) {
+    return record.scheduleId === scheduleId &&
+      String(record.internalCode || "").trim() === String(internalCode || "").trim() &&
+      Number(record.quantity) > 0;
+  });
+}
+
+function getShippingWarehouseAllocatedQuantity(scheduleId, internalCode) {
+  return getShippingWarehouseRecordsForProduct(scheduleId, internalCode).reduce(function (sum, record) {
+    return sum + (Number(record.quantity) || 0);
+  }, 0);
+}
+
+function renderShippingWarehouseProductTable() {
+  const body = document.querySelector("#shipping-warehouse-product-body");
+  const summary = document.querySelector("#shipping-warehouse-summary");
+  const printButton = document.querySelector("#print-shipping-warehouse-list");
+  if (!body || !summary) return;
+
+  const schedule = getSelectedShippingWarehouseSchedule();
+  body.innerHTML = "";
+
+  if (!schedule) {
+    summary.textContent = "船便を選択すると、保存済みの船積商品を表示します。";
+    if (printButton) printButton.disabled = true;
+    hideShippingWarehouseEditor();
+    return;
+  }
+
+  const search = String(document.querySelector("#shipping-warehouse-search")?.value || "").trim().toLowerCase();
+  const saved = getSavedAllocationsForSchedule(schedule.id);
+  const rows = saved
+    .map(function (allocation) {
+      const code = String(allocation.internalCode || "").trim();
+      const product = shippingScheduleProducts.find(function (item) {
+        return String(item.internalCode || "").trim() === code;
+      }) || {};
+      const shipQuantity = Number(allocation.quantity) || 0;
+      const warehouseQuantity = getShippingWarehouseAllocatedQuantity(schedule.id, code);
+      const remaining = Math.max(0, shipQuantity - warehouseQuantity);
+      return {
+        internalCode: code,
+        productCode: allocation.productCode || product.productCode || "",
+        productName: allocation.productName || product.productName || "",
+        shipQuantity: shipQuantity,
+        warehouseQuantity: warehouseQuantity,
+        remaining: remaining,
+        currentLocation: product.location || ""
+      };
+    })
+    .filter(function (row) {
+      if (!search) return true;
+      return [row.internalCode, row.productCode, row.productName]
+        .map(function (value) { return String(value || "").toLowerCase(); })
+        .some(function (value) { return value.includes(search); });
+    })
+    .sort(function (a, b) {
+      if (b.remaining !== a.remaining) return b.remaining - a.remaining;
+      return a.internalCode.localeCompare(b.internalCode, "ja", { numeric: true });
+    });
+
+  const totalShip = saved.reduce(function (sum, row) { return sum + (Number(row.quantity) || 0); }, 0);
+  const allWarehouse = getShippingWarehouseRecordsForSchedule(schedule.id).reduce(function (sum, row) {
+    return sum + (Number(row.quantity) || 0);
+  }, 0);
+  const totalRemaining = Math.max(0, totalShip - allWarehouse);
+  const completeProducts = saved.filter(function (allocation) {
+    const code = String(allocation.internalCode || "").trim();
+    return getShippingWarehouseAllocatedQuantity(schedule.id, code) === (Number(allocation.quantity) || 0);
+  }).length;
+
+  summary.textContent =
+    `${schedule.name}｜船積 ${saved.length.toLocaleString("ja-JP")}商品・${totalShip.toLocaleString("ja-JP")}個 / ` +
+    `倉庫振分済 ${allWarehouse.toLocaleString("ja-JP")}個 / ` +
+    `未振分 ${totalRemaining.toLocaleString("ja-JP")}個 / 完了 ${completeProducts.toLocaleString("ja-JP")}商品`;
+
+  if (rows.length === 0) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 8;
+    cell.textContent = saved.length === 0
+      ? "この船便には保存済みの船積商品がありません。先に「船便別に商品を振り分ける」で数量を保存してください。"
+      : "検索条件に一致する商品はありません。";
+    row.appendChild(cell);
+    body.appendChild(row);
+  } else {
+    rows.forEach(function (item) {
+      const row = document.createElement("tr");
+      appendShippingScheduleCell(row, item.internalCode);
+      appendShippingScheduleCell(row, item.productCode || "-");
+      appendShippingScheduleCell(row, item.productName || "");
+      appendShippingScheduleCell(row, `${item.shipQuantity.toLocaleString("ja-JP")}個`);
+      appendShippingScheduleCell(row, `${item.warehouseQuantity.toLocaleString("ja-JP")}個`);
+      appendShippingScheduleCell(row, `${item.remaining.toLocaleString("ja-JP")}個`);
+
+      const statusCell = document.createElement("td");
+      const status = document.createElement("strong");
+      if (item.remaining === 0 && item.shipQuantity > 0) {
+        status.textContent = "振分完了";
+        status.className = "shipping-warehouse-status-complete";
+      } else {
+        status.textContent = "未完了";
+        status.className = "shipping-warehouse-status-pending";
+      }
+      statusCell.appendChild(status);
+      row.appendChild(statusCell);
+
+      const actionCell = document.createElement("td");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = item.warehouseQuantity > 0 ? "振分けを編集" : "倉庫へ振り分ける";
+      button.addEventListener("click", function () {
+        openShippingWarehouseEditor(item.internalCode);
+      });
+      actionCell.appendChild(button);
+      row.appendChild(actionCell);
+      body.appendChild(row);
+    });
+  }
+
+  if (printButton) printButton.disabled = saved.length === 0;
+}
+
+function openShippingWarehouseEditor(internalCode) {
+  const schedule = getSelectedShippingWarehouseSchedule();
+  if (!schedule) return;
+  const saved = getSavedAllocationsForSchedule(schedule.id).find(function (allocation) {
+    return String(allocation.internalCode || "").trim() === String(internalCode || "").trim();
+  });
+  if (!saved) return;
+
+  const product = shippingScheduleProducts.find(function (item) {
+    return String(item.internalCode || "").trim() === String(internalCode || "").trim();
+  }) || {};
+  const shipQuantity = Number(saved.quantity) || 0;
+  const existing = getShippingWarehouseRecordsForProduct(schedule.id, internalCode);
+  const byDestination = new Map(existing.map(function (record) {
+    return [record.destination, Number(record.quantity) || 0];
+  }));
+
+  shippingWarehouseEditingInternalCode = String(internalCode || "").trim();
+  const editor = document.querySelector("#shipping-warehouse-editor");
+  const title = document.querySelector("#shipping-warehouse-editor-title");
+  const grid = document.querySelector("#shipping-warehouse-location-grid");
+  if (!editor || !grid) return;
+
+  if (title) {
+    title.textContent = `${saved.productName || product.productName || internalCode} を倉庫へ振り分ける`;
+  }
+  editor.dataset.shipQuantity = String(shipQuantity);
+  editor.dataset.currentLocation = String(product.location || "");
+  grid.innerHTML = "";
+
+  SHIPPING_DESTINATION_LOCATIONS.forEach(function (destination) {
+    const item = document.createElement("div");
+    item.className = "shipping-warehouse-location-item";
+    const label = document.createElement("label");
+    label.textContent = destination;
+    if (destination === product.location) {
+      const current = document.createElement("small");
+      current.textContent = "現在の保管場所";
+      label.appendChild(current);
+    }
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "0";
+    input.step = "1";
+    input.value = String(byDestination.get(destination) || 0);
+    input.className = "shipping-warehouse-location-input";
+    input.dataset.destination = destination;
+    input.addEventListener("input", updateShippingWarehouseEditorSummary);
+    item.appendChild(label);
+    item.appendChild(input);
+    grid.appendChild(item);
+  });
+
+  editor.hidden = false;
+  updateShippingWarehouseEditorSummary();
+  editor.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function hideShippingWarehouseEditor() {
+  shippingWarehouseEditingInternalCode = "";
+  const editor = document.querySelector("#shipping-warehouse-editor");
+  if (editor) editor.hidden = true;
+}
+
+function getShippingWarehouseEditorInputTotal() {
+  return Array.from(document.querySelectorAll("#shipping-warehouse-location-grid .shipping-warehouse-location-input"))
+    .reduce(function (sum, input) {
+      const value = Number(input.value);
+      return sum + (Number.isFinite(value) && value > 0 ? value : 0);
+    }, 0);
+}
+
+function updateShippingWarehouseEditorSummary() {
+  const editor = document.querySelector("#shipping-warehouse-editor");
+  const summary = document.querySelector("#shipping-warehouse-editor-summary");
+  if (!editor || !summary || editor.hidden) return;
+  const shipQuantity = Number(editor.dataset.shipQuantity || 0);
+  const allocated = getShippingWarehouseEditorInputTotal();
+  const remaining = shipQuantity - allocated;
+  summary.textContent =
+    `船積数量：${shipQuantity.toLocaleString("ja-JP")}個 / ` +
+    `入力合計：${allocated.toLocaleString("ja-JP")}個 / ` +
+    `${remaining >= 0 ? "未振分" : "超過"}：${Math.abs(remaining).toLocaleString("ja-JP")}個`;
+  summary.classList.toggle("shipping-warehouse-over", remaining < 0);
+}
+
+function fillShippingWarehouseCurrentLocation() {
+  const editor = document.querySelector("#shipping-warehouse-editor");
+  if (!editor || editor.hidden) return;
+  const currentLocation = String(editor.dataset.currentLocation || "");
+  const shipQuantity = Number(editor.dataset.shipQuantity || 0);
+  if (!SHIPPING_DESTINATION_LOCATIONS.includes(currentLocation)) {
+    alert("この商品の現在の保管場所が倉庫振分け候補にありません。手入力で振り分けてください。");
+    return;
+  }
+  document.querySelectorAll("#shipping-warehouse-location-grid .shipping-warehouse-location-input").forEach(function (input) {
+    input.value = input.dataset.destination === currentLocation ? String(shipQuantity) : "0";
+  });
+  updateShippingWarehouseEditorSummary();
+}
+
+function clearShippingWarehouseInputs() {
+  document.querySelectorAll("#shipping-warehouse-location-grid .shipping-warehouse-location-input").forEach(function (input) {
+    input.value = "0";
+  });
+  updateShippingWarehouseEditorSummary();
+}
+
+async function saveShippingWarehouseEditor() {
+  const schedule = getSelectedShippingWarehouseSchedule();
+  const internalCode = shippingWarehouseEditingInternalCode;
+  if (!schedule || !internalCode) return;
+
+  const saved = getSavedAllocationsForSchedule(schedule.id).find(function (allocation) {
+    return String(allocation.internalCode || "").trim() === internalCode;
+  });
+  if (!saved) {
+    alert("この商品の船積数量が見つかりません。画面を更新してもう一度お試しください。");
+    return;
+  }
+
+  const shipQuantity = Number(saved.quantity) || 0;
+  const inputs = Array.from(document.querySelectorAll("#shipping-warehouse-location-grid .shipping-warehouse-location-input"));
+  const entries = [];
+  for (const input of inputs) {
+    const quantity = Number(input.value);
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      alert(`${input.dataset.destination} の数量は0以上の整数で入力してください。`);
+      input.focus();
+      return;
+    }
+    if (quantity > 0) entries.push({ destination: input.dataset.destination, quantity: quantity });
+  }
+
+  const total = entries.reduce(function (sum, entry) { return sum + entry.quantity; }, 0);
+  if (total > shipQuantity) {
+    alert(
+      `倉庫への振分合計が船積数量を超えています。\n\n` +
+      `船積数量：${shipQuantity.toLocaleString("ja-JP")}個\n` +
+      `倉庫振分合計：${total.toLocaleString("ja-JP")}個\n` +
+      `超過：${(total - shipQuantity).toLocaleString("ja-JP")}個`
+    );
+    return;
+  }
+
+  const remaining = shipQuantity - total;
+  let message =
+    `${saved.productName || internalCode} の倉庫振分けを保存します。\n\n` +
+    `船積数量：${shipQuantity.toLocaleString("ja-JP")}個\n` +
+    `倉庫振分合計：${total.toLocaleString("ja-JP")}個\n` +
+    `未振分：${remaining.toLocaleString("ja-JP")}個`;
+  if (remaining > 0) message += "\n\n未振分が残っています。この状態でも保存できます。";
+  message += "\n\nよろしいですか？";
+  if (!window.confirm(message)) return;
+
+  try {
+    const existing = getShippingWarehouseRecordsForProduct(schedule.id, internalCode);
+    for (const record of existing) {
+      await deleteShippingWarehouseAllocation(record.id);
+    }
+
+    const product = shippingScheduleProducts.find(function (item) {
+      return String(item.internalCode || "").trim() === internalCode;
+    }) || {};
+    const now = new Date().toISOString();
+    for (const entry of entries) {
+      await saveShippingWarehouseAllocation({
+        id: createShippingWarehouseAllocationId(schedule.id, internalCode, entry.destination),
+        scheduleId: schedule.id,
+        internalCode: internalCode,
+        productCode: saved.productCode || product.productCode || "",
+        productName: saved.productName || product.productName || "",
+        destination: entry.destination,
+        quantity: entry.quantity,
+        updatedAt: now
+      });
+    }
+
+    shippingWarehouseAllocations = await getAllShippingWarehouseAllocations();
+    renderShippingWarehouseProductTable();
+    hideShippingWarehouseEditor();
+    alert(remaining === 0 ? "倉庫への振分けを保存しました。振分完了です。" : "倉庫への振分けを保存しました。未振分数量が残っています。");
+  } catch (error) {
+    console.error("倉庫別振分け保存エラー", error);
+    alert("倉庫への振分けを保存できませんでした。");
+  }
+}
+
+function createShippingWarehouseAllocationId(scheduleId, internalCode, destination) {
+  return `${scheduleId}::warehouse::${encodeURIComponent(internalCode)}::${encodeURIComponent(destination)}`;
+}
+
+function printShippingWarehouseList() {
+  const schedule = getSelectedShippingWarehouseSchedule();
+  if (!schedule) {
+    alert("印刷する船便を選択してください。");
+    return;
+  }
+
+  const saved = getSavedAllocationsForSchedule(schedule.id);
+  if (saved.length === 0) {
+    alert("この船便には保存済みの船積商品がありません。");
+    return;
+  }
+
+  const destinationGroups = new Map();
+  SHIPPING_DESTINATION_LOCATIONS.forEach(function (destination) {
+    destinationGroups.set(destination, []);
+  });
+
+  getShippingWarehouseRecordsForSchedule(schedule.id).forEach(function (record) {
+    if (!destinationGroups.has(record.destination)) destinationGroups.set(record.destination, []);
+    destinationGroups.get(record.destination).push(record);
+  });
+
+  const unallocated = saved.map(function (allocation) {
+    const code = String(allocation.internalCode || "").trim();
+    const shipQuantity = Number(allocation.quantity) || 0;
+    const warehouseQuantity = getShippingWarehouseAllocatedQuantity(schedule.id, code);
+    return {
+      internalCode: code,
+      productCode: allocation.productCode || "",
+      productName: allocation.productName || "",
+      shipQuantity: shipQuantity,
+      allocatedQuantity: warehouseQuantity,
+      remaining: Math.max(0, shipQuantity - warehouseQuantity)
+    };
+  }).filter(function (row) { return row.remaining > 0; });
+
+  const groupHtml = Array.from(destinationGroups.entries())
+    .filter(function (entry) { return entry[1].length > 0; })
+    .map(function (entry) {
+      const destination = entry[0];
+      const rows = entry[1].slice().sort(function (a, b) {
+        return String(a.internalCode || "").localeCompare(String(b.internalCode || ""), "ja", { numeric: true });
+      });
+      const total = rows.reduce(function (sum, row) { return sum + (Number(row.quantity) || 0); }, 0);
+      const tr = rows.map(function (row, index) {
+        return `<tr><td>${index + 1}</td><td>${escapeShippingHtml(row.internalCode)}</td><td>${escapeShippingHtml(row.productCode || "-")}</td><td>${escapeShippingHtml(row.productName)}</td><td class="num strong">${(Number(row.quantity) || 0).toLocaleString("ja-JP")}</td></tr>`;
+      }).join("");
+      return `<section class="warehouse"><h2>${escapeShippingHtml(destination)}　合計 ${total.toLocaleString("ja-JP")}個</h2><table><thead><tr><th style="width:7%">No</th><th style="width:18%">社内コード</th><th style="width:20%">商品コード</th><th>商品名</th><th style="width:15%">数量</th></tr></thead><tbody>${tr}</tbody></table></section>`;
+    }).join("");
+
+  const unallocatedHtml = unallocated.length > 0
+    ? `<section class="warehouse warning"><h2>未振分商品</h2><table><thead><tr><th>No</th><th>社内コード</th><th>商品コード</th><th>商品名</th><th>船積数量</th><th>振分済</th><th>未振分</th></tr></thead><tbody>${unallocated.map(function (row, index) { return `<tr><td>${index + 1}</td><td>${escapeShippingHtml(row.internalCode)}</td><td>${escapeShippingHtml(row.productCode || "-")}</td><td>${escapeShippingHtml(row.productName)}</td><td class="num">${row.shipQuantity.toLocaleString("ja-JP")}</td><td class="num">${row.allocatedQuantity.toLocaleString("ja-JP")}</td><td class="num strong">${row.remaining.toLocaleString("ja-JP")}</td></tr>`; }).join("")}</tbody></table></section>`
+    : "";
+
+  const totalShip = saved.reduce(function (sum, row) { return sum + (Number(row.quantity) || 0); }, 0);
+  const totalAllocated = getShippingWarehouseRecordsForSchedule(schedule.id).reduce(function (sum, row) { return sum + (Number(row.quantity) || 0); }, 0);
+  const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>${escapeShippingHtml(schedule.name)} 倉庫別振分け</title><style>
+    @page { size: A4 portrait; margin: 10mm; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:"Yu Gothic","Meiryo",sans-serif; color:#111; font-size:10pt; }
+    h1 { margin:0 0 8px; font-size:17pt; }
+    .meta { margin-bottom:10px; padding:8px; background:#f3f4f6; line-height:1.7; }
+    .warehouse { break-inside: avoid; margin:0 0 14px; }
+    .warehouse h2 { margin:0 0 5px; padding:5px 7px; background:#e8eef4; font-size:12pt; }
+    .warning h2 { background:#fff3e0; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { border:1px solid #777; padding:4px 5px; vertical-align:middle; }
+    th { background:#f5f5f5; }
+    .num { text-align:right; }
+    .strong { font-weight:700; }
+    .footer { margin-top:8px; font-size:8pt; color:#555; }
+  </style></head><body>
+    <h1>倉庫別 船積振分けリスト　${escapeShippingHtml(schedule.name)}</h1>
+    <div class="meta"><strong>出港日：</strong>${escapeShippingHtml(formatShippingDate(schedule.departureDate))}　 <strong>入港日：</strong>${escapeShippingHtml(formatShippingDate(schedule.arrivalDate))}　 <strong>倉庫到着日：</strong>${escapeShippingHtml(formatShippingDate(schedule.warehouseArrivalDate))}<br><strong>船積数量合計：</strong>${totalShip.toLocaleString("ja-JP")}個　 <strong>倉庫振分済：</strong>${totalAllocated.toLocaleString("ja-JP")}個　 <strong>未振分：</strong>${Math.max(0,totalShip-totalAllocated).toLocaleString("ja-JP")}個　 <strong>印刷日：</strong>${escapeShippingHtml(formatShippingDateForPrint(new Date()))}</div>
+    ${groupHtml || '<p>倉庫への振分けはまだ登録されていません。</p>'}
+    ${unallocatedHtml}
+    <div class="footer">バーコード在庫・棚卸管理アプリ v47</div>
+  </body></html>`;
+
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.setAttribute("aria-hidden", "true");
+  document.body.appendChild(iframe);
+  const printWindow = iframe.contentWindow;
+  const printDocument = iframe.contentDocument || printWindow.document;
+  printDocument.open();
+  printDocument.write(html);
+  printDocument.close();
+  window.setTimeout(function () {
+    try { printWindow.focus(); printWindow.print(); }
+    finally { window.setTimeout(function () { iframe.remove(); }, 1500); }
   }, 300);
 }
 
@@ -1244,9 +1761,53 @@ function createShippingScheduleStyle() {
       min-width: 90px;
     }
     #shipping-schedule #print-shipping-allocation-list { background: #455a64; }
+    #shipping-schedule #print-shipping-warehouse-list { background: #455a64; }
+    #shipping-schedule .shipping-warehouse-editor {
+      margin: 18px 0 6px;
+      padding: 16px;
+      border: 2px solid #90a4ae;
+      border-radius: 12px;
+      background: #fafcfd;
+    }
+    #shipping-schedule .shipping-warehouse-location-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 14px;
+      margin: 12px 0;
+    }
+    #shipping-schedule .shipping-warehouse-location-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 120px;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 10px;
+      border: 1px solid #d7dee2;
+      border-radius: 9px;
+      background: #fff;
+    }
+    #shipping-schedule .shipping-warehouse-location-item label { margin: 0; }
+    #shipping-schedule .shipping-warehouse-location-item small {
+      display: block;
+      color: #1976d2;
+      font-weight: 700;
+    }
+    #shipping-schedule .shipping-warehouse-quick-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 10px 0;
+    }
+    #shipping-schedule .shipping-warehouse-status-complete { color: #2e7d32; }
+    #shipping-schedule .shipping-warehouse-status-pending { color: #ef6c00; }
+    #shipping-schedule .shipping-warehouse-over {
+      background: #ffebee;
+      color: #c62828;
+    }
     @media (max-width: 760px) {
       #shipping-schedule .shipping-schedule-grid,
-      #shipping-schedule .shipping-allocation-controls { grid-template-columns: 1fr; }
+      #shipping-schedule .shipping-allocation-controls,
+      #shipping-schedule .shipping-warehouse-location-grid { grid-template-columns: 1fr; }
+      #shipping-schedule .shipping-warehouse-location-item { grid-template-columns: 1fr 110px; }
       #shipping-schedule .shipping-schedule-card { padding: 14px; }
     }
   `;

@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v46
+          画面版 v47
         </span>
       </div>
 
@@ -280,6 +280,13 @@
               type="button"
             >
               船便別に商品を振り分ける
+            </button>
+
+            <button
+              id="show-shipping-warehouse-allocation-button"
+              type="button"
+            >
+              船積リストを倉庫へ振り分ける
             </button>
           </div>
         </details>
@@ -794,6 +801,7 @@
       <div class="shipping-schedule-shortcuts">
         <button id="jump-shipping-schedule-form-button" type="button">船便スケジュールを登録する</button>
         <button id="jump-shipping-allocation-button" type="button">船便別に商品を振り分ける</button>
+        <button id="jump-shipping-warehouse-button" type="button">倉庫別に振り分ける</button>
       </div>
 
       <div id="shipping-schedule-form-area" class="shipping-schedule-card">
@@ -912,6 +920,71 @@
           <button id="shipping-allocation-prev-page" type="button">前へ</button>
           <strong id="shipping-allocation-page-status">1 / 1ページ</strong>
           <button id="shipping-allocation-next-page" type="button">次へ</button>
+        </div>
+      </div>
+
+      <div id="shipping-warehouse-area" class="shipping-schedule-card">
+        <h3>船積リストを倉庫別に振り分ける</h3>
+
+        <p>
+          船便へ保存した数量を、各保管場所へ何個入れるか振り分けます。
+          合計が船積数量を超える場合は保存できません。
+        </p>
+
+        <div class="shipping-allocation-controls">
+          <div>
+            <label for="shipping-warehouse-schedule">振り分ける船便（必須）</label>
+            <select id="shipping-warehouse-schedule">
+              <option value="">船便を選択してください</option>
+            </select>
+          </div>
+          <div>
+            <label for="shipping-warehouse-search">商品を検索</label>
+            <input id="shipping-warehouse-search" type="search" placeholder="社内コード・商品コード・商品名">
+          </div>
+        </div>
+
+        <div id="shipping-warehouse-summary" class="shipping-allocation-summary">
+          船便を選択すると、保存済みの船積商品を表示します。
+        </div>
+
+        <div class="shipping-allocation-table-wrap">
+          <table class="shipping-warehouse-product-table">
+            <thead>
+              <tr>
+                <th>社内コード</th>
+                <th>商品コード</th>
+                <th>商品名</th>
+                <th>船積数量</th>
+                <th>倉庫振分済</th>
+                <th>未振分</th>
+                <th>状態</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="shipping-warehouse-product-body"></tbody>
+          </table>
+        </div>
+
+        <div id="shipping-warehouse-editor" class="shipping-warehouse-editor" hidden>
+          <h4 id="shipping-warehouse-editor-title">商品を倉庫へ振り分ける</h4>
+          <div id="shipping-warehouse-editor-summary" class="shipping-allocation-info"></div>
+
+          <div class="shipping-warehouse-quick-actions">
+            <button id="shipping-warehouse-fill-current-location" type="button">現在の保管場所へ全数入れる</button>
+            <button id="shipping-warehouse-clear-inputs" type="button">入力をすべて0にする</button>
+          </div>
+
+          <div id="shipping-warehouse-location-grid" class="shipping-warehouse-location-grid"></div>
+
+          <div class="shipping-schedule-actions">
+            <button id="save-shipping-warehouse-allocation" type="button">この商品の倉庫振分けを保存する</button>
+            <button id="cancel-shipping-warehouse-allocation" type="button">編集をやめる</button>
+          </div>
+        </div>
+
+        <div class="shipping-schedule-actions">
+          <button id="print-shipping-warehouse-list" type="button" disabled>倉庫別振分けリストを印刷する</button>
         </div>
       </div>
 
@@ -2033,7 +2106,7 @@
     </section>
   </main>
 
-<script src="storage.js?v=42"></script>
+<script src="storage.js?v=47"></script>
 <script src="app.js?v=46"></script>
 <script src="inventory.js"></script>
 <script src="libs/barcode-detector-zxing-adapter.js?v=31"></script>
@@ -2050,9 +2123,9 @@
 <script src="purchase-required.js?v=46"></script>
 <script src="low-shipment.js?v=45"></script>
 <script src="shipping-wish.js?v=42"></script>
-<script src="shipping-schedule.js?v=44"></script>
-<script src="backup.js?v=42"></script>
-<script src="restore.js?v=42"></script>
+<script src="shipping-schedule.js?v=47"></script>
+<script src="backup.js?v=47"></script>
+<script src="restore.js?v=47"></script>
 <script src="location-management.js?v=32"></script>
 <script src="home-dashboard.js?v=42"></script>
 </body>

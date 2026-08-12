@@ -33,7 +33,7 @@ function createBackupStyle() {
 async function exportFullBackup() {
   const button = document.querySelector("#export-full-backup-button");
   const confirmed = window.confirm(
-    "商品・在庫・入出庫履歴・棚卸履歴・集約データ・販売予定・販売実績・船積希望・船便スケジュール・商品振分け・倉庫別振分けを保存します。\n\n" +
+    "商品・在庫・入出庫履歴・棚卸履歴・集約データ・販売予定・販売実績・船便スケジュール・商品振分け・倉庫別振分け・旧船積希望データ（互換用）を保存します。\n\n" +
     "バックアップには会社の在庫情報が含まれます。\n" +
     "第三者が見られる場所には保存しないでください。\n\n" +
     "バックアップを作成しますか？"
@@ -66,7 +66,7 @@ async function exportFullBackup() {
     const backupData = {
       backupType: "barcode-inventory-app",
       backupVersion: 7,
-      appVersion: "v47",
+      appVersion: "v48",
       appName: "バーコード在庫・棚卸管理",
       exportedAt: exportedAt.toISOString(),
       counts: {
@@ -115,7 +115,7 @@ async function exportFullBackup() {
       `販売予定：${salesPlans.length}件\n` +
       `販売実績：${salesActuals.length}件\n` +
       `販売実績CSV取込履歴：${salesImportBatches.length}件\n` +
-      `船積希望：${shippingWishes.length}件\n` +
+      `旧船積希望データ（互換用）：${shippingWishes.length}件\n` +
       `船便スケジュール：${shippingSchedules.length}件\n` +
       `船便商品振分け：${shippingAllocations.length}件\n` +
       `倉庫別振分け：${shippingWarehouseAllocations.length}件\n\n` +

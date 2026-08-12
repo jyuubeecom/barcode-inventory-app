@@ -74,7 +74,7 @@ async function handleRestoreFileSelection(event) {
       `販売予定：${c.salesPlans}件\n` +
       `販売実績：${c.salesActuals}件\n` +
       `販売実績CSV取込履歴：${c.salesImportBatches}件\n` +
-      `船積希望：${c.shippingWishes}件\n` +
+      `旧船積希望データ（互換用）：${c.shippingWishes}件\n` +
       `船便スケジュール：${c.shippingSchedules}件\n` +
       `船便商品振分け：${c.shippingAllocations}件\n` +
       `倉庫別振分け：${c.shippingWarehouseAllocations}件\n\n` +
@@ -104,7 +104,7 @@ async function handleRestoreFileSelection(event) {
       `販売予定：${c.salesPlans}件\n` +
       `販売実績：${c.salesActuals}件\n` +
       `販売実績CSV取込履歴：${c.salesImportBatches}件\n` +
-      `船積希望：${c.shippingWishes}件\n` +
+      `旧船積希望データ（互換用）：${c.shippingWishes}件\n` +
       `船便スケジュール：${c.shippingSchedules}件\n` +
       `船便商品振分け：${c.shippingAllocations}件\n` +
       `倉庫別振分け：${c.shippingWarehouseAllocations}件\n\n` +

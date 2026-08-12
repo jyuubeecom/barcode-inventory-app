@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v47
+          画面版 v48
         </span>
       </div>
 
@@ -212,7 +212,7 @@
           </summary>
 
           <p class="home-panel-description">
-            販売予定、発注判定、出荷低迷、船積希望、船便スケジュールを管理します。
+            販売予定、発注判定、出荷低迷、船便スケジュールを管理します。
           </p>
 
           <div
@@ -253,22 +253,7 @@
             >
               出荷低迷商品の一覧
             </button>
-
-            <button
-              id="show-shipping-wish-button"
-              type="button"
-            >
-              船積希望を登録する
-            </button>
-
-            <button
-              id="show-shipping-wish-list-button"
-              type="button"
-            >
-              船積希望一覧を見る
-            </button>
-
-            <button
+<button
               id="show-shipping-schedule-button"
               type="button"
             >
@@ -674,121 +659,6 @@
     </section>
 
 
-    <!-- 船積希望商品 -->
-    <section id="shipping-wish" hidden>
-      <h2>船積希望商品</h2>
-
-      <p>
-        船積を希望する商品と数量を登録します。
-        商品は社内コードから商品マスタを呼び出します。
-      </p>
-
-      <div class="shipping-wish-shortcuts" aria-label="船積希望画面の移動">
-        <button id="jump-shipping-wish-form-button" type="button">船積希望を登録する</button>
-        <button id="jump-shipping-wish-list-button" type="button">船積希望一覧を見る</button>
-      </div>
-
-      <div id="shipping-wish-form-area" class="shipping-wish-card">
-        <h3>船積希望を登録する</h3>
-
-        <form id="shipping-wish-form">
-          <div class="shipping-wish-form-grid">
-            <div class="shipping-wish-full">
-              <label for="shipping-wish-internal-code">社内コード（必須）</label>
-              <div class="shipping-wish-product-row">
-                <input
-                  id="shipping-wish-internal-code"
-                  type="text"
-                  list="shipping-wish-product-list"
-                  autocomplete="off"
-                  required
-                  placeholder="社内コードを入力または選択"
-                >
-                <button id="shipping-wish-product-lookup-button" type="button">商品を読み込む</button>
-              </div>
-              <datalist id="shipping-wish-product-list"></datalist>
-            </div>
-
-            <div>
-              <label for="shipping-wish-product-code">商品コード</label>
-              <input id="shipping-wish-product-code" class="shipping-wish-readonly" type="text" readonly>
-            </div>
-
-            <div>
-              <label for="shipping-wish-product-name">商品名</label>
-              <input id="shipping-wish-product-name" class="shipping-wish-readonly" type="text" readonly>
-            </div>
-
-            <div>
-              <label for="shipping-wish-quantity">希望数量（必須）</label>
-              <input id="shipping-wish-quantity" type="number" min="1" step="1" value="1" required>
-            </div>
-
-            <div>
-              <label for="shipping-wish-desired-month">希望船積月（任意）</label>
-              <input id="shipping-wish-desired-month" type="month">
-            </div>
-
-            <div class="shipping-wish-full">
-              <label for="shipping-wish-note">メモ（任意）</label>
-              <textarea id="shipping-wish-note" rows="3" placeholder="例：次回コンテナで優先、得意先要望など"></textarea>
-            </div>
-          </div>
-
-          <div class="shipping-wish-form-actions">
-            <button id="save-shipping-wish-button" type="submit">船積希望を登録する</button>
-            <button id="cancel-shipping-wish-edit-button" type="button" hidden>編集をやめる</button>
-          </div>
-        </form>
-      </div>
-
-      <div id="shipping-wish-list-area" class="shipping-wish-card">
-        <h3>登録済みの船積希望</h3>
-
-        <div class="shipping-wish-filter-row">
-          <div>
-            <label for="shipping-wish-search">商品を検索</label>
-            <input id="shipping-wish-search" type="search" placeholder="社内コード・商品コード・商品名・メモ">
-          </div>
-          <div>
-            <label for="shipping-wish-month-filter">希望船積月で絞り込み</label>
-            <input id="shipping-wish-month-filter" type="month">
-          </div>
-        </div>
-
-        <div id="shipping-wish-summary" class="shipping-wish-summary-box">
-          登録：0件 / 希望数量合計：0個
-        </div>
-
-        <div class="shipping-wish-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>登録日</th>
-                <th>希望船積月</th>
-                <th>社内コード</th>
-                <th>商品コード</th>
-                <th>商品名</th>
-                <th>希望数量</th>
-                <th>振分済み</th>
-                <th>未振分</th>
-                <th>メモ</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody id="shipping-wish-table-body"></tbody>
-          </table>
-        </div>
-
-        <div class="shipping-wish-pager">
-          <button id="shipping-wish-prev-page" type="button">前へ</button>
-          <strong id="shipping-wish-page-status">1 / 1ページ</strong>
-          <button id="shipping-wish-next-page" type="button">次へ</button>
-        </div>
-      </div>
-
-      <button id="back-home-from-shipping-wish" type="button">ホームへ戻る</button>
-    </section>
 
     <!-- 船便スケジュール・商品振分け -->
     <section id="shipping-schedule" hidden>
@@ -2122,10 +1992,9 @@
 <script src="sales-actual.js?v=39"></script>
 <script src="purchase-required.js?v=46"></script>
 <script src="low-shipment.js?v=45"></script>
-<script src="shipping-wish.js?v=42"></script>
 <script src="shipping-schedule.js?v=47"></script>
-<script src="backup.js?v=47"></script>
-<script src="restore.js?v=47"></script>
+<script src="backup.js?v=48"></script>
+<script src="restore.js?v=48"></script>
 <script src="location-management.js?v=32"></script>
 <script src="home-dashboard.js?v=42"></script>
 </body>

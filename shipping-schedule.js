@@ -24,6 +24,7 @@ let shippingScheduleProducts = [];
 let shippingScheduleSalesActuals = [];
 let shippingScheduleSalesPlans = [];
 let shippingWarehouseAllocations = [];
+let shippingArrivalReceipts = [];
 let shippingWarehouseEditingInternalCode = "";
 let shippingScheduleEditingId = "";
 let shippingScheduleCurrentPage = 1;
@@ -205,7 +206,8 @@ async function refreshShippingScheduleData() {
     getAllProducts(),
     getAllSalesActuals(),
     getAllSalesPlans(),
-    getAllShippingWarehouseAllocations()
+    getAllShippingWarehouseAllocations(),
+    typeof getAllShippingArrivalReceipts === "function" ? getAllShippingArrivalReceipts() : Promise.resolve([])
   ]);
   shippingScheduleRecords = results[0].slice().sort(compareShippingSchedules);
   shippingScheduleAllocations = results[1].slice();
@@ -213,11 +215,15 @@ async function refreshShippingScheduleData() {
   shippingScheduleSalesActuals = results[3].slice();
   shippingScheduleSalesPlans = results[4].slice();
   shippingWarehouseAllocations = results[5].slice();
+  shippingArrivalReceipts = results[6].slice();
   renderShippingScheduleTable();
   populateShippingScheduleSelect();
   populateShippingWarehouseScheduleSelect();
   renderShippingAllocationTable();
   renderShippingWarehouseProductTable();
+  if (window.shippingArrivalApp && typeof window.shippingArrivalApp.refreshStatus === "function") {
+    window.shippingArrivalApp.refreshStatus();
+  }
 }
 
 async function saveShippingScheduleFromForm(event) {
@@ -273,6 +279,11 @@ async function saveShippingScheduleFromForm(event) {
     resetShippingScheduleForm();
     await refreshShippingScheduleData();
     alert(wasEditing ? "船便スケジュールを変更しました。" : "船便スケジュールを登録しました。");
+    if (window.shippingArrivalApp && typeof window.shippingArrivalApp.checkNow === "function") {
+      window.setTimeout(function () {
+        window.shippingArrivalApp.checkNow({ showMessageWhenNone: false });
+      }, 100);
+    }
     scrollShippingScheduleFormIntoView();
   } catch (error) {
     console.error("船便スケジュール保存エラー", error);
@@ -283,6 +294,11 @@ async function saveShippingScheduleFromForm(event) {
 function editShippingSchedule(id) {
   const record = shippingScheduleRecords.find(function (item) { return item.id === id; });
   if (!record) return;
+
+  if (isShippingScheduleReceived(id)) {
+    alert("この船便はすでに倉庫到着分を在庫へ入荷反映済みのため、スケジュールを編集できません。");
+    return;
+  }
 
   shippingScheduleEditingId = id;
   document.querySelector("#shipping-schedule-name").value = record.name || "";
@@ -297,6 +313,19 @@ function editShippingSchedule(id) {
 async function removeShippingSchedule(id) {
   const record = shippingScheduleRecords.find(function (item) { return item.id === id; });
   if (!record) return;
+
+  const arrivalReceipt = shippingArrivalReceipts.find(function (receipt) {
+    return receipt.scheduleId === id || receipt.id === id;
+  });
+  if (arrivalReceipt) {
+    alert(
+      `船便「${record.name}」はすでに倉庫到着分を在庫へ入荷反映済みのため削除できません。\n\n` +
+      `倉庫到着日：${formatShippingDate(record.warehouseArrivalDate)}\n` +
+      `入荷反映数量：${(Number(arrivalReceipt.totalQuantity) || 0).toLocaleString("ja-JP")}個\n\n` +
+      "入出庫履歴との整合性を守るため、反映済み船便は履歴として残します。"
+    );
+    return;
+  }
 
   const allocations = shippingScheduleAllocations.filter(function (allocation) {
     return allocation.scheduleId === id && Number(allocation.quantity) > 0;
@@ -434,6 +463,12 @@ function getSelectedShippingSchedule() {
   return shippingScheduleRecords.find(function (record) { return record.id === scheduleId; }) || null;
 }
 
+function isShippingScheduleReceived(scheduleId) {
+  return shippingArrivalReceipts.some(function (receipt) {
+    return receipt.scheduleId === scheduleId || receipt.id === scheduleId;
+  });
+}
+
 function getShippingAllocationRows(schedule) {
   if (!schedule || !isShippingIsoDate(schedule.warehouseArrivalDate)) return [];
 
@@ -537,6 +572,7 @@ function renderShippingAllocationTable() {
     return;
   }
 
+  const scheduleReceived = isShippingScheduleReceived(schedule.id);
   const targetPeriod = getShippingTargetPeriod(schedule);
   const monthKey = schedule.warehouseArrivalDate.slice(0, 7);
   const averageContext = buildShippingAverageContext(monthKey);
@@ -573,7 +609,8 @@ function renderShippingAllocationTable() {
       `倉庫到着 ${escapeShippingHtml(formatShippingDate(schedule.warehouseArrivalDate))}<br>` +
       `対象期間：${escapeShippingHtml(formatShippingDate(targetPeriod.startDate))} ～ ${escapeShippingHtml(formatShippingDate(targetPeriod.endDate))}（${targetPeriod.days.toLocaleString("ja-JP")}日）<br>` +
       `次便：${escapeShippingHtml(targetPeriod.nextSchedule.name)} / 倉庫到着 ${escapeShippingHtml(formatShippingDate(targetPeriod.nextSchedule.warehouseArrivalDate))}<br>` +
-      `月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の6か月平均`;
+      `月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の6か月平均` +
+      (scheduleReceived ? `<br><span class="shipping-received-note">この船便は入荷反映済みです。船積数量は履歴保護のため編集できません。</span>` : "");
   }
 
   const allRows = getShippingAllocationRows(schedule);
@@ -625,6 +662,7 @@ function renderShippingAllocationTable() {
       input.className = "shipping-allocation-quantity";
       input.dataset.internalCode = item.internalCode;
       input.dataset.recommendedQuantity = String(item.recommendedQuantity);
+      input.disabled = scheduleReceived;
       inputCell.appendChild(input);
       row.appendChild(inputCell);
 
@@ -633,7 +671,7 @@ function renderShippingAllocationTable() {
     });
   }
 
-  if (saveButton) saveButton.disabled = visible.length === 0;
+  if (saveButton) saveButton.disabled = visible.length === 0 || scheduleReceived;
   if (printButton) printButton.disabled = getSavedAllocationsForSchedule(schedule.id).length === 0;
   pageStatus.textContent = `${shippingAllocationCurrentPage} / ${totalPages}ページ`;
   if (prev) prev.disabled = shippingAllocationCurrentPage <= 1;
@@ -644,6 +682,10 @@ async function saveVisibleShippingAllocations() {
   const schedule = getSelectedShippingSchedule();
   if (!schedule) {
     alert("振り分ける船便を選択してください。");
+    return;
+  }
+  if (isShippingScheduleReceived(schedule.id)) {
+    alert("この船便はすでに在庫へ入荷反映済みのため、船積数量は変更できません。");
     return;
   }
 
@@ -729,6 +771,11 @@ async function saveVisibleShippingAllocations() {
 
     await refreshShippingScheduleData();
     alert("船便への商品振分けを保存しました。");
+    if (window.shippingArrivalApp && typeof window.shippingArrivalApp.checkNow === "function") {
+      window.setTimeout(function () {
+        window.shippingArrivalApp.checkNow({ showMessageWhenNone: false });
+      }, 100);
+    }
   } catch (error) {
     console.error("船便振分保存エラー", error);
     alert("船便への振分けを保存できませんでした。");
@@ -1041,7 +1088,11 @@ function renderShippingWarehouseProductTable() {
       const actionCell = document.createElement("td");
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = item.warehouseQuantity > 0 ? "振分けを編集" : "倉庫へ振り分ける";
+      const scheduleReceived = isShippingScheduleReceived(schedule.id);
+      button.textContent = scheduleReceived
+        ? "入荷反映済"
+        : (item.warehouseQuantity > 0 ? "振分けを編集" : "倉庫へ振り分ける");
+      button.disabled = scheduleReceived;
       button.addEventListener("click", function () {
         openShippingWarehouseEditor(item.internalCode);
       });
@@ -1057,6 +1108,10 @@ function renderShippingWarehouseProductTable() {
 function openShippingWarehouseEditor(internalCode) {
   const schedule = getSelectedShippingWarehouseSchedule();
   if (!schedule) return;
+  if (isShippingScheduleReceived(schedule.id)) {
+    alert("この船便はすでに在庫へ入荷反映済みのため、倉庫別振分けは編集できません。");
+    return;
+  }
   const saved = getSavedAllocationsForSchedule(schedule.id).find(function (allocation) {
     return String(allocation.internalCode || "").trim() === String(internalCode || "").trim();
   });
@@ -1166,6 +1221,10 @@ async function saveShippingWarehouseEditor() {
   const schedule = getSelectedShippingWarehouseSchedule();
   const internalCode = shippingWarehouseEditingInternalCode;
   if (!schedule || !internalCode) return;
+  if (isShippingScheduleReceived(schedule.id)) {
+    alert("この船便はすでに在庫へ入荷反映済みのため、倉庫別振分けは変更できません。");
+    return;
+  }
 
   const saved = getSavedAllocationsForSchedule(schedule.id).find(function (allocation) {
     return String(allocation.internalCode || "").trim() === internalCode;
@@ -1523,7 +1582,11 @@ function getPriorShippingScheduleIds(currentSchedule) {
   return new Set(
     shippingScheduleRecords
       .filter(function (record) {
+        const alreadyReceived = shippingArrivalReceipts.some(function (receipt) {
+          return receipt.scheduleId === record.id || receipt.id === record.id;
+        });
         return record.id !== currentSchedule.id &&
+          !alreadyReceived &&
           isShippingIsoDate(record.warehouseArrivalDate) &&
           record.warehouseArrivalDate < currentDate;
       })
@@ -1803,6 +1866,10 @@ function createShippingScheduleStyle() {
       background: #ffebee;
       color: #c62828;
     }
+    #shipping-schedule .shipping-received-note {
+      color: #2e7d32;
+      font-weight: 700;
+    }
     @media (max-width: 760px) {
       #shipping-schedule .shipping-schedule-grid,
       #shipping-schedule .shipping-allocation-controls,
@@ -1813,3 +1880,8 @@ function createShippingScheduleStyle() {
   `;
   document.head.appendChild(style);
 }
+
+
+window.shippingScheduleFeature = {
+  refresh: refreshShippingScheduleData
+};

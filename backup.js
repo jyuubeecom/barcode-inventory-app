@@ -33,7 +33,7 @@ function createBackupStyle() {
 async function exportFullBackup() {
   const button = document.querySelector("#export-full-backup-button");
   const confirmed = window.confirm(
-    "商品・在庫・入出庫履歴・棚卸履歴・集約データ・販売予定・販売実績・船便スケジュール・商品振分け・倉庫別振分け・旧船積希望データ（互換用）を保存します。\n\n" +
+    "商品・在庫・入出庫履歴・棚卸履歴・集約データ・販売予定・販売実績・船便スケジュール・商品振分け・倉庫別振分け・船便入荷反映履歴・旧船積希望データ（互換用）を保存します。\n\n" +
     "バックアップには会社の在庫情報が含まれます。\n" +
     "第三者が見られる場所には保存しないでください。\n\n" +
     "バックアップを作成しますか？"
@@ -44,7 +44,7 @@ async function exportFullBackup() {
   button.textContent = "バックアップを作成しています...";
 
   try {
-    const [productsData, movements, stocktakings, submissions, reflections, salesPlans, salesActuals, salesImportBatches, shippingWishes, shippingSchedules, shippingAllocations, shippingWarehouseAllocations, restoreLogs] =
+    const [productsData, movements, stocktakings, submissions, reflections, salesPlans, salesActuals, salesImportBatches, shippingWishes, shippingSchedules, shippingAllocations, shippingWarehouseAllocations, shippingArrivalReceipts, restoreLogs] =
       await Promise.all([
         getAllProducts(),
         getAllStockMovements(),
@@ -58,6 +58,7 @@ async function exportFullBackup() {
         getAllShippingSchedules(),
         getAllShippingAllocations(),
         getAllShippingWarehouseAllocations(),
+        getAllShippingArrivalReceipts(),
         getAllRestoreLogs()
       ]);
 
@@ -65,8 +66,8 @@ async function exportFullBackup() {
     const appSettings = collectAppSettingsForBackup();
     const backupData = {
       backupType: "barcode-inventory-app",
-      backupVersion: 7,
-      appVersion: "v48",
+      backupVersion: 8,
+      appVersion: "v51",
       appName: "バーコード在庫・棚卸管理",
       exportedAt: exportedAt.toISOString(),
       counts: {
@@ -82,6 +83,7 @@ async function exportFullBackup() {
         shippingSchedules: shippingSchedules.length,
         shippingAllocations: shippingAllocations.length,
         shippingWarehouseAllocations: shippingWarehouseAllocations.length,
+        shippingArrivalReceipts: shippingArrivalReceipts.length,
         restoreLogs: restoreLogs.length
       },
       data: {
@@ -97,6 +99,7 @@ async function exportFullBackup() {
         shippingSchedules: shippingSchedules,
         shippingAllocations: shippingAllocations,
         shippingWarehouseAllocations: shippingWarehouseAllocations,
+        shippingArrivalReceipts: shippingArrivalReceipts,
         appSettings: appSettings,
         restoreLogs: restoreLogs
       }
@@ -118,7 +121,8 @@ async function exportFullBackup() {
       `旧船積希望データ（互換用）：${shippingWishes.length}件\n` +
       `船便スケジュール：${shippingSchedules.length}件\n` +
       `船便商品振分け：${shippingAllocations.length}件\n` +
-      `倉庫別振分け：${shippingWarehouseAllocations.length}件\n\n` +
+      `倉庫別振分け：${shippingWarehouseAllocations.length}件\n` +
+      `船便入荷反映履歴：${shippingArrivalReceipts.length}件\n\n` +
       `ファイル名：${fileName}`
     );
   } catch (error) {

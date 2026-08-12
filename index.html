@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v50
+          画面版 v51
         </span>
       </div>
 
@@ -737,6 +737,17 @@
           <button id="shipping-schedule-prev-page" type="button">前へ</button>
           <strong id="shipping-schedule-page-status">1 / 1ページ</strong>
           <button id="shipping-schedule-next-page" type="button">次へ</button>
+        </div>
+
+        <div id="shipping-arrival-status-area">
+          <h3>船便の自動入荷反映</h3>
+          <p class="shipping-arrival-note">
+            倉庫到着日になった船便は、アプリを開いたときに一度だけ現在庫へ「入庫」として自動反映します。<br>
+            アプリを閉じている間に勝手に処理するのではなく、倉庫到着日以降に最初にこのアプリを開いた時点で反映します。入出庫履歴の日付は船便の「倉庫到着日」で記録します。
+          </p>
+          <button id="check-shipping-arrivals-button" type="button">到着済み船便を今すぐ確認する</button>
+          <div id="shipping-arrival-status-summary">入荷反映状況を読み込んでいます...</div>
+          <div id="shipping-arrival-status-list"></div>
         </div>
       </div>
 
@@ -2072,7 +2083,7 @@
 
   </main>
 
-<script src="storage.js?v=47"></script>
+<script src="storage.js?v=51"></script>
 <script src="app.js?v=46"></script>
 <script src="inventory.js"></script>
 <script src="libs/barcode-detector-zxing-adapter.js?v=31"></script>
@@ -2088,10 +2099,11 @@
 <script src="sales-actual.js?v=39"></script>
 <script src="purchase-required.js?v=46"></script>
 <script src="low-shipment.js?v=45"></script>
-<script src="shipping-schedule.js?v=47"></script>
+<script src="shipping-schedule.js?v=51"></script>
+<script src="shipping-arrival.js?v=51"></script>
 <script src="barcode-print.js?v=50"></script>
-<script src="backup.js?v=48"></script>
-<script src="restore.js?v=48"></script>
+<script src="backup.js?v=51"></script>
+<script src="restore.js?v=51"></script>
 <script src="location-management.js?v=32"></script>
 <script src="home-dashboard.js?v=42"></script>
 </body>

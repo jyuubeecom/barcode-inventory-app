@@ -3,7 +3,7 @@
 const DATABASE_NAME =
   "barcodeInventoryDatabase";
 
-const DATABASE_VERSION = 12;
+const DATABASE_VERSION = 13;
 
 const PRODUCT_STORE_NAME =
   "products";
@@ -43,6 +43,9 @@ const SHIPPING_ALLOCATION_STORE_NAME =
 
 const SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME =
   "shippingWarehouseAllocations";
+
+const SHIPPING_ARRIVAL_RECEIPT_STORE_NAME =
+  "shippingArrivalReceipts";
 
 function openDatabase() {
   return new Promise(function (
@@ -481,6 +484,30 @@ function openDatabase() {
           shippingWarehouseAllocationStore.createIndex(
             "destination",
             "destination",
+            { unique: false }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            SHIPPING_ARRIVAL_RECEIPT_STORE_NAME
+          )
+        ) {
+          const shippingArrivalReceiptStore =
+            database.createObjectStore(
+              SHIPPING_ARRIVAL_RECEIPT_STORE_NAME,
+              { keyPath: "id" }
+            );
+
+          shippingArrivalReceiptStore.createIndex(
+            "warehouseArrivalDate",
+            "warehouseArrivalDate",
+            { unique: false }
+          );
+
+          shippingArrivalReceiptStore.createIndex(
+            "reflectedAt",
+            "reflectedAt",
             { unique: false }
           );
         }
@@ -1956,6 +1983,70 @@ async function deleteShippingWarehouseAllocation(id) {
   });
 }
 
+async function getAllShippingArrivalReceipts() {
+  return getAllRecordsFromStore(SHIPPING_ARRIVAL_RECEIPT_STORE_NAME);
+}
+
+async function getShippingArrivalReceipt(scheduleId) {
+  const database = await openDatabase();
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      SHIPPING_ARRIVAL_RECEIPT_STORE_NAME,
+      "readonly"
+    );
+    const request = transaction
+      .objectStore(SHIPPING_ARRIVAL_RECEIPT_STORE_NAME)
+      .get(scheduleId);
+    request.onsuccess = function () {
+      const result = request.result || null;
+      database.close();
+      resolve(result);
+    };
+    request.onerror = function () {
+      const error = request.error;
+      database.close();
+      reject(error);
+    };
+  });
+}
+
+async function applyShippingArrivalReceipt(updatedProducts, movements, receipt) {
+  const database = await openDatabase();
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      [
+        PRODUCT_STORE_NAME,
+        MOVEMENT_STORE_NAME,
+        SHIPPING_ARRIVAL_RECEIPT_STORE_NAME
+      ],
+      "readwrite"
+    );
+
+    const productStore = transaction.objectStore(PRODUCT_STORE_NAME);
+    const movementStore = transaction.objectStore(MOVEMENT_STORE_NAME);
+    const receiptStore = transaction.objectStore(SHIPPING_ARRIVAL_RECEIPT_STORE_NAME);
+
+    updatedProducts.forEach(function (product) {
+      productStore.put(product);
+    });
+    movements.forEach(function (movement) {
+      movementStore.add(movement);
+    });
+    receiptStore.add(receipt);
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
 async function deleteShippingScheduleWithAllocations(scheduleId) {
   const database = await openDatabase();
   return new Promise(function (resolve, reject) {
@@ -1963,13 +2054,15 @@ async function deleteShippingScheduleWithAllocations(scheduleId) {
       [
         SHIPPING_SCHEDULE_STORE_NAME,
         SHIPPING_ALLOCATION_STORE_NAME,
-        SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME
+        SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME,
+        SHIPPING_ARRIVAL_RECEIPT_STORE_NAME
       ],
       "readwrite"
     );
     const scheduleStore = transaction.objectStore(SHIPPING_SCHEDULE_STORE_NAME);
     const allocationStore = transaction.objectStore(SHIPPING_ALLOCATION_STORE_NAME);
     const warehouseStore = transaction.objectStore(SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME);
+    const receiptStore = transaction.objectStore(SHIPPING_ARRIVAL_RECEIPT_STORE_NAME);
     const allocationIndex = allocationStore.index("scheduleId");
     const warehouseIndex = warehouseStore.index("scheduleId");
     const allocationRequest = allocationIndex.openCursor(IDBKeyRange.only(scheduleId));
@@ -1986,6 +2079,7 @@ async function deleteShippingScheduleWithAllocations(scheduleId) {
       const cursor = warehouseRequest.result;
       if (!cursor) {
         scheduleStore.delete(scheduleId);
+    receiptStore.delete(scheduleId);
         return;
       }
       cursor.delete();

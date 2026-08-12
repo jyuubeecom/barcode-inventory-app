@@ -51,6 +51,11 @@ async function openBarcodePrintScreen() {
   screen.hidden = false;
   barcodePrintCurrentPage = 1;
 
+  // 印刷画面を開くたびに前回の選択をリセットします。
+  // 同じ画面内で検索を切り替える場合は、選択内容を維持します。
+  barcodePrintSelected.clear();
+  barcodePrintCopies.clear();
+
   try {
     barcodePrintProducts = (await getAllProducts()).slice().sort(function (a, b) {
       return String(a.internalCode || "").localeCompare(String(b.internalCode || ""), "ja", { numeric: true });
@@ -126,6 +131,7 @@ function renderBarcodePrintTable() {
         if (!barcodePrintCopies.has(internalCode)) barcodePrintCopies.set(internalCode, 1);
       } else {
         barcodePrintSelected.delete(internalCode);
+        barcodePrintCopies.delete(internalCode);
       }
       renderBarcodePrintSummary();
     });
@@ -195,6 +201,7 @@ function appendBarcodePrintCell(row, value) {
 
 function renderBarcodePrintSummary() {
   const summary = document.querySelector("#barcode-print-summary");
+  const printButton = document.querySelector("#print-selected-barcodes");
   if (!summary) return;
 
   let labelCount = 0;
@@ -202,7 +209,88 @@ function renderBarcodePrintSummary() {
     labelCount += barcodePrintCopies.get(code) || 1;
   });
 
-  summary.textContent = `表示：${barcodePrintFilteredProducts.length.toLocaleString("ja-JP")}商品 / 選択：${barcodePrintSelected.size.toLocaleString("ja-JP")}商品 / 印刷ラベル：${labelCount.toLocaleString("ja-JP")}枚`;
+  const filteredCodes = new Set(barcodePrintFilteredProducts.map(function (product) {
+    return String(product.internalCode || "").trim();
+  }));
+  let hiddenSelectedCount = 0;
+  barcodePrintSelected.forEach(function (code) {
+    if (!filteredCodes.has(code)) hiddenSelectedCount += 1;
+  });
+
+  summary.innerHTML = `
+    <div><strong>現在の検索結果：</strong>${barcodePrintFilteredProducts.length.toLocaleString("ja-JP")}商品</div>
+    <div><strong>印刷対象：</strong>${barcodePrintSelected.size.toLocaleString("ja-JP")}商品 / <strong>合計ラベル：</strong>${labelCount.toLocaleString("ja-JP")}枚</div>
+    ${hiddenSelectedCount > 0 ? `<div class="barcode-print-hidden-selection">※ 現在の検索結果には表示されていない選択商品が ${hiddenSelectedCount.toLocaleString("ja-JP")}件あります。下の「印刷対象」にすべて表示しています。</div>` : ""}
+  `;
+
+  if (printButton) {
+    printButton.textContent = labelCount > 0
+      ? `選択したバーコードを印刷する（合計${labelCount.toLocaleString("ja-JP")}枚）`
+      : "選択したバーコードを印刷する";
+  }
+
+  renderBarcodePrintSelectionPanel();
+}
+
+function renderBarcodePrintSelectionPanel() {
+  const panel = document.querySelector("#barcode-print-selection-panel");
+  const list = document.querySelector("#barcode-print-selection-list");
+  if (!panel || !list) return;
+
+  if (barcodePrintSelected.size === 0) {
+    panel.hidden = true;
+    list.innerHTML = "";
+    return;
+  }
+
+  panel.hidden = false;
+  list.innerHTML = "";
+
+  const selectedProducts = barcodePrintProducts.filter(function (product) {
+    return barcodePrintSelected.has(String(product.internalCode || "").trim());
+  });
+
+  selectedProducts.forEach(function (product) {
+    const code = String(product.internalCode || "").trim();
+    const row = document.createElement("div");
+    row.className = "barcode-print-selected-row";
+
+    const info = document.createElement("div");
+    info.className = "barcode-print-selected-info";
+    info.innerHTML = `<strong>${escapeBarcodePrintHtml(code || "-")}</strong><span>${escapeBarcodePrintHtml(product.productName || "商品名未登録")}</span>`;
+
+    const copiesWrap = document.createElement("label");
+    copiesWrap.className = "barcode-print-selected-copies-wrap";
+    copiesWrap.textContent = "枚数";
+    const copies = document.createElement("input");
+    copies.type = "number";
+    copies.min = "1";
+    copies.max = "99";
+    copies.step = "1";
+    copies.value = String(barcodePrintCopies.get(code) || 1);
+    copies.className = "barcode-print-selected-copies";
+    copies.addEventListener("change", function () {
+      const value = Math.max(1, Math.min(99, Math.floor(Number(copies.value) || 1)));
+      barcodePrintCopies.set(code, value);
+      renderBarcodePrintTable();
+    });
+    copiesWrap.appendChild(copies);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "barcode-print-selected-remove";
+    remove.textContent = "選択解除";
+    remove.addEventListener("click", function () {
+      barcodePrintSelected.delete(code);
+      barcodePrintCopies.delete(code);
+      renderBarcodePrintTable();
+    });
+
+    row.appendChild(info);
+    row.appendChild(copiesWrap);
+    row.appendChild(remove);
+    list.appendChild(row);
+  });
 }
 
 function selectVisibleBarcodeProducts() {
@@ -219,6 +307,7 @@ function selectVisibleBarcodeProducts() {
 
 function clearBarcodePrintSelection() {
   barcodePrintSelected.clear();
+  barcodePrintCopies.clear();
   renderBarcodePrintTable();
 }
 
@@ -267,6 +356,30 @@ function printSelectedBarcodeLabels() {
     );
     if (!proceed) return;
   }
+
+  const printableSelectedProducts = selectedProducts.filter(function (product) {
+    if (barcodeMode !== "jan") return true;
+    return isValidJanCode(String(product.janCode || "").trim());
+  });
+
+  const selectedLines = printableSelectedProducts.slice(0, 10).map(function (product) {
+    const code = String(product.internalCode || "").trim();
+    return `・${code || "-"} ${product.productName || "商品名未登録"}：${barcodePrintCopies.get(code) || 1}枚`;
+  });
+  if (printableSelectedProducts.length > 10) {
+    selectedLines.push(`・ほか ${printableSelectedProducts.length - 10}商品`);
+  }
+
+  const confirmMessage = [
+    "この内容で印刷しますか？",
+    "",
+    `印刷対象：${printableSelectedProducts.length}商品`,
+    `合計ラベル：${labels.length}枚`,
+    "",
+    ...selectedLines
+  ].join("\n");
+
+  if (!confirm(confirmMessage)) return;
 
   const perPage = Number(layout) || 4;
   const pages = [];
@@ -545,6 +658,63 @@ function createBarcodePrintStyle() {
       padding: 12px;
       margin: 12px 0;
       font-weight: 700;
+      line-height: 1.7;
+    }
+    #barcode-print .barcode-print-hidden-selection {
+      color: #b45309;
+      margin-top: 4px;
+      font-size: 0.95rem;
+    }
+    #barcode-print .barcode-print-selection-panel {
+      border: 2px solid #1f6fc4;
+      border-radius: 12px;
+      padding: 14px;
+      margin: 14px 0;
+      background: #f7fbff;
+    }
+    #barcode-print .barcode-print-selection-panel h3 {
+      margin: 0 0 6px;
+      font-size: 1.05rem;
+    }
+    #barcode-print .barcode-print-selection-help {
+      margin: 0 0 10px;
+      color: #445;
+    }
+    #barcode-print .barcode-print-selection-list {
+      display: grid;
+      gap: 8px;
+    }
+    #barcode-print .barcode-print-selected-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      background: #fff;
+      border: 1px solid #d6e2ee;
+      border-radius: 9px;
+    }
+    #barcode-print .barcode-print-selected-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      min-width: 0;
+    }
+    #barcode-print .barcode-print-selected-info span {
+      overflow-wrap: anywhere;
+    }
+    #barcode-print .barcode-print-selected-copies-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      white-space: nowrap;
+    }
+    #barcode-print .barcode-print-selected-copies {
+      width: 78px;
+    }
+    #barcode-print .barcode-print-selected-remove {
+      background: #d32f2f;
     }
     #barcode-print .barcode-print-table-wrap { overflow-x: auto; }
     #barcode-print table { min-width: 900px; }
@@ -562,6 +732,9 @@ function createBarcodePrintStyle() {
     @media (max-width: 760px) {
       #barcode-print .barcode-print-controls { grid-template-columns: 1fr; }
       #barcode-print .barcode-print-actions button { width: 100%; }
+      #barcode-print .barcode-print-selected-row { grid-template-columns: 1fr; }
+      #barcode-print .barcode-print-selected-copies-wrap { justify-content: flex-start; }
+      #barcode-print .barcode-print-selected-remove { width: 100%; }
     }
   `;
   document.head.appendChild(style);

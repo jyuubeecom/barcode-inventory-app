@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v49
+          画面版 v50
         </span>
       </div>
 
@@ -2021,17 +2021,27 @@
 
       <div class="barcode-print-note">
         社内コードはCODE128で印刷します。JANコードは8桁または13桁で、チェック桁が正しい場合にEANバーコードとして印刷します。<br>
-        「枚数」は、その商品のラベルを何枚印刷するか指定します。最初は4分割がおすすめです。
+        「枚数」は、その商品のラベルを何枚印刷するか指定します。最初は4分割がおすすめです。<br>
+        商品を検索し直しても、同じ印刷画面を開いている間は選択済みの商品が残ります。下の「印刷対象」で必ず確認できます。
       </div>
 
       <div class="barcode-print-actions">
-        <button id="barcode-print-select-visible" type="button">このページの商品をすべて選択</button>
-        <button id="barcode-print-clear-selection" type="button">選択をすべて解除</button>
+        <button id="barcode-print-select-visible" type="button">現在のページの商品を追加選択</button>
+        <button id="barcode-print-clear-selection" type="button">印刷対象をすべて解除</button>
         <button id="print-selected-barcodes" type="button">選択したバーコードを印刷する</button>
       </div>
 
       <div id="barcode-print-summary" class="barcode-print-summary">
-        表示：0商品 / 選択：0商品 / 印刷ラベル：0枚
+        <div><strong>現在の検索結果：</strong>0商品</div>
+        <div><strong>印刷対象：</strong>0商品 / <strong>合計ラベル：</strong>0枚</div>
+      </div>
+
+      <div id="barcode-print-selection-panel" class="barcode-print-selection-panel" hidden>
+        <h3>印刷対象（現在選んでいる商品）</h3>
+        <p class="barcode-print-selection-help">
+          検索結果に表示されていない商品も、ここにすべて表示されます。枚数変更や選択解除もここからできます。
+        </p>
+        <div id="barcode-print-selection-list" class="barcode-print-selection-list"></div>
       </div>
 
       <div id="barcode-print-table-area" class="barcode-print-table-wrap">
@@ -2079,7 +2089,7 @@
 <script src="purchase-required.js?v=46"></script>
 <script src="low-shipment.js?v=45"></script>
 <script src="shipping-schedule.js?v=47"></script>
-<script src="barcode-print.js?v=49"></script>
+<script src="barcode-print.js?v=50"></script>
 <script src="backup.js?v=48"></script>
 <script src="restore.js?v=48"></script>
 <script src="location-management.js?v=32"></script>

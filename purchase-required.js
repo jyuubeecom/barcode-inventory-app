@@ -96,7 +96,7 @@ async function refreshPurchaseRequiredData() {
       .map(function (product) {
         const internalCode = String(product.internalCode || "").trim();
         const sixMonthSales = actualByProduct.get(internalCode) || 0;
-        const monthlyAverage = sixMonthSales / 6;
+        const monthlyAverage = Math.ceil(sixMonthSales / 6);
         const threeMonthBase = monthlyAverage * 3;
         const plannedQuantity = planByProduct.get(internalCode) || 0;
         const requiredStockRaw = threeMonthBase + plannedQuantity;
@@ -341,8 +341,8 @@ function renderPurchaseRequiredTable() {
         <td>${escapePurchaseHtml(item.productName)}</td>
         <td>${item.currentStock.toLocaleString("ja-JP")}</td>
         <td>${formatPurchaseQuantity(item.sixMonthSales)}</td>
-        <td>${formatPurchaseDecimal(item.monthlyAverage)}</td>
-        <td>${formatPurchaseDecimal(item.threeMonthBase)}</td>
+        <td>${formatPurchaseWholeNumber(item.monthlyAverage)}</td>
+        <td>${formatPurchaseWholeNumber(item.threeMonthBase)}</td>
         <td>${formatPurchaseQuantity(item.plannedQuantity)}</td>
         <td><strong>${item.requiredStock.toLocaleString("ja-JP")}</strong></td>
         <td>${escapePurchaseHtml(item.location)}</td>
@@ -371,6 +371,12 @@ function formatPurchaseDisplayDate(value) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
   if (!match) return value || "";
   return `${match[1]}/${match[2]}/${match[3]}`;
+}
+
+function formatPurchaseWholeNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "0";
+  return Math.ceil(number).toLocaleString("ja-JP");
 }
 
 function formatPurchaseDecimal(value) {

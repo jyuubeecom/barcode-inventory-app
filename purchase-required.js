@@ -268,8 +268,8 @@ function parsePurchaseLocalDate(value) {
 }
 
 function isPurchaseDiscontinuedProduct(product) {
-  const status = String(product && (product.productStatus || product.status || "") || "").trim().toLowerCase();
-  return status === "廃盤" || status === "discontinued" || Boolean(product && product.discontinued === true);
+  const status = String(product && (product.productStatus || product.status || "") || "").normalize("NFKC").trim().toLowerCase();
+  return status === "廃盤予定" || status === "廃盤" || status === "discontinued" || status === "inactive" || Boolean(product && product.discontinued === true);
 }
 
 function getPurchaseStockNumber(value) {

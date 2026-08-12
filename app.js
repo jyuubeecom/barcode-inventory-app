@@ -908,7 +908,9 @@ function openDetailScreen(internalCode) {
   detailProductStatus.className =
     productLifecycleStatus === "廃盤"
       ? "detail-product-discontinued"
-      : "detail-product-active";
+      : productLifecycleStatus === "廃盤予定"
+        ? "detail-product-planned"
+        : "detail-product-active";
 
   detailUpdatedAt.textContent =
     formatDateTime(selectedProduct.updatedAt);
@@ -1220,6 +1222,15 @@ function getProductLifecycleStatus(
       .normalize("NFKC")
       .trim()
       .toLowerCase();
+
+  if (
+    savedStatus === "廃盤予定" ||
+    savedStatus === "discontinued planned" ||
+    savedStatus === "planned discontinued" ||
+    savedStatus === "planned-discontinued"
+  ) {
+    return "廃盤予定";
+  }
 
   if (
     savedStatus === "廃盤" ||
@@ -2124,6 +2135,10 @@ function displayProducts(displayedProducts) {
       row.classList.add(
         "product-discontinued-row"
       );
+    } else if (lifecycleStatus === "廃盤予定") {
+      row.classList.add(
+        "product-planned-row"
+      );
     }
 
     row.appendChild(
@@ -2444,7 +2459,9 @@ function createProductListLifecycleCell(
   badge.classList.add(
     productStatus === "廃盤"
       ? "product-lifecycle-discontinued"
-      : "product-lifecycle-active"
+      : productStatus === "廃盤予定"
+        ? "product-lifecycle-planned"
+        : "product-lifecycle-active"
   );
 
   cell.appendChild(badge);
@@ -2505,7 +2522,9 @@ function appendProductLifecycleStatusCell(
   badge.classList.add(
     productStatus === "廃盤"
       ? "product-lifecycle-discontinued"
-      : "product-lifecycle-active"
+      : productStatus === "廃盤予定"
+        ? "product-lifecycle-planned"
+        : "product-lifecycle-active"
   );
 
   cell.appendChild(badge);
@@ -2543,6 +2562,12 @@ function createProductLifecycleStyle() {
       color: #1b5e20;
     }
 
+    .product-lifecycle-planned {
+      background-color: #fff3e0;
+      color: #e65100;
+      border: 1px solid #ffb74d;
+    }
+
     .product-lifecycle-discontinued,
     .status-discontinued,
     .detail-status-discontinued {
@@ -2575,7 +2600,12 @@ function createProductLifecycleStyle() {
       color: #546e7a;
     }
 
+    .product-planned-row {
+      background-color: #fffaf2 !important;
+    }
+
     .detail-product-active,
+    .detail-product-planned,
     .detail-product-discontinued {
       display: inline-block;
       min-width: 80px;
@@ -2588,6 +2618,12 @@ function createProductLifecycleStyle() {
     .detail-product-active {
       background-color: #e8f5e9;
       color: #1b5e20;
+    }
+
+    .detail-product-planned {
+      background-color: #fff3e0;
+      color: #e65100;
+      border: 1px solid #ffb74d;
     }
 
     .detail-product-discontinued {
@@ -2862,6 +2898,7 @@ function createProductListFilterControls(
   productLifecycleFilterSelect.innerHTML = `
     <option value="all">すべて</option>
     <option value="active">通常商品のみ</option>
+    <option value="planned">廃盤予定のみ</option>
     <option value="discontinued">廃盤のみ</option>
   `;
 
@@ -3217,6 +3254,13 @@ function getFilteredProducts() {
       if (
         lifecycleFilter === "active" &&
         lifecycleStatus !== "通常商品"
+      ) {
+        return false;
+      }
+
+      if (
+        lifecycleFilter === "planned" &&
+        lifecycleStatus !== "廃盤予定"
       ) {
         return false;
       }

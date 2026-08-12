@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v44
+          画面版 v45
         </span>
       </div>
 
@@ -212,7 +212,7 @@
           </summary>
 
           <p class="home-panel-description">
-            販売予定、発注判定、船積希望、船便スケジュールを管理します。
+            販売予定、発注判定、出荷低迷、船積希望、船便スケジュールを管理します。
           </p>
 
           <div
@@ -245,6 +245,13 @@
               type="button"
             >
               発注が必要な商品一覧
+            </button>
+
+            <button
+              id="show-low-shipment-button"
+              type="button"
+            >
+              出荷低迷商品の一覧
             </button>
 
             <button
@@ -592,6 +599,74 @@
     </section>
 
 
+    <!-- 出荷低迷商品の一覧 -->
+    <section id="low-shipment" hidden>
+      <h2>出荷低迷商品の一覧</h2>
+
+      <p>
+        前月までの直近6か月の販売実績（返品差引後）から月平均販売数を計算し、
+        現在庫が24か月分以上ある商品を自動表示します。
+        6か月の月平均販売数が0個で在庫が残っている商品は「販売実績なし」として表示します。
+        廃盤商品は対象外です。
+      </p>
+
+      <div class="low-shipment-card">
+        <div id="low-shipment-summary" class="low-shipment-summary">
+          出荷低迷判定を計算します。
+        </div>
+        <div id="low-shipment-coverage" class="low-shipment-coverage"></div>
+        <p>
+          <button id="refresh-low-shipment-button" type="button">最新データで再計算する</button>
+        </p>
+      </div>
+
+      <div id="low-shipment-list-area" class="low-shipment-card">
+        <div class="low-shipment-filter-row">
+          <div>
+            <label for="low-shipment-search">商品を検索</label>
+            <input id="low-shipment-search" type="search" placeholder="社内コード・商品コード・商品名・保管場所">
+          </div>
+          <div>
+            <label for="low-shipment-filter">判定で絞り込み</label>
+            <select id="low-shipment-filter">
+              <option value="all">すべて</option>
+              <option value="over-24">2年以上分</option>
+              <option value="no-sales">販売実績なし</option>
+            </select>
+          </div>
+          <strong id="low-shipment-filter-count">表示：0商品</strong>
+        </div>
+
+        <div class="low-shipment-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>社内コード</th>
+                <th>商品コード</th>
+                <th>商品名</th>
+                <th>現在庫</th>
+                <th>6か月販売数（返品差引後）</th>
+                <th>月平均販売数</th>
+                <th>在庫月数</th>
+                <th>保管場所</th>
+                <th>判定</th>
+              </tr>
+            </thead>
+            <tbody id="low-shipment-table-body"></tbody>
+          </table>
+        </div>
+
+        <div class="low-shipment-pager">
+          <button id="low-shipment-prev-page" type="button">前へ</button>
+          <strong id="low-shipment-page-status">1 / 1ページ</strong>
+          <button id="low-shipment-next-page" type="button">次へ</button>
+        </div>
+      </div>
+
+      <button id="back-home-from-low-shipment" type="button">ホームへ戻る</button>
+    </section>
+
+
     <!-- 船積希望商品 -->
     <section id="shipping-wish" hidden>
       <h2>船積希望商品</h2>
@@ -713,7 +788,7 @@
       <h2>船便スケジュール・商品振分け</h2>
 
       <p>
-        出港日・入港日・倉庫到着日を登録し、「今回の倉庫到着日～次便の倉庫到着日前日」の販売見込と販売予定から不足商品と推奨数量を自動計算します。
+        出港日・入港日・倉庫到着日を登録し、「今回の倉庫到着日から次便の倉庫到着日前日まで」を対象期間として不足商品と推奨数量を自動計算します。
       </p>
 
       <div class="shipping-schedule-shortcuts">
@@ -1965,6 +2040,7 @@
 <script src="sales-plan.js?v=37"></script>
 <script src="sales-actual.js?v=39"></script>
 <script src="purchase-required.js?v=40"></script>
+<script src="low-shipment.js?v=45"></script>
 <script src="shipping-wish.js?v=42"></script>
 <script src="shipping-schedule.js?v=44"></script>
 <script src="backup.js?v=42"></script>

@@ -269,17 +269,19 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
   const errorRecords = [];
   const unregisteredCodes = new Set();
   let saleRows = 0;
+  let returnRows = 0;
 
   for (let index = 0; index < parsed.rows.length; index += 1) {
     const row = parsed.rows[index];
     while (row.length < 12) row.push("");
 
     const detailType = normalizeSalesActualText(row[11]);
-    if (detailType !== "売上") {
+    if (detailType !== "売上" && detailType !== "返品") {
       ignoredRecords.push({ rowNumber: parsed.headerIndex + index + 2, reason: `明細区分「${detailType || "空欄"}」` });
       continue;
     }
-    saleRows += 1;
+    if (detailType === "売上") saleRows += 1;
+    if (detailType === "返品") returnRows += 1;
 
     const internalCode = normalizeSalesActualText(row[0]);
     const saleDate = parseSalesActualDate(row[5]);
@@ -362,6 +364,8 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
     reportEndDate: reportEndDate,
     totalRows: parsed.rows.length,
     saleRows: saleRows,
+    returnRows: returnRows,
+    targetRows: saleRows + returnRows,
     importRecords: importRecords,
     duplicateRecords: duplicateRecords,
     ignoredRecords: ignoredRecords,
@@ -414,9 +418,11 @@ function renderSalesActualPreview(preview) {
     `<strong>帳票期間：</strong>${escapeSalesActualHtml(rangeText)}`,
     `<strong>データ行：</strong>${preview.totalRows}件`,
     `<strong>売上行：</strong>${preview.saleRows}件`,
+    `<strong>返品行：</strong>${preview.returnRows}件`,
+    `<strong>取込対象（売上＋返品）：</strong>${preview.targetRows}件`,
     `<strong>新規取込：</strong>${preview.importRecords.length}件`,
     `<strong>重複スキップ：</strong>${preview.duplicateRecords.length}件`,
-    `<strong>売上以外：</strong>${preview.ignoredRecords.length}件`,
+    `<strong>対象外（値引など）：</strong>${preview.ignoredRecords.length}件`,
     `<strong>エラー：</strong>${preview.errorRecords.length}件`
   ].join("<br>");
 
@@ -446,7 +452,10 @@ function renderSalesActualPreview(preview) {
     messages.push("未登録商品の販売実績も保存しますが、商品が登録されるまで発注判定には使用しません。");
   }
   if (preview.errorRecords.length > 0) {
-    messages.push(`取込不可の行が${preview.errorRecords.length}件あります。これらの行は保存しません。`);
+    messages.push(`取込不可の行が${preview.errorRecords.length}件あります。社内コード0・日付不明・数量不明など、商品を特定できない行は保存しません。`);
+  }
+  if (preview.returnRows > 0) {
+    messages.push("返品はCSVのマイナス数量をそのまま保存し、月平均販売数から差し引きます。");
   }
   if (preview.duplicateRecords.length > 0) {
     messages.push(`すでに取り込まれている明細${preview.duplicateRecords.length}件は二重登録しません。`);
@@ -489,6 +498,8 @@ async function importSelectedSalesActualFile() {
       reportEndDate: preview.reportEndDate,
       sourceRowCount: preview.totalRows,
       saleRowCount: preview.saleRows,
+      returnRowCount: preview.returnRows,
+      targetRowCount: preview.targetRows,
       importedCount: records.length,
       duplicateCount: preview.duplicateRecords.length,
       ignoredCount: preview.ignoredRecords.length,

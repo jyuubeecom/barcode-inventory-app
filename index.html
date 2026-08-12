@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v38
+          画面版 v39
         </span>
       </div>
 
@@ -433,7 +433,7 @@
       <h2>販売実績CSVを読み込む</h2>
 
       <p>
-        日々の販売実績CSVを取り込み、発注判定に使用する販売数を蓄積します。
+        日々の販売実績CSVを取り込み、売上から返品を差し引いた販売数を発注判定に使用します。
         商品はA列の社内コードだけで照合します。
       </p>
 
@@ -444,7 +444,7 @@
           A列：社内コード（CSV上の見出しは「商品コード」）<br>
           F列：出荷日<br>
           G列：出荷数量<br>
-          L列：明細区分が「売上」の行だけ取込<br>
+          L列：明細区分が「売上」「返品」の行を取込（返品はマイナス数量で差引）<br>
           B列・C列の商品名は照合には使用しません。
         </div>
         <p>
@@ -540,7 +540,7 @@
                 <th>商品コード</th>
                 <th>商品名</th>
                 <th>現在庫</th>
-                <th>6か月販売合計</th>
+                <th>6か月販売数（返品差引後）</th>
                 <th>月平均販売数</th>
                 <th>月平均×3</th>
                 <th>今後3か月販売予定</th>
@@ -1683,8 +1683,8 @@
 <script src="csv-update.js?v=31"></script>
 <script src="pwa.js?v=31"></script>
 <script src="sales-plan.js?v=37"></script>
-<script src="sales-actual.js?v=38"></script>
-<script src="purchase-required.js?v=38"></script>
+<script src="sales-actual.js?v=39"></script>
+<script src="purchase-required.js?v=39"></script>
 <script src="backup.js?v=38"></script>
 <script src="restore.js?v=38"></script>
 <script src="location-management.js?v=32"></script>

@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v42
+          画面版 v43
         </span>
       </div>
 
@@ -713,7 +713,7 @@
       <h2>船便スケジュール・商品振分け</h2>
 
       <p>
-        出港日・入港日・倉庫到着日を登録し、船積希望商品を各船便へ振り分けます。
+        出港日・入港日・倉庫到着日を登録し、倉庫到着月の「6か月平均販売数＋当月販売予定数」から不足商品と推奨数量を自動計算します。
       </p>
 
       <div class="shipping-schedule-shortcuts">
@@ -791,13 +791,18 @@
             </select>
           </div>
           <div>
-            <label for="shipping-allocation-search">船積希望商品を検索</label>
-            <input id="shipping-allocation-search" type="search" placeholder="社内コード・商品コード・商品名・希望月・メモ">
+            <label for="shipping-allocation-search">不足商品を検索</label>
+            <input id="shipping-allocation-search" type="search" placeholder="社内コード・商品コード・商品名・保管場所">
           </div>
         </div>
 
         <div id="shipping-allocation-schedule-info" class="shipping-allocation-info"></div>
-        <div id="shipping-allocation-summary" class="shipping-allocation-summary">船便を選択すると、船積希望商品を振り分けできます。</div>
+        <div id="shipping-allocation-summary" class="shipping-allocation-summary">船便を選択すると、倉庫到着月に必要な商品を自動計算します。</div>
+
+        <div class="shipping-allocation-note">
+          推奨数量 ＝ 「直前6か月の月平均販売数 ＋ 倉庫到着月の販売予定数」－ 現在庫 － 前の船便への振分数量です。<br>
+          「今回の船便」には推奨数量を初期表示します。積まない商品は0個に変更してから保存してください。
+        </div>
 
         <div class="shipping-allocation-table-wrap">
           <table>
@@ -806,13 +811,14 @@
                 <th>社内コード</th>
                 <th>商品コード</th>
                 <th>商品名</th>
-                <th>希望数量</th>
-                <th>他便振分済</th>
+                <th>月平均販売数</th>
+                <th>当月販売予定</th>
+                <th>現在庫</th>
+                <th>前便振分済</th>
+                <th>必要数</th>
+                <th>推奨数量</th>
                 <th>今回の船便</th>
-                <th>未振分</th>
-                <th>希望船積月</th>
-                <th>メモ</th>
-                <th>状態</th>
+                <th>保管場所</th>
               </tr>
             </thead>
             <tbody id="shipping-allocation-table-body"></tbody>
@@ -821,6 +827,7 @@
 
         <div class="shipping-schedule-actions">
           <button id="save-visible-shipping-allocations" type="button" disabled>表示中の振分数量を保存する</button>
+          <button id="print-shipping-allocation-list" type="button" disabled>この船便の振分リストを印刷する</button>
         </div>
 
         <div class="shipping-schedule-pager">
@@ -1956,7 +1963,7 @@
 <script src="sales-actual.js?v=39"></script>
 <script src="purchase-required.js?v=40"></script>
 <script src="shipping-wish.js?v=42"></script>
-<script src="shipping-schedule.js?v=42"></script>
+<script src="shipping-schedule.js?v=43"></script>
 <script src="backup.js?v=42"></script>
 <script src="restore.js?v=42"></script>
 <script src="location-management.js?v=32"></script>

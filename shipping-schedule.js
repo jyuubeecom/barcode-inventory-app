@@ -4,7 +4,9 @@ const SHIPPING_SCHEDULE_PAGE_SIZE = 20;
 const SHIPPING_ALLOCATION_PAGE_SIZE = 20;
 let shippingScheduleRecords = [];
 let shippingScheduleAllocations = [];
-let shippingScheduleWishes = [];
+let shippingScheduleProducts = [];
+let shippingScheduleSalesActuals = [];
+let shippingScheduleSalesPlans = [];
 let shippingScheduleEditingId = "";
 let shippingScheduleCurrentPage = 1;
 let shippingAllocationCurrentPage = 1;
@@ -22,6 +24,7 @@ function initializeShippingScheduleFeature() {
   const scheduleSelect = document.querySelector("#shipping-allocation-schedule");
   const allocationSearch = document.querySelector("#shipping-allocation-search");
   const saveVisibleButton = document.querySelector("#save-visible-shipping-allocations");
+  const printButton = document.querySelector("#print-shipping-allocation-list");
   const prevSchedule = document.querySelector("#shipping-schedule-prev-page");
   const nextSchedule = document.querySelector("#shipping-schedule-next-page");
   const prevAllocation = document.querySelector("#shipping-allocation-prev-page");
@@ -58,6 +61,7 @@ function initializeShippingScheduleFeature() {
     });
   }
   if (saveVisibleButton) saveVisibleButton.addEventListener("click", saveVisibleShippingAllocations);
+  if (printButton) printButton.addEventListener("click", printShippingAllocationList);
 
   if (prevSchedule) {
     prevSchedule.addEventListener("click", function () {
@@ -143,11 +147,15 @@ async function refreshShippingScheduleData() {
   const results = await Promise.all([
     getAllShippingSchedules(),
     getAllShippingAllocations(),
-    getAllShippingWishes()
+    getAllProducts(),
+    getAllSalesActuals(),
+    getAllSalesPlans()
   ]);
   shippingScheduleRecords = results[0].slice().sort(compareShippingSchedules);
   shippingScheduleAllocations = results[1].slice();
-  shippingScheduleWishes = results[2].slice().sort(compareShippingWishesForSchedule);
+  shippingScheduleProducts = results[2].slice();
+  shippingScheduleSalesActuals = results[3].slice();
+  shippingScheduleSalesPlans = results[4].slice();
   renderShippingScheduleTable();
   populateShippingScheduleSelect();
   renderShippingAllocationTable();
@@ -241,7 +249,7 @@ async function removeShippingSchedule(id) {
   const confirmed = window.confirm(
     `船便「${record.name}」を削除しますか？\n\n` +
     `出港日：${formatShippingDate(record.departureDate)}\n` +
-    `振分商品：${allocations.length}件 / ${allocatedQuantity.toLocaleString("ja-JP")}個\n\n` +
+    `振分商品：${getUniqueAllocationProductCount(allocations)}件 / ${allocatedQuantity.toLocaleString("ja-JP")}個\n\n` +
     "削除すると、この船便への商品振分けも解除されます。"
   );
   if (!confirmed) return;
@@ -303,7 +311,7 @@ function renderShippingScheduleTable() {
       appendShippingScheduleCell(row, formatShippingDate(record.departureDate));
       appendShippingScheduleCell(row, formatShippingDate(record.arrivalDate));
       appendShippingScheduleCell(row, formatShippingDate(record.warehouseArrivalDate));
-      appendShippingScheduleCell(row, `${allocations.length}件`);
+      appendShippingScheduleCell(row, `${getUniqueAllocationProductCount(allocations)}件`);
       appendShippingScheduleCell(row, `${quantity.toLocaleString("ja-JP")}個`);
 
       const allocationCell = document.createElement("td");
@@ -361,27 +369,77 @@ function populateShippingScheduleSelect() {
   }
 }
 
-function getFilteredShippingAllocationWishes() {
-  const search = String(document.querySelector("#shipping-allocation-search")?.value || "").trim().toLowerCase();
+function getSelectedShippingSchedule() {
   const scheduleId = document.querySelector("#shipping-allocation-schedule")?.value || "";
-  if (!scheduleId) return [];
+  return shippingScheduleRecords.find(function (record) { return record.id === scheduleId; }) || null;
+}
 
-  return shippingScheduleWishes.filter(function (wish) {
-    const currentQuantity = getAllocationQuantity(scheduleId, wish.id);
-    const allocatedTotal = getAllocatedTotalForWish(wish.id);
-    const remaining = Math.max(0, Number(wish.quantity || 0) - allocatedTotal);
-    if (remaining <= 0 && currentQuantity <= 0) return false;
+function getShippingAllocationRows(schedule) {
+  if (!schedule || !isShippingIsoDate(schedule.warehouseArrivalDate)) return [];
 
-    if (!search) return true;
-    const haystack = [wish.internalCode, wish.productCode, wish.productName, wish.desiredMonth, wish.note]
+  const monthKey = schedule.warehouseArrivalDate.slice(0, 7);
+  const averageContext = buildShippingAverageContext(monthKey);
+  const actualByProduct = aggregateShippingActuals(averageContext.monthKeys);
+  const planByProduct = aggregateShippingPlansForMonth(monthKey);
+  const priorScheduleIds = getPriorShippingScheduleIds(schedule);
+
+  return shippingScheduleProducts
+    .filter(function (product) {
+      return !isShippingDiscontinuedProduct(product) && String(product.internalCode || "").trim();
+    })
+    .map(function (product) {
+      const internalCode = String(product.internalCode || "").trim();
+      const sixMonthSales = actualByProduct.get(internalCode) || 0;
+      const monthlyAverage = Math.max(0, Math.ceil(sixMonthSales / 6));
+      const plannedQuantity = planByProduct.get(internalCode) || 0;
+      const requiredQuantity = Math.max(0, Math.ceil(monthlyAverage + plannedQuantity));
+      const currentStock = getShippingNumber(product.stock);
+      const priorAllocated = getAllocatedQuantityForProductInSchedules(internalCode, priorScheduleIds);
+      const recommendedQuantity = Math.max(0, requiredQuantity - currentStock - priorAllocated);
+      const currentAllocation = getCurrentScheduleAllocationQuantity(schedule.id, internalCode);
+
+      return {
+        internalCode: internalCode,
+        productCode: product.productCode || "",
+        productName: product.productName || "",
+        currentStock: currentStock,
+        sixMonthSales: sixMonthSales,
+        monthlyAverage: monthlyAverage,
+        plannedQuantity: plannedQuantity,
+        requiredQuantity: requiredQuantity,
+        priorAllocated: priorAllocated,
+        recommendedQuantity: recommendedQuantity,
+        currentAllocation: currentAllocation,
+        location: product.location || "",
+        averageStartMonth: averageContext.startMonth,
+        averageEndMonth: averageContext.endMonth,
+        targetMonth: monthKey
+      };
+    })
+    .filter(function (row) {
+      return row.recommendedQuantity > 0 || row.currentAllocation > 0;
+    })
+    .sort(function (a, b) {
+      if (b.recommendedQuantity !== a.recommendedQuantity) return b.recommendedQuantity - a.recommendedQuantity;
+      return a.internalCode.localeCompare(b.internalCode, "ja", { numeric: true });
+    });
+}
+
+function getFilteredShippingAllocationRows(schedule) {
+  const search = String(document.querySelector("#shipping-allocation-search")?.value || "").trim().toLowerCase();
+  const rows = getShippingAllocationRows(schedule);
+  if (!search) return rows;
+
+  return rows.filter(function (row) {
+    return [row.internalCode, row.productCode, row.productName, row.location]
       .map(function (value) { return String(value || "").toLowerCase(); })
-      .join(" ");
-    return haystack.includes(search);
+      .some(function (value) { return value.includes(search); });
   });
 }
 
 function getShippingAllocationTotalPages() {
-  return Math.max(1, Math.ceil(getFilteredShippingAllocationWishes().length / SHIPPING_ALLOCATION_PAGE_SIZE));
+  const schedule = getSelectedShippingSchedule();
+  return Math.max(1, Math.ceil(getFilteredShippingAllocationRows(schedule).length / SHIPPING_ALLOCATION_PAGE_SIZE));
 }
 
 function renderShippingAllocationTable() {
@@ -392,94 +450,100 @@ function renderShippingAllocationTable() {
   const prev = document.querySelector("#shipping-allocation-prev-page");
   const next = document.querySelector("#shipping-allocation-next-page");
   const saveButton = document.querySelector("#save-visible-shipping-allocations");
+  const printButton = document.querySelector("#print-shipping-allocation-list");
   if (!body || !summary || !pageStatus) return;
 
-  const scheduleId = document.querySelector("#shipping-allocation-schedule")?.value || "";
-  const schedule = shippingScheduleRecords.find(function (record) { return record.id === scheduleId; });
+  const schedule = getSelectedShippingSchedule();
   body.innerHTML = "";
 
   if (!schedule) {
-    summary.textContent = "船便を選択すると、船積希望商品を振り分けできます。";
+    summary.textContent = "船便を選択すると、倉庫到着月に必要な商品を自動計算します。";
     if (info) info.textContent = "";
     if (saveButton) saveButton.disabled = true;
+    if (printButton) printButton.disabled = true;
     pageStatus.textContent = "1 / 1ページ";
     if (prev) prev.disabled = true;
     if (next) next.disabled = true;
     return;
   }
 
+  const monthKey = schedule.warehouseArrivalDate.slice(0, 7);
+  const averageContext = buildShippingAverageContext(monthKey);
   if (info) {
-    info.textContent = `${schedule.name}｜出港 ${formatShippingDate(schedule.departureDate)}｜入港 ${formatShippingDate(schedule.arrivalDate)}｜倉庫到着 ${formatShippingDate(schedule.warehouseArrivalDate)}`;
+    info.innerHTML =
+      `<strong>${escapeShippingHtml(schedule.name)}</strong><br>` +
+      `出港 ${escapeShippingHtml(formatShippingDate(schedule.departureDate))} / ` +
+      `入港 ${escapeShippingHtml(formatShippingDate(schedule.arrivalDate))} / ` +
+      `倉庫到着 ${escapeShippingHtml(formatShippingDate(schedule.warehouseArrivalDate))}<br>` +
+      `判定対象月：${escapeShippingHtml(formatShippingMonth(monthKey))} / ` +
+      `月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の6か月平均`;
   }
 
-  const filtered = getFilteredShippingAllocationWishes();
+  const allRows = getShippingAllocationRows(schedule);
+  const filtered = getFilteredShippingAllocationRows(schedule);
   const totalPages = Math.max(1, Math.ceil(filtered.length / SHIPPING_ALLOCATION_PAGE_SIZE));
   if (shippingAllocationCurrentPage > totalPages) shippingAllocationCurrentPage = totalPages;
   const start = (shippingAllocationCurrentPage - 1) * SHIPPING_ALLOCATION_PAGE_SIZE;
   const visible = filtered.slice(start, start + SHIPPING_ALLOCATION_PAGE_SIZE);
 
-  const wishTotal = shippingScheduleWishes.reduce(function (sum, wish) {
-    return sum + (Number(wish.quantity) || 0);
+  const totalRecommended = allRows.reduce(function (sum, row) {
+    return sum + row.recommendedQuantity;
   }, 0);
-  const allAllocated = shippingScheduleAllocations.reduce(function (sum, allocation) {
-    return sum + (Number(allocation.quantity) || 0);
+  const currentAllocated = allRows.reduce(function (sum, row) {
+    return sum + row.currentAllocation;
   }, 0);
-  const currentAllocated = shippingScheduleAllocations
-    .filter(function (allocation) { return allocation.scheduleId === scheduleId; })
-    .reduce(function (sum, allocation) { return sum + (Number(allocation.quantity) || 0); }, 0);
-  const remainingTotal = Math.max(0, wishTotal - allAllocated);
-  summary.textContent = `船積希望合計：${wishTotal.toLocaleString("ja-JP")}個 / この船便：${currentAllocated.toLocaleString("ja-JP")}個 / 全船便未振分：${remainingTotal.toLocaleString("ja-JP")}個`;
+  summary.textContent =
+    `不足候補：${allRows.length.toLocaleString("ja-JP")}商品 / ` +
+    `推奨数量合計：${totalRecommended.toLocaleString("ja-JP")}個 / ` +
+    `この船便の保存済み数量：${currentAllocated.toLocaleString("ja-JP")}個`;
 
   if (visible.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 10;
-    cell.textContent = "振り分けできる船積希望商品はありません。";
+    cell.colSpan = 11;
+    cell.textContent = "この船便の倉庫到着月で不足する商品はありません。";
     row.appendChild(cell);
     body.appendChild(row);
   } else {
-    visible.forEach(function (wish) {
-      const currentQuantity = getAllocationQuantity(scheduleId, wish.id);
-      const allocatedTotal = getAllocatedTotalForWish(wish.id);
-      const otherAllocated = Math.max(0, allocatedTotal - currentQuantity);
-      const remainingAfterCurrent = Math.max(0, Number(wish.quantity || 0) - allocatedTotal);
-
+    visible.forEach(function (item) {
       const row = document.createElement("tr");
-      row.dataset.shippingWishId = wish.id;
-      appendShippingScheduleCell(row, wish.internalCode || "");
-      appendShippingScheduleCell(row, wish.productCode || "未登録");
-      appendShippingScheduleCell(row, wish.productName || "");
-      appendShippingScheduleCell(row, `${Number(wish.quantity || 0).toLocaleString("ja-JP")}個`);
-      appendShippingScheduleCell(row, `${otherAllocated.toLocaleString("ja-JP")}個`);
+      row.dataset.internalCode = item.internalCode;
+      appendShippingScheduleCell(row, item.internalCode);
+      appendShippingScheduleCell(row, item.productCode || "-");
+      appendShippingScheduleCell(row, item.productName || "");
+      appendShippingScheduleCell(row, `${item.monthlyAverage.toLocaleString("ja-JP")}個`);
+      appendShippingScheduleCell(row, `${formatShippingQuantity(item.plannedQuantity)}個`);
+      appendShippingScheduleCell(row, `${item.currentStock.toLocaleString("ja-JP")}個`);
+      appendShippingScheduleCell(row, `${item.priorAllocated.toLocaleString("ja-JP")}個`);
+      appendShippingScheduleCell(row, `${item.requiredQuantity.toLocaleString("ja-JP")}個`);
+      appendShippingScheduleCell(row, `${item.recommendedQuantity.toLocaleString("ja-JP")}個`);
 
       const inputCell = document.createElement("td");
       const input = document.createElement("input");
       input.type = "number";
       input.min = "0";
       input.step = "1";
-      input.value = String(currentQuantity || 0);
+      input.value = String(item.currentAllocation > 0 ? item.currentAllocation : item.recommendedQuantity);
       input.className = "shipping-allocation-quantity";
-      input.dataset.shippingWishId = wish.id;
+      input.dataset.internalCode = item.internalCode;
+      input.dataset.recommendedQuantity = String(item.recommendedQuantity);
       inputCell.appendChild(input);
       row.appendChild(inputCell);
 
-      appendShippingScheduleCell(row, `${remainingAfterCurrent.toLocaleString("ja-JP")}個`);
-      appendShippingScheduleCell(row, formatShippingWishMonthForSchedule(wish.desiredMonth));
-      appendShippingScheduleCell(row, wish.note || "");
-      appendShippingScheduleCell(row, currentQuantity > 0 ? "振分済み" : "未振分");
+      appendShippingScheduleCell(row, item.location || "");
       body.appendChild(row);
     });
   }
 
   if (saveButton) saveButton.disabled = visible.length === 0;
+  if (printButton) printButton.disabled = getSavedAllocationsForSchedule(schedule.id).length === 0;
   pageStatus.textContent = `${shippingAllocationCurrentPage} / ${totalPages}ページ`;
   if (prev) prev.disabled = shippingAllocationCurrentPage <= 1;
   if (next) next.disabled = shippingAllocationCurrentPage >= totalPages;
 }
 
 async function saveVisibleShippingAllocations() {
-  const scheduleId = document.querySelector("#shipping-allocation-schedule")?.value || "";
-  const schedule = shippingScheduleRecords.find(function (record) { return record.id === scheduleId; });
+  const schedule = getSelectedShippingSchedule();
   if (!schedule) {
     alert("振り分ける船便を選択してください。");
     return;
@@ -489,33 +553,34 @@ async function saveVisibleShippingAllocations() {
   if (inputs.length === 0) return;
 
   const changes = [];
+  let overRecommendedCount = 0;
+
   for (const input of inputs) {
-    const wishId = input.dataset.shippingWishId;
-    const wish = shippingScheduleWishes.find(function (item) { return item.id === wishId; });
-    if (!wish) continue;
+    const internalCode = String(input.dataset.internalCode || "").trim();
+    const product = shippingScheduleProducts.find(function (item) {
+      return String(item.internalCode || "").trim() === internalCode;
+    });
+    if (!product) continue;
 
     const quantity = Number(input.value);
     if (!Number.isInteger(quantity) || quantity < 0) {
-      alert(`${wish.productName || wish.internalCode} の振分数量は0以上の整数で入力してください。`);
+      alert(`${product.productName || internalCode} の振分数量は0以上の整数で入力してください。`);
       input.focus();
       return;
     }
 
-    const currentQuantity = getAllocationQuantity(scheduleId, wishId);
-    const otherAllocated = Math.max(0, getAllocatedTotalForWish(wishId) - currentQuantity);
-    const maxForThisSchedule = Math.max(0, Number(wish.quantity || 0) - otherAllocated);
-    if (quantity > maxForThisSchedule) {
-      alert(
-        `${wish.productName || wish.internalCode} は希望数量を超えて振り分けできません。\n\n` +
-        `希望数量：${Number(wish.quantity || 0).toLocaleString("ja-JP")}個\n` +
-        `他の船便：${otherAllocated.toLocaleString("ja-JP")}個\n` +
-        `今回の船便に振分可能：${maxForThisSchedule.toLocaleString("ja-JP")}個`
-      );
-      input.focus();
-      return;
-    }
+    const currentQuantity = getCurrentScheduleAllocationQuantity(schedule.id, internalCode);
+    const recommendedQuantity = Number(input.dataset.recommendedQuantity || 0);
+    if (quantity > recommendedQuantity && quantity !== currentQuantity) overRecommendedCount += 1;
 
-    if (quantity !== currentQuantity) changes.push({ wish: wish, quantity: quantity });
+    if (quantity !== currentQuantity) {
+      changes.push({
+        product: product,
+        internalCode: internalCode,
+        quantity: quantity,
+        recommendedQuantity: recommendedQuantity
+      });
+    }
   }
 
   if (changes.length === 0) {
@@ -523,34 +588,38 @@ async function saveVisibleShippingAllocations() {
     return;
   }
 
-  const confirmed = window.confirm(
-    `${schedule.name} の振分数量を保存します。\n\n変更商品：${changes.length}件\n\nよろしいですか？`
-  );
+  let message = `${schedule.name} の振分数量を保存します。\n\n変更商品：${changes.length}件`;
+  if (overRecommendedCount > 0) {
+    message += `\n推奨数量を超える商品：${overRecommendedCount}件`;
+  }
+  message += "\n\nよろしいですか？";
+
+  const confirmed = window.confirm(message);
   if (!confirmed) return;
 
   try {
     for (const change of changes) {
-      const id = createShippingAllocationId(scheduleId, change.wish.id);
-      if (change.quantity === 0) {
-        await deleteShippingAllocation(id);
-      } else {
+      const existingRecords = getAllocationRecordsForScheduleProduct(schedule.id, change.internalCode);
+      for (const existing of existingRecords) {
+        await deleteShippingAllocation(existing.id);
+      }
+
+      if (change.quantity > 0) {
         await saveShippingAllocation({
-          id: id,
-          scheduleId: scheduleId,
-          shippingWishId: change.wish.id,
-          internalCode: change.wish.internalCode || "",
-          productCode: change.wish.productCode || "",
-          productName: change.wish.productName || "",
+          id: createShippingProductAllocationId(schedule.id, change.internalCode),
+          scheduleId: schedule.id,
+          shippingWishId: "",
+          internalCode: change.internalCode,
+          productCode: change.product.productCode || "",
+          productName: change.product.productName || "",
           quantity: change.quantity,
+          source: "auto-shortage",
           updatedAt: new Date().toISOString()
         });
       }
     }
 
     await refreshShippingScheduleData();
-    if (typeof refreshShippingWishData === "function") {
-      try { await refreshShippingWishData(); } catch (error) { console.warn(error); }
-    }
     alert("船便への商品振分けを保存しました。");
   } catch (error) {
     console.error("船便振分保存エラー", error);
@@ -558,17 +627,300 @@ async function saveVisibleShippingAllocations() {
   }
 }
 
-function getAllocationQuantity(scheduleId, wishId) {
-  const record = shippingScheduleAllocations.find(function (allocation) {
-    return allocation.scheduleId === scheduleId && allocation.shippingWishId === wishId;
-  });
-  return record ? Number(record.quantity) || 0 : 0;
+function printShippingAllocationList() {
+  const schedule = getSelectedShippingSchedule();
+  if (!schedule) {
+    alert("印刷する船便を選択してください。");
+    return;
+  }
+
+  const saved = getSavedAllocationsForSchedule(schedule.id);
+  if (saved.length === 0) {
+    alert("この船便には保存済みの振分商品がありません。先に振分数量を保存してください。");
+    return;
+  }
+
+  const rowsByCode = new Map(getShippingAllocationRows(schedule).map(function (row) {
+    return [row.internalCode, row];
+  }));
+
+  const printRows = saved
+    .map(function (allocation) {
+      const code = String(allocation.internalCode || "").trim();
+      const computed = rowsByCode.get(code);
+      const product = shippingScheduleProducts.find(function (item) {
+        return String(item.internalCode || "").trim() === code;
+      }) || {};
+      return {
+        internalCode: code,
+        productCode: allocation.productCode || product.productCode || "",
+        productName: allocation.productName || product.productName || "",
+        monthlyAverage: computed ? computed.monthlyAverage : "",
+        plannedQuantity: computed ? computed.plannedQuantity : "",
+        currentStock: computed ? computed.currentStock : getShippingNumber(product.stock),
+        priorAllocated: computed ? computed.priorAllocated : "",
+        requiredQuantity: computed ? computed.requiredQuantity : "",
+        recommendedQuantity: computed ? computed.recommendedQuantity : "",
+        quantity: Number(allocation.quantity) || 0,
+        location: product.location || ""
+      };
+    })
+    .filter(function (row) { return row.quantity > 0; })
+    .sort(function (a, b) {
+      return a.internalCode.localeCompare(b.internalCode, "ja", { numeric: true });
+    });
+
+  const totalQuantity = printRows.reduce(function (sum, row) { return sum + row.quantity; }, 0);
+  const targetMonth = schedule.warehouseArrivalDate.slice(0, 7);
+  const averageContext = buildShippingAverageContext(targetMonth);
+  const printDate = formatShippingDateForPrint(new Date());
+
+  const tableRows = printRows.map(function (row, index) {
+    return `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeShippingHtml(row.internalCode)}</td>
+        <td>${escapeShippingHtml(row.productCode || "-")}</td>
+        <td>${escapeShippingHtml(row.productName)}</td>
+        <td class="num">${formatShippingPrintNumber(row.monthlyAverage)}</td>
+        <td class="num">${formatShippingPrintNumber(row.plannedQuantity)}</td>
+        <td class="num">${formatShippingPrintNumber(row.currentStock)}</td>
+        <td class="num">${formatShippingPrintNumber(row.priorAllocated)}</td>
+        <td class="num">${formatShippingPrintNumber(row.requiredQuantity)}</td>
+        <td class="num">${formatShippingPrintNumber(row.recommendedQuantity)}</td>
+        <td class="num strong">${row.quantity.toLocaleString("ja-JP")}</td>
+        <td>${escapeShippingHtml(row.location)}</td>
+      </tr>`;
+  }).join("");
+
+  const html = `<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>${escapeShippingHtml(schedule.name)} 船積リスト</title>
+<style>
+  @page { size: A4 landscape; margin: 10mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Yu Gothic", "Meiryo", sans-serif; color: #111; font-size: 10pt; }
+  h1 { margin: 0 0 8px; font-size: 17pt; }
+  .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 12px; margin-bottom: 10px; }
+  .meta div { border-bottom: 1px solid #aaa; padding: 4px 0; }
+  .note { margin: 8px 0 10px; padding: 6px 8px; background: #f3f4f6; font-size: 9pt; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th, td { border: 1px solid #777; padding: 4px 5px; vertical-align: middle; word-break: break-word; }
+  th { background: #e8eef4; font-size: 8.5pt; }
+  td { font-size: 8.5pt; }
+  .num { text-align: right; }
+  .strong { font-weight: 700; font-size: 9.5pt; }
+  .total { margin-top: 8px; text-align: right; font-size: 11pt; font-weight: 700; }
+  .footer { margin-top: 8px; font-size: 8pt; color: #444; }
+</style>
+</head>
+<body>
+  <h1>船積リスト　${escapeShippingHtml(schedule.name)}</h1>
+  <div class="meta">
+    <div><strong>出港日：</strong>${escapeShippingHtml(formatShippingDate(schedule.departureDate))}</div>
+    <div><strong>入港日：</strong>${escapeShippingHtml(formatShippingDate(schedule.arrivalDate))}</div>
+    <div><strong>倉庫到着日：</strong>${escapeShippingHtml(formatShippingDate(schedule.warehouseArrivalDate))}</div>
+    <div><strong>印刷日：</strong>${escapeShippingHtml(printDate)}</div>
+  </div>
+  <div class="note">
+    判定対象：${escapeShippingHtml(formatShippingMonth(targetMonth))}　／　月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の6か月平均　／　必要数＝月平均＋当月販売予定
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:3%">No</th>
+        <th style="width:7%">社内コード</th>
+        <th style="width:8%">商品コード</th>
+        <th style="width:18%">商品名</th>
+        <th style="width:7%">月平均</th>
+        <th style="width:8%">当月予定</th>
+        <th style="width:7%">現在庫</th>
+        <th style="width:8%">前便振分</th>
+        <th style="width:7%">必要数</th>
+        <th style="width:7%">推奨</th>
+        <th style="width:8%">今回数量</th>
+        <th style="width:12%">保管場所</th>
+      </tr>
+    </thead>
+    <tbody>${tableRows}</tbody>
+  </table>
+  <div class="total">振分商品：${printRows.length.toLocaleString("ja-JP")}件　／　振分数量合計：${totalQuantity.toLocaleString("ja-JP")}個</div>
+  <div class="footer">バーコード在庫・棚卸管理アプリ v43</div>
+</body>
+</html>`;
+
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.setAttribute("aria-hidden", "true");
+  document.body.appendChild(iframe);
+
+  const printWindow = iframe.contentWindow;
+  const printDocument = iframe.contentDocument || printWindow.document;
+  printDocument.open();
+  printDocument.write(html);
+  printDocument.close();
+
+  window.setTimeout(function () {
+    try {
+      printWindow.focus();
+      printWindow.print();
+    } finally {
+      window.setTimeout(function () { iframe.remove(); }, 1500);
+    }
+  }, 300);
 }
 
-function getAllocatedTotalForWish(wishId) {
+function buildShippingAverageContext(targetMonth) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(targetMonth || ""));
+  if (!match) return { monthKeys: [], startMonth: "", endMonth: "" };
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const monthKeys = [];
+  for (let offset = 6; offset >= 1; offset -= 1) {
+    const date = new Date(year, monthIndex - offset, 1);
+    monthKeys.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return {
+    monthKeys: monthKeys,
+    startMonth: monthKeys[0] || "",
+    endMonth: monthKeys[monthKeys.length - 1] || ""
+  };
+}
+
+function aggregateShippingActuals(monthKeys) {
+  const monthSet = new Set(monthKeys);
+  const result = new Map();
+  shippingScheduleSalesActuals.forEach(function (record) {
+    const saleDate = String(record.saleDate || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(saleDate)) return;
+    if (!monthSet.has(saleDate.slice(0, 7))) return;
+    const code = String(record.internalCode || "").trim();
+    if (!code) return;
+    const quantity = Number(record.quantity || 0);
+    if (!Number.isFinite(quantity)) return;
+    result.set(code, (result.get(code) || 0) + quantity);
+  });
+  return result;
+}
+
+function aggregateShippingPlansForMonth(monthKey) {
+  const result = new Map();
+  if (!/^\d{4}-\d{2}$/.test(String(monthKey || ""))) return result;
+  const monthStart = `${monthKey}-01`;
+  const monthEnd = getShippingLastDateOfMonth(monthKey);
+
+  shippingScheduleSalesPlans.forEach(function (plan) {
+    if (!shippingPlanOverlapsRange(plan, monthStart, monthEnd)) return;
+    const code = String(plan.internalCode || "").trim();
+    if (!code) return;
+    const quantity = Number(plan.quantity || 0);
+    if (!Number.isFinite(quantity)) return;
+    result.set(code, (result.get(code) || 0) + quantity);
+  });
+  return result;
+}
+
+function shippingPlanOverlapsRange(plan, startDate, endDate) {
+  const type = getShippingPlanType(plan);
+  if (type === "date") return plan.shippingDate >= startDate && plan.shippingDate <= endDate;
+  if (type === "period") return plan.shippingStartDate <= endDate && plan.shippingEndDate >= startDate;
+  if (type === "month") {
+    const monthStart = `${plan.shippingMonth}-01`;
+    const monthEnd = getShippingLastDateOfMonth(plan.shippingMonth);
+    return monthStart <= endDate && monthEnd >= startDate;
+  }
+  return false;
+}
+
+function getShippingPlanType(plan) {
+  if (plan && plan.shippingType === "date" && isShippingIsoDate(plan.shippingDate)) return "date";
+  if (plan && plan.shippingType === "period" && isShippingIsoDate(plan.shippingStartDate) && isShippingIsoDate(plan.shippingEndDate)) return "period";
+  if (plan && isShippingIsoDate(plan.shippingDate)) return "date";
+  if (plan && isShippingIsoDate(plan.shippingStartDate) && isShippingIsoDate(plan.shippingEndDate)) return "period";
+  if (plan && /^\d{4}-\d{2}$/.test(String(plan.shippingMonth || ""))) return "month";
+  return "unknown";
+}
+
+function getPriorShippingScheduleIds(currentSchedule) {
+  const ordered = shippingScheduleRecords.slice().sort(compareShippingScheduleChronology);
+  const index = ordered.findIndex(function (record) { return record.id === currentSchedule.id; });
+  if (index <= 0) return new Set();
+  return new Set(ordered.slice(0, index).map(function (record) { return record.id; }));
+}
+
+function compareShippingScheduleChronology(a, b) {
+  const aWarehouse = a.warehouseArrivalDate || "9999-99-99";
+  const bWarehouse = b.warehouseArrivalDate || "9999-99-99";
+  if (aWarehouse !== bWarehouse) return aWarehouse.localeCompare(bWarehouse);
+  const aDeparture = a.departureDate || "9999-99-99";
+  const bDeparture = b.departureDate || "9999-99-99";
+  if (aDeparture !== bDeparture) return aDeparture.localeCompare(bDeparture);
+  return String(a.id || "").localeCompare(String(b.id || ""));
+}
+
+function getAllocatedQuantityForProductInSchedules(internalCode, scheduleIds) {
+  if (!scheduleIds || scheduleIds.size === 0) return 0;
   return shippingScheduleAllocations
-    .filter(function (allocation) { return allocation.shippingWishId === wishId; })
-    .reduce(function (sum, allocation) { return sum + (Number(allocation.quantity) || 0); }, 0);
+    .filter(function (allocation) {
+      return scheduleIds.has(allocation.scheduleId) &&
+        String(allocation.internalCode || "").trim() === internalCode;
+    })
+    .reduce(function (sum, allocation) {
+      return sum + (Number(allocation.quantity) || 0);
+    }, 0);
+}
+
+function getCurrentScheduleAllocationQuantity(scheduleId, internalCode) {
+  return getAllocationRecordsForScheduleProduct(scheduleId, internalCode)
+    .reduce(function (sum, allocation) {
+      return sum + (Number(allocation.quantity) || 0);
+    }, 0);
+}
+
+function getAllocationRecordsForScheduleProduct(scheduleId, internalCode) {
+  return shippingScheduleAllocations.filter(function (allocation) {
+    return allocation.scheduleId === scheduleId &&
+      String(allocation.internalCode || "").trim() === internalCode;
+  });
+}
+
+function getSavedAllocationsForSchedule(scheduleId) {
+  const merged = new Map();
+  shippingScheduleAllocations
+    .filter(function (allocation) {
+      return allocation.scheduleId === scheduleId && Number(allocation.quantity) > 0;
+    })
+    .forEach(function (allocation) {
+      const code = String(allocation.internalCode || "").trim();
+      if (!code) return;
+      const current = merged.get(code) || {
+        internalCode: code,
+        productCode: allocation.productCode || "",
+        productName: allocation.productName || "",
+        quantity: 0
+      };
+      current.quantity += Number(allocation.quantity) || 0;
+      if (!current.productCode && allocation.productCode) current.productCode = allocation.productCode;
+      if (!current.productName && allocation.productName) current.productName = allocation.productName;
+      merged.set(code, current);
+    });
+  return Array.from(merged.values());
+}
+
+function getUniqueAllocationProductCount(allocations) {
+  return new Set(
+    allocations
+      .filter(function (allocation) { return Number(allocation.quantity) > 0; })
+      .map(function (allocation) { return String(allocation.internalCode || "").trim(); })
+      .filter(Boolean)
+  ).size;
 }
 
 function appendShippingScheduleCell(row, value) {
@@ -584,13 +936,6 @@ function compareShippingSchedules(a, b) {
   return String(a.name || "").localeCompare(String(b.name || ""), "ja");
 }
 
-function compareShippingWishesForSchedule(a, b) {
-  const aMonth = a.desiredMonth || "9999-99";
-  const bMonth = b.desiredMonth || "9999-99";
-  if (aMonth !== bMonth) return aMonth.localeCompare(bMonth);
-  return String(a.internalCode || "").localeCompare(String(b.internalCode || ""), "ja", { numeric: true });
-}
-
 function createShippingScheduleId() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") {
     return `shipping-schedule-${window.crypto.randomUUID()}`;
@@ -598,8 +943,8 @@ function createShippingScheduleId() {
   return `shipping-schedule-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function createShippingAllocationId(scheduleId, wishId) {
-  return `${scheduleId}::${wishId}`;
+function createShippingProductAllocationId(scheduleId, internalCode) {
+  return `${scheduleId}::product::${encodeURIComponent(internalCode)}`;
 }
 
 function formatShippingDate(value) {
@@ -608,10 +953,58 @@ function formatShippingDate(value) {
   return `${Number(parts[0])}/${Number(parts[1])}/${Number(parts[2])}`;
 }
 
-function formatShippingWishMonthForSchedule(value) {
-  if (!/^\d{4}-\d{2}$/.test(String(value || ""))) return "未指定";
-  const parts = value.split("-");
-  return `${Number(parts[0])}年${Number(parts[1])}月`;
+function formatShippingMonth(value) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(value || ""));
+  if (!match) return value || "";
+  return `${Number(match[1])}年${Number(match[2])}月`;
+}
+
+function formatShippingDateForPrint(date) {
+  return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function formatShippingQuantity(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "0";
+  return Number.isInteger(number)
+    ? number.toLocaleString("ja-JP")
+    : number.toLocaleString("ja-JP", { maximumFractionDigits: 2 });
+}
+
+function formatShippingPrintNumber(value) {
+  if (value === "" || value === null || typeof value === "undefined") return "-";
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString("ja-JP") : "-";
+}
+
+function getShippingNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function isShippingDiscontinuedProduct(product) {
+  const status = String(product && (product.productStatus || product.status || "") || "").trim().toLowerCase();
+  return status === "廃盤" || status === "discontinued" || Boolean(product && product.discontinued === true);
+}
+
+function isShippingIsoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+}
+
+function getShippingLastDateOfMonth(month) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(month || ""));
+  if (!match) return "";
+  const lastDay = new Date(Number(match[1]), Number(match[2]), 0).getDate();
+  return `${match[1]}-${match[2]}-${String(lastDay).padStart(2, "0")}`;
+}
+
+function escapeShippingHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function createShippingScheduleStyle() {
@@ -650,6 +1043,14 @@ function createShippingScheduleStyle() {
       background: #e0f2f1;
       font-weight: 700;
     }
+    #shipping-schedule .shipping-allocation-note {
+      margin: 10px 0;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #fff3e0;
+      color: #8a3b00;
+      line-height: 1.7;
+    }
     #shipping-schedule .shipping-schedule-table-wrap,
     #shipping-schedule .shipping-allocation-table-wrap {
       overflow-x: auto;
@@ -657,7 +1058,7 @@ function createShippingScheduleStyle() {
     }
     #shipping-schedule table {
       width: 100%;
-      min-width: 980px;
+      min-width: 1180px;
       border-collapse: collapse;
     }
     #shipping-schedule th,
@@ -667,12 +1068,8 @@ function createShippingScheduleStyle() {
       text-align: left;
       vertical-align: middle;
     }
-    #shipping-schedule .shipping-schedule-actions {
-      white-space: nowrap;
-    }
-    #shipping-schedule .shipping-schedule-delete {
-      background: #d32f2f;
-    }
+    #shipping-schedule .shipping-schedule-actions { white-space: nowrap; }
+    #shipping-schedule .shipping-schedule-delete { background: #d32f2f; }
     #shipping-schedule .shipping-allocation-controls {
       display: grid;
       grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
@@ -683,11 +1080,10 @@ function createShippingScheduleStyle() {
       width: 110px;
       min-width: 90px;
     }
+    #shipping-schedule #print-shipping-allocation-list { background: #455a64; }
     @media (max-width: 760px) {
       #shipping-schedule .shipping-schedule-grid,
-      #shipping-schedule .shipping-allocation-controls {
-        grid-template-columns: 1fr;
-      }
+      #shipping-schedule .shipping-allocation-controls { grid-template-columns: 1fr; }
       #shipping-schedule .shipping-schedule-card { padding: 14px; }
     }
   `;

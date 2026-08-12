@@ -3,7 +3,7 @@
 const DATABASE_NAME =
   "barcodeInventoryDatabase";
 
-const DATABASE_VERSION = 10;
+const DATABASE_VERSION = 11;
 
 const PRODUCT_STORE_NAME =
   "products";
@@ -34,6 +34,12 @@ const SALES_IMPORT_BATCH_STORE_NAME =
 
 const SHIPPING_WISH_STORE_NAME =
   "shippingWishes";
+
+const SHIPPING_SCHEDULE_STORE_NAME =
+  "shippingSchedules";
+
+const SHIPPING_ALLOCATION_STORE_NAME =
+  "shippingAllocations";
 
 function openDatabase() {
   return new Promise(function (
@@ -388,6 +394,60 @@ function openDatabase() {
           shippingWishStore.createIndex(
             "status",
             "status",
+            { unique: false }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            SHIPPING_SCHEDULE_STORE_NAME
+          )
+        ) {
+          const shippingScheduleStore =
+            database.createObjectStore(
+              SHIPPING_SCHEDULE_STORE_NAME,
+              { keyPath: "id" }
+            );
+
+          shippingScheduleStore.createIndex(
+            "departureDate",
+            "departureDate",
+            { unique: false }
+          );
+
+          shippingScheduleStore.createIndex(
+            "warehouseArrivalDate",
+            "warehouseArrivalDate",
+            { unique: false }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            SHIPPING_ALLOCATION_STORE_NAME
+          )
+        ) {
+          const shippingAllocationStore =
+            database.createObjectStore(
+              SHIPPING_ALLOCATION_STORE_NAME,
+              { keyPath: "id" }
+            );
+
+          shippingAllocationStore.createIndex(
+            "scheduleId",
+            "scheduleId",
+            { unique: false }
+          );
+
+          shippingAllocationStore.createIndex(
+            "shippingWishId",
+            "shippingWishId",
+            { unique: false }
+          );
+
+          shippingAllocationStore.createIndex(
+            "internalCode",
+            "internalCode",
             { unique: false }
           );
         }
@@ -1766,3 +1826,96 @@ async function getAllShippingWishes() {
     SHIPPING_WISH_STORE_NAME
   );
 }
+
+async function saveShippingSchedule(record) {
+  const database = await openDatabase();
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      SHIPPING_SCHEDULE_STORE_NAME,
+      "readwrite"
+    );
+    transaction.objectStore(SHIPPING_SCHEDULE_STORE_NAME).add(record);
+    transaction.oncomplete = function () { database.close(); resolve(); };
+    transaction.onerror = function () { const error = transaction.error; database.close(); reject(error); };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function updateShippingSchedule(record) {
+  const database = await openDatabase();
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      SHIPPING_SCHEDULE_STORE_NAME,
+      "readwrite"
+    );
+    transaction.objectStore(SHIPPING_SCHEDULE_STORE_NAME).put(record);
+    transaction.oncomplete = function () { database.close(); resolve(); };
+    transaction.onerror = function () { const error = transaction.error; database.close(); reject(error); };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function getAllShippingSchedules() {
+  return getAllRecordsFromStore(SHIPPING_SCHEDULE_STORE_NAME);
+}
+
+async function getAllShippingAllocations() {
+  return getAllRecordsFromStore(SHIPPING_ALLOCATION_STORE_NAME);
+}
+
+async function saveShippingAllocation(record) {
+  const database = await openDatabase();
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      SHIPPING_ALLOCATION_STORE_NAME,
+      "readwrite"
+    );
+    transaction.objectStore(SHIPPING_ALLOCATION_STORE_NAME).put(record);
+    transaction.oncomplete = function () { database.close(); resolve(); };
+    transaction.onerror = function () { const error = transaction.error; database.close(); reject(error); };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function deleteShippingAllocation(id) {
+  const database = await openDatabase();
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      SHIPPING_ALLOCATION_STORE_NAME,
+      "readwrite"
+    );
+    transaction.objectStore(SHIPPING_ALLOCATION_STORE_NAME).delete(id);
+    transaction.oncomplete = function () { database.close(); resolve(); };
+    transaction.onerror = function () { const error = transaction.error; database.close(); reject(error); };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function deleteShippingScheduleWithAllocations(scheduleId) {
+  const database = await openDatabase();
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      [SHIPPING_SCHEDULE_STORE_NAME, SHIPPING_ALLOCATION_STORE_NAME],
+      "readwrite"
+    );
+    const scheduleStore = transaction.objectStore(SHIPPING_SCHEDULE_STORE_NAME);
+    const allocationStore = transaction.objectStore(SHIPPING_ALLOCATION_STORE_NAME);
+    const index = allocationStore.index("scheduleId");
+    const request = index.openCursor(IDBKeyRange.only(scheduleId));
+
+    request.onsuccess = function () {
+      const cursor = request.result;
+      if (!cursor) {
+        scheduleStore.delete(scheduleId);
+        return;
+      }
+      cursor.delete();
+      cursor.continue();
+    };
+
+    transaction.oncomplete = function () { database.close(); resolve(); };
+    transaction.onerror = function () { const error = transaction.error; database.close(); reject(error); };
+    transaction.onabort = transaction.onerror;
+  });
+}
+

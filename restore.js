@@ -74,7 +74,9 @@ async function handleRestoreFileSelection(event) {
       `販売予定：${c.salesPlans}件\n` +
       `販売実績：${c.salesActuals}件\n` +
       `販売実績CSV取込履歴：${c.salesImportBatches}件\n` +
-      `船積希望：${c.shippingWishes}件\n\n` +
+      `船積希望：${c.shippingWishes}件\n` +
+      `船便スケジュール：${c.shippingSchedules}件\n` +
+      `船便商品振分け：${c.shippingAllocations}件\n\n` +
       "現在のデータはすべて置き換えられます。\n" +
       "現在のデータを残す場合は、先にバックアップしてください。\n\n" +
       "復元を続けますか？"
@@ -101,7 +103,9 @@ async function handleRestoreFileSelection(event) {
       `販売予定：${c.salesPlans}件\n` +
       `販売実績：${c.salesActuals}件\n` +
       `販売実績CSV取込履歴：${c.salesImportBatches}件\n` +
-      `船積希望：${c.shippingWishes}件\n\n` +
+      `船積希望：${c.shippingWishes}件\n` +
+      `船便スケジュール：${c.shippingSchedules}件\n` +
+      `船便商品振分け：${c.shippingAllocations}件\n\n` +
       "画面を更新します。"
     );
     location.reload();
@@ -122,7 +126,7 @@ function normalizeAndValidateBackup(raw) {
   if (!raw || raw.backupType !== "barcode-inventory-app") {
     throw new Error("このアプリで作成したバックアップではありません。");
   }
-  if (![1, 2, 3, 4, 5].includes(raw.backupVersion)) {
+  if (![1, 2, 3, 4, 5, 6].includes(raw.backupVersion)) {
     throw new Error("対応していないバックアップ形式です。");
   }
   const data = raw.data || {};
@@ -138,6 +142,8 @@ function normalizeAndValidateBackup(raw) {
       salesActuals: Array.isArray(data.salesActuals) ? data.salesActuals : [],
       salesImportBatches: Array.isArray(data.salesImportBatches) ? data.salesImportBatches : [],
       shippingWishes: Array.isArray(data.shippingWishes) ? data.shippingWishes : [],
+      shippingSchedules: Array.isArray(data.shippingSchedules) ? data.shippingSchedules : [],
+      shippingAllocations: Array.isArray(data.shippingAllocations) ? data.shippingAllocations : [],
       appSettings: data.appSettings && typeof data.appSettings === "object" ? data.appSettings : {},
       restoreLogs: Array.isArray(data.restoreLogs) ? data.restoreLogs : []
     }
@@ -155,6 +161,8 @@ function normalizeAndValidateBackup(raw) {
   validateUniqueKeyRecords(normalized.data.salesActuals, "id", "販売実績");
   validateUniqueKeyRecords(normalized.data.salesImportBatches, "batchId", "販売実績CSV取込履歴");
   validateUniqueKeyRecords(normalized.data.shippingWishes, "id", "船積希望");
+  validateUniqueKeyRecords(normalized.data.shippingSchedules, "id", "船便スケジュール");
+  validateUniqueKeyRecords(normalized.data.shippingAllocations, "id", "船便商品振分け");
   normalized.counts = {
     products: normalized.data.products.length,
     stockMovements: normalized.data.stockMovements.length,
@@ -165,6 +173,8 @@ function normalizeAndValidateBackup(raw) {
     salesActuals: normalized.data.salesActuals.length,
     salesImportBatches: normalized.data.salesImportBatches.length,
     shippingWishes: normalized.data.shippingWishes.length,
+    shippingSchedules: normalized.data.shippingSchedules.length,
+    shippingAllocations: normalized.data.shippingAllocations.length,
     restoreLogs: normalized.data.restoreLogs.length
   };
   return normalized;
@@ -206,6 +216,8 @@ async function replaceAllDataFromBackupV31(backup, fileName) {
     SALES_ACTUAL_STORE_NAME,
     SALES_IMPORT_BATCH_STORE_NAME,
     SHIPPING_WISH_STORE_NAME,
+    SHIPPING_SCHEDULE_STORE_NAME,
+    SHIPPING_ALLOCATION_STORE_NAME,
     RESTORE_LOG_STORE_NAME
   ];
 
@@ -223,6 +235,8 @@ async function replaceAllDataFromBackupV31(backup, fileName) {
       d.salesActuals.forEach(function (r) { tx.objectStore(SALES_ACTUAL_STORE_NAME).put(r); });
       d.salesImportBatches.forEach(function (r) { tx.objectStore(SALES_IMPORT_BATCH_STORE_NAME).put(r); });
       d.shippingWishes.forEach(function (r) { tx.objectStore(SHIPPING_WISH_STORE_NAME).put(r); });
+      d.shippingSchedules.forEach(function (r) { tx.objectStore(SHIPPING_SCHEDULE_STORE_NAME).put(r); });
+      d.shippingAllocations.forEach(function (r) { tx.objectStore(SHIPPING_ALLOCATION_STORE_NAME).put(r); });
       d.restoreLogs.forEach(function (r) { tx.objectStore(RESTORE_LOG_STORE_NAME).put(r); });
       tx.objectStore(RESTORE_LOG_STORE_NAME).put({
         id: `restore-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

@@ -5,6 +5,7 @@ let shippingWishRecords = [];
 let shippingWishProducts = [];
 let shippingWishEditingId = "";
 let shippingWishCurrentPage = 1;
+let shippingWishAllocations = [];
 
 document.addEventListener("DOMContentLoaded", initializeShippingWishFeature);
 
@@ -123,13 +124,15 @@ function scrollShippingWishListIntoView() {
 }
 
 async function refreshShippingWishData() {
-  const [records, products] = await Promise.all([
+  const [records, products, allocations] = await Promise.all([
     getAllShippingWishes(),
-    getAllProducts()
+    getAllProducts(),
+    getAllShippingAllocations()
   ]);
 
   shippingWishRecords = records.slice().sort(compareShippingWishes);
   shippingWishProducts = products.slice();
+  shippingWishAllocations = allocations.slice();
   populateShippingWishProductList();
   renderShippingWishTable();
 }
@@ -214,6 +217,20 @@ async function saveShippingWishFromForm(event) {
     return;
   }
 
+  if (shippingWishEditingId) {
+    const allocatedTotal = getShippingWishAllocatedTotal(shippingWishEditingId);
+    if (quantity < allocatedTotal) {
+      alert(
+        "この商品はすでに船便へ振り分けられています。\n\n" +
+        `振分済み：${allocatedTotal.toLocaleString("ja-JP")}個\n` +
+        `希望数量：${quantity.toLocaleString("ja-JP")}個\n\n` +
+        "希望数量を減らす場合は、先に船便別の振分数量を減らしてください。"
+      );
+      quantityInput.focus();
+      return;
+    }
+  }
+
   if (desiredMonth && !/^\d{4}-\d{2}$/.test(desiredMonth)) {
     alert("希望船積月を正しく選択してください。");
     monthInput.focus();
@@ -287,6 +304,16 @@ async function removeShippingWish(id) {
     return item.id === id;
   });
   if (!record) return;
+
+  const allocatedTotal = getShippingWishAllocatedTotal(id);
+  if (allocatedTotal > 0) {
+    alert(
+      "この船積希望は船便へ振り分け済みのため削除できません。\n\n" +
+      `振分済み：${allocatedTotal.toLocaleString("ja-JP")}個\n\n` +
+      "先に「船便別に商品を振り分ける」で振分数量を0にしてください。"
+    );
+    return;
+  }
 
   const confirmed = window.confirm(
     "次の船積希望を削除しますか？\n\n" +
@@ -365,14 +392,18 @@ function renderShippingWishTable() {
   const totalQuantity = filtered.reduce(function (sum, record) {
     return sum + (Number(record.quantity) || 0);
   }, 0);
+  const allocatedQuantity = filtered.reduce(function (sum, record) {
+    return sum + getShippingWishAllocatedTotal(record.id);
+  }, 0);
+  const remainingQuantity = Math.max(0, totalQuantity - allocatedQuantity);
 
-  summary.textContent = `登録：${filtered.length}件 / 希望数量合計：${totalQuantity.toLocaleString("ja-JP")}個`;
+  summary.textContent = `登録：${filtered.length}件 / 希望数量合計：${totalQuantity.toLocaleString("ja-JP")}個 / 振分済み：${allocatedQuantity.toLocaleString("ja-JP")}個 / 未振分：${remainingQuantity.toLocaleString("ja-JP")}個`;
   body.innerHTML = "";
 
   if (visible.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 8;
+    cell.colSpan = 10;
     cell.textContent = "条件に一致する船積希望はありません。";
     row.appendChild(cell);
     body.appendChild(row);
@@ -384,7 +415,11 @@ function renderShippingWishTable() {
       appendShippingWishCell(row, record.internalCode || "");
       appendShippingWishCell(row, record.productCode || "未登録");
       appendShippingWishCell(row, record.productName || "");
+      const allocated = getShippingWishAllocatedTotal(record.id);
+      const remaining = Math.max(0, Number(record.quantity || 0) - allocated);
       appendShippingWishCell(row, `${Number(record.quantity || 0).toLocaleString("ja-JP")}個`);
+      appendShippingWishCell(row, `${allocated.toLocaleString("ja-JP")}個`);
+      appendShippingWishCell(row, `${remaining.toLocaleString("ja-JP")}個`);
       appendShippingWishCell(row, record.note || "");
 
       const actionCell = document.createElement("td");
@@ -421,6 +456,16 @@ function appendShippingWishCell(row, value) {
   const cell = document.createElement("td");
   cell.textContent = value;
   row.appendChild(cell);
+}
+
+function getShippingWishAllocatedTotal(wishId) {
+  return shippingWishAllocations
+    .filter(function (allocation) {
+      return allocation.shippingWishId === wishId;
+    })
+    .reduce(function (sum, allocation) {
+      return sum + (Number(allocation.quantity) || 0);
+    }, 0);
 }
 
 function getShippingWishTotalPages() {

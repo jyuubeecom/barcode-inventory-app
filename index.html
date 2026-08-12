@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v41
+          画面版 v42
         </span>
       </div>
 
@@ -212,7 +212,7 @@
           </summary>
 
           <p class="home-panel-description">
-            販売予定、発注判定、船積希望を管理します。
+            販売予定、発注判定、船積希望、船便スケジュールを管理します。
           </p>
 
           <div
@@ -259,6 +259,20 @@
               type="button"
             >
               船積希望一覧を見る
+            </button>
+
+            <button
+              id="show-shipping-schedule-button"
+              type="button"
+            >
+              船便スケジュールを登録する
+            </button>
+
+            <button
+              id="show-shipping-allocation-button"
+              type="button"
+            >
+              船便別に商品を振り分ける
             </button>
           </div>
         </details>
@@ -674,6 +688,8 @@
                 <th>商品コード</th>
                 <th>商品名</th>
                 <th>希望数量</th>
+                <th>振分済み</th>
+                <th>未振分</th>
                 <th>メモ</th>
                 <th>操作</th>
               </tr>
@@ -690,6 +706,131 @@
       </div>
 
       <button id="back-home-from-shipping-wish" type="button">ホームへ戻る</button>
+    </section>
+
+    <!-- 船便スケジュール・商品振分け -->
+    <section id="shipping-schedule" hidden>
+      <h2>船便スケジュール・商品振分け</h2>
+
+      <p>
+        出港日・入港日・倉庫到着日を登録し、船積希望商品を各船便へ振り分けます。
+      </p>
+
+      <div class="shipping-schedule-shortcuts">
+        <button id="jump-shipping-schedule-form-button" type="button">船便スケジュールを登録する</button>
+        <button id="jump-shipping-allocation-button" type="button">船便別に商品を振り分ける</button>
+      </div>
+
+      <div id="shipping-schedule-form-area" class="shipping-schedule-card">
+        <h3>船便スケジュールを登録する</h3>
+        <form id="shipping-schedule-form">
+          <div class="shipping-schedule-grid">
+            <div class="shipping-schedule-full">
+              <label for="shipping-schedule-name">船便名（任意）</label>
+              <input id="shipping-schedule-name" type="text" placeholder="空欄の場合は出港日から自動作成します">
+              <small>例：9月第1便。空欄なら「2026/9/5 出港便」のように自動作成します。</small>
+            </div>
+
+            <div>
+              <label for="shipping-schedule-departure-date">出港日（必須）</label>
+              <input id="shipping-schedule-departure-date" type="date" required>
+            </div>
+
+            <div>
+              <label for="shipping-schedule-arrival-date">入港日（必須）</label>
+              <input id="shipping-schedule-arrival-date" type="date" required>
+            </div>
+
+            <div>
+              <label for="shipping-schedule-warehouse-date">倉庫到着日（必須）</label>
+              <input id="shipping-schedule-warehouse-date" type="date" required>
+            </div>
+          </div>
+
+          <div class="shipping-schedule-actions">
+            <button id="save-shipping-schedule-button" type="submit">船便スケジュールを登録する</button>
+            <button id="cancel-shipping-schedule-edit-button" type="button" hidden>編集をやめる</button>
+          </div>
+        </form>
+
+        <div id="shipping-schedule-summary" class="shipping-schedule-summary">登録船便：0件</div>
+
+        <div class="shipping-schedule-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>船便名</th>
+                <th>出港日</th>
+                <th>入港日</th>
+                <th>倉庫到着日</th>
+                <th>振分商品</th>
+                <th>振分数量</th>
+                <th>商品振分け</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="shipping-schedule-table-body"></tbody>
+          </table>
+        </div>
+
+        <div class="shipping-schedule-pager">
+          <button id="shipping-schedule-prev-page" type="button">前へ</button>
+          <strong id="shipping-schedule-page-status">1 / 1ページ</strong>
+          <button id="shipping-schedule-next-page" type="button">次へ</button>
+        </div>
+      </div>
+
+      <div id="shipping-allocation-area" class="shipping-schedule-card">
+        <h3>船便別に商品を振り分ける</h3>
+
+        <div class="shipping-allocation-controls">
+          <div>
+            <label for="shipping-allocation-schedule">振り分ける船便（必須）</label>
+            <select id="shipping-allocation-schedule">
+              <option value="">船便を選択してください</option>
+            </select>
+          </div>
+          <div>
+            <label for="shipping-allocation-search">船積希望商品を検索</label>
+            <input id="shipping-allocation-search" type="search" placeholder="社内コード・商品コード・商品名・希望月・メモ">
+          </div>
+        </div>
+
+        <div id="shipping-allocation-schedule-info" class="shipping-allocation-info"></div>
+        <div id="shipping-allocation-summary" class="shipping-allocation-summary">船便を選択すると、船積希望商品を振り分けできます。</div>
+
+        <div class="shipping-allocation-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>社内コード</th>
+                <th>商品コード</th>
+                <th>商品名</th>
+                <th>希望数量</th>
+                <th>他便振分済</th>
+                <th>今回の船便</th>
+                <th>未振分</th>
+                <th>希望船積月</th>
+                <th>メモ</th>
+                <th>状態</th>
+              </tr>
+            </thead>
+            <tbody id="shipping-allocation-table-body"></tbody>
+          </table>
+        </div>
+
+        <div class="shipping-schedule-actions">
+          <button id="save-visible-shipping-allocations" type="button" disabled>表示中の振分数量を保存する</button>
+        </div>
+
+        <div class="shipping-schedule-pager">
+          <button id="shipping-allocation-prev-page" type="button">前へ</button>
+          <strong id="shipping-allocation-page-status">1 / 1ページ</strong>
+          <button id="shipping-allocation-next-page" type="button">次へ</button>
+        </div>
+      </div>
+
+      <button id="back-home-from-shipping-schedule" type="button">ホームへ戻る</button>
     </section>
 
     <!-- 社内コード・JANコード手入力検索画面 -->
@@ -1799,7 +1940,7 @@
     </section>
   </main>
 
-<script src="storage.js?v=41"></script>
+<script src="storage.js?v=42"></script>
 <script src="app.js?v=31"></script>
 <script src="inventory.js"></script>
 <script src="libs/barcode-detector-zxing-adapter.js?v=31"></script>
@@ -1814,10 +1955,11 @@
 <script src="sales-plan.js?v=37"></script>
 <script src="sales-actual.js?v=39"></script>
 <script src="purchase-required.js?v=40"></script>
-<script src="shipping-wish.js?v=41"></script>
-<script src="backup.js?v=41"></script>
-<script src="restore.js?v=41"></script>
+<script src="shipping-wish.js?v=42"></script>
+<script src="shipping-schedule.js?v=42"></script>
+<script src="backup.js?v=42"></script>
+<script src="restore.js?v=42"></script>
 <script src="location-management.js?v=32"></script>
-<script src="home-dashboard.js?v=41"></script>
+<script src="home-dashboard.js?v=42"></script>
 </body>
 </html>

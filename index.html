@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v48
+          画面版 v49
         </span>
       </div>
 
@@ -172,6 +172,13 @@
               type="button"
             >
               区画未設定商品一覧
+            </button>
+
+            <button
+              id="show-barcode-print-button"
+              type="button"
+            >
+              バーコードを印刷する
             </button>
           </div>
         </details>
@@ -1974,6 +1981,85 @@
         </button>
       </form>
     </section>
+
+    <!-- バーコードラベル印刷 -->
+    <section id="barcode-print" hidden>
+      <h2>バーコードを印刷する</h2>
+
+      <p>
+        商品を選択して、社内コード・JANコードのバーコードラベルをA4横向きで印刷します。
+      </p>
+
+      <div class="barcode-print-controls">
+        <div>
+          <label for="barcode-print-search">商品を検索</label>
+          <input
+            id="barcode-print-search"
+            type="search"
+            placeholder="社内コード・商品コード・商品名・JANコード・保管場所"
+          >
+        </div>
+
+        <div>
+          <label for="barcode-print-mode">印刷するバーコード</label>
+          <select id="barcode-print-mode">
+            <option value="both">社内コード＋JANコード</option>
+            <option value="internal">社内コードのみ</option>
+            <option value="jan">JANコードのみ</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="barcode-print-layout">A4横向きの分割数</label>
+          <select id="barcode-print-layout">
+            <option value="4">4分割（大きめ・段ボール向け）</option>
+            <option value="8">8分割</option>
+            <option value="12">12分割</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="barcode-print-note">
+        社内コードはCODE128で印刷します。JANコードは8桁または13桁で、チェック桁が正しい場合にEANバーコードとして印刷します。<br>
+        「枚数」は、その商品のラベルを何枚印刷するか指定します。最初は4分割がおすすめです。
+      </div>
+
+      <div class="barcode-print-actions">
+        <button id="barcode-print-select-visible" type="button">このページの商品をすべて選択</button>
+        <button id="barcode-print-clear-selection" type="button">選択をすべて解除</button>
+        <button id="print-selected-barcodes" type="button">選択したバーコードを印刷する</button>
+      </div>
+
+      <div id="barcode-print-summary" class="barcode-print-summary">
+        表示：0商品 / 選択：0商品 / 印刷ラベル：0枚
+      </div>
+
+      <div id="barcode-print-table-area" class="barcode-print-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>選択</th>
+              <th>社内コード</th>
+              <th>商品コード</th>
+              <th>商品名</th>
+              <th>JANコード</th>
+              <th>保管場所</th>
+              <th>枚数</th>
+            </tr>
+          </thead>
+          <tbody id="barcode-print-table-body"></tbody>
+        </table>
+      </div>
+
+      <div class="barcode-print-pager">
+        <button id="barcode-print-prev-page" type="button">前へ</button>
+        <span id="barcode-print-page-status">1 / 1ページ</span>
+        <button id="barcode-print-next-page" type="button">次へ</button>
+      </div>
+
+      <button id="back-home-from-barcode-print" type="button">ホームへ戻る</button>
+    </section>
+
   </main>
 
 <script src="storage.js?v=47"></script>
@@ -1993,6 +2079,7 @@
 <script src="purchase-required.js?v=46"></script>
 <script src="low-shipment.js?v=45"></script>
 <script src="shipping-schedule.js?v=47"></script>
+<script src="barcode-print.js?v=49"></script>
 <script src="backup.js?v=48"></script>
 <script src="restore.js?v=48"></script>
 <script src="location-management.js?v=32"></script>

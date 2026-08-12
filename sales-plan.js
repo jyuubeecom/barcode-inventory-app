@@ -149,17 +149,37 @@ function updateSalesPlanShippingFields() {
   const dateInput = document.querySelector("#sales-plan-shipping-date");
   const startInput = document.querySelector("#sales-plan-shipping-start-date");
   const endInput = document.querySelector("#sales-plan-shipping-end-date");
+  const note = document.querySelector("#sales-plan-shipping-note");
 
-  if (!typeSelect || !dateArea || !startArea || !endArea) return;
+  if (
+    !typeSelect || !dateArea || !startArea || !endArea ||
+    !dateInput || !startInput || !endInput
+  ) return;
 
   const isPeriod = typeSelect.value === "period";
+
+  // style.css の「form div { display: grid; }」より確実に優先して、
+  // 選択していない入力欄を完全に非表示にします。
   dateArea.hidden = isPeriod;
   startArea.hidden = !isPeriod;
   endArea.hidden = !isPeriod;
+  dateArea.style.display = isPeriod ? "none" : "";
+  startArea.style.display = isPeriod ? "" : "none";
+  endArea.style.display = isPeriod ? "" : "none";
 
+  // 非表示側は required を外し、disabled にしてブラウザの必須判定対象からも外します。
   dateInput.required = !isPeriod;
+  dateInput.disabled = isPeriod;
   startInput.required = isPeriod;
+  startInput.disabled = !isPeriod;
   endInput.required = isPeriod;
+  endInput.disabled = !isPeriod;
+
+  if (note) {
+    note.textContent = isPeriod
+      ? "出荷期間の開始日と終了日を入力してください。"
+      : "出荷する日を1日選んでください。";
+  }
 }
 
 function readSalesPlanShippingFromForm() {
@@ -578,6 +598,9 @@ function createSalesPlanStyle() {
     .sales-plan-product-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
     .sales-plan-readonly { background: #eef3f6; }
     .sales-plan-shipping-note { margin: -4px 0 0; padding: 10px 12px; border-radius: 8px; background: #e3f2fd; color: #164e63; }
+    #sales-plan-shipping-date-area[hidden],
+    #sales-plan-shipping-period-start-area[hidden],
+    #sales-plan-shipping-period-end-area[hidden] { display: none !important; }
     .sales-plan-form-actions, .sales-plan-filter-row, .sales-plan-pager { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .sales-plan-filter-row > * { flex: 1 1 230px; }
     .sales-plan-table-wrap { overflow-x: auto; margin-top: 12px; }

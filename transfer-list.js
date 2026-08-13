@@ -171,7 +171,7 @@
     const style = document.createElement("style");
     style.id = "transfer-list-style";
     style.textContent = `
-      #transfer-list { max-width: 1180px; margin: 0 auto; }
+      #transfer-list { max-width: 1180px; margin: 0 auto; scroll-margin-top: 12px; }
       .transfer-card { background: #fff; border: 1px solid #cfd8dc; border-radius: 12px; padding: 16px; margin: 16px 0; }
       .transfer-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
       .transfer-add-grid { display: grid; grid-template-columns: minmax(220px, 1fr) 160px auto; gap: 12px; align-items: end; }
@@ -225,12 +225,28 @@
     hideMainSections();
     const section = document.querySelector("#transfer-list");
     if (section) section.hidden = false;
-    window.scrollTo({ top: 0, behavior: "auto" });
+
+    // ホームなどのボタンから開いたとき、表示した商品移動リストの先頭へ自動移動する。
+    // hidden解除直後はブラウザ側のレイアウト計算が終わっていない場合があるため、
+    // 1フレーム待ってからスクロールする。
+    if (section) {
+      window.requestAnimationFrame(function () {
+        section.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+
     try {
       state.products = await getAllProducts();
       renderProductSuggestions();
       await renderSavedTransfers();
       renderCurrentItems();
+
+      // データ描画で高さが変わった場合も、画面先頭がずれないよう最後に位置を整える。
+      if (section) {
+        window.requestAnimationFrame(function () {
+          section.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      }
     } catch (error) {
       console.error("商品移動リスト表示エラー", error);
       alert("商品移動リストを表示できませんでした。");

@@ -73,6 +73,34 @@ const SALES_ACTUAL_OUTBOUND_LOCATION_PRIORITY = Object.freeze([
 const SALES_ACTUAL_RETURN_LOCATION =
   "本社1階 A区";
 
+const LOCATION_STOCK_DISPLAY_ORDER = Object.freeze([
+  ...SALES_ACTUAL_OUTBOUND_LOCATION_PRIORITY,
+  LOCATION_STOCK_UNCONFIRMED_NAME
+]);
+
+function sortLocationStocksByDisplayOrder(entries) {
+  const order = new Map(
+    LOCATION_STOCK_DISPLAY_ORDER.map(function (location, index) {
+      return [location, index];
+    })
+  );
+
+  return (Array.isArray(entries) ? entries : []).slice().sort(
+    function (left, right) {
+      const leftLocation = normalizeLocationStockName(left && left.location);
+      const rightLocation = normalizeLocationStockName(right && right.location);
+      const leftIndex = order.has(leftLocation) ? order.get(leftLocation) : 999;
+      const rightIndex = order.has(rightLocation) ? order.get(rightLocation) : 999;
+
+      if (leftIndex !== rightIndex) {
+        return leftIndex - rightIndex;
+      }
+
+      return leftLocation.localeCompare(rightLocation, "ja");
+    }
+  );
+}
+
 function normalizeLocationStockName(value) {
   let location = String(value || "")
     .normalize("NFKC")
@@ -179,7 +207,7 @@ function getProductLocationStocks(product) {
       });
     }
 
-    return entries;
+    return sortLocationStocksByDisplayOrder(entries);
   }
 
   const currentTotal = entries.reduce(
@@ -280,7 +308,7 @@ function getProductLocationStocks(product) {
     });
   }
 
-  return entries;
+  return sortLocationStocksByDisplayOrder(entries);
 }
 
 function normalizeProductLocationStocks(product) {

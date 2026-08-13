@@ -152,6 +152,7 @@
                 <th>移動先</th>
                 <th>商品数</th>
                 <th>合計個数</th>
+                <th>確認状況</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -191,6 +192,13 @@
       .transfer-note { color: #546e7a; margin-bottom: 0; }
       .transfer-location-warning { color: #ef6c00; font-size: 13px; font-weight: 700; display: block; margin-top: 4px; }
       .transfer-editing-message { background: #e3f2fd; color: #0d47a1; padding: 10px 12px; border-radius: 8px; font-weight: 700; }
+      .transfer-status-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 96px; padding: 5px 9px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+      .transfer-status-pending { background: #eceff1; color: #455a64; }
+      .transfer-status-source { background: #fff3cd; color: #8a5a00; }
+      .transfer-status-complete { background: #dff3e4; color: #1b5e20; }
+      .transfer-status-detail { display: block; margin-top: 5px; font-size: 12px; line-height: 1.5; color: #546e7a; white-space: nowrap; }
+      .transfer-confirm-source-button { background: #ef9a25; }
+      .transfer-confirm-destination-button { background: #2e7d32; }
       @media (max-width: 760px) {
         .transfer-form-grid, .transfer-add-grid { grid-template-columns: 1fr; }
         .transfer-card { padding: 12px; }
@@ -456,26 +464,40 @@
         ? existingRecords.find(function (record) { return record.id === state.editingId; })
         : null;
       const now = new Date().toISOString();
+      const normalizedItems = state.items.map(function (item) {
+        return {
+          internalCode: item.internalCode,
+          productCode: item.productCode || "",
+          productName: item.productName,
+          storageLocation: item.storageLocation || "",
+          quantity: Number(item.quantity)
+        };
+      });
+      const contentChanged = existing
+        ? hasTransferContentChanged(existing, header, normalizedItems)
+        : false;
+      const hadConfirmation = Boolean(existing?.sourceConfirmedAt || existing?.destinationConfirmedAt);
+      const resetConfirmation = Boolean(existing && contentChanged && hadConfirmation);
       const record = {
         id: state.editingId || createTransferId(),
         transferDate: header.transferDate,
         sourceLocation: header.sourceLocation,
         destinationLocation: header.destinationLocation,
-        items: state.items.map(function (item) {
-          return {
-            internalCode: item.internalCode,
-            productCode: item.productCode || "",
-            productName: item.productName,
-            storageLocation: item.storageLocation || "",
-            quantity: Number(item.quantity)
-          };
-        }),
+        items: normalizedItems,
+        sourceConfirmedBy: resetConfirmation ? "" : String(existing?.sourceConfirmedBy || ""),
+        sourceConfirmedAt: resetConfirmation ? "" : String(existing?.sourceConfirmedAt || ""),
+        destinationConfirmedBy: resetConfirmation ? "" : String(existing?.destinationConfirmedBy || ""),
+        destinationConfirmedAt: resetConfirmation ? "" : String(existing?.destinationConfirmedAt || ""),
         createdAt: existing?.createdAt || now,
         updatedAt: now
       };
 
       await saveTransferList(record);
-      alert(state.editingId ? "商品移動リストを更新しました。" : "商品移動リストを保存しました。");
+      let message = state.editingId ? "商品移動リストを更新しました。" : "商品移動リストを保存しました。";
+      if (resetConfirmation) {
+        message += "\n\n確認済みの内容を変更したため、確認状況を「未確認」に戻しました。";
+      }
+      alert(message);
       resetForm();
       await renderSavedTransfers();
     } catch (error) {
@@ -524,8 +546,10 @@
           <td>${escapeHtml(record.destinationLocation || "-")}</td>
           <td>${items.length}商品</td>
           <td>${formatNumber(total)}個</td>
+          <td>${renderTransferStatus(record)}</td>
           <td>
             <div class="transfer-row-actions">
+              ${renderTransferConfirmationButton(record)}
               <button type="button" data-transfer-edit="${escapeHtml(record.id)}">編集</button>
               <button type="button" data-transfer-print="${escapeHtml(record.id)}">印刷</button>
               <button type="button" class="transfer-delete-button" data-transfer-delete="${escapeHtml(record.id)}">削除</button>
@@ -547,6 +571,18 @@
         if (record) printTransferRecord(record);
       });
     });
+    body.querySelectorAll("[data-transfer-confirm-source]").forEach(function (button) {
+      button.addEventListener("click", async function () {
+        const record = records.find(function (item) { return item.id === button.dataset.transferConfirmSource; });
+        if (record) await confirmTransferSource(record);
+      });
+    });
+    body.querySelectorAll("[data-transfer-confirm-destination]").forEach(function (button) {
+      button.addEventListener("click", async function () {
+        const record = records.find(function (item) { return item.id === button.dataset.transferConfirmDestination; });
+        if (record) await confirmTransferDestination(record);
+      });
+    });
     body.querySelectorAll("[data-transfer-delete]").forEach(function (button) {
       button.addEventListener("click", async function () {
         const record = records.find(function (item) { return item.id === button.dataset.transferDelete; });
@@ -565,6 +601,139 @@
         }
       });
     });
+  }
+
+  function renderTransferStatus(record) {
+    const sourceConfirmed = Boolean(record?.sourceConfirmedAt);
+    const destinationConfirmed = Boolean(record?.destinationConfirmedAt);
+
+    if (sourceConfirmed && destinationConfirmed) {
+      return `
+        <span class="transfer-status-badge transfer-status-complete">移動完了</span>
+        <span class="transfer-status-detail">
+          移動元：${escapeHtml(record.sourceConfirmedBy || "-")} ${escapeHtml(formatDateTime(record.sourceConfirmedAt))}<br>
+          移動先：${escapeHtml(record.destinationConfirmedBy || "-")} ${escapeHtml(formatDateTime(record.destinationConfirmedAt))}
+        </span>
+      `;
+    }
+
+    if (sourceConfirmed) {
+      return `
+        <span class="transfer-status-badge transfer-status-source">移動元確認済</span>
+        <span class="transfer-status-detail">
+          ${escapeHtml(record.sourceConfirmedBy || "-")} ${escapeHtml(formatDateTime(record.sourceConfirmedAt))}
+        </span>
+      `;
+    }
+
+    return '<span class="transfer-status-badge transfer-status-pending">未確認</span>';
+  }
+
+  function renderTransferConfirmationButton(record) {
+    if (!record?.sourceConfirmedAt) {
+      return `<button type="button" class="transfer-confirm-source-button" data-transfer-confirm-source="${escapeHtml(record.id)}">移動元で確認</button>`;
+    }
+    if (!record?.destinationConfirmedAt) {
+      return `<button type="button" class="transfer-confirm-destination-button" data-transfer-confirm-destination="${escapeHtml(record.id)}">移動先で確認</button>`;
+    }
+    return "";
+  }
+
+  async function confirmTransferSource(record) {
+    const confirmer = window.prompt(
+      `移動元「${record.sourceLocation || "-"}」の確認者名を入力してください。`
+    );
+    if (confirmer === null) return;
+    const name = String(confirmer).trim();
+    if (!name) {
+      alert("確認者名を入力してください。");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `${formatDate(record.transferDate)}\n${record.sourceLocation} → ${record.destinationLocation}\n\n移動元で商品を確認済みにしますか？`
+    );
+    if (!confirmed) return;
+
+    try {
+      const updated = {
+        ...record,
+        sourceConfirmedBy: name,
+        sourceConfirmedAt: new Date().toISOString(),
+        destinationConfirmedBy: "",
+        destinationConfirmedAt: "",
+        updatedAt: new Date().toISOString()
+      };
+      await saveTransferList(updated);
+      alert("移動元の確認を記録しました。\n次は移動先で確認してください。");
+      await renderSavedTransfers();
+    } catch (error) {
+      console.error("移動元確認保存エラー", error);
+      alert("移動元の確認を保存できませんでした。");
+    }
+  }
+
+  async function confirmTransferDestination(record) {
+    if (!record?.sourceConfirmedAt) {
+      alert("先に移動元で確認してください。");
+      return;
+    }
+
+    const confirmer = window.prompt(
+      `移動先「${record.destinationLocation || "-"}」の確認者名を入力してください。`
+    );
+    if (confirmer === null) return;
+    const name = String(confirmer).trim();
+    if (!name) {
+      alert("確認者名を入力してください。");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `${formatDate(record.transferDate)}\n${record.sourceLocation} → ${record.destinationLocation}\n\n移動先で商品を確認し、「移動完了」にしますか？`
+    );
+    if (!confirmed) return;
+
+    try {
+      const updated = {
+        ...record,
+        destinationConfirmedBy: name,
+        destinationConfirmedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      await saveTransferList(updated);
+      alert("移動先の確認を記録しました。\n商品移動が完了しました。");
+      await renderSavedTransfers();
+    } catch (error) {
+      console.error("移動先確認保存エラー", error);
+      alert("移動先の確認を保存できませんでした。");
+    }
+  }
+
+  function hasTransferContentChanged(existing, header, items) {
+    const before = {
+      transferDate: String(existing?.transferDate || ""),
+      sourceLocation: String(existing?.sourceLocation || ""),
+      destinationLocation: String(existing?.destinationLocation || ""),
+      items: (Array.isArray(existing?.items) ? existing.items : []).map(normalizeTransferItemForCompare)
+    };
+    const after = {
+      transferDate: String(header.transferDate || ""),
+      sourceLocation: String(header.sourceLocation || ""),
+      destinationLocation: String(header.destinationLocation || ""),
+      items: (Array.isArray(items) ? items : []).map(normalizeTransferItemForCompare)
+    };
+    return JSON.stringify(before) !== JSON.stringify(after);
+  }
+
+  function normalizeTransferItemForCompare(item) {
+    return {
+      internalCode: String(item?.internalCode || ""),
+      productCode: String(item?.productCode || ""),
+      productName: String(item?.productName || ""),
+      storageLocation: String(item?.storageLocation || ""),
+      quantity: Number(item?.quantity || 0)
+    };
   }
 
   function loadTransferForEditing(record) {
@@ -633,8 +802,8 @@
           <td>${escapeHtml(item.productCode || "-")}</td>
           <td>${escapeHtml(item.productName || "")}</td>
           <td class="qty">${formatNumber(Number(item.quantity || 0))}</td>
-          <td><span class="check-box">□</span></td>
-          <td><span class="check-box">□</span></td>
+          <td><span class="check-box">${record.sourceConfirmedAt ? "☑" : "□"}</span></td>
+          <td><span class="check-box">${record.destinationConfirmedAt ? "☑" : "□"}</span></td>
         </tr>
       `;
     }).join("");
@@ -686,17 +855,17 @@
           </thead>
           <tbody>${rows}</tbody>
         </table>
-        <div class="summary">移動個数 合計：${formatNumber(total)}個</div>
+        <div class="summary">移動個数 合計：${formatNumber(total)}個　／　確認状況：${escapeHtml(getTransferStatusText(record))}</div>
         <div class="confirm-area">
           <div class="confirm-title">移動確認欄</div>
           <div class="confirm-row">
-            <div><strong>移動元 確認者：</strong><span class="confirm-line"></span></div>
-            <div><strong>確認日：</strong><span class="confirm-date-line"></span></div>
-            <div><strong>移動先 確認者：</strong><span class="confirm-line"></span></div>
-            <div><strong>確認日：</strong><span class="confirm-date-line"></span></div>
+            <div><strong>移動元 確認者：</strong>${record.sourceConfirmedBy ? escapeHtml(record.sourceConfirmedBy) : '<span class="confirm-line"></span>'}</div>
+            <div><strong>確認日：</strong>${record.sourceConfirmedAt ? escapeHtml(formatDateTime(record.sourceConfirmedAt)) : '<span class="confirm-date-line"></span>'}</div>
+            <div><strong>移動先 確認者：</strong>${record.destinationConfirmedBy ? escapeHtml(record.destinationConfirmedBy) : '<span class="confirm-line"></span>'}</div>
+            <div><strong>確認日：</strong>${record.destinationConfirmedAt ? escapeHtml(formatDateTime(record.destinationConfirmedAt)) : '<span class="confirm-date-line"></span>'}</div>
           </div>
         </div>
-        <div class="footer">バーコード在庫・棚卸管理アプリ v57</div>
+        <div class="footer">バーコード在庫・棚卸管理アプリ v60</div>
         <script>window.onload = function () { window.print(); };<\/script>
       </body>
       </html>`);
@@ -716,6 +885,25 @@
     const parts = String(value).split("-");
     if (parts.length !== 3) return String(value);
     return `${Number(parts[0])}/${Number(parts[1])}/${Number(parts[2])}`;
+  }
+
+  function getTransferStatusText(record) {
+    if (record?.sourceConfirmedAt && record?.destinationConfirmedAt) return "移動完了";
+    if (record?.sourceConfirmedAt) return "移動元確認済";
+    return "未確認";
+  }
+
+  function formatDateTime(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleString("ja-JP", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
   }
 
   function escapeHtml(value) {

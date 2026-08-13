@@ -45,20 +45,20 @@ let stocktakingHasUnsavedChanges = false;
 
 const STOCKTAKING_LOCATION_OPTIONS =
   Object.freeze([
+    "本社1階 A区",
+    "本社1階 B区",
+    "本社1階 C区",
+    "本社1階 D区",
+    "本社1階 E区",
+    "本社1階 F区",
+    "本社2階 A区",
+    "本社2階 B区",
+    "本社2階 C区",
+    "本社2階 D区",
+    "本社2階 E区",
+    "本社2階 F区",
     "酒本倉庫1階",
-    "酒本倉庫2階",
-    "本社1階　A区",
-    "本社1階　B区",
-    "本社1階　C区",
-    "本社1階　D区",
-    "本社1階　E区",
-    "本社1階　F区",
-    "本社2階　A区",
-    "本社2階　B区",
-    "本社2階　C区",
-    "本社2階　D区",
-    "本社2階　E区",
-    "本社2階　F区"
+    "酒本倉庫2階"
   ]);
 
 const STOCKTAKING_BULK_ZERO_UNCONFIRMED_LOCATION =
@@ -150,8 +150,19 @@ function isAllowedStocktakingItemLocation(
 function isStocktakingLocationOption(
   location
 ) {
-  return STOCKTAKING_LOCATION_OPTIONS.includes(
-    String(location || "").trim()
+  const normalizedLocation =
+    normalizeStocktakingText(
+      location
+    );
+
+  return STOCKTAKING_LOCATION_OPTIONS.some(
+    function (option) {
+      return (
+        normalizeStocktakingText(
+          option
+        ) === normalizedLocation
+      );
+    }
   );
 }
 
@@ -1761,9 +1772,11 @@ async function handleStocktakingStart(
     updatedAt: startedAt,
     confirmedAt: "",
     reflectedToInventory: false,
+    locationStockVersion: 1,
     items:
       createStocktakingItems(
-        targetProducts
+        targetProducts,
+        location
       )
   };
 
@@ -1814,6 +1827,275 @@ function isDiscontinuedStocktakingProduct(
   );
 }
 
+function getStocktakingProductLocationStocks(
+  product
+) {
+  let entries = [];
+
+  if (
+    typeof getProductLocationStocks ===
+    "function"
+  ) {
+    entries =
+      getProductLocationStocks(
+        product
+      );
+  } else {
+    const fallbackLocation =
+      String(
+        product && product.location
+          ? product.location
+          : ""
+      ).trim();
+
+    entries = [
+      {
+        location:
+          fallbackLocation,
+        stock:
+          getValidStocktakingNumber(
+            product && product.stock
+          )
+      }
+    ];
+  }
+
+  const normalizedEntries =
+    entries
+      .map(
+        function (entry) {
+          const location =
+            typeof normalizeLocationStockName ===
+            "function"
+              ? normalizeLocationStockName(
+                  entry && entry.location
+                )
+              : String(
+                  entry && entry.location
+                    ? entry.location
+                    : ""
+                ).trim();
+
+          return {
+            location: location,
+            stock:
+              getValidStocktakingNumber(
+                entry && entry.stock
+              )
+          };
+        }
+      )
+      .filter(
+        function (entry) {
+          return entry.location !== "";
+        }
+      );
+
+  const locationOrder =
+    new Map();
+
+  STOCKTAKING_LOCATION_OPTIONS.forEach(
+    function (location, index) {
+      locationOrder.set(
+        normalizeStocktakingText(
+          location
+        ),
+        index
+      );
+    }
+  );
+
+  locationOrder.set(
+    normalizeStocktakingText(
+      STOCKTAKING_BULK_ZERO_UNCONFIRMED_LOCATION
+    ),
+    STOCKTAKING_LOCATION_OPTIONS.length
+  );
+
+  normalizedEntries.sort(
+    function (left, right) {
+      const leftKey =
+        normalizeStocktakingText(
+          left.location
+        );
+
+      const rightKey =
+        normalizeStocktakingText(
+          right.location
+        );
+
+      const leftIndex =
+        locationOrder.has(leftKey)
+          ? locationOrder.get(leftKey)
+          : 999;
+
+      const rightIndex =
+        locationOrder.has(rightKey)
+          ? locationOrder.get(rightKey)
+          : 999;
+
+      if (leftIndex !== rightIndex) {
+        return leftIndex - rightIndex;
+      }
+
+      return left.location.localeCompare(
+        right.location,
+        "ja"
+      );
+    }
+  );
+
+  return normalizedEntries;
+}
+
+function getStocktakingRegisteredLocationBreakdown(
+  product,
+  stocktakingLocation
+) {
+  const locationStocks =
+    getStocktakingProductLocationStocks(
+      product
+    );
+
+  if (
+    stocktakingLocation ===
+    "すべての保管場所"
+  ) {
+    return locationStocks.map(
+      function (entry) {
+        return {
+          location: entry.location,
+          stock: entry.stock
+        };
+      }
+    );
+  }
+
+  const normalizedTargetLocation =
+    typeof normalizeLocationStockName ===
+    "function"
+      ? normalizeLocationStockName(
+          stocktakingLocation
+        )
+      : String(
+          stocktakingLocation || ""
+        ).trim();
+
+  const targetEntry =
+    locationStocks.find(
+      function (entry) {
+        return (
+          normalizeStocktakingText(
+            entry.location
+          ) ===
+          normalizeStocktakingText(
+            normalizedTargetLocation
+          )
+        );
+      }
+    );
+
+  if (targetEntry) {
+    return [
+      {
+        location:
+          targetEntry.location,
+        stock:
+          targetEntry.stock
+      }
+    ];
+  }
+
+  const primaryLocation =
+    typeof normalizeLocationStockName ===
+    "function"
+      ? normalizeLocationStockName(
+          product && product.location
+        )
+      : String(
+          product && product.location
+            ? product.location
+            : ""
+        ).trim();
+
+  if (
+    normalizeStocktakingText(
+      primaryLocation
+    ) ===
+    normalizeStocktakingText(
+      normalizedTargetLocation
+    )
+  ) {
+    return [
+      {
+        location:
+          normalizedTargetLocation,
+        stock: 0
+      }
+    ];
+  }
+
+  return [];
+}
+
+function getRegisteredStockTotal(
+  registeredLocationBreakdown
+) {
+  return (
+    Array.isArray(
+      registeredLocationBreakdown
+    )
+      ? registeredLocationBreakdown
+      : []
+  ).reduce(
+    function (sum, entry) {
+      return (
+        sum +
+        getValidStocktakingNumber(
+          entry && entry.stock
+        )
+      );
+    },
+    0
+  );
+}
+
+function createInitialStocktakingLocationBreakdown(
+  registeredLocationBreakdown,
+  fallbackLocation
+) {
+  const sourceEntries =
+    Array.isArray(
+      registeredLocationBreakdown
+    )
+      ? registeredLocationBreakdown
+      : [];
+
+  if (sourceEntries.length > 0) {
+    return sourceEntries.map(
+      function (entry) {
+        return {
+          id:
+            createStocktakingLocationEntryId(),
+          location:
+            entry.location || "",
+          quantity: ""
+        };
+      }
+    );
+  }
+
+  return [
+    {
+      id:
+        createStocktakingLocationEntryId(),
+      location:
+        fallbackLocation || "",
+      quantity: ""
+    }
+  ];
+}
+
 function getStocktakingTargetProducts(
   allProducts,
   location
@@ -1837,6 +2119,18 @@ function getStocktakingTargetProducts(
         if (
           location ===
           "すべての保管場所"
+        ) {
+          return true;
+        }
+
+        const registeredBreakdown =
+          getStocktakingRegisteredLocationBreakdown(
+            product,
+            location
+          );
+
+        if (
+          registeredBreakdown.length > 0
         ) {
           return true;
         }
@@ -1869,12 +2163,48 @@ function getStocktakingTargetProducts(
 }
 
 function createStocktakingItems(
-  targetProducts
+  targetProducts,
+  stocktakingLocation
 ) {
   return targetProducts.map(
     function (product) {
-      const defaultLocation =
-        product.location || "";
+      const registeredLocationBreakdown =
+        getStocktakingRegisteredLocationBreakdown(
+          product,
+          stocktakingLocation
+        );
+
+      const registeredStock =
+        getRegisteredStockTotal(
+          registeredLocationBreakdown
+        );
+
+      const fallbackLocation =
+        stocktakingLocation ===
+        "すべての保管場所"
+          ? (
+              product.location || ""
+            )
+          : stocktakingLocation;
+
+      const displayLocation =
+        stocktakingLocation ===
+        "すべての保管場所"
+          ? (
+              registeredLocationBreakdown.length > 0
+                ? registeredLocationBreakdown
+                    .map(
+                      function (entry) {
+                        return entry.location;
+                      }
+                    )
+                    .join(" / ")
+                : (
+                    product.location ||
+                    "未登録"
+                  )
+            )
+          : stocktakingLocation;
 
       return {
         internalCode:
@@ -1886,21 +2216,17 @@ function createStocktakingItems(
         janCode:
           product.janCode || "",
         location:
-          defaultLocation ||
+          displayLocation ||
           "未登録",
         registeredStock:
-          getValidStocktakingNumber(
-            product.stock
+          registeredStock,
+        registeredLocationBreakdown:
+          registeredLocationBreakdown,
+        locationBreakdown:
+          createInitialStocktakingLocationBreakdown(
+            registeredLocationBreakdown,
+            fallbackLocation
           ),
-        locationBreakdown: [
-          {
-            id:
-              createStocktakingLocationEntryId(),
-            location:
-              defaultLocation,
-            quantity: ""
-          }
-        ],
         actualStock: "",
         difference: null,
         result: "未確認",
@@ -1940,7 +2266,8 @@ async function showActiveStocktaking(
 
       currentStocktaking.items =
         createStocktakingItems(
-          targetProducts
+          targetProducts,
+          currentStocktaking.location
         );
 
       currentStocktaking.updatedAt =
@@ -1982,6 +2309,28 @@ async function showActiveStocktaking(
       currentStocktaking.startedAt
     );
 
+  const stocktakingNotice =
+    stocktakingActiveScreen.querySelector(
+      ".stocktaking-notice"
+    );
+
+  if (
+    stocktakingNotice &&
+    currentStocktaking.locationStockVersion ===
+      1
+  ) {
+    if (
+      currentStocktaking.location ===
+      "すべての保管場所"
+    ) {
+      stocktakingNotice.textContent =
+        "場所別在庫を基準に棚卸します。登録されている各保管場所の実在庫を入力してください。別の場所で見つかった場合は「保管場所を追加」で入力できます。";
+    } else {
+      stocktakingNotice.textContent =
+        `「${currentStocktaking.location}」の場所別在庫を棚卸します。この棚卸を確定した場合、この保管場所の在庫だけを実在庫へ置き換え、ほかの保管場所の在庫は変更しません。`;
+    }
+  }
+
   stocktakingProductSearchInput.value =
     "";
 
@@ -1989,8 +2338,30 @@ async function showActiveStocktaking(
     "all";
 
   if (bulkZeroLocationSelect) {
-    bulkZeroLocationSelect.value =
-      STOCKTAKING_BULK_ZERO_UNCONFIRMED_LOCATION;
+    if (
+      currentStocktaking.locationStockVersion ===
+        1 &&
+      currentStocktaking.location !==
+      "すべての保管場所"
+    ) {
+      const fixedLocation =
+        typeof normalizeLocationStockName ===
+        "function"
+          ? normalizeLocationStockName(
+              currentStocktaking.location
+            )
+          : currentStocktaking.location;
+
+      bulkZeroLocationSelect.value =
+        fixedLocation;
+      bulkZeroLocationSelect.disabled =
+        true;
+    } else {
+      bulkZeroLocationSelect.value =
+        STOCKTAKING_BULK_ZERO_UNCONFIRMED_LOCATION;
+      bulkZeroLocationSelect.disabled =
+        false;
+    }
   }
 
   stocktakingSaveMessage.textContent =
@@ -2021,11 +2392,113 @@ async function showActiveStocktaking(
   );
 }
 
-function normalizeStocktakingItem(item) {
-  const registeredStock =
-    getValidStocktakingNumber(
-      item.registeredStock
+function normalizeRegisteredStocktakingLocationBreakdown(
+  item
+) {
+  const sourceEntries =
+    Array.isArray(
+      item &&
+      item.registeredLocationBreakdown
+    )
+      ? item.registeredLocationBreakdown
+      : [];
+
+  if (sourceEntries.length > 0) {
+    return sourceEntries
+      .map(
+        function (entry) {
+          const location =
+            typeof normalizeLocationStockName ===
+            "function"
+              ? normalizeLocationStockName(
+                  entry && entry.location
+                )
+              : String(
+                  entry && entry.location
+                    ? entry.location
+                    : ""
+                ).trim();
+
+          return {
+            location: location,
+            stock:
+              getValidStocktakingNumber(
+                entry && entry.stock
+              )
+          };
+        }
+      )
+      .filter(
+        function (entry) {
+          return entry.location !== "";
+        }
+      );
+  }
+
+  const fallbackLocation =
+    String(
+      item && item.location &&
+      item.location !== "未登録"
+        ? item.location
+        : ""
+    ).trim();
+
+  if (fallbackLocation === "") {
+    return [];
+  }
+
+  return [
+    {
+      location:
+        typeof normalizeLocationStockName ===
+        "function"
+          ? normalizeLocationStockName(
+              fallbackLocation
+            )
+          : fallbackLocation,
+      stock:
+        getValidStocktakingNumber(
+          item && item.registeredStock
+        )
+    }
+  ];
+}
+
+function formatRegisteredStocktakingLocations(
+  item
+) {
+  const entries =
+    normalizeRegisteredStocktakingLocationBreakdown(
+      item
     );
+
+  if (entries.length === 0) {
+    return item.location || "未登録";
+  }
+
+  return entries
+    .map(
+      function (entry) {
+        return entry.location;
+      }
+    )
+    .join(" / ");
+}
+
+function normalizeStocktakingItem(item) {
+  const registeredLocationBreakdown =
+    normalizeRegisteredStocktakingLocationBreakdown(
+      item
+    );
+
+  const registeredStock =
+    registeredLocationBreakdown.length > 0
+      ? getRegisteredStockTotal(
+          registeredLocationBreakdown
+        )
+      : getValidStocktakingNumber(
+          item.registeredStock
+        );
 
   const locationBreakdown =
     normalizeStocktakingLocationBreakdown(
@@ -2056,6 +2529,8 @@ function normalizeStocktakingItem(item) {
       item.location || "未登録",
     registeredStock:
       registeredStock,
+    registeredLocationBreakdown:
+      registeredLocationBreakdown,
     locationBreakdown:
       locationBreakdown,
     actualStock:
@@ -2129,6 +2604,16 @@ function renderStocktakingItems() {
 
   filterStocktakingItems();
   updateStocktakingSummary();
+}
+
+function isSingleLocationStocktakingMode() {
+  return (
+    currentStocktaking &&
+    currentStocktaking.locationStockVersion ===
+      1 &&
+    currentStocktaking.location !==
+      "すべての保管場所"
+  );
 }
 
 function createStocktakingItemRow(
@@ -2208,7 +2693,9 @@ function createStocktakingItemRow(
 
   appendStocktakingTextCell(
     row,
-    item.location,
+    formatRegisteredStocktakingLocations(
+      item
+    ),
     "stocktaking-cell-registered-location",
     "登録保管場所"
   );
@@ -2287,6 +2774,12 @@ function createStocktakingItemRow(
   addLocationButton.classList.add(
     "stocktaking-add-location-button"
   );
+
+  if (
+    isSingleLocationStocktakingMode()
+  ) {
+    addLocationButton.hidden = true;
+  }
 
   const totalDisplay =
     document.createElement("p");
@@ -2594,10 +3087,35 @@ function renderStocktakingLocationEntries(
       const locationInput =
         document.createElement("select");
 
+      const lockedLocation =
+        isSingleLocationStocktakingMode()
+          ? (
+              typeof normalizeLocationStockName ===
+              "function"
+                ? normalizeLocationStockName(
+                    currentStocktaking.location
+                  )
+                : String(
+                    currentStocktaking.location || ""
+                  ).trim()
+            )
+          : "";
+
+      if (lockedLocation !== "") {
+        entry.location = lockedLocation;
+      }
+
       const savedLocation =
-        String(
-          entry.location || ""
-        ).trim();
+        typeof normalizeLocationStockName ===
+        "function"
+          ? normalizeLocationStockName(
+              entry.location || ""
+            )
+          : String(
+              entry.location || ""
+            ).trim();
+
+      entry.location = savedLocation;
 
       locationInput.innerHTML =
         createStocktakingLocationOptionsHtml(
@@ -2652,6 +3170,10 @@ function renderStocktakingLocationEntries(
         `${item.productName}の保管場所`
       );
 
+      if (lockedLocation !== "") {
+        locationInput.disabled = true;
+      }
+
       const quantityInput =
         document.createElement("input");
 
@@ -2698,7 +3220,12 @@ function renderStocktakingLocationEntries(
       );
 
       removeButton.disabled =
-        item.locationBreakdown.length === 1;
+        item.locationBreakdown.length === 1 ||
+        lockedLocation !== "";
+
+      if (lockedLocation !== "") {
+        removeButton.hidden = true;
+      }
 
       locationInput.addEventListener(
         "change",
@@ -4069,6 +4596,432 @@ async function saveCurrentStocktaking(
   }
 }
 
+function normalizeStocktakingStockSnapshot(
+  entries,
+  valueKey
+) {
+  const snapshot =
+    new Map();
+
+  (
+    Array.isArray(entries)
+      ? entries
+      : []
+  ).forEach(
+    function (entry) {
+      const location =
+        typeof normalizeLocationStockName ===
+        "function"
+          ? normalizeLocationStockName(
+              entry && entry.location
+            )
+          : String(
+              entry && entry.location
+                ? entry.location
+                : ""
+            ).trim();
+
+      if (location === "") {
+        return;
+      }
+
+      const quantity =
+        getValidStocktakingNumber(
+          entry && entry[valueKey]
+        );
+
+      snapshot.set(
+        location,
+        (snapshot.get(location) || 0) +
+          quantity
+      );
+    }
+  );
+
+  return snapshot;
+}
+
+function areStocktakingStockSnapshotsEqual(
+  leftEntries,
+  rightEntries
+) {
+  const leftSnapshot =
+    normalizeStocktakingStockSnapshot(
+      leftEntries,
+      "stock"
+    );
+
+  const rightSnapshot =
+    normalizeStocktakingStockSnapshot(
+      rightEntries,
+      "stock"
+    );
+
+  const allLocations =
+    new Set([
+      ...leftSnapshot.keys(),
+      ...rightSnapshot.keys()
+    ]);
+
+  for (const location of allLocations) {
+    if (
+      (leftSnapshot.get(location) || 0) !==
+      (rightSnapshot.get(location) || 0)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function formatStocktakingRegisteredBreakdown(
+  entries
+) {
+  if (
+    !Array.isArray(entries) ||
+    entries.length === 0
+  ) {
+    return "なし";
+  }
+
+  return entries
+    .map(
+      function (entry) {
+        return (
+          `${entry.location}：` +
+          `${getValidStocktakingNumber(entry.stock)}個`
+        );
+      }
+    )
+    .join(" / ");
+}
+
+function getActualLocationStocksFromStocktakingItem(
+  item
+) {
+  const merged =
+    new Map();
+
+  (
+    Array.isArray(
+      item && item.locationBreakdown
+    )
+      ? item.locationBreakdown
+      : []
+  ).forEach(
+    function (entry) {
+      const quantityText =
+        String(
+          entry &&
+          entry.quantity !== undefined &&
+          entry.quantity !== null
+            ? entry.quantity
+            : ""
+        ).trim();
+
+      if (quantityText === "") {
+        return;
+      }
+
+      const quantity =
+        Number(quantityText);
+
+      if (
+        !Number.isInteger(quantity) ||
+        quantity < 0
+      ) {
+        return;
+      }
+
+      const location =
+        typeof normalizeLocationStockName ===
+        "function"
+          ? normalizeLocationStockName(
+              entry && entry.location
+            )
+          : String(
+              entry && entry.location
+                ? entry.location
+                : ""
+            ).trim();
+
+      if (location === "") {
+        return;
+      }
+
+      merged.set(
+        location,
+        (merged.get(location) || 0) +
+          quantity
+      );
+    }
+  );
+
+  const entries =
+    Array.from(
+      merged,
+      function ([location, stock]) {
+        return {
+          location: location,
+          stock: stock
+        };
+      }
+    );
+
+  if (
+    typeof sortLocationStocksByDisplayOrder ===
+    "function"
+  ) {
+    return sortLocationStocksByDisplayOrder(
+      entries
+    );
+  }
+
+  return entries;
+}
+
+function chooseStocktakingPrimaryLocation(
+  product,
+  locationStocks,
+  fallbackLocation
+) {
+  const normalizedEntries =
+    typeof sortLocationStocksByDisplayOrder ===
+    "function"
+      ? sortLocationStocksByDisplayOrder(
+          locationStocks
+        )
+      : locationStocks.slice();
+
+  const currentPrimary =
+    typeof normalizeLocationStockName ===
+    "function"
+      ? normalizeLocationStockName(
+          product && product.location
+        )
+      : String(
+          product && product.location
+            ? product.location
+            : ""
+        ).trim();
+
+  if (
+    currentPrimary !== "" &&
+    normalizedEntries.some(
+      function (entry) {
+        return (
+          entry.location ===
+            currentPrimary &&
+          entry.stock > 0
+        );
+      }
+    )
+  ) {
+    return currentPrimary;
+  }
+
+  const firstPositive =
+    normalizedEntries.find(
+      function (entry) {
+        return entry.stock > 0;
+      }
+    );
+
+  if (firstPositive) {
+    return firstPositive.location;
+  }
+
+  const normalizedFallback =
+    typeof normalizeLocationStockName ===
+    "function"
+      ? normalizeLocationStockName(
+          fallbackLocation
+        )
+      : String(
+          fallbackLocation || ""
+        ).trim();
+
+  return (
+    normalizedFallback ||
+    currentPrimary ||
+    STOCKTAKING_BULK_ZERO_UNCONFIRMED_LOCATION
+  );
+}
+
+function createLocationAwareStocktakingProductUpdate(
+  product,
+  item,
+  stocktakingLocation,
+  confirmedAt
+) {
+  const normalizedProduct =
+    typeof normalizeProductLocationStocks ===
+    "function"
+      ? normalizeProductLocationStocks(
+          product
+        )
+      : product;
+
+  const beforeStock =
+    getValidStocktakingNumber(
+      normalizedProduct.stock
+    );
+
+  const beforeLocationStocks =
+    getStocktakingProductLocationStocks(
+      normalizedProduct
+    );
+
+  let nextLocationStocks = [];
+
+  if (
+    stocktakingLocation ===
+    "すべての保管場所"
+  ) {
+    nextLocationStocks =
+      getActualLocationStocksFromStocktakingItem(
+        item
+      );
+  } else {
+    const targetLocation =
+      typeof normalizeLocationStockName ===
+      "function"
+        ? normalizeLocationStockName(
+            stocktakingLocation
+          )
+        : String(
+            stocktakingLocation || ""
+          ).trim();
+
+    nextLocationStocks =
+      beforeLocationStocks.map(
+        function (entry) {
+          return {
+            location: entry.location,
+            stock: entry.stock
+          };
+        }
+      );
+
+    let targetEntry =
+      nextLocationStocks.find(
+        function (entry) {
+          return (
+            normalizeStocktakingText(
+              entry.location
+            ) ===
+            normalizeStocktakingText(
+              targetLocation
+            )
+          );
+        }
+      );
+
+    if (!targetEntry) {
+      targetEntry = {
+        location: targetLocation,
+        stock: 0
+      };
+
+      nextLocationStocks.push(
+        targetEntry
+      );
+    }
+
+    targetEntry.stock =
+      getValidStocktakingNumber(
+        item.actualStock
+      );
+  }
+
+  if (
+    typeof sortLocationStocksByDisplayOrder ===
+    "function"
+  ) {
+    nextLocationStocks =
+      sortLocationStocksByDisplayOrder(
+        nextLocationStocks
+      );
+  }
+
+  const afterStock =
+    nextLocationStocks.reduce(
+      function (sum, entry) {
+        return (
+          sum +
+          getValidStocktakingNumber(
+            entry.stock
+          )
+        );
+      },
+      0
+    );
+
+  const primaryLocation =
+    chooseStocktakingPrimaryLocation(
+      normalizedProduct,
+      nextLocationStocks,
+      stocktakingLocation ===
+        "すべての保管場所"
+        ? item.location
+        : stocktakingLocation
+    );
+
+  const cleanedLocationStocks =
+    nextLocationStocks.filter(
+      function (entry) {
+        return (
+          entry.stock > 0 ||
+          entry.location ===
+            primaryLocation
+        );
+      }
+    );
+
+  const updatedProductSource = {
+    ...normalizedProduct,
+    stock: afterStock,
+    location:
+      primaryLocation,
+    locationStocks:
+      cleanedLocationStocks,
+    updatedAt:
+      confirmedAt
+  };
+
+  const updatedProduct =
+    typeof normalizeProductLocationStocks ===
+    "function"
+      ? normalizeProductLocationStocks(
+          updatedProductSource
+        )
+      : updatedProductSource;
+
+  const afterLocationStocks =
+    getStocktakingProductLocationStocks(
+      updatedProduct
+    );
+
+  return {
+    product: updatedProduct,
+    beforeStock: beforeStock,
+    afterStock:
+      getValidStocktakingNumber(
+        updatedProduct.stock
+      ),
+    beforeLocationStocks:
+      beforeLocationStocks,
+    afterLocationStocks:
+      afterLocationStocks,
+    locationChanged:
+      !areStocktakingStockSnapshotsEqual(
+        beforeLocationStocks,
+        afterLocationStocks
+      )
+  };
+}
+
 async function handleConfirmStocktaking() {
   const saved =
     await saveCurrentStocktaking(
@@ -4155,6 +5108,9 @@ async function handleConfirmStocktaking() {
 
       const missingItems = [];
       const changedItems = [];
+      const locationStockAware =
+        currentStocktaking.locationStockVersion ===
+        1;
 
       currentStocktaking.items.forEach(
         function (item) {
@@ -4171,23 +5127,56 @@ async function handleConfirmStocktaking() {
             return;
           }
 
-          const currentStock =
-            getValidStocktakingNumber(
-              product.stock
-            );
+          if (locationStockAware) {
+            const registeredSnapshot =
+              normalizeRegisteredStocktakingLocationBreakdown(
+                item
+              );
 
-          if (
-            currentStock !==
-            item.registeredStock
-          ) {
-            changedItems.push({
-              productName:
-                item.productName,
-              registeredStock:
-                item.registeredStock,
-              currentStock:
-                currentStock
-            });
+            const currentSnapshot =
+              getStocktakingRegisteredLocationBreakdown(
+                product,
+                currentStocktaking.location
+              );
+
+            if (
+              !areStocktakingStockSnapshotsEqual(
+                registeredSnapshot,
+                currentSnapshot
+              )
+            ) {
+              changedItems.push({
+                productName:
+                  item.productName,
+                registeredText:
+                  formatStocktakingRegisteredBreakdown(
+                    registeredSnapshot
+                  ),
+                currentText:
+                  formatStocktakingRegisteredBreakdown(
+                    currentSnapshot
+                  )
+              });
+            }
+          } else {
+            const currentStock =
+              getValidStocktakingNumber(
+                product.stock
+              );
+
+            if (
+              currentStock !==
+              item.registeredStock
+            ) {
+              changedItems.push({
+                productName:
+                  item.productName,
+                registeredStock:
+                  item.registeredStock,
+                currentStock:
+                  currentStock
+              });
+            }
           }
         }
       );
@@ -4208,6 +5197,14 @@ async function handleConfirmStocktaking() {
             .slice(0, 5)
             .map(
               function (item) {
+                if (locationStockAware) {
+                  return (
+                    `${item.productName}\n` +
+                    `棚卸開始時：${item.registeredText}\n` +
+                    `現在：${item.currentText}`
+                  );
+                }
+
                 return (
                   `${item.productName}\n` +
                   `棚卸開始時：${item.registeredStock}個\n` +
@@ -4218,9 +5215,9 @@ async function handleConfirmStocktaking() {
             .join("\n\n");
 
         alert(
-          "棚卸開始後に在庫数が変更された商品があります。\n\n" +
+          "棚卸開始後に在庫が変更された商品があります。\n\n" +
           changedText +
-          "\n\n入庫・出庫の内容を確認し、棚卸をやり直してください。"
+          "\n\n入庫・出庫・商品移動の内容を確認し、棚卸をやり直してください。"
         );
 
         return;
@@ -4232,6 +5229,101 @@ async function handleConfirmStocktaking() {
             productMap.get(
               item.internalCode
             );
+
+          if (locationStockAware) {
+            const updateResult =
+              createLocationAwareStocktakingProductUpdate(
+                product,
+                item,
+                currentStocktaking.location,
+                confirmedAt
+              );
+
+            if (
+              updateResult.beforeStock ===
+                updateResult.afterStock &&
+              !updateResult.locationChanged
+            ) {
+              return;
+            }
+
+            updatedProducts.push(
+              updateResult.product
+            );
+
+            const actualLocationBreakdownText =
+              formatStocktakingLocationBreakdown(
+                item
+              );
+
+            const beforeLocationText =
+              formatStocktakingRegisteredBreakdown(
+                updateResult.beforeLocationStocks
+              );
+
+            const afterLocationText =
+              formatStocktakingRegisteredBreakdown(
+                updateResult.afterLocationStocks
+              );
+
+            const memoParts = [
+              `棚卸日：${currentStocktaking.stocktakingDate}`,
+              `棚卸対象：${currentStocktaking.location}`,
+              `開始時場所別：${beforeLocationText}`,
+              `反映後場所別：${afterLocationText}`
+            ];
+
+            if (
+              actualLocationBreakdownText !== ""
+            ) {
+              memoParts.push(
+                `実在庫入力：${actualLocationBreakdownText}`
+              );
+            }
+
+            if (item.bulkZeroApplied) {
+              memoParts.push(
+                "入力方法：一括0入力"
+              );
+            }
+
+            if (item.memo !== "") {
+              memoParts.push(
+                item.memo
+              );
+            }
+
+            movements.push({
+              id:
+                createStocktakingMovementId(
+                  index
+                ),
+              dateTime: confirmedAt,
+              internalCode:
+                updateResult.product.internalCode,
+              productCode:
+                updateResult.product.productCode || "",
+              productName:
+                updateResult.product.productName || "",
+              type: "棚卸調整",
+              quantity:
+                updateResult.afterStock -
+                updateResult.beforeStock,
+              beforeStock:
+                updateResult.beforeStock,
+              afterStock:
+                updateResult.afterStock,
+              person:
+                currentStocktaking.person,
+              reason: "棚卸調整",
+              memo:
+                memoParts.join(" / "),
+              stocktakingLocation:
+                currentStocktaking.location
+            });
+
+            return;
+          }
 
           const beforeStock =
             getValidStocktakingNumber(
@@ -4289,9 +5381,6 @@ async function handleConfirmStocktaking() {
             );
           }
 
-          const memoText =
-            memoParts.join(" / ");
-
           movements.push({
             id:
               createStocktakingMovementId(
@@ -4315,7 +5404,8 @@ async function handleConfirmStocktaking() {
             person:
               currentStocktaking.person,
             reason: "棚卸調整",
-            memo: memoText
+            memo:
+              memoParts.join(" / ")
           });
         }
       );

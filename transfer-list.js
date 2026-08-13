@@ -64,7 +64,7 @@
       <h2>商品移動リスト</h2>
       <p>
         倉庫から倉庫、本社などへ商品を移動するときのリストを作成して印刷します。
-        この機能では現在庫の数量や保管場所は自動変更しません。
+        移動先で確認して「移動完了」になると、場所別在庫へ自動反映します。総在庫数は変わりません。
       </p>
 
       <div class="transfer-card">
@@ -488,6 +488,8 @@
         sourceConfirmedAt: resetConfirmation ? "" : String(existing?.sourceConfirmedAt || ""),
         destinationConfirmedBy: resetConfirmation ? "" : String(existing?.destinationConfirmedBy || ""),
         destinationConfirmedAt: resetConfirmation ? "" : String(existing?.destinationConfirmedAt || ""),
+        inventoryAppliedBy: resetConfirmation ? "" : String(existing?.inventoryAppliedBy || ""),
+        inventoryAppliedAt: resetConfirmation ? "" : String(existing?.inventoryAppliedAt || ""),
         createdAt: existing?.createdAt || now,
         updatedAt: now
       };
@@ -550,9 +552,9 @@
           <td>
             <div class="transfer-row-actions">
               ${renderTransferConfirmationButton(record)}
-              <button type="button" data-transfer-edit="${escapeHtml(record.id)}">編集</button>
+              ${record.inventoryAppliedAt ? "" : `<button type="button" data-transfer-edit="${escapeHtml(record.id)}">編集</button>`}
               <button type="button" data-transfer-print="${escapeHtml(record.id)}">印刷</button>
-              <button type="button" class="transfer-delete-button" data-transfer-delete="${escapeHtml(record.id)}">削除</button>
+              ${record.inventoryAppliedAt ? "" : `<button type="button" class="transfer-delete-button" data-transfer-delete="${escapeHtml(record.id)}">削除</button>`}
             </div>
           </td>
         </tr>
@@ -583,6 +585,12 @@
         if (record) await confirmTransferDestination(record);
       });
     });
+    body.querySelectorAll("[data-transfer-apply-legacy]").forEach(function (button) {
+      button.addEventListener("click", async function () {
+        const record = records.find(function (item) { return item.id === button.dataset.transferApplyLegacy; });
+        if (record) await applyLegacyCompletedTransfer(record);
+      });
+    });
     body.querySelectorAll("[data-transfer-delete]").forEach(function (button) {
       button.addEventListener("click", async function () {
         const record = records.find(function (item) { return item.id === button.dataset.transferDelete; });
@@ -606,13 +614,26 @@
   function renderTransferStatus(record) {
     const sourceConfirmed = Boolean(record?.sourceConfirmedAt);
     const destinationConfirmed = Boolean(record?.destinationConfirmedAt);
+    const inventoryApplied = Boolean(record?.inventoryAppliedAt);
 
-    if (sourceConfirmed && destinationConfirmed) {
+    if (sourceConfirmed && destinationConfirmed && inventoryApplied) {
       return `
         <span class="transfer-status-badge transfer-status-complete">移動完了</span>
         <span class="transfer-status-detail">
           移動元：${escapeHtml(record.sourceConfirmedBy || "-")} ${escapeHtml(formatDateTime(record.sourceConfirmedAt))}<br>
-          移動先：${escapeHtml(record.destinationConfirmedBy || "-")} ${escapeHtml(formatDateTime(record.destinationConfirmedAt))}
+          移動先：${escapeHtml(record.destinationConfirmedBy || "-")} ${escapeHtml(formatDateTime(record.destinationConfirmedAt))}<br>
+          在庫反映：${escapeHtml(record.inventoryAppliedBy || "-")} ${escapeHtml(formatDateTime(record.inventoryAppliedAt))}
+        </span>
+      `;
+    }
+
+    if (sourceConfirmed && destinationConfirmed) {
+      return `
+        <span class="transfer-status-badge transfer-status-source">移動完了・在庫未反映</span>
+        <span class="transfer-status-detail">
+          移動元：${escapeHtml(record.sourceConfirmedBy || "-")} ${escapeHtml(formatDateTime(record.sourceConfirmedAt))}<br>
+          移動先：${escapeHtml(record.destinationConfirmedBy || "-")} ${escapeHtml(formatDateTime(record.destinationConfirmedAt))}<br>
+          v61以前に完了した移動リストです
         </span>
       `;
     }
@@ -636,10 +657,20 @@
     if (!record?.destinationConfirmedAt) {
       return `<button type="button" class="transfer-confirm-destination-button" data-transfer-confirm-destination="${escapeHtml(record.id)}">移動先で確認</button>`;
     }
+    if (!record?.inventoryAppliedAt) {
+      return `<button type="button" class="transfer-confirm-destination-button" data-transfer-apply-legacy="${escapeHtml(record.id)}">在庫へ反映</button>`;
+    }
     return "";
   }
 
   async function confirmTransferSource(record) {
+    try {
+      await validateTransferSourceStock(record);
+    } catch (error) {
+      alert(error.message || "移動元の在庫を確認できませんでした。");
+      return;
+    }
+
     const confirmer = window.prompt(
       `移動元「${record.sourceLocation || "-"}」の確認者名を入力してください。`
     );
@@ -662,6 +693,8 @@
         sourceConfirmedAt: new Date().toISOString(),
         destinationConfirmedBy: "",
         destinationConfirmedAt: "",
+        inventoryAppliedBy: "",
+        inventoryAppliedAt: "",
         updatedAt: new Date().toISOString()
       };
       await saveTransferList(updated);
@@ -690,24 +723,161 @@
     }
 
     const confirmed = window.confirm(
-      `${formatDate(record.transferDate)}\n${record.sourceLocation} → ${record.destinationLocation}\n\n移動先で商品を確認し、「移動完了」にしますか？`
+      `${formatDate(record.transferDate)}\n${record.sourceLocation} → ${record.destinationLocation}\n\n` +
+      "移動先で商品を確認し、「移動完了」にしますか？\n\n" +
+      "「OK」を押すと、同時に場所別在庫へ自動反映します。\n" +
+      "総在庫数は変わりません。"
     );
     if (!confirmed) return;
 
     try {
-      const updated = {
-        ...record,
-        destinationConfirmedBy: name,
-        destinationConfirmedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      await saveTransferList(updated);
-      alert("移動先の確認を記録しました。\n商品移動が完了しました。");
+      const result = await completeTransferAndApplyInventory(
+        record,
+        name
+      );
+      applyUpdatedTransferProducts(result?.products);
+      alert(
+        "商品移動が完了しました。\n\n" +
+        `移動元「${record.sourceLocation}」の場所別在庫を減らし、\n` +
+        `移動先「${record.destinationLocation}」の場所別在庫を増やしました。\n` +
+        "総在庫数は変更していません。"
+      );
       await renderSavedTransfers();
     } catch (error) {
-      console.error("移動先確認保存エラー", error);
-      alert("移動先の確認を保存できませんでした。");
+      console.error("商品移動・在庫反映エラー", error);
+      alert(
+        error.message ||
+        "商品移動を在庫へ反映できませんでした。"
+      );
     }
+  }
+
+  async function applyLegacyCompletedTransfer(record) {
+    if (record?.inventoryAppliedAt) {
+      alert("この商品移動リストは、すでに在庫へ反映済みです。");
+      return;
+    }
+
+    const defaultPerson = String(
+      record?.destinationConfirmedBy || ""
+    ).trim();
+    let person = defaultPerson;
+
+    if (person === "") {
+      const entered = window.prompt(
+        "在庫へ反映する担当者名を入力してください。"
+      );
+      if (entered === null) return;
+      person = String(entered).trim();
+      if (person === "") {
+        alert("担当者名を入力してください。");
+        return;
+      }
+    }
+
+    const confirmed = window.confirm(
+      `${formatDate(record.transferDate)}\n${record.sourceLocation} → ${record.destinationLocation}\n\n` +
+      "この移動リストはv61以前に「移動完了」になったため、在庫にはまだ反映されていません。\n\n" +
+      "現在の場所別在庫へ反映しますか？"
+    );
+    if (!confirmed) return;
+
+    try {
+      const result = await completeTransferAndApplyInventory(
+        record,
+        person
+      );
+      applyUpdatedTransferProducts(result?.products);
+      alert("場所別在庫へ反映しました。");
+      await renderSavedTransfers();
+    } catch (error) {
+      console.error("旧商品移動リスト在庫反映エラー", error);
+      alert(
+        error.message ||
+        "場所別在庫へ反映できませんでした。"
+      );
+    }
+  }
+
+  async function validateTransferSourceStock(record) {
+    const products = await getAllProducts();
+    const productMap = new Map(
+      products.map(function (product) {
+        return [String(product.internalCode || ""), product];
+      })
+    );
+    const sourceLocation = normalizeLocationStockName(
+      record?.sourceLocation
+    );
+    const grouped = new Map();
+
+    (Array.isArray(record?.items) ? record.items : []).forEach(
+      function (item) {
+        const internalCode = String(item?.internalCode || "");
+        const quantity = Number(item?.quantity || 0);
+        grouped.set(
+          internalCode,
+          (grouped.get(internalCode) || 0) + quantity
+        );
+      }
+    );
+
+    for (const [internalCode, quantity] of grouped.entries()) {
+      const product = productMap.get(internalCode);
+      if (!product) {
+        throw new Error(
+          `社内コード ${internalCode} の商品が見つかりません。`
+        );
+      }
+
+      const locationStocks = getProductLocationStocks(product);
+      const sourceEntry = locationStocks.find(
+        function (entry) {
+          return normalizeLocationStockName(entry.location) === sourceLocation;
+        }
+      );
+      const sourceStock = sourceEntry
+        ? Number(sourceEntry.stock || 0)
+        : 0;
+
+      if (sourceStock < quantity) {
+        throw new Error(
+          `${product.productName || internalCode}\n` +
+          `移動元「${sourceLocation}」の在庫が不足しています。\n` +
+          `現在：${sourceStock}個 / 移動：${quantity}個`
+        );
+      }
+    }
+  }
+
+  function applyUpdatedTransferProducts(updatedProducts) {
+    const products = Array.isArray(updatedProducts)
+      ? updatedProducts
+      : [];
+
+    products.forEach(function (product) {
+      const index = state.products.findIndex(
+        function (savedProduct) {
+          return (
+            String(savedProduct.internalCode || "") ===
+            String(product.internalCode || "")
+          );
+        }
+      );
+
+      if (index === -1) {
+        state.products.push(product);
+      } else {
+        state.products[index] = product;
+      }
+
+      if (
+        window.inventoryApp &&
+        typeof window.inventoryApp.applyUpdatedProduct === "function"
+      ) {
+        window.inventoryApp.applyUpdatedProduct(product);
+      }
+    });
   }
 
   function hasTransferContentChanged(existing, header, items) {
@@ -863,9 +1033,11 @@
             <div><strong>確認日：</strong>${record.sourceConfirmedAt ? escapeHtml(formatDateTime(record.sourceConfirmedAt)) : '<span class="confirm-date-line"></span>'}</div>
             <div><strong>移動先 確認者：</strong>${record.destinationConfirmedBy ? escapeHtml(record.destinationConfirmedBy) : '<span class="confirm-line"></span>'}</div>
             <div><strong>確認日：</strong>${record.destinationConfirmedAt ? escapeHtml(formatDateTime(record.destinationConfirmedAt)) : '<span class="confirm-date-line"></span>'}</div>
+            <div><strong>在庫反映：</strong>${record.inventoryAppliedBy ? escapeHtml(record.inventoryAppliedBy) : '<span class="confirm-line"></span>'}</div>
+            <div><strong>反映日：</strong>${record.inventoryAppliedAt ? escapeHtml(formatDateTime(record.inventoryAppliedAt)) : '<span class="confirm-date-line"></span>'}</div>
           </div>
         </div>
-        <div class="footer">バーコード在庫・棚卸管理アプリ v60</div>
+        <div class="footer">バーコード在庫・棚卸管理アプリ v62</div>
         <script>window.onload = function () { window.print(); };<\/script>
       </body>
       </html>`);
@@ -888,7 +1060,12 @@
   }
 
   function getTransferStatusText(record) {
-    if (record?.sourceConfirmedAt && record?.destinationConfirmedAt) return "移動完了";
+    if (record?.sourceConfirmedAt && record?.destinationConfirmedAt && record?.inventoryAppliedAt) {
+      return "移動完了・在庫反映済";
+    }
+    if (record?.sourceConfirmedAt && record?.destinationConfirmedAt) {
+      return "移動完了・在庫未反映";
+    }
     if (record?.sourceConfirmedAt) return "移動元確認済";
     return "未確認";
   }

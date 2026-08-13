@@ -1,9 +1,9 @@
 "use strict";
 
-const CACHE_NAME = "barcode-inventory-app-v61";
+const CACHE_NAME = "barcode-inventory-app-v62";
 const APP_FILES = [
-  "./", "./index.html", "./style.css", "./storage.js?v=61",
-  "./app.js?v=61", "./inventory.js", "./transfer-list.js?v=60",
+  "./", "./index.html", "./style.css", "./storage.js?v=62",
+  "./app.js?v=61", "./inventory.js", "./transfer-list.js?v=62",
   "./libs/barcode-detector-zxing-adapter.js?v=31",
   "./libs/ZXING-LICENSE.txt",
   "./scanner.js?v=31", "./stocktaking.js?v=31",

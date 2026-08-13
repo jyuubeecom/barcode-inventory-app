@@ -2509,6 +2509,447 @@ async function saveTransferList(record) {
   });
 }
 
+
+function createTransferMovementId(transferId, internalCode) {
+  const randomText = Math.random()
+    .toString(36)
+    .slice(2, 10);
+
+  return (
+    `transfer-${String(transferId || "")}-` +
+    `${String(internalCode || "")}-` +
+    `${Date.now()}-${randomText}`
+  );
+}
+
+async function completeTransferAndApplyInventory(
+  transferRecord,
+  confirmerName
+) {
+  const record = transferRecord || {};
+  const transferId = String(record.id || "").trim();
+  const person = String(confirmerName || "").trim();
+  const sourceLocation = normalizeLocationStockName(
+    record.sourceLocation
+  );
+  const destinationLocation = normalizeLocationStockName(
+    record.destinationLocation
+  );
+  const rawItems = Array.isArray(record.items)
+    ? record.items
+    : [];
+
+  if (transferId === "") {
+    throw new Error(
+      "商品移動リストのIDが見つかりません。"
+    );
+  }
+
+  if (person === "") {
+    throw new Error(
+      "確認者名を入力してください。"
+    );
+  }
+
+  if (
+    sourceLocation === "" ||
+    destinationLocation === ""
+  ) {
+    throw new Error(
+      "移動元または移動先が設定されていません。"
+    );
+  }
+
+  if (sourceLocation === destinationLocation) {
+    throw new Error(
+      "移動元と移動先は別の場所にしてください。"
+    );
+  }
+
+  const groupedItems = new Map();
+
+  rawItems.forEach(function (item) {
+    const internalCode = String(
+      item && item.internalCode || ""
+    ).trim();
+    const quantity = Number(
+      item && item.quantity || 0
+    );
+
+    if (internalCode === "") {
+      throw new Error(
+        "社内コードが空欄の商品があります。"
+      );
+    }
+
+    if (
+      !Number.isInteger(quantity) ||
+      quantity <= 0
+    ) {
+      throw new Error(
+        `${item && item.productName || internalCode} の` +
+        "移動個数を確認してください。"
+      );
+    }
+
+    const current = groupedItems.get(
+      internalCode
+    );
+
+    if (current) {
+      current.quantity += quantity;
+      return;
+    }
+
+    groupedItems.set(
+      internalCode,
+      {
+        internalCode: internalCode,
+        productCode: String(
+          item && item.productCode || ""
+        ),
+        productName: String(
+          item && item.productName || ""
+        ),
+        quantity: quantity
+      }
+    );
+  });
+
+  const items = Array.from(
+    groupedItems.values()
+  );
+
+  if (items.length === 0) {
+    throw new Error(
+      "移動する商品がありません。"
+    );
+  }
+
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      [
+        PRODUCT_STORE_NAME,
+        MOVEMENT_STORE_NAME,
+        TRANSFER_LIST_STORE_NAME
+      ],
+      "readwrite"
+    );
+
+    const productStore = transaction.objectStore(
+      PRODUCT_STORE_NAME
+    );
+    const movementStore = transaction.objectStore(
+      MOVEMENT_STORE_NAME
+    );
+    const transferStore = transaction.objectStore(
+      TRANSFER_LIST_STORE_NAME
+    );
+
+    const productsByCode = new Map();
+    let currentTransfer = null;
+    let pendingRequests = items.length + 1;
+    let failureError = null;
+    let result = null;
+
+    function abortWithMessage(message) {
+      if (failureError) {
+        return;
+      }
+
+      failureError = message instanceof Error
+        ? message
+        : new Error(String(message));
+
+      try {
+        transaction.abort();
+      } catch (error) {
+        database.close();
+        reject(failureError);
+      }
+    }
+
+    function requestCompleted() {
+      pendingRequests -= 1;
+
+      if (
+        pendingRequests === 0 &&
+        !failureError
+      ) {
+        applyInventoryChanges();
+      }
+    }
+
+    function applyInventoryChanges() {
+      if (!currentTransfer) {
+        abortWithMessage(
+          "保存済みの商品移動リストが見つかりません。"
+        );
+        return;
+      }
+
+      if (currentTransfer.inventoryAppliedAt) {
+        abortWithMessage(
+          "この商品移動リストは、すでに在庫へ反映済みです。"
+        );
+        return;
+      }
+
+      if (!currentTransfer.sourceConfirmedAt) {
+        abortWithMessage(
+          "先に移動元で確認してください。"
+        );
+        return;
+      }
+
+      const savedSourceLocation = normalizeLocationStockName(
+        currentTransfer.sourceLocation
+      );
+      const savedDestinationLocation = normalizeLocationStockName(
+        currentTransfer.destinationLocation
+      );
+      const savedGroupedItems = new Map();
+
+      (Array.isArray(currentTransfer.items)
+        ? currentTransfer.items
+        : []
+      ).forEach(function (item) {
+        const internalCode = String(
+          item && item.internalCode || ""
+        ).trim();
+        const quantity = Number(
+          item && item.quantity || 0
+        );
+
+        savedGroupedItems.set(
+          internalCode,
+          (savedGroupedItems.get(internalCode) || 0) + quantity
+        );
+      });
+
+      const savedItemsSignature = JSON.stringify(
+        Array.from(savedGroupedItems.entries()).sort()
+      );
+      const clickedItemsSignature = JSON.stringify(
+        items.map(function (item) {
+          return [item.internalCode, item.quantity];
+        }).sort()
+      );
+
+      if (
+        savedSourceLocation !== sourceLocation ||
+        savedDestinationLocation !== destinationLocation ||
+        savedItemsSignature !== clickedItemsSignature
+      ) {
+        abortWithMessage(
+          "商品移動リストの内容が更新されています。画面を開き直して、もう一度確認してください。"
+        );
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const updatedProducts = [];
+
+      for (const item of items) {
+        const savedProduct = productsByCode.get(
+          item.internalCode
+        );
+
+        if (!savedProduct) {
+          abortWithMessage(
+            `社内コード ${item.internalCode} の商品が見つかりません。`
+          );
+          return;
+        }
+
+        const product = normalizeProductLocationStocks(
+          savedProduct
+        );
+        const locationStocks = product.locationStocks.map(
+          function (entry) {
+            return {
+              location: normalizeLocationStockName(
+                entry.location
+              ),
+              stock: normalizeLocationStockQuantity(
+                entry.stock
+              )
+            };
+          }
+        );
+
+        const sourceEntry = locationStocks.find(
+          function (entry) {
+            return entry.location === sourceLocation;
+          }
+        );
+        const sourceStock = sourceEntry
+          ? sourceEntry.stock
+          : 0;
+
+        if (sourceStock < item.quantity) {
+          abortWithMessage(
+            `${product.productName || item.productName || item.internalCode}\n` +
+            `移動元「${sourceLocation}」の在庫が不足しています。\n` +
+            `現在：${sourceStock}個 / 移動：${item.quantity}個`
+          );
+          return;
+        }
+
+        sourceEntry.stock -= item.quantity;
+
+        let destinationEntry = locationStocks.find(
+          function (entry) {
+            return entry.location === destinationLocation;
+          }
+        );
+
+        if (!destinationEntry) {
+          destinationEntry = {
+            location: destinationLocation,
+            stock: 0
+          };
+          locationStocks.push(destinationEntry);
+        }
+
+        destinationEntry.stock += item.quantity;
+
+        let primaryLocation = normalizeLocationStockName(
+          product.location
+        );
+
+        if (
+          primaryLocation === "" ||
+          (
+            primaryLocation === sourceLocation &&
+            sourceEntry.stock === 0
+          )
+        ) {
+          primaryLocation = destinationLocation;
+        }
+
+        const cleanedLocationStocks = locationStocks.filter(
+          function (entry) {
+            return (
+              entry.stock > 0 ||
+              entry.location === primaryLocation
+            );
+          }
+        );
+
+        const beforeStock = normalizeLocationStockQuantity(
+          product.stock
+        );
+        const updatedProduct = normalizeProductLocationStocks({
+          ...product,
+          stock: beforeStock,
+          location: primaryLocation,
+          locationStocks: cleanedLocationStocks,
+          updatedAt: now
+        });
+
+        updatedProducts.push(updatedProduct);
+        productStore.put(updatedProduct);
+
+        movementStore.add({
+          id: createTransferMovementId(
+            transferId,
+            item.internalCode
+          ),
+          dateTime: now,
+          internalCode: updatedProduct.internalCode,
+          productCode: updatedProduct.productCode || "",
+          productName: updatedProduct.productName || "",
+          janCode: updatedProduct.janCode || "",
+          type: "移動",
+          quantity: item.quantity,
+          beforeStock: beforeStock,
+          afterStock: beforeStock,
+          person: person,
+          reason: "移動",
+          memo: `${sourceLocation} → ${destinationLocation}`,
+          sourceLocation: sourceLocation,
+          destinationLocation: destinationLocation,
+          transferListId: transferId
+        });
+      }
+
+      const updatedTransfer = {
+        ...currentTransfer,
+        destinationConfirmedBy: person,
+        destinationConfirmedAt:
+          currentTransfer.destinationConfirmedAt || now,
+        inventoryAppliedBy: person,
+        inventoryAppliedAt: now,
+        updatedAt: now
+      };
+
+      transferStore.put(updatedTransfer);
+
+      result = {
+        transfer: updatedTransfer,
+        products: updatedProducts
+      };
+    }
+
+    const transferRequest = transferStore.get(
+      transferId
+    );
+
+    transferRequest.onsuccess = function () {
+      currentTransfer = transferRequest.result || null;
+      requestCompleted();
+    };
+
+    transferRequest.onerror = function () {
+      abortWithMessage(
+        transferRequest.error ||
+        "商品移動リストを読み込めませんでした。"
+      );
+    };
+
+    items.forEach(function (item) {
+      const request = productStore.get(
+        item.internalCode
+      );
+
+      request.onsuccess = function () {
+        productsByCode.set(
+          item.internalCode,
+          request.result || null
+        );
+        requestCompleted();
+      };
+
+      request.onerror = function () {
+        abortWithMessage(
+          request.error ||
+          `社内コード ${item.internalCode} の商品を読み込めませんでした。`
+        );
+      };
+    });
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve(result);
+    };
+
+    transaction.onerror = function () {
+      const error = failureError || transaction.error;
+      database.close();
+      reject(error);
+    };
+
+    transaction.onabort = function () {
+      const error = failureError || transaction.error;
+      database.close();
+      reject(error);
+    };
+  });
+}
+
 async function deleteTransferList(id) {
   const database = await openDatabase();
   return new Promise(function (resolve, reject) {

@@ -53,6 +53,26 @@ const TRANSFER_LIST_STORE_NAME =
 const LOCATION_STOCK_UNCONFIRMED_NAME =
   "未確認";
 
+const SALES_ACTUAL_OUTBOUND_LOCATION_PRIORITY = Object.freeze([
+  "本社1階 A区",
+  "本社1階 B区",
+  "本社1階 C区",
+  "本社1階 D区",
+  "本社1階 E区",
+  "本社1階 F区",
+  "本社2階 A区",
+  "本社2階 B区",
+  "本社2階 C区",
+  "本社2階 D区",
+  "本社2階 E区",
+  "本社2階 F区",
+  "酒本倉庫1階",
+  "酒本倉庫2階"
+]);
+
+const SALES_ACTUAL_RETURN_LOCATION =
+  "本社1階 A区";
+
 function normalizeLocationStockName(value) {
   let location = String(value || "")
     .normalize("NFKC")
@@ -2114,6 +2134,19 @@ async function getAllSalesImportBatches() {
   );
 }
 
+function createSalesActualInventoryMovementId(batchId, internalCode) {
+  const safeBatch = String(batchId || "sales-batch").replace(/[^a-zA-Z0-9_-]/g, "_");
+  const safeCode = String(internalCode || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_");
+  return `sales-inventory-${safeBatch}-${safeCode}`;
+}
+
+function formatSalesActualLocationChanges(changes) {
+  return changes.map(function (change) {
+    const sign = change.change > 0 ? "+" : "";
+    return `${change.location} ${sign}${change.change}個`;
+  }).join(" / ");
+}
+
 async function saveSalesActualImportBatch(batchRecord, salesRecords) {
   const database = await openDatabase();
 
@@ -2121,33 +2154,290 @@ async function saveSalesActualImportBatch(batchRecord, salesRecords) {
     const transaction = database.transaction(
       [
         SALES_ACTUAL_STORE_NAME,
-        SALES_IMPORT_BATCH_STORE_NAME
+        SALES_IMPORT_BATCH_STORE_NAME,
+        PRODUCT_STORE_NAME,
+        MOVEMENT_STORE_NAME
       ],
       "readwrite"
     );
 
-    const salesStore = transaction.objectStore(
-      SALES_ACTUAL_STORE_NAME
-    );
-    const batchStore = transaction.objectStore(
-      SALES_IMPORT_BATCH_STORE_NAME
-    );
+    const salesStore = transaction.objectStore(SALES_ACTUAL_STORE_NAME);
+    const batchStore = transaction.objectStore(SALES_IMPORT_BATCH_STORE_NAME);
+    const productStore = transaction.objectStore(PRODUCT_STORE_NAME);
+    const movementStore = transaction.objectStore(MOVEMENT_STORE_NAME);
 
-    batchStore.add(batchRecord);
+    const netSalesByCode = new Map();
+    const productCodes = [];
+    const productsByCode = new Map();
+    const updatedProducts = [];
+    let savedBatch = null;
+    let failureError = null;
+    let pendingRequests = 0;
+    let startedWrites = false;
+
+    function abortWithMessage(message) {
+      if (failureError) return;
+      failureError = message instanceof Error
+        ? message
+        : new Error(String(message || "販売実績の在庫反映に失敗しました。"));
+      try {
+        transaction.abort();
+      } catch (error) {
+        // すでに終了している場合は何もしません。
+      }
+    }
+
     salesRecords.forEach(function (record) {
-      salesStore.add(record);
+      const internalCode = String(record && record.internalCode || "").trim();
+      const quantity = Number(record && record.quantity);
+
+      if (!internalCode) return;
+      if (!Number.isFinite(quantity) || !Number.isInteger(quantity)) {
+        abortWithMessage(
+          `社内コード ${internalCode} の販売数量が整数ではありません。\n` +
+          "在庫は整数で管理しているため、このCSVは取り込めません。"
+        );
+        return;
+      }
+
+      netSalesByCode.set(
+        internalCode,
+        (netSalesByCode.get(internalCode) || 0) + quantity
+      );
     });
+
+    if (failureError) return;
+
+    netSalesByCode.forEach(function (quantity, internalCode) {
+      if (quantity !== 0) productCodes.push(internalCode);
+    });
+
+    function startWrites() {
+      if (startedWrites || failureError) return;
+      startedWrites = true;
+
+      const inventoryAdjustments = [];
+      const inventorySkippedCodes = [];
+      const now = new Date().toISOString();
+
+      productCodes.forEach(function (internalCode) {
+        if (failureError) return;
+
+        const savedProduct = productsByCode.get(internalCode);
+        const netSalesQuantity = netSalesByCode.get(internalCode) || 0;
+
+        if (!savedProduct) {
+          inventorySkippedCodes.push(internalCode);
+          return;
+        }
+
+        const product = normalizeProductLocationStocks(savedProduct);
+        const beforeStock = normalizeLocationStockQuantity(product.stock);
+        const locationStocks = product.locationStocks.map(function (entry) {
+          return {
+            location: normalizeLocationStockName(entry.location),
+            stock: normalizeLocationStockQuantity(entry.stock)
+          };
+        });
+        const locationChanges = [];
+
+        if (netSalesQuantity > 0) {
+          if (beforeStock < netSalesQuantity) {
+            abortWithMessage(
+              `${product.productName || internalCode}\n` +
+              `販売実績CSVの出庫数量が現在庫を上回っています。\n` +
+              `現在庫：${beforeStock}個 / CSV出庫：${netSalesQuantity}個\n\n` +
+              "在庫数を確認してから、もう一度CSVを取り込んでください。"
+            );
+            return;
+          }
+
+          let remaining = netSalesQuantity;
+
+          SALES_ACTUAL_OUTBOUND_LOCATION_PRIORITY.forEach(function (location) {
+            if (remaining <= 0) return;
+
+            const entry = locationStocks.find(function (item) {
+              return item.location === location;
+            });
+            if (!entry || entry.stock <= 0) return;
+
+            const deduction = Math.min(entry.stock, remaining);
+            entry.stock -= deduction;
+            remaining -= deduction;
+            locationChanges.push({
+              location: location,
+              change: -deduction
+            });
+          });
+
+          if (remaining > 0) {
+            const eligibleStock = netSalesQuantity - remaining;
+            abortWithMessage(
+              `${product.productName || internalCode}\n` +
+              "販売実績CSVを出庫する保管場所の在庫が不足しています。\n" +
+              `自動出庫の対象在庫：${eligibleStock}個 / CSV出庫：${netSalesQuantity}個\n\n` +
+              "自動出庫は「本社1階 → 本社2階 → 酒本倉庫1階 → 酒本倉庫2階」の順です。"
+            );
+            return;
+          }
+        } else if (netSalesQuantity < 0) {
+          const returnQuantity = Math.abs(netSalesQuantity);
+          let returnEntry = locationStocks.find(function (item) {
+            return item.location === SALES_ACTUAL_RETURN_LOCATION;
+          });
+
+          if (!returnEntry) {
+            returnEntry = {
+              location: SALES_ACTUAL_RETURN_LOCATION,
+              stock: 0
+            };
+            locationStocks.push(returnEntry);
+          }
+
+          returnEntry.stock += returnQuantity;
+          locationChanges.push({
+            location: SALES_ACTUAL_RETURN_LOCATION,
+            change: returnQuantity
+          });
+        }
+
+        const totalChange = locationChanges.reduce(function (sum, item) {
+          return sum + item.change;
+        }, 0);
+        const afterStock = beforeStock + totalChange;
+        const positiveEntries = locationStocks.filter(function (entry) {
+          return entry.stock > 0;
+        });
+        let primaryLocation = normalizeLocationStockName(product.location);
+        const primaryStillHasStock = positiveEntries.some(function (entry) {
+          return entry.location === primaryLocation;
+        });
+
+        if (!primaryStillHasStock && positiveEntries.length > 0) {
+          const priorityMap = new Map(
+            SALES_ACTUAL_OUTBOUND_LOCATION_PRIORITY.map(function (location, index) {
+              return [location, index];
+            })
+          );
+          positiveEntries.sort(function (left, right) {
+            const leftIndex = priorityMap.has(left.location) ? priorityMap.get(left.location) : 999;
+            const rightIndex = priorityMap.has(right.location) ? priorityMap.get(right.location) : 999;
+            return leftIndex - rightIndex;
+          });
+          primaryLocation = positiveEntries[0].location;
+        }
+
+        if (!primaryLocation) {
+          primaryLocation = SALES_ACTUAL_RETURN_LOCATION;
+        }
+
+        const updatedProduct = normalizeProductLocationStocks({
+          ...product,
+          stock: afterStock,
+          location: primaryLocation,
+          locationStocks: locationStocks.filter(function (entry) {
+            return entry.stock > 0;
+          }),
+          updatedAt: now
+        });
+
+        updatedProducts.push(updatedProduct);
+        productStore.put(updatedProduct);
+
+        const movementId = createSalesActualInventoryMovementId(
+          batchRecord.batchId,
+          internalCode
+        );
+        const isOutbound = netSalesQuantity > 0;
+
+        movementStore.add({
+          id: movementId,
+          dateTime: now,
+          internalCode: updatedProduct.internalCode,
+          productCode: updatedProduct.productCode || "",
+          productName: updatedProduct.productName || "",
+          janCode: updatedProduct.janCode || "",
+          type: isOutbound ? "出庫" : "入庫",
+          quantity: Math.abs(netSalesQuantity),
+          beforeStock: beforeStock,
+          afterStock: afterStock,
+          person: "販売実績CSV",
+          reason: isOutbound ? "販売実績CSV" : "販売実績CSV返品",
+          memo: isOutbound
+            ? `自動出庫：${formatSalesActualLocationChanges(locationChanges)}`
+            : `返品自動反映：${formatSalesActualLocationChanges(locationChanges)}`,
+          location: locationChanges.length === 1
+            ? locationChanges[0].location
+            : "複数保管場所",
+          salesBatchId: batchRecord.batchId,
+          locationChanges: locationChanges
+        });
+
+        inventoryAdjustments.push({
+          internalCode: internalCode,
+          netSalesQuantity: netSalesQuantity,
+          beforeStock: beforeStock,
+          afterStock: afterStock,
+          locationChanges: locationChanges,
+          movementId: movementId
+        });
+      });
+
+      if (failureError) return;
+
+      savedBatch = {
+        ...batchRecord,
+        inventoryAppliedAt: now,
+        inventoryAdjustmentCount: inventoryAdjustments.length,
+        inventoryAdjustments: inventoryAdjustments,
+        inventorySkippedCodes: inventorySkippedCodes,
+        inventoryRule: "本社1階→本社2階→酒本倉庫1階→酒本倉庫2階"
+      };
+
+      batchStore.add(savedBatch);
+      salesRecords.forEach(function (record) {
+        salesStore.add(record);
+      });
+    }
+
+    if (productCodes.length === 0) {
+      startWrites();
+    } else {
+      pendingRequests = productCodes.length;
+      productCodes.forEach(function (internalCode) {
+        const request = productStore.get(internalCode);
+        request.onsuccess = function () {
+          productsByCode.set(internalCode, request.result || null);
+          pendingRequests -= 1;
+          if (pendingRequests === 0) startWrites();
+        };
+        request.onerror = function () {
+          abortWithMessage(
+            request.error ||
+            `社内コード ${internalCode} の商品を読み込めませんでした。`
+          );
+        };
+      });
+    }
 
     transaction.oncomplete = function () {
       database.close();
-      resolve();
+      resolve({
+        batch: savedBatch || batchRecord,
+        products: updatedProducts
+      });
     };
     transaction.onerror = function () {
-      const error = transaction.error;
+      const error = failureError || transaction.error;
       database.close();
       reject(error);
     };
-    transaction.onabort = transaction.onerror;
+    transaction.onabort = function () {
+      const error = failureError || transaction.error;
+      database.close();
+      reject(error);
+    };
   });
 }
 
@@ -2158,40 +2448,190 @@ async function deleteSalesActualImportBatch(batchId) {
     const transaction = database.transaction(
       [
         SALES_ACTUAL_STORE_NAME,
-        SALES_IMPORT_BATCH_STORE_NAME
+        SALES_IMPORT_BATCH_STORE_NAME,
+        PRODUCT_STORE_NAME,
+        MOVEMENT_STORE_NAME
       ],
       "readwrite"
     );
 
-    const salesStore = transaction.objectStore(
-      SALES_ACTUAL_STORE_NAME
-    );
-    const batchStore = transaction.objectStore(
-      SALES_IMPORT_BATCH_STORE_NAME
-    );
-    const index = salesStore.index("batchId");
-    const request = index.openCursor(IDBKeyRange.only(batchId));
+    const salesStore = transaction.objectStore(SALES_ACTUAL_STORE_NAME);
+    const batchStore = transaction.objectStore(SALES_IMPORT_BATCH_STORE_NAME);
+    const productStore = transaction.objectStore(PRODUCT_STORE_NAME);
+    const movementStore = transaction.objectStore(MOVEMENT_STORE_NAME);
+    const salesIndex = salesStore.index("batchId");
+    const updatedProducts = [];
+    let failureError = null;
+    let batch = null;
+    let pendingProducts = 0;
+    let rollbackStarted = false;
 
-    request.onsuccess = function () {
-      const cursor = request.result;
-      if (!cursor) {
-        batchStore.delete(batchId);
+    function abortWithMessage(message) {
+      if (failureError) return;
+      failureError = message instanceof Error
+        ? message
+        : new Error(String(message || "販売実績CSVの取消に失敗しました。"));
+      try {
+        transaction.abort();
+      } catch (error) {
+        // すでに終了している場合は何もしません。
+      }
+    }
+
+    function deleteSalesRecordsAndBatch() {
+      const request = salesIndex.openCursor(IDBKeyRange.only(batchId));
+      request.onsuccess = function () {
+        const cursor = request.result;
+        if (!cursor) {
+          batchStore.delete(batchId);
+          return;
+        }
+        cursor.delete();
+        cursor.continue();
+      };
+      request.onerror = function () {
+        abortWithMessage(request.error || "販売実績を削除できませんでした。");
+      };
+    }
+
+    function startRollback() {
+      if (rollbackStarted || failureError) return;
+      rollbackStarted = true;
+
+      const adjustments = batch && Array.isArray(batch.inventoryAdjustments)
+        ? batch.inventoryAdjustments
+        : [];
+
+      if (adjustments.length === 0) {
+        deleteSalesRecordsAndBatch();
         return;
       }
-      cursor.delete();
-      cursor.continue();
+
+      pendingProducts = adjustments.length;
+
+      adjustments.forEach(function (adjustment) {
+        const request = productStore.get(adjustment.internalCode);
+        request.onsuccess = function () {
+          const savedProduct = request.result || null;
+          if (!savedProduct) {
+            abortWithMessage(
+              `社内コード ${adjustment.internalCode} の商品が見つからないため、在庫を元に戻せません。`
+            );
+            return;
+          }
+
+          const product = normalizeProductLocationStocks(savedProduct);
+          const locationStocks = product.locationStocks.map(function (entry) {
+            return {
+              location: normalizeLocationStockName(entry.location),
+              stock: normalizeLocationStockQuantity(entry.stock)
+            };
+          });
+          const changes = Array.isArray(adjustment.locationChanges)
+            ? adjustment.locationChanges
+            : [];
+
+          for (const change of changes) {
+            const location = normalizeLocationStockName(change.location);
+            const appliedChange = Number(change.change) || 0;
+            let entry = locationStocks.find(function (item) {
+              return item.location === location;
+            });
+
+            if (!entry) {
+              entry = { location: location, stock: 0 };
+              locationStocks.push(entry);
+            }
+
+            if (appliedChange > 0 && entry.stock < appliedChange) {
+              abortWithMessage(
+                `${product.productName || adjustment.internalCode}\n` +
+                `販売実績CSVの取込取消に必要な在庫が「${location}」にありません。\n` +
+                `現在：${entry.stock}個 / 戻すために必要：${appliedChange}個\n\n` +
+                "その後の入出庫を確認してから取消してください。"
+              );
+              return;
+            }
+
+            entry.stock -= appliedChange;
+          }
+
+          const totalAppliedChange = changes.reduce(function (sum, change) {
+            return sum + (Number(change.change) || 0);
+          }, 0);
+          const restoredStock = normalizeLocationStockQuantity(product.stock) - totalAppliedChange;
+          const positiveEntries = locationStocks.filter(function (entry) {
+            return entry.stock > 0;
+          });
+          let primaryLocation = normalizeLocationStockName(product.location);
+
+          if (!positiveEntries.some(function (entry) {
+            return entry.location === primaryLocation;
+          })) {
+            primaryLocation = positiveEntries.length > 0
+              ? positiveEntries[0].location
+              : primaryLocation || LOCATION_STOCK_UNCONFIRMED_NAME;
+          }
+
+          const restoredProduct = normalizeProductLocationStocks({
+            ...product,
+            stock: restoredStock,
+            location: primaryLocation,
+            locationStocks: positiveEntries,
+            updatedAt: new Date().toISOString()
+          });
+
+          productStore.put(restoredProduct);
+          updatedProducts.push(restoredProduct);
+
+          if (adjustment.movementId) {
+            movementStore.delete(adjustment.movementId);
+          }
+
+          pendingProducts -= 1;
+          if (pendingProducts === 0) {
+            deleteSalesRecordsAndBatch();
+          }
+        };
+        request.onerror = function () {
+          abortWithMessage(
+            request.error ||
+            `社内コード ${adjustment.internalCode} の商品を読み込めませんでした。`
+          );
+        };
+      });
+    }
+
+    const batchRequest = batchStore.get(batchId);
+    batchRequest.onsuccess = function () {
+      batch = batchRequest.result || null;
+      if (!batch) {
+        abortWithMessage("取消対象の販売実績CSVが見つかりませんでした。");
+        return;
+      }
+      startRollback();
+    };
+    batchRequest.onerror = function () {
+      abortWithMessage(
+        batchRequest.error ||
+        "販売実績CSVの履歴を読み込めませんでした。"
+      );
     };
 
     transaction.oncomplete = function () {
       database.close();
-      resolve();
+      resolve({ products: updatedProducts });
     };
     transaction.onerror = function () {
-      const error = transaction.error;
+      const error = failureError || transaction.error;
       database.close();
       reject(error);
     };
-    transaction.onabort = transaction.onerror;
+    transaction.onabort = function () {
+      const error = failureError || transaction.error;
+      database.close();
+      reject(error);
+    };
   });
 }
 

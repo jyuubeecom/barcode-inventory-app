@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v62
+          画面版 v63
         </span>
       </div>
 
@@ -1486,11 +1486,34 @@
 
         <div>
           <label for="stock-in-current-stock">
-            現在庫数
+            現在庫数（総在庫）
           </label>
 
           <input
             id="stock-in-current-stock"
+            type="number"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="stock-in-location">
+            入庫先の保管場所（必須）
+          </label>
+
+          <select
+            id="stock-in-location"
+            required
+          ></select>
+        </div>
+
+        <div>
+          <label for="stock-in-location-stock">
+            入庫先の現在庫数
+          </label>
+
+          <input
+            id="stock-in-location-stock"
             type="number"
             readonly
           >
@@ -1616,11 +1639,34 @@
 
         <div>
           <label for="stock-out-current-stock">
-            現在庫数
+            現在庫数（総在庫）
           </label>
 
           <input
             id="stock-out-current-stock"
+            type="number"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="stock-out-location">
+            出庫元の保管場所（必須）
+          </label>
+
+          <select
+            id="stock-out-location"
+            required
+          ></select>
+        </div>
+
+        <div>
+          <label for="stock-out-location-stock">
+            出庫元の現在庫数
+          </label>
+
+          <input
+            id="stock-out-location-stock"
             type="number"
             readonly
           >
@@ -2136,9 +2182,9 @@
 
   </main>
 
-<script src="storage.js?v=62"></script>
+<script src="storage.js?v=63"></script>
 <script src="app.js?v=61"></script>
-<script src="inventory.js"></script>
+<script src="inventory.js?v=63"></script>
 <script src="transfer-list.js?v=62"></script>
 <script src="libs/barcode-detector-zxing-adapter.js?v=31"></script>
 <script src="scanner.js?v=31"></script>
@@ -2150,7 +2196,7 @@
 <script src="csv-update.js?v=31"></script>
 <script src="pwa.js?v=31"></script>
 <script src="sales-plan.js?v=37"></script>
-<script src="sales-actual.js?v=39"></script>
+<script src="sales-actual.js?v=63"></script>
 <script src="purchase-required.js?v=59"></script>
 <script src="low-shipment.js?v=45"></script>
 <script src="shipping-schedule.js?v=58"></script>

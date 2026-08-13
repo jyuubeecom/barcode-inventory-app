@@ -460,6 +460,15 @@ function renderSalesActualPreview(preview) {
   if (preview.duplicateRecords.length > 0) {
     messages.push(`すでに取り込まれている明細${preview.duplicateRecords.length}件は二重登録しません。`);
   }
+  messages.push(
+    "このCSVを取り込むと、登録済み商品の販売数量を場所別在庫から自動出庫します。"
+  );
+  messages.push(
+    "自動出庫順：本社1階 A～F区 → 本社2階 A～F区 → 酒本倉庫1階 → 酒本倉庫2階。返品（マイナス数量）は本社1階 A区へ戻します。"
+  );
+  messages.push(
+    "v63より前に取り込んだ販売実績CSVは、更新時にさかのぼって在庫へ反映しません。"
+  );
   warnings.textContent = messages.join("\n");
 }
 
@@ -475,6 +484,8 @@ async function importSelectedSalesActualFile() {
     `新規販売実績：${preview.importRecords.length}件\n` +
     `重複スキップ：${preview.duplicateRecords.length}件\n` +
     `商品未登録コード：${preview.unregisteredCodes.length}件\n\n` +
+    "登録済み商品の販売数量は、場所別在庫から自動出庫します。\n" +
+    "順番：本社1階 → 本社2階 → 酒本倉庫1階 → 酒本倉庫2階\n\n" +
     "取り込みますか？"
   );
   if (!confirmed) return;
@@ -507,9 +518,27 @@ async function importSelectedSalesActualFile() {
       unregisteredCodes: preview.unregisteredCodes
     };
 
-    await saveSalesActualImportBatch(batch, records);
-    salesActualImportHistory.unshift(batch);
-    alert(`販売実績を${records.length}件取り込みました。`);
+    const saveResult = await saveSalesActualImportBatch(batch, records);
+    const savedBatch = saveResult && saveResult.batch
+      ? saveResult.batch
+      : batch;
+    const updatedProducts = saveResult && Array.isArray(saveResult.products)
+      ? saveResult.products
+      : [];
+
+    applySalesActualUpdatedProducts(updatedProducts);
+    salesActualImportHistory.unshift(savedBatch);
+
+    const appliedCount = Number(savedBatch.inventoryAdjustmentCount || 0);
+    const skippedCount = Array.isArray(savedBatch.inventorySkippedCodes)
+      ? savedBatch.inventorySkippedCodes.length
+      : 0;
+
+    alert(
+      `販売実績を${records.length}件取り込みました。\n\n` +
+      `在庫へ反映した商品：${appliedCount}商品\n` +
+      `商品未登録のため在庫未反映：${skippedCount}商品`
+    );
     clearSalesActualPreview();
     document.querySelector("#sales-actual-file").value = "";
     renderSalesActualImportHistory();
@@ -584,24 +613,64 @@ function renderSalesActualImportHistory() {
       const batchId = button.dataset.batchId;
       const batch = salesActualImportHistory.find(function (item) { return item.batchId === batchId; });
       if (!batch) return;
+      const inventoryWasApplied = Array.isArray(batch.inventoryAdjustments) &&
+        batch.inventoryAdjustments.length > 0;
+      const inventoryMessage = inventoryWasApplied
+        ? "このCSVで反映した在庫も、取込前の状態へ戻します。\n"
+        : "このCSVでは在庫を変更していないため、在庫数は変わりません。\n";
+
       const confirmed = window.confirm(
         `「${batch.fileName || "販売実績CSV"}」の取込データを削除します。\n\n` +
         "CSVを修正版へ差し替える場合などに使用してください。\n" +
-        "商品・在庫・販売予定は削除されません。\n\n削除しますか？"
+        inventoryMessage +
+        "商品マスタ・販売予定は削除されません。\n\n削除しますか？"
       );
       if (!confirmed) return;
       button.disabled = true;
       try {
-        await deleteSalesActualImportBatch(batchId);
+        const deleteResult = await deleteSalesActualImportBatch(batchId);
+        const restoredProducts = deleteResult && Array.isArray(deleteResult.products)
+          ? deleteResult.products
+          : [];
+        applySalesActualUpdatedProducts(restoredProducts);
         salesActualImportHistory = salesActualImportHistory.filter(function (item) { return item.batchId !== batchId; });
         renderSalesActualImportHistory();
-        alert("販売実績CSVの取込を取り消しました。");
+        alert(
+          inventoryWasApplied
+            ? "販売実績CSVの取込を取り消し、在庫も元に戻しました。"
+            : "販売実績CSVの取込を取り消しました。"
+        );
       } catch (error) {
         console.error("販売実績取込取消エラー", error);
         alert("取込データを削除できませんでした。");
         button.disabled = false;
       }
     });
+  });
+}
+
+function applySalesActualUpdatedProducts(updatedProducts) {
+  if (!Array.isArray(updatedProducts) || updatedProducts.length === 0) {
+    return;
+  }
+
+  updatedProducts.forEach(function (updatedProduct) {
+    if (
+      window.inventoryApp &&
+      typeof window.inventoryApp.applyUpdatedProduct === "function"
+    ) {
+      window.inventoryApp.applyUpdatedProduct(updatedProduct);
+    }
+
+    const index = salesActualProducts.findIndex(function (product) {
+      return product.internalCode === updatedProduct.internalCode;
+    });
+
+    if (index >= 0) {
+      salesActualProducts[index] = updatedProduct;
+    } else {
+      salesActualProducts.push(updatedProduct);
+    }
   });
 }
 

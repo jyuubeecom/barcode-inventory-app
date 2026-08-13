@@ -199,6 +199,11 @@ async function applyBulkLocation() {
     return {
       ...product,
       location: destination,
+      locationStocks:
+        getLocationStocksAfterPrimaryLocationChange(
+          product,
+          destination
+        ),
       updatedAt: now
     };
   });

@@ -50,6 +50,344 @@ const SHIPPING_ARRIVAL_RECEIPT_STORE_NAME =
 const TRANSFER_LIST_STORE_NAME =
   "transferLists";
 
+const LOCATION_STOCK_UNCONFIRMED_NAME =
+  "未確認";
+
+function normalizeLocationStockName(value) {
+  let location = String(value || "")
+    .normalize("NFKC")
+    .trim()
+    .replace(/[\s\u3000]+/g, " ");
+
+  if (location === "") {
+    return "";
+  }
+
+  const headquartersMatch = location.match(
+    /^本社([12])階\s*([A-Fa-f])区$/
+  );
+
+  if (headquartersMatch) {
+    return (
+      `本社${headquartersMatch[1]}階 ` +
+      `${headquartersMatch[2].toUpperCase()}区`
+    );
+  }
+
+  if (location === "酒本倉庫1階") {
+    return "酒本倉庫1階";
+  }
+
+  if (location === "酒本倉庫2階") {
+    return "酒本倉庫2階";
+  }
+
+  if (location === LOCATION_STOCK_UNCONFIRMED_NAME) {
+    return LOCATION_STOCK_UNCONFIRMED_NAME;
+  }
+
+  return location;
+}
+
+function normalizeLocationStockQuantity(value) {
+  const quantity = Number(value);
+
+  if (!Number.isFinite(quantity)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.trunc(quantity));
+}
+
+function getProductLocationStocks(product) {
+  const targetStock =
+    normalizeLocationStockQuantity(
+      product && product.stock
+    );
+
+  const primaryLocation =
+    normalizeLocationStockName(
+      product && product.location
+    );
+
+  const merged = new Map();
+  const savedLocationStocks =
+    product && Array.isArray(product.locationStocks)
+      ? product.locationStocks
+      : [];
+
+  savedLocationStocks.forEach(function (entry) {
+    const location = normalizeLocationStockName(
+      entry && entry.location
+    );
+
+    if (location === "") {
+      return;
+    }
+
+    const quantity =
+      normalizeLocationStockQuantity(
+        entry && entry.stock
+      );
+
+    merged.set(
+      location,
+      (merged.get(location) || 0) + quantity
+    );
+  });
+
+  let entries = Array.from(
+    merged,
+    function ([location, stock]) {
+      return {
+        location: location,
+        stock: stock
+      };
+    }
+  );
+
+  if (entries.length === 0) {
+    if (
+      primaryLocation !== "" ||
+      targetStock > 0
+    ) {
+      entries.push({
+        location:
+          primaryLocation ||
+          LOCATION_STOCK_UNCONFIRMED_NAME,
+        stock: targetStock
+      });
+    }
+
+    return entries;
+  }
+
+  const currentTotal = entries.reduce(
+    function (sum, entry) {
+      return sum + entry.stock;
+    },
+    0
+  );
+
+  const difference = targetStock - currentTotal;
+
+  if (difference > 0) {
+    let targetEntry = entries.find(
+      function (entry) {
+        return (
+          primaryLocation !== "" &&
+          entry.location === primaryLocation
+        );
+      }
+    );
+
+    if (!targetEntry) {
+      targetEntry = entries[0];
+    }
+
+    if (!targetEntry) {
+      targetEntry = {
+        location:
+          primaryLocation ||
+          LOCATION_STOCK_UNCONFIRMED_NAME,
+        stock: 0
+      };
+      entries.push(targetEntry);
+    }
+
+    targetEntry.stock += difference;
+  } else if (difference < 0) {
+    let remaining = Math.abs(difference);
+
+    const orderedEntries = entries.slice().sort(
+      function (left, right) {
+        const leftPrimary =
+          primaryLocation !== "" &&
+          left.location === primaryLocation;
+        const rightPrimary =
+          primaryLocation !== "" &&
+          right.location === primaryLocation;
+
+        if (leftPrimary === rightPrimary) {
+          return 0;
+        }
+
+        return leftPrimary ? -1 : 1;
+      }
+    );
+
+    orderedEntries.forEach(function (entry) {
+      if (remaining <= 0) {
+        return;
+      }
+
+      const deduction = Math.min(
+        entry.stock,
+        remaining
+      );
+
+      entry.stock -= deduction;
+      remaining -= deduction;
+    });
+  }
+
+  entries = entries.filter(
+    function (entry) {
+      if (entry.stock > 0) {
+        return true;
+      }
+
+      if (
+        primaryLocation !== "" &&
+        entry.location === primaryLocation
+      ) {
+        return true;
+      }
+
+      return targetStock === 0 && entries.length === 1;
+    }
+  );
+
+  if (
+    entries.length === 0 &&
+    targetStock > 0
+  ) {
+    entries.push({
+      location:
+        primaryLocation ||
+        LOCATION_STOCK_UNCONFIRMED_NAME,
+      stock: targetStock
+    });
+  }
+
+  return entries;
+}
+
+function normalizeProductLocationStocks(product) {
+  const source = product || {};
+
+  return {
+    ...source,
+    locationStocks:
+      getProductLocationStocks(source)
+  };
+}
+
+function getLocationStocksAfterPrimaryLocationChange(
+  product,
+  nextLocation
+) {
+  const normalizedProduct =
+    normalizeProductLocationStocks(
+      product
+    );
+
+  const locationStocks =
+    normalizedProduct.locationStocks.map(
+      function (entry) {
+        return {
+          location: entry.location,
+          stock: normalizeLocationStockQuantity(
+            entry.stock
+          )
+        };
+      }
+    );
+
+  const beforeLocation =
+    normalizeLocationStockName(
+      product && product.location
+    );
+
+  const afterLocation =
+    normalizeLocationStockName(
+      nextLocation
+    );
+
+  if (
+    beforeLocation !== afterLocation &&
+    locationStocks.length <= 1
+  ) {
+    if (
+      afterLocation === "" &&
+      normalizeLocationStockQuantity(
+        product && product.stock
+      ) <= 0
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        location:
+          afterLocation ||
+          LOCATION_STOCK_UNCONFIRMED_NAME,
+        stock: normalizeLocationStockQuantity(
+          product && product.stock
+        )
+      }
+    ];
+  }
+
+  return locationStocks;
+}
+
+async function migrateProductLocationStocks() {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      PRODUCT_STORE_NAME,
+      "readwrite"
+    );
+    const store = transaction.objectStore(
+      PRODUCT_STORE_NAME
+    );
+    const request = store.getAll();
+    let updatedCount = 0;
+
+    request.onsuccess = function () {
+      const records = request.result || [];
+
+      records.forEach(function (product) {
+        const normalized =
+          normalizeProductLocationStocks(product);
+
+        const before = Array.isArray(
+          product.locationStocks
+        )
+          ? product.locationStocks
+          : null;
+
+        if (
+          before === null ||
+          JSON.stringify(before) !==
+            JSON.stringify(
+              normalized.locationStocks
+            )
+        ) {
+          store.put(normalized);
+          updatedCount += 1;
+        }
+      });
+    };
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve(updatedCount);
+    };
+
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+
+    transaction.onabort =
+      transaction.onerror;
+  });
+}
+
 function openDatabase() {
   return new Promise(function (
     resolve,
@@ -584,7 +922,9 @@ async function saveProduct(
       );
 
     productStore.add(
-      product
+      normalizeProductLocationStocks(
+        product
+      )
     );
 
     transaction.oncomplete =
@@ -644,7 +984,9 @@ async function saveProductAndMovement(
       );
 
     productStore.add(
-      product
+      normalizeProductLocationStocks(
+        product
+      )
     );
 
     movementStore.add(
@@ -699,7 +1041,9 @@ async function updateProduct(
       );
 
     productStore.put(
-      product
+      normalizeProductLocationStocks(
+        product
+      )
     );
 
     transaction.oncomplete =
@@ -806,7 +1150,9 @@ async function getAllProducts() {
     request.onsuccess =
       function () {
         savedProducts =
-          request.result || [];
+          (request.result || []).map(
+            normalizeProductLocationStocks
+          );
       };
 
     transaction.oncomplete =
@@ -910,7 +1256,9 @@ async function recordStockMovement(
       );
 
     productStore.put(
-      updatedProduct
+      normalizeProductLocationStocks(
+        updatedProduct
+      )
     );
 
     movementStore.add(
@@ -1247,7 +1595,9 @@ async function completeStocktakingSession(
     updatedProducts.forEach(
       function (product) {
         productStore.put(
-          product
+          normalizeProductLocationStocks(
+            product
+          )
         );
       }
     );
@@ -1476,7 +1826,11 @@ async function completeStocktakingAggregationReflection(
 
     updatedProducts.forEach(
       function (product) {
-        productStore.put(product);
+        productStore.put(
+          normalizeProductLocationStocks(
+            product
+          )
+        );
       }
     );
 
@@ -1646,7 +2000,11 @@ async function updateProductsInBatch(updatedProducts) {
     );
 
     updatedProducts.forEach(function (product) {
-      store.put(product);
+      store.put(
+        normalizeProductLocationStocks(
+          product
+        )
+      );
     });
 
     transaction.oncomplete = function () {
@@ -2060,7 +2418,11 @@ async function applyShippingArrivalReceipt(updatedProducts, movements, receipt) 
     const receiptStore = transaction.objectStore(SHIPPING_ARRIVAL_RECEIPT_STORE_NAME);
 
     updatedProducts.forEach(function (product) {
-      productStore.put(product);
+      productStore.put(
+        normalizeProductLocationStocks(
+          product
+        )
+      );
     });
     movements.forEach(function (movement) {
       movementStore.add(movement);

@@ -271,6 +271,11 @@ const detailLocation =
     "#detail-location"
   );
 
+const detailLocationStocks =
+  document.querySelector(
+    "#detail-location-stocks"
+  );
+
 const detailSupplier =
   document.querySelector(
     "#detail-supplier"
@@ -417,6 +422,8 @@ async function initializeApp() {
   showScreen("home");
 
   try {
+    await migrateProductLocationStocks();
+
     const savedProducts =
       await getAllProducts();
 
@@ -595,6 +602,10 @@ async function handleProductSubmit(event) {
     minStock: minStock,
     category: category,
     location: location,
+    locationStocks: getProductLocationStocks({
+      stock: stock,
+      location: location
+    }),
     supplier: supplier,
     backorderStatus: backorderStatus,
     productStatus: productStatus,
@@ -624,7 +635,9 @@ async function handleProductSubmit(event) {
       initialMovement
     );
 
-    products.push(newProduct);
+    products.push(
+      normalizeProductData(newProduct)
+    );
 
     sortProducts();
     updateSummary();
@@ -923,6 +936,10 @@ function openDetailScreen(internalCode) {
   detailLocation.textContent =
     selectedProduct.location || "未登録";
 
+  renderDetailLocationStocks(
+    selectedProduct
+  );
+
   detailSupplier.textContent =
     selectedProduct.supplier;
 
@@ -1092,6 +1109,11 @@ async function handleEditProductSubmit(event) {
     minStock: minStock,
     category: category,
     location: location,
+    locationStocks:
+      getLocationStocksAfterPrimaryLocationChange(
+        currentProduct,
+        location
+      ),
     supplier: supplier,
     backorderStatus: backorderStatus,
     productStatus: productStatus,
@@ -1239,23 +1261,53 @@ function applyUpdatedProduct(updatedProduct) {
 }
 
 function normalizeProductData(product) {
+  const normalizedLocationProduct =
+    normalizeProductLocationStocks(
+      product
+    );
+
   return {
-    ...product,
+    ...normalizedLocationProduct,
     stock: getValidStockNumber(
-      product.stock
+      normalizedLocationProduct.stock
     ),
     minStock: getValidStockNumber(
-      product.minStock
+      normalizedLocationProduct.minStock
     ),
     productStatus:
       getProductLifecycleStatus(
-        product
+        normalizedLocationProduct
       ),
     backorderStatus:
       getProductBackorderStatus(
-        product
+        normalizedLocationProduct
       )
   };
+}
+
+function renderDetailLocationStocks(product) {
+  if (!detailLocationStocks) {
+    return;
+  }
+
+  const locationStocks =
+    getProductLocationStocks(product);
+
+  detailLocationStocks.innerHTML = "";
+
+  if (locationStocks.length === 0) {
+    detailLocationStocks.textContent =
+      "場所別在庫はありません。";
+    return;
+  }
+
+  locationStocks.forEach(function (entry) {
+    const line = document.createElement("div");
+    line.textContent =
+      `${entry.location}：` +
+      `${Number(entry.stock || 0).toLocaleString("ja-JP")}個`;
+    detailLocationStocks.appendChild(line);
+  });
 }
 
 function getProductLifecycleStatus(

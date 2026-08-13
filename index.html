@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v63
+          画面版 v64
         </span>
       </div>
 
@@ -470,6 +470,13 @@
         日々の販売実績CSVを取り込み、売上から返品を差し引いた販売数を発注判定に使用します。
         商品はA列の社内コードだけで照合します。
       </p>
+
+      <div style="margin: 14px 0 18px; padding: 14px 16px; border: 2px solid #f0a020; border-radius: 10px; background: #fff4df; color: #7a4300; line-height: 1.8;">
+        <strong style="font-size: 1.05em;">⚠ 販売実績CSVを取り込むと、販売数量を場所別在庫から自動出庫します。</strong><br>
+        出庫の優先順：<strong>本社1階 → 本社2階 → 酒本倉庫1階 → 酒本倉庫2階</strong><br>
+        本社1階・本社2階は、それぞれ <strong>A区 → B区 → C区 → D区 → E区 → F区</strong> の順に在庫を減らします。<br>
+        返品分は販売数から差し引いて処理します。取込前に、下のプレビューで内容を必ず確認してください。
+      </div>
 
       <div class="sales-actual-card">
         <h3>1. CSVを選ぶ</h3>

@@ -267,6 +267,11 @@ async function saveShippingScheduleFromForm(event) {
     departureDate: departureDate,
     arrivalDate: arrivalDate,
     warehouseArrivalDate: warehouseArrivalDate,
+    shipmentConfirmed: existing ? Boolean(existing.shipmentConfirmed) : false,
+    shipmentConfirmedAt: existing && existing.shipmentConfirmedAt ? existing.shipmentConfirmedAt : "",
+    shipmentConfirmedItems: existing && Array.isArray(existing.shipmentConfirmedItems) ? existing.shipmentConfirmedItems : [],
+    shipmentConfirmedQuantity: existing ? (Number(existing.shipmentConfirmedQuantity) || 0) : 0,
+    shipmentConfirmedProductCount: existing ? (Number(existing.shipmentConfirmedProductCount) || 0) : 0,
     createdAt: existing && existing.createdAt ? existing.createdAt : now,
     updatedAt: now
   };
@@ -299,6 +304,10 @@ function editShippingSchedule(id) {
     alert("この船便はすでに倉庫到着分を在庫へ入荷反映済みのため、スケジュールを編集できません。");
     return;
   }
+  if (isShippingScheduleConfirmed(record)) {
+    alert("この船便は船積内容を確定済みです。スケジュールを変更する場合は、先に「確定を解除」してください。");
+    return;
+  }
 
   shippingScheduleEditingId = id;
   document.querySelector("#shipping-schedule-name").value = record.name || "";
@@ -324,6 +333,11 @@ async function removeShippingSchedule(id) {
       `入荷反映数量：${(Number(arrivalReceipt.totalQuantity) || 0).toLocaleString("ja-JP")}個\n\n` +
       "入出庫履歴との整合性を守るため、反映済み船便は履歴として残します。"
     );
+    return;
+  }
+
+  if (isShippingScheduleConfirmed(record)) {
+    alert("この船便は船積内容を確定済みです。削除する場合は、先に「確定を解除」してください。");
     return;
   }
 
@@ -382,7 +396,7 @@ function renderShippingScheduleTable() {
   if (visible.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 8;
+    cell.colSpan = 9;
     cell.textContent = "船便スケジュールはまだ登録されていません。";
     row.appendChild(cell);
     body.appendChild(row);
@@ -403,10 +417,28 @@ function renderShippingScheduleTable() {
       appendShippingScheduleCell(row, `${getUniqueAllocationProductCount(allocations)}件`);
       appendShippingScheduleCell(row, `${quantity.toLocaleString("ja-JP")}個`);
 
+      const statusCell = document.createElement("td");
+      const statusBadge = document.createElement("strong");
+      const received = isShippingScheduleReceived(record.id);
+      const confirmed = isShippingScheduleConfirmed(record);
+      statusBadge.className = "shipping-confirm-status";
+      if (received) {
+        statusBadge.textContent = "入荷済";
+        statusBadge.classList.add("shipping-confirm-status-received");
+      } else if (confirmed) {
+        statusBadge.textContent = "船積確定済";
+        statusBadge.classList.add("shipping-confirm-status-confirmed");
+      } else {
+        statusBadge.textContent = "未確定";
+        statusBadge.classList.add("shipping-confirm-status-pending");
+      }
+      statusCell.appendChild(statusBadge);
+      row.appendChild(statusCell);
+
       const allocationCell = document.createElement("td");
       const allocationButton = document.createElement("button");
       allocationButton.type = "button";
-      allocationButton.textContent = "商品を振り分ける";
+      allocationButton.textContent = confirmed || received ? "内容を見る" : "商品を振り分ける";
       allocationButton.addEventListener("click", function () {
         const select = document.querySelector("#shipping-allocation-schedule");
         if (select) select.value = record.id;
@@ -419,14 +451,32 @@ function renderShippingScheduleTable() {
 
       const actionCell = document.createElement("td");
       actionCell.className = "shipping-schedule-actions";
+
+      if (!received) {
+        const confirmButton = document.createElement("button");
+        confirmButton.type = "button";
+        if (confirmed) {
+          confirmButton.textContent = "確定を解除";
+          confirmButton.className = "shipping-confirm-release-button";
+          confirmButton.addEventListener("click", function () { unconfirmShippingSchedule(record.id); });
+        } else {
+          confirmButton.textContent = "船積内容を確定";
+          confirmButton.className = "shipping-confirm-button";
+          confirmButton.addEventListener("click", function () { confirmShippingSchedule(record.id); });
+        }
+        actionCell.appendChild(confirmButton);
+      }
+
       const edit = document.createElement("button");
       edit.type = "button";
       edit.textContent = "編集";
+      edit.disabled = confirmed || received;
       edit.addEventListener("click", function () { editShippingSchedule(record.id); });
       const del = document.createElement("button");
       del.type = "button";
       del.textContent = "削除";
       del.className = "shipping-schedule-delete";
+      del.disabled = confirmed || received;
       del.addEventListener("click", function () { removeShippingSchedule(record.id); });
       actionCell.appendChild(edit);
       actionCell.appendChild(del);
@@ -467,6 +517,132 @@ function isShippingScheduleReceived(scheduleId) {
   return shippingArrivalReceipts.some(function (receipt) {
     return receipt.scheduleId === scheduleId || receipt.id === scheduleId;
   });
+}
+
+function isShippingScheduleConfirmed(scheduleOrId) {
+  const schedule = typeof scheduleOrId === "string"
+    ? shippingScheduleRecords.find(function (record) { return record.id === scheduleOrId; })
+    : scheduleOrId;
+  return Boolean(schedule && (schedule.shipmentConfirmed || schedule.shipmentConfirmedAt));
+}
+
+async function confirmShippingSchedule(id) {
+  const record = shippingScheduleRecords.find(function (item) { return item.id === id; });
+  if (!record) return;
+  if (isShippingScheduleReceived(id)) {
+    alert("この船便はすでに入荷反映済みです。");
+    return;
+  }
+  if (isShippingScheduleConfirmed(record)) {
+    alert("この船便はすでに船積内容を確定済みです。");
+    return;
+  }
+
+  const items = getSavedAllocationsForSchedule(id);
+  if (items.length === 0) {
+    alert("船積商品がまだ保存されていません。先に「船便別に商品を振り分ける」で数量を保存してください。");
+    return;
+  }
+
+  const totalQuantity = items.reduce(function (sum, item) {
+    return sum + (Number(item.quantity) || 0);
+  }, 0);
+  if (totalQuantity <= 0) {
+    alert("船積数量が0個のため確定できません。");
+    return;
+  }
+
+  const today = getShippingTodayKeyForConfirmation();
+  const alreadyDue = isShippingIsoDate(record.warehouseArrivalDate) && record.warehouseArrivalDate <= today;
+  let message =
+    `船便「${record.name}」の船積内容を確定します。\n\n` +
+    `船積商品：${items.length.toLocaleString("ja-JP")}商品\n` +
+    `船積数量：${totalQuantity.toLocaleString("ja-JP")}個\n` +
+    `倉庫到着日：${formatShippingDate(record.warehouseArrivalDate)}\n\n` +
+    "確定後は、船積数量と船便スケジュールを変更できません。\n" +
+    "変更する場合は、入荷反映前に「確定を解除」してください。";
+  if (alreadyDue) {
+    message += "\n\n※この船便はすでに倉庫到着日を迎えています。確定後、すぐに自動入荷の対象になります。";
+  }
+  message += "\n\nこの内容で確定しますか？";
+
+  if (!window.confirm(message)) return;
+
+  const confirmedAt = new Date().toISOString();
+  const snapshotItems = items.map(function (item) {
+    return {
+      internalCode: String(item.internalCode || "").trim(),
+      productCode: item.productCode || "",
+      productName: item.productName || "",
+      quantity: Number(item.quantity) || 0
+    };
+  });
+
+  try {
+    await updateShippingSchedule({
+      ...record,
+      shipmentConfirmed: true,
+      shipmentConfirmedAt: confirmedAt,
+      shipmentConfirmedItems: snapshotItems,
+      shipmentConfirmedQuantity: totalQuantity,
+      shipmentConfirmedProductCount: snapshotItems.length,
+      updatedAt: confirmedAt
+    });
+    await refreshShippingScheduleData();
+    alert("船積内容を確定しました。倉庫到着日になるまで在庫には反映されません。");
+    if (alreadyDue && window.shippingArrivalApp && typeof window.shippingArrivalApp.checkNow === "function") {
+      window.setTimeout(function () {
+        window.shippingArrivalApp.checkNow({ showMessageWhenNone: false });
+      }, 100);
+    }
+  } catch (error) {
+    console.error("船積内容確定エラー", error);
+    alert("船積内容を確定できませんでした。");
+  }
+}
+
+async function unconfirmShippingSchedule(id) {
+  const record = shippingScheduleRecords.find(function (item) { return item.id === id; });
+  if (!record) return;
+  if (isShippingScheduleReceived(id)) {
+    alert("この船便はすでに入荷反映済みのため、確定を解除できません。");
+    return;
+  }
+  if (!isShippingScheduleConfirmed(record)) return;
+
+  const confirmed = window.confirm(
+    `船便「${record.name}」の船積確定を解除しますか？\n\n` +
+    "解除すると、船積数量と船便スケジュールを再び編集できます。\n" +
+    "編集後は、もう一度「船積内容を確定」してください。"
+  );
+  if (!confirmed) return;
+
+  try {
+    const now = new Date().toISOString();
+    await updateShippingSchedule({
+      ...record,
+      shipmentConfirmed: false,
+      shipmentConfirmedAt: "",
+      shipmentConfirmedItems: [],
+      shipmentConfirmedQuantity: 0,
+      shipmentConfirmedProductCount: 0,
+      updatedAt: now
+    });
+    await refreshShippingScheduleData();
+    alert("船積確定を解除しました。");
+  } catch (error) {
+    console.error("船積確定解除エラー", error);
+    alert("船積確定を解除できませんでした。");
+  }
+}
+
+function getShippingTodayKeyForConfirmation() {
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0")
+  ].join("-");
 }
 
 function getShippingAllocationRows(schedule) {
@@ -573,6 +749,8 @@ function renderShippingAllocationTable() {
   }
 
   const scheduleReceived = isShippingScheduleReceived(schedule.id);
+  const scheduleConfirmed = isShippingScheduleConfirmed(schedule);
+  const scheduleLocked = scheduleReceived || scheduleConfirmed;
   const targetPeriod = getShippingTargetPeriod(schedule);
   const monthKey = schedule.warehouseArrivalDate.slice(0, 7);
   const averageContext = buildShippingAverageContext(monthKey);
@@ -610,7 +788,11 @@ function renderShippingAllocationTable() {
       `対象期間：${escapeShippingHtml(formatShippingDate(targetPeriod.startDate))} ～ ${escapeShippingHtml(formatShippingDate(targetPeriod.endDate))}（${targetPeriod.days.toLocaleString("ja-JP")}日）<br>` +
       `次便：${escapeShippingHtml(targetPeriod.nextSchedule.name)} / 倉庫到着 ${escapeShippingHtml(formatShippingDate(targetPeriod.nextSchedule.warehouseArrivalDate))}<br>` +
       `月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の6か月平均` +
-      (scheduleReceived ? `<br><span class="shipping-received-note">この船便は入荷反映済みです。船積数量は履歴保護のため編集できません。</span>` : "");
+      (scheduleReceived
+        ? `<br><span class="shipping-received-note">この船便は入荷反映済みです。船積数量は履歴保護のため編集できません。</span>`
+        : (scheduleConfirmed
+          ? `<br><span class="shipping-confirmed-note">この船便は船積内容を確定済みです。数量を変更する場合は、船便一覧で「確定を解除」してください。</span>`
+          : `<br><span class="shipping-unconfirmed-note">船積数量を確認したら、船便一覧の「船積内容を確定」を押してください。未確定の船便は自動入荷されません。</span>`));
   }
 
   const allRows = getShippingAllocationRows(schedule);
@@ -662,7 +844,7 @@ function renderShippingAllocationTable() {
       input.className = "shipping-allocation-quantity";
       input.dataset.internalCode = item.internalCode;
       input.dataset.recommendedQuantity = String(item.recommendedQuantity);
-      input.disabled = scheduleReceived;
+      input.disabled = scheduleLocked;
       inputCell.appendChild(input);
       row.appendChild(inputCell);
 
@@ -671,7 +853,7 @@ function renderShippingAllocationTable() {
     });
   }
 
-  if (saveButton) saveButton.disabled = visible.length === 0 || scheduleReceived;
+  if (saveButton) saveButton.disabled = visible.length === 0 || scheduleLocked;
   if (printButton) printButton.disabled = getSavedAllocationsForSchedule(schedule.id).length === 0;
   pageStatus.textContent = `${shippingAllocationCurrentPage} / ${totalPages}ページ`;
   if (prev) prev.disabled = shippingAllocationCurrentPage <= 1;
@@ -686,6 +868,10 @@ async function saveVisibleShippingAllocations() {
   }
   if (isShippingScheduleReceived(schedule.id)) {
     alert("この船便はすでに在庫へ入荷反映済みのため、船積数量は変更できません。");
+    return;
+  }
+  if (isShippingScheduleConfirmed(schedule)) {
+    alert("この船便は船積内容を確定済みです。数量を変更する場合は、先に船便一覧で「確定を解除」してください。");
     return;
   }
 
@@ -1587,6 +1773,7 @@ function getPriorShippingScheduleIds(currentSchedule) {
         });
         return record.id !== currentSchedule.id &&
           !alreadyReceived &&
+          isShippingScheduleConfirmed(record) &&
           isShippingIsoDate(record.warehouseArrivalDate) &&
           record.warehouseArrivalDate < currentDate;
       })
@@ -1870,6 +2057,26 @@ function createShippingScheduleStyle() {
       color: #2e7d32;
       font-weight: 700;
     }
+    #shipping-schedule .shipping-confirmed-note {
+      color: #1565c0;
+      font-weight: 700;
+    }
+    #shipping-schedule .shipping-unconfirmed-note {
+      color: #ef6c00;
+      font-weight: 700;
+    }
+    #shipping-schedule .shipping-confirm-status {
+      display: inline-block;
+      padding: 5px 9px;
+      border-radius: 999px;
+      white-space: nowrap;
+      font-size: 0.92em;
+    }
+    #shipping-schedule .shipping-confirm-status-pending { background: #fff3e0; color: #ef6c00; }
+    #shipping-schedule .shipping-confirm-status-confirmed { background: #e3f2fd; color: #1565c0; }
+    #shipping-schedule .shipping-confirm-status-received { background: #e8f5e9; color: #2e7d32; }
+    #shipping-schedule .shipping-confirm-button { background: #2e7d32; }
+    #shipping-schedule .shipping-confirm-release-button { background: #ef6c00; }
     @media (max-width: 760px) {
       #shipping-schedule .shipping-schedule-grid,
       #shipping-schedule .shipping-allocation-controls,

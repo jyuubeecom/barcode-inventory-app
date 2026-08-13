@@ -53,10 +53,11 @@ async function checkAndReflectDueShippingArrivals(options) {
 
     const dueSchedules = schedules
       .filter(function (schedule) {
-        return isShippingArrivalIsoDate(schedule.warehouseArrivalDate) &&
+        return isShippingArrivalScheduleConfirmed(schedule) &&
+          isShippingArrivalIsoDate(schedule.warehouseArrivalDate) &&
           schedule.warehouseArrivalDate <= today &&
           !receivedIds.has(schedule.id) &&
-          getShippingArrivalAllocationsForSchedule(allocations, schedule.id).length > 0;
+          getShippingArrivalConfirmedItems(schedule, allocations).length > 0;
       })
       .sort(function (a, b) {
         if (a.warehouseArrivalDate !== b.warehouseArrivalDate) {
@@ -69,7 +70,7 @@ async function checkAndReflectDueShippingArrivals(options) {
     const failed = [];
 
     for (const schedule of dueSchedules) {
-      const scheduleAllocations = getShippingArrivalAllocationsForSchedule(allocations, schedule.id);
+      const scheduleAllocations = getShippingArrivalConfirmedItems(schedule, allocations);
       const grouped = groupShippingArrivalAllocations(scheduleAllocations);
       const missingCodes = grouped
         .map(function (item) { return item.internalCode; })
@@ -225,15 +226,20 @@ async function refreshShippingArrivalStatus() {
     });
 
     const reflectedCount = receipts.length;
+    const unconfirmedCount = sorted.filter(function (schedule) {
+      return !receiptMap.has(schedule.id) && !isShippingArrivalScheduleConfirmed(schedule);
+    }).length;
     const duePendingCount = sorted.filter(function (schedule) {
-      const quantity = getShippingArrivalScheduleQuantity(allocations, schedule.id);
-      return isShippingArrivalIsoDate(schedule.warehouseArrivalDate) &&
+      const quantity = getShippingArrivalConfirmedQuantity(schedule, allocations);
+      return isShippingArrivalScheduleConfirmed(schedule) &&
+        isShippingArrivalIsoDate(schedule.warehouseArrivalDate) &&
         schedule.warehouseArrivalDate <= today &&
         quantity > 0 &&
         !receiptMap.has(schedule.id);
     }).length;
 
     summary.textContent =
+      `船積未確定：${unconfirmedCount.toLocaleString("ja-JP")}便 / ` +
       `入荷反映済み：${reflectedCount.toLocaleString("ja-JP")}便 / ` +
       `到着済み未反映：${duePendingCount.toLocaleString("ja-JP")}便`;
 
@@ -247,7 +253,10 @@ async function refreshShippingArrivalStatus() {
     }
 
     sorted.forEach(function (schedule) {
-      const quantity = getShippingArrivalScheduleQuantity(allocations, schedule.id);
+      const confirmed = isShippingArrivalScheduleConfirmed(schedule);
+      const quantity = confirmed
+        ? getShippingArrivalConfirmedQuantity(schedule, allocations)
+        : getShippingArrivalScheduleQuantity(allocations, schedule.id);
       const receipt = receiptMap.get(schedule.id);
       const row = document.createElement("div");
       row.className = "shipping-arrival-status-row";
@@ -268,17 +277,20 @@ async function refreshShippingArrivalStatus() {
       if (receipt) {
         badge.textContent = `入荷反映済 ${Number(receipt.totalQuantity || 0).toLocaleString("ja-JP")}個`;
         badge.classList.add("shipping-arrival-done");
+      } else if (!confirmed) {
+        badge.textContent = "船積未確定";
+        badge.classList.add("shipping-arrival-unconfirmed");
       } else if (!isShippingArrivalIsoDate(schedule.warehouseArrivalDate)) {
         badge.textContent = "日付確認";
         badge.classList.add("shipping-arrival-warning");
       } else if (schedule.warehouseArrivalDate > today) {
-        badge.textContent = "到着前";
+        badge.textContent = "船積確定済・到着前";
         badge.classList.add("shipping-arrival-future");
       } else if (quantity <= 0) {
-        badge.textContent = "到着済・船積数量なし";
+        badge.textContent = "確定済・船積数量なし";
         badge.classList.add("shipping-arrival-warning");
       } else {
-        badge.textContent = "到着済・未反映";
+        badge.textContent = "確定済・到着済・未反映";
         badge.classList.add("shipping-arrival-warning");
       }
 
@@ -290,6 +302,32 @@ async function refreshShippingArrivalStatus() {
     console.error("船便入荷状況表示エラー", error);
     summary.textContent = "入荷反映状況を読み込めませんでした。";
   }
+}
+
+function isShippingArrivalScheduleConfirmed(schedule) {
+  return Boolean(schedule && (schedule.shipmentConfirmed || schedule.shipmentConfirmedAt));
+}
+
+function getShippingArrivalConfirmedItems(schedule, allocations) {
+  if (!isShippingArrivalScheduleConfirmed(schedule)) return [];
+  if (Array.isArray(schedule.shipmentConfirmedItems) && schedule.shipmentConfirmedItems.length > 0) {
+    return schedule.shipmentConfirmedItems
+      .map(function (item) {
+        return {
+          internalCode: String(item.internalCode || "").trim(),
+          productCode: item.productCode || "",
+          productName: item.productName || "",
+          quantity: Number(item.quantity) || 0
+        };
+      })
+      .filter(function (item) { return item.internalCode && item.quantity > 0; });
+  }
+  return getShippingArrivalAllocationsForSchedule(allocations, schedule.id);
+}
+
+function getShippingArrivalConfirmedQuantity(schedule, allocations) {
+  return getShippingArrivalConfirmedItems(schedule, allocations)
+    .reduce(function (sum, item) { return sum + (Number(item.quantity) || 0); }, 0);
 }
 
 function getShippingArrivalAllocationsForSchedule(allocations, scheduleId) {
@@ -402,6 +440,7 @@ function createShippingArrivalStyle() {
     }
     .shipping-arrival-done { background: #e8f5e9; color: #2e7d32; }
     .shipping-arrival-future { background: #eceff1; color: #455a64; }
+    .shipping-arrival-unconfirmed { background: #ffebee; color: #c62828; }
     .shipping-arrival-warning { background: #fff3e0; color: #ef6c00; }
     .shipping-arrival-empty { padding: 12px; color: #607d8b; }
     @media (max-width: 760px) {

@@ -67,7 +67,7 @@ async function exportFullBackup() {
     const backupData = {
       backupType: "barcode-inventory-app",
       backupVersion: 8,
-      appVersion: "v51",
+      appVersion: "v52",
       appName: "バーコード在庫・棚卸管理",
       exportedAt: exportedAt.toISOString(),
       counts: {

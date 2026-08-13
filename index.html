@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v51
+          画面版 v52
         </span>
       </div>
 
@@ -725,6 +725,7 @@
                 <th>倉庫到着日</th>
                 <th>振分商品</th>
                 <th>振分数量</th>
+                <th>船積状態</th>
                 <th>商品振分け</th>
                 <th>操作</th>
               </tr>
@@ -742,7 +743,8 @@
         <div id="shipping-arrival-status-area">
           <h3>船便の自動入荷反映</h3>
           <p class="shipping-arrival-note">
-            倉庫到着日になった船便は、アプリを開いたときに一度だけ現在庫へ「入庫」として自動反映します。<br>
+            <strong>「船積内容を確定する」まで在庫へ自動反映しません。</strong><br>
+            船積数量を確認して確定した船便だけ、倉庫到着日になったあとに一度だけ現在庫へ「入庫」として自動反映します。<br>
             アプリを閉じている間に勝手に処理するのではなく、倉庫到着日以降に最初にこのアプリを開いた時点で反映します。入出庫履歴の日付は船便の「倉庫到着日」で記録します。
           </p>
           <button id="check-shipping-arrivals-button" type="button">到着済み船便を今すぐ確認する</button>
@@ -2099,10 +2101,10 @@
 <script src="sales-actual.js?v=39"></script>
 <script src="purchase-required.js?v=46"></script>
 <script src="low-shipment.js?v=45"></script>
-<script src="shipping-schedule.js?v=51"></script>
-<script src="shipping-arrival.js?v=51"></script>
+<script src="shipping-schedule.js?v=52"></script>
+<script src="shipping-arrival.js?v=52"></script>
 <script src="barcode-print.js?v=50"></script>
-<script src="backup.js?v=51"></script>
+<script src="backup.js?v=52"></script>
 <script src="restore.js?v=51"></script>
 <script src="location-management.js?v=32"></script>
 <script src="home-dashboard.js?v=42"></script>

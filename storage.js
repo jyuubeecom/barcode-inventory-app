@@ -3,7 +3,7 @@
 const DATABASE_NAME =
   "barcodeInventoryDatabase";
 
-const DATABASE_VERSION = 13;
+const DATABASE_VERSION = 14;
 
 const PRODUCT_STORE_NAME =
   "products";
@@ -46,6 +46,9 @@ const SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME =
 
 const SHIPPING_ARRIVAL_RECEIPT_STORE_NAME =
   "shippingArrivalReceipts";
+
+const TRANSFER_LIST_STORE_NAME =
+  "transferLists";
 
 function openDatabase() {
   return new Promise(function (
@@ -508,6 +511,36 @@ function openDatabase() {
           shippingArrivalReceiptStore.createIndex(
             "reflectedAt",
             "reflectedAt",
+            { unique: false }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            TRANSFER_LIST_STORE_NAME
+          )
+        ) {
+          const transferListStore =
+            database.createObjectStore(
+              TRANSFER_LIST_STORE_NAME,
+              { keyPath: "id" }
+            );
+
+          transferListStore.createIndex(
+            "transferDate",
+            "transferDate",
+            { unique: false }
+          );
+
+          transferListStore.createIndex(
+            "sourceLocation",
+            "sourceLocation",
+            { unique: false }
+          );
+
+          transferListStore.createIndex(
+            "destinationLocation",
+            "destinationLocation",
             { unique: false }
           );
         }
@@ -2088,6 +2121,46 @@ async function deleteShippingScheduleWithAllocations(scheduleId) {
 
     transaction.oncomplete = function () { database.close(); resolve(); };
     transaction.onerror = function () { const error = transaction.error; database.close(); reject(error); };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function getAllTransferLists() {
+  return getAllRecordsFromStore(TRANSFER_LIST_STORE_NAME);
+}
+
+async function saveTransferList(record) {
+  const database = await openDatabase();
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      TRANSFER_LIST_STORE_NAME,
+      "readwrite"
+    );
+    transaction.objectStore(TRANSFER_LIST_STORE_NAME).put(record);
+    transaction.oncomplete = function () { database.close(); resolve(); };
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function deleteTransferList(id) {
+  const database = await openDatabase();
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      TRANSFER_LIST_STORE_NAME,
+      "readwrite"
+    );
+    transaction.objectStore(TRANSFER_LIST_STORE_NAME).delete(id);
+    transaction.oncomplete = function () { database.close(); resolve(); };
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
     transaction.onabort = transaction.onerror;
   });
 }

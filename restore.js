@@ -78,7 +78,8 @@ async function handleRestoreFileSelection(event) {
       `船便スケジュール：${c.shippingSchedules}件\n` +
       `船便商品振分け：${c.shippingAllocations}件\n` +
       `倉庫別振分け：${c.shippingWarehouseAllocations}件\n` +
-      `船便入荷反映履歴：${c.shippingArrivalReceipts}件\n\n` +
+      `船便入荷反映履歴：${c.shippingArrivalReceipts}件\n` +
+      `商品移動リスト：${c.transferLists}件\n\n` +
       "現在のデータはすべて置き換えられます。\n" +
       "現在のデータを残す場合は、先にバックアップしてください。\n\n" +
       "復元を続けますか？"
@@ -109,7 +110,8 @@ async function handleRestoreFileSelection(event) {
       `船便スケジュール：${c.shippingSchedules}件\n` +
       `船便商品振分け：${c.shippingAllocations}件\n` +
       `倉庫別振分け：${c.shippingWarehouseAllocations}件\n` +
-      `船便入荷反映履歴：${c.shippingArrivalReceipts}件\n\n` +
+      `船便入荷反映履歴：${c.shippingArrivalReceipts}件\n` +
+      `商品移動リスト：${c.transferLists}件\n\n` +
       "画面を更新します。"
     );
     location.reload();
@@ -130,7 +132,7 @@ function normalizeAndValidateBackup(raw) {
   if (!raw || raw.backupType !== "barcode-inventory-app") {
     throw new Error("このアプリで作成したバックアップではありません。");
   }
-  if (![1, 2, 3, 4, 5, 6, 7, 8].includes(raw.backupVersion)) {
+  if (![1, 2, 3, 4, 5, 6, 7, 8, 9].includes(raw.backupVersion)) {
     throw new Error("対応していないバックアップ形式です。");
   }
   const data = raw.data || {};
@@ -150,6 +152,7 @@ function normalizeAndValidateBackup(raw) {
       shippingAllocations: Array.isArray(data.shippingAllocations) ? data.shippingAllocations : [],
       shippingWarehouseAllocations: Array.isArray(data.shippingWarehouseAllocations) ? data.shippingWarehouseAllocations : [],
       shippingArrivalReceipts: Array.isArray(data.shippingArrivalReceipts) ? data.shippingArrivalReceipts : [],
+      transferLists: Array.isArray(data.transferLists) ? data.transferLists : [],
       appSettings: data.appSettings && typeof data.appSettings === "object" ? data.appSettings : {},
       restoreLogs: Array.isArray(data.restoreLogs) ? data.restoreLogs : []
     }
@@ -171,6 +174,7 @@ function normalizeAndValidateBackup(raw) {
   validateUniqueKeyRecords(normalized.data.shippingAllocations, "id", "船便商品振分け");
   validateUniqueKeyRecords(normalized.data.shippingWarehouseAllocations, "id", "倉庫別振分け");
   validateUniqueKeyRecords(normalized.data.shippingArrivalReceipts, "id", "船便入荷反映履歴");
+  validateUniqueKeyRecords(normalized.data.transferLists, "id", "商品移動リスト");
   normalized.counts = {
     products: normalized.data.products.length,
     stockMovements: normalized.data.stockMovements.length,
@@ -185,6 +189,7 @@ function normalizeAndValidateBackup(raw) {
     shippingAllocations: normalized.data.shippingAllocations.length,
     shippingWarehouseAllocations: normalized.data.shippingWarehouseAllocations.length,
     shippingArrivalReceipts: normalized.data.shippingArrivalReceipts.length,
+    transferLists: normalized.data.transferLists.length,
     restoreLogs: normalized.data.restoreLogs.length
   };
   return normalized;
@@ -230,6 +235,7 @@ async function replaceAllDataFromBackupV31(backup, fileName) {
     SHIPPING_ALLOCATION_STORE_NAME,
     SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME,
     SHIPPING_ARRIVAL_RECEIPT_STORE_NAME,
+    TRANSFER_LIST_STORE_NAME,
     RESTORE_LOG_STORE_NAME
   ];
 
@@ -251,6 +257,7 @@ async function replaceAllDataFromBackupV31(backup, fileName) {
       d.shippingAllocations.forEach(function (r) { tx.objectStore(SHIPPING_ALLOCATION_STORE_NAME).put(r); });
       d.shippingWarehouseAllocations.forEach(function (r) { tx.objectStore(SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME).put(r); });
       d.shippingArrivalReceipts.forEach(function (r) { tx.objectStore(SHIPPING_ARRIVAL_RECEIPT_STORE_NAME).put(r); });
+      d.transferLists.forEach(function (r) { tx.objectStore(TRANSFER_LIST_STORE_NAME).put(r); });
       d.restoreLogs.forEach(function (r) { tx.objectStore(RESTORE_LOG_STORE_NAME).put(r); });
       tx.objectStore(RESTORE_LOG_STORE_NAME).put({
         id: `restore-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

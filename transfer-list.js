@@ -633,6 +633,8 @@
           <td>${escapeHtml(item.productCode || "-")}</td>
           <td>${escapeHtml(item.productName || "")}</td>
           <td class="qty">${formatNumber(Number(item.quantity || 0))}</td>
+          <td><span class="check-box">□</span></td>
+          <td><span class="check-box">□</span></td>
         </tr>
       `;
     }).join("");
@@ -653,13 +655,20 @@
           table { width: 100%; border-collapse: collapse; table-layout: fixed; }
           th, td { border: 1px solid #555; padding: 6px 5px; vertical-align: middle; overflow-wrap: anywhere; }
           th { background: #f1f1f1; text-align: center; }
-          th:nth-child(1), td:nth-child(1) { width: 8%; text-align: center; }
-          th:nth-child(2), td:nth-child(2) { width: 18%; }
-          th:nth-child(3), td:nth-child(3) { width: 20%; }
-          th:nth-child(4), td:nth-child(4) { width: 42%; }
-          th:nth-child(5), td:nth-child(5) { width: 12%; }
+          th:nth-child(1), td:nth-child(1) { width: 6%; text-align: center; }
+          th:nth-child(2), td:nth-child(2) { width: 16%; }
+          th:nth-child(3), td:nth-child(3) { width: 16%; }
+          th:nth-child(4), td:nth-child(4) { width: 32%; }
+          th:nth-child(5), td:nth-child(5) { width: 10%; }
+          th:nth-child(6), td:nth-child(6), th:nth-child(7), td:nth-child(7) { width: 10%; text-align: center; }
           .qty { text-align: right; font-weight: 700; }
+          .check-box { font-size: 22px; line-height: 1; font-family: Arial, sans-serif; }
           .summary { margin-top: 10px; text-align: right; font-size: 14px; font-weight: 700; }
+          .confirm-area { margin-top: 16px; border: 1.5px solid #555; padding: 10px 12px; break-inside: avoid; }
+          .confirm-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+          .confirm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin-top: 8px; }
+          .confirm-line { border-bottom: 1px solid #333; display: inline-block; min-width: 150px; height: 18px; vertical-align: bottom; }
+          .confirm-date-line { border-bottom: 1px solid #333; display: inline-block; min-width: 100px; height: 18px; vertical-align: bottom; }
           .footer { margin-top: 10px; font-size: 10px; color: #555; }
           @media print { .no-print { display: none !important; } }
         </style>
@@ -673,12 +682,21 @@
         </div>
         <table>
           <thead>
-            <tr><th>No</th><th>社内コード</th><th>商品コード</th><th>商品名</th><th>移動個数</th></tr>
+            <tr><th>No</th><th>社内コード</th><th>商品コード</th><th>商品名</th><th>移動個数</th><th>移動元確認</th><th>移動先確認</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
         <div class="summary">移動個数 合計：${formatNumber(total)}個</div>
-        <div class="footer">バーコード在庫・棚卸管理アプリ v54</div>
+        <div class="confirm-area">
+          <div class="confirm-title">移動確認欄</div>
+          <div class="confirm-row">
+            <div><strong>移動元 確認者：</strong><span class="confirm-line"></span></div>
+            <div><strong>確認日：</strong><span class="confirm-date-line"></span></div>
+            <div><strong>移動先 確認者：</strong><span class="confirm-line"></span></div>
+            <div><strong>確認日：</strong><span class="confirm-date-line"></span></div>
+          </div>
+        </div>
+        <div class="footer">バーコード在庫・棚卸管理アプリ v57</div>
         <script>window.onload = function () { window.print(); };<\/script>
       </body>
       </html>`);

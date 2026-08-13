@@ -731,6 +731,7 @@ function renderShippingAllocationTable() {
   const prev = document.querySelector("#shipping-allocation-prev-page");
   const next = document.querySelector("#shipping-allocation-next-page");
   const saveButton = document.querySelector("#save-visible-shipping-allocations");
+  const readOnlyMessage = document.querySelector("#shipping-allocation-readonly-message");
   const printButton = document.querySelector("#print-shipping-allocation-list");
   if (!body || !summary || !pageStatus) return;
 
@@ -740,7 +741,11 @@ function renderShippingAllocationTable() {
   if (!schedule) {
     summary.textContent = "船便を選択すると、今回の倉庫到着日から次便の倉庫到着日前日までを自動計算します。";
     if (info) info.textContent = "";
-    if (saveButton) saveButton.disabled = true;
+    if (saveButton) {
+      saveButton.disabled = true;
+      saveButton.hidden = false;
+    }
+    if (readOnlyMessage) readOnlyMessage.hidden = true;
     if (printButton) printButton.disabled = true;
     pageStatus.textContent = "1 / 1ページ";
     if (prev) prev.disabled = true;
@@ -751,6 +756,18 @@ function renderShippingAllocationTable() {
   const scheduleReceived = isShippingScheduleReceived(schedule.id);
   const scheduleConfirmed = isShippingScheduleConfirmed(schedule);
   const scheduleLocked = scheduleReceived || scheduleConfirmed;
+
+  if (saveButton) {
+    saveButton.hidden = scheduleLocked;
+    if (scheduleLocked) saveButton.disabled = true;
+  }
+  if (readOnlyMessage) {
+    readOnlyMessage.hidden = !scheduleLocked;
+    readOnlyMessage.textContent = scheduleReceived
+      ? "🔒 入荷反映済みのため閲覧専用です。船積数量は変更できません。"
+      : "🔒 船積内容を確定済みのため閲覧専用です。変更する場合は、船便一覧で「確定を解除」してください。";
+  }
+
   const targetPeriod = getShippingTargetPeriod(schedule);
   const monthKey = schedule.warehouseArrivalDate.slice(0, 7);
   const averageContext = buildShippingAverageContext(monthKey);
@@ -771,7 +788,11 @@ function renderShippingAllocationTable() {
     cell.textContent = "次の船便が未登録です。先に次便のスケジュールを登録してください。";
     row.appendChild(cell);
     body.appendChild(row);
-    if (saveButton) saveButton.disabled = true;
+    if (saveButton) {
+      saveButton.disabled = true;
+      saveButton.hidden = scheduleLocked;
+    }
+    if (readOnlyMessage) readOnlyMessage.hidden = !scheduleLocked;
     if (printButton) printButton.disabled = true;
     pageStatus.textContent = "1 / 1ページ";
     if (prev) prev.disabled = true;
@@ -836,16 +857,23 @@ function renderShippingAllocationTable() {
       appendShippingScheduleCell(row, `${item.recommendedQuantity.toLocaleString("ja-JP")}個`);
 
       const inputCell = document.createElement("td");
-      const input = document.createElement("input");
-      input.type = "number";
-      input.min = "0";
-      input.step = "1";
-      input.value = String(item.currentAllocation > 0 ? item.currentAllocation : item.recommendedQuantity);
-      input.className = "shipping-allocation-quantity";
-      input.dataset.internalCode = item.internalCode;
-      input.dataset.recommendedQuantity = String(item.recommendedQuantity);
-      input.disabled = scheduleLocked;
-      inputCell.appendChild(input);
+      if (scheduleLocked) {
+        const lockedValue = document.createElement("strong");
+        lockedValue.className = "shipping-allocation-readonly-quantity";
+        lockedValue.textContent = `${item.currentAllocation.toLocaleString("ja-JP")}個`;
+        lockedValue.title = scheduleReceived ? "入荷反映済み" : "船積確定済み";
+        inputCell.appendChild(lockedValue);
+      } else {
+        const input = document.createElement("input");
+        input.type = "number";
+        input.min = "0";
+        input.step = "1";
+        input.value = String(item.currentAllocation > 0 ? item.currentAllocation : item.recommendedQuantity);
+        input.className = "shipping-allocation-quantity";
+        input.dataset.internalCode = item.internalCode;
+        input.dataset.recommendedQuantity = String(item.recommendedQuantity);
+        inputCell.appendChild(input);
+      }
       row.appendChild(inputCell);
 
       appendShippingScheduleCell(row, item.location || "");
@@ -853,7 +881,10 @@ function renderShippingAllocationTable() {
     });
   }
 
-  if (saveButton) saveButton.disabled = visible.length === 0 || scheduleLocked;
+  if (saveButton && !scheduleLocked) {
+    saveButton.hidden = false;
+    saveButton.disabled = visible.length === 0;
+  }
   if (printButton) printButton.disabled = getSavedAllocationsForSchedule(schedule.id).length === 0;
   pageStatus.textContent = `${shippingAllocationCurrentPage} / ${totalPages}ページ`;
   if (prev) prev.disabled = shippingAllocationCurrentPage <= 1;
@@ -2052,6 +2083,26 @@ function createShippingScheduleStyle() {
     #shipping-schedule .shipping-warehouse-over {
       background: #ffebee;
       color: #c62828;
+    }
+    #shipping-schedule .shipping-allocation-readonly-message {
+      display: inline-block;
+      margin: 0;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: #e3f2fd;
+      color: #0d47a1;
+      font-weight: 700;
+    }
+    #shipping-schedule .shipping-allocation-readonly-message[hidden] { display: none; }
+    #shipping-schedule .shipping-allocation-readonly-quantity {
+      display: inline-block;
+      min-width: 90px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #eceff1;
+      color: #37474f;
+      text-align: right;
+      white-space: nowrap;
     }
     #shipping-schedule .shipping-received-note {
       color: #2e7d32;

@@ -348,6 +348,17 @@
     codeInput.focus();
   }
 
+  function normalizeLocationForCompare(value) {
+    return String(value || "")
+      .normalize("NFKC")
+      .replace(/[\s\u3000]+/g, "")
+      .trim();
+  }
+
+  function isSameLocation(left, right) {
+    return normalizeLocationForCompare(left) === normalizeLocationForCompare(right);
+  }
+
   function renderCurrentItems() {
     const body = document.querySelector("#transfer-current-body");
     const empty = document.querySelector("#transfer-empty-message");
@@ -360,7 +371,7 @@
     empty.hidden = state.items.length > 0;
 
     body.innerHTML = state.items.map(function (item, index) {
-      const locationWarning = sourceLocation && item.storageLocation && item.storageLocation !== sourceLocation
+      const locationWarning = sourceLocation && item.storageLocation && !isSameLocation(item.storageLocation, sourceLocation)
         ? `<span class="transfer-location-warning">登録保管場所は移動元と異なります</span>`
         : "";
       return `
@@ -421,7 +432,7 @@
     if (!transferDate) throw new Error("移動日を入力してください。");
     if (!sourceLocation) throw new Error("移動元を選択してください。");
     if (!destinationLocation) throw new Error("移動先を選択してください。");
-    if (sourceLocation === destinationLocation) throw new Error("移動元と移動先は別の場所を選択してください。");
+    if (isSameLocation(sourceLocation, destinationLocation)) throw new Error("移動元と移動先は別の場所を選択してください。");
     if (state.items.length === 0) throw new Error("移動する商品を1件以上追加してください。");
 
     const invalidItem = state.items.find(function (item) {

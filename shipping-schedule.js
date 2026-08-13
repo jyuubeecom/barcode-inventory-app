@@ -688,6 +688,7 @@ function getShippingAllocationRows(schedule) {
         recommendedQuantity: recommendedQuantity,
         currentAllocation: currentAllocation,
         location: product.location || "",
+        isBackorder: isShippingBackorderProduct(product),
         averageStartMonth: averageContext.startMonth,
         averageEndMonth: averageContext.endMonth,
         targetStartDate: targetPeriod.startDate,
@@ -701,6 +702,7 @@ function getShippingAllocationRows(schedule) {
       return row.recommendedQuantity > 0 || row.currentAllocation > 0;
     })
     .sort(function (a, b) {
+      if (a.isBackorder !== b.isBackorder) return a.isBackorder ? -1 : 1;
       if (b.recommendedQuantity !== a.recommendedQuantity) return b.recommendedQuantity - a.recommendedQuantity;
       return a.internalCode.localeCompare(b.internalCode, "ja", { numeric: true });
     });
@@ -712,7 +714,7 @@ function getFilteredShippingAllocationRows(schedule) {
   if (!search) return rows;
 
   return rows.filter(function (row) {
-    return [row.internalCode, row.productCode, row.productName, row.location]
+    return [row.internalCode, row.productCode, row.productName, row.location, row.isBackorder ? "注残" : ""]
       .map(function (value) { return String(value || "").toLowerCase(); })
       .some(function (value) { return value.includes(search); });
   });
@@ -829,9 +831,13 @@ function renderShippingAllocationTable() {
   const currentAllocated = allRows.reduce(function (sum, row) {
     return sum + row.currentAllocation;
   }, 0);
+  const backorderCount = allRows.filter(function (row) {
+    return row.isBackorder;
+  }).length;
   summary.textContent =
     `不足候補：${allRows.length.toLocaleString("ja-JP")}商品 / ` +
     `推奨数量合計：${totalRecommended.toLocaleString("ja-JP")}個 / ` +
+    `注残：${backorderCount.toLocaleString("ja-JP")}商品 / ` +
     `この船便の保存済み数量：${currentAllocated.toLocaleString("ja-JP")}個`;
 
   if (visible.length === 0) {
@@ -845,9 +851,23 @@ function renderShippingAllocationTable() {
     visible.forEach(function (item) {
       const row = document.createElement("tr");
       row.dataset.internalCode = item.internalCode;
+      if (item.isBackorder) {
+        row.classList.add("shipping-backorder-row");
+      }
       appendShippingScheduleCell(row, item.internalCode);
       appendShippingScheduleCell(row, item.productCode || "-");
-      appendShippingScheduleCell(row, item.productName || "");
+
+      const productNameCell = document.createElement("td");
+      if (item.isBackorder) {
+        const badge = document.createElement("span");
+        badge.className = "shipping-backorder-badge";
+        badge.textContent = "注残";
+        productNameCell.appendChild(badge);
+      }
+      const productNameText = document.createElement("span");
+      productNameText.textContent = item.productName || "";
+      productNameCell.appendChild(productNameText);
+      row.appendChild(productNameCell);
       appendShippingScheduleCell(row, `${item.monthlyAverage.toLocaleString("ja-JP")}個`);
       appendShippingScheduleCell(row, `${item.periodSalesEstimate.toLocaleString("ja-JP")}個`);
       appendShippingScheduleCell(row, `${formatShippingQuantity(item.plannedQuantity)}個`);
@@ -1055,11 +1075,11 @@ function printShippingAllocationList() {
 
   const tableRows = printRows.map(function (row, index) {
     return `
-      <tr>
+      <tr class="${row.isBackorder ? "backorder-row" : ""}">
         <td>${index + 1}</td>
         <td>${escapeShippingHtml(row.internalCode)}</td>
         <td>${escapeShippingHtml(row.productCode || "-")}</td>
-        <td>${escapeShippingHtml(row.productName)}</td>
+        <td>${row.isBackorder ? '<span class="backorder-badge">注残</span> ' : ''}${escapeShippingHtml(row.productName)}</td>
         <td class="num">${formatShippingPrintNumber(row.monthlyAverage)}</td>
         <td class="num">${formatShippingPrintNumber(row.periodSalesEstimate)}</td>
         <td class="num">${formatShippingPrintNumber(row.plannedQuantity)}</td>
@@ -1091,6 +1111,8 @@ function printShippingAllocationList() {
   td { font-size: 7.8pt; }
   .num { text-align: right; }
   .strong { font-weight: 700; font-size: 8.8pt; }
+  .backorder-row { background:#fff8d6; }
+  .backorder-badge { display:inline-block; padding:1px 4px; border:1px solid #c79200; background:#f6c343; color:#4f3500; font-weight:700; border-radius:3px; }
   .total { margin-top: 7px; text-align: right; font-size: 10.5pt; font-weight: 700; }
   .footer { margin-top: 7px; font-size: 7.5pt; color: #444; }
 </style>
@@ -1133,7 +1155,7 @@ function printShippingAllocationList() {
     <tbody>${tableRows}</tbody>
   </table>
   <div class="total">振分商品：${printRows.length.toLocaleString("ja-JP")}件　／　振分数量合計：${totalQuantity.toLocaleString("ja-JP")}個</div>
-  <div class="footer">バーコード在庫・棚卸管理アプリ v47</div>
+  <div class="footer">バーコード在庫・棚卸管理アプリ v58</div>
 </body>
 </html>`;
 
@@ -1242,16 +1264,18 @@ function renderShippingWarehouseProductTable() {
         shipQuantity: shipQuantity,
         warehouseQuantity: warehouseQuantity,
         remaining: remaining,
-        currentLocation: product.location || ""
+        currentLocation: product.location || "",
+        isBackorder: isShippingBackorderProduct(product)
       };
     })
     .filter(function (row) {
       if (!search) return true;
-      return [row.internalCode, row.productCode, row.productName]
+      return [row.internalCode, row.productCode, row.productName, row.isBackorder ? "注残" : ""]
         .map(function (value) { return String(value || "").toLowerCase(); })
         .some(function (value) { return value.includes(search); });
     })
     .sort(function (a, b) {
+      if (a.isBackorder !== b.isBackorder) return a.isBackorder ? -1 : 1;
       if (b.remaining !== a.remaining) return b.remaining - a.remaining;
       return a.internalCode.localeCompare(b.internalCode, "ja", { numeric: true });
     });
@@ -1283,9 +1307,23 @@ function renderShippingWarehouseProductTable() {
   } else {
     rows.forEach(function (item) {
       const row = document.createElement("tr");
+      if (item.isBackorder) {
+        row.classList.add("shipping-backorder-row");
+      }
       appendShippingScheduleCell(row, item.internalCode);
       appendShippingScheduleCell(row, item.productCode || "-");
-      appendShippingScheduleCell(row, item.productName || "");
+
+      const productNameCell = document.createElement("td");
+      if (item.isBackorder) {
+        const badge = document.createElement("span");
+        badge.className = "shipping-backorder-badge";
+        badge.textContent = "注残";
+        productNameCell.appendChild(badge);
+      }
+      const productNameText = document.createElement("span");
+      productNameText.textContent = item.productName || "";
+      productNameCell.appendChild(productNameText);
+      row.appendChild(productNameCell);
       appendShippingScheduleCell(row, `${item.shipQuantity.toLocaleString("ja-JP")}個`);
       appendShippingScheduleCell(row, `${item.warehouseQuantity.toLocaleString("ja-JP")}個`);
       appendShippingScheduleCell(row, `${item.remaining.toLocaleString("ja-JP")}個`);
@@ -1555,7 +1593,12 @@ function printShippingWarehouseList() {
       productName: allocation.productName || "",
       shipQuantity: shipQuantity,
       allocatedQuantity: warehouseQuantity,
-      remaining: Math.max(0, shipQuantity - warehouseQuantity)
+      remaining: Math.max(0, shipQuantity - warehouseQuantity),
+      isBackorder: isShippingBackorderProduct(
+        shippingScheduleProducts.find(function (item) {
+          return String(item.internalCode || "").trim() === code;
+        }) || {}
+      )
     };
   }).filter(function (row) { return row.remaining > 0; });
 
@@ -1568,13 +1611,17 @@ function printShippingWarehouseList() {
       });
       const total = rows.reduce(function (sum, row) { return sum + (Number(row.quantity) || 0); }, 0);
       const tr = rows.map(function (row, index) {
-        return `<tr><td>${index + 1}</td><td>${escapeShippingHtml(row.internalCode)}</td><td>${escapeShippingHtml(row.productCode || "-")}</td><td>${escapeShippingHtml(row.productName)}</td><td class="num strong">${(Number(row.quantity) || 0).toLocaleString("ja-JP")}</td></tr>`;
+        const product = shippingScheduleProducts.find(function (item) {
+          return String(item.internalCode || "").trim() === String(row.internalCode || "").trim();
+        }) || {};
+        const backorder = isShippingBackorderProduct(product);
+        return `<tr class="${backorder ? "backorder-row" : ""}"><td>${index + 1}</td><td>${escapeShippingHtml(row.internalCode)}</td><td>${escapeShippingHtml(row.productCode || "-")}</td><td>${backorder ? '<span class="backorder-badge">注残</span> ' : ''}${escapeShippingHtml(row.productName)}</td><td class="num strong">${(Number(row.quantity) || 0).toLocaleString("ja-JP")}</td></tr>`;
       }).join("");
       return `<section class="warehouse"><h2>${escapeShippingHtml(destination)}　合計 ${total.toLocaleString("ja-JP")}個</h2><table><thead><tr><th style="width:7%">No</th><th style="width:18%">社内コード</th><th style="width:20%">商品コード</th><th>商品名</th><th style="width:15%">数量</th></tr></thead><tbody>${tr}</tbody></table></section>`;
     }).join("");
 
   const unallocatedHtml = unallocated.length > 0
-    ? `<section class="warehouse warning"><h2>未振分商品</h2><table><thead><tr><th>No</th><th>社内コード</th><th>商品コード</th><th>商品名</th><th>船積数量</th><th>振分済</th><th>未振分</th></tr></thead><tbody>${unallocated.map(function (row, index) { return `<tr><td>${index + 1}</td><td>${escapeShippingHtml(row.internalCode)}</td><td>${escapeShippingHtml(row.productCode || "-")}</td><td>${escapeShippingHtml(row.productName)}</td><td class="num">${row.shipQuantity.toLocaleString("ja-JP")}</td><td class="num">${row.allocatedQuantity.toLocaleString("ja-JP")}</td><td class="num strong">${row.remaining.toLocaleString("ja-JP")}</td></tr>`; }).join("")}</tbody></table></section>`
+    ? `<section class="warehouse warning"><h2>未振分商品</h2><table><thead><tr><th>No</th><th>社内コード</th><th>商品コード</th><th>商品名</th><th>船積数量</th><th>振分済</th><th>未振分</th></tr></thead><tbody>${unallocated.map(function (row, index) { return `<tr><td>${index + 1}</td><td>${escapeShippingHtml(row.internalCode)}</td><td>${escapeShippingHtml(row.productCode || "-")}</td><td>${row.isBackorder ? '<span class="backorder-badge">注残</span> ' : ''}${escapeShippingHtml(row.productName)}</td><td class="num">${row.shipQuantity.toLocaleString("ja-JP")}</td><td class="num">${row.allocatedQuantity.toLocaleString("ja-JP")}</td><td class="num strong">${row.remaining.toLocaleString("ja-JP")}</td></tr>`; }).join("")}</tbody></table></section>`
     : "";
 
   const totalShip = saved.reduce(function (sum, row) { return sum + (Number(row.quantity) || 0); }, 0);
@@ -1593,13 +1640,15 @@ function printShippingWarehouseList() {
     th { background:#f5f5f5; }
     .num { text-align:right; }
     .strong { font-weight:700; }
+    .backorder-row { background:#fff8d6; }
+    .backorder-badge { display:inline-block; padding:1px 4px; border:1px solid #c79200; background:#f6c343; color:#4f3500; font-weight:700; border-radius:3px; }
     .footer { margin-top:8px; font-size:8pt; color:#555; }
   </style></head><body>
     <h1>倉庫別 船積振分けリスト　${escapeShippingHtml(schedule.name)}</h1>
     <div class="meta"><strong>出港日：</strong>${escapeShippingHtml(formatShippingDate(schedule.departureDate))}　 <strong>入港日：</strong>${escapeShippingHtml(formatShippingDate(schedule.arrivalDate))}　 <strong>倉庫到着日：</strong>${escapeShippingHtml(formatShippingDate(schedule.warehouseArrivalDate))}<br><strong>船積数量合計：</strong>${totalShip.toLocaleString("ja-JP")}個　 <strong>倉庫振分済：</strong>${totalAllocated.toLocaleString("ja-JP")}個　 <strong>未振分：</strong>${Math.max(0,totalShip-totalAllocated).toLocaleString("ja-JP")}個　 <strong>印刷日：</strong>${escapeShippingHtml(formatShippingDateForPrint(new Date()))}</div>
     ${groupHtml || '<p>倉庫への振分けはまだ登録されていません。</p>'}
     ${unallocatedHtml}
-    <div class="footer">バーコード在庫・棚卸管理アプリ v47</div>
+    <div class="footer">バーコード在庫・棚卸管理アプリ v58</div>
   </body></html>`;
 
   const iframe = document.createElement("iframe");
@@ -1939,6 +1988,23 @@ function getShippingNumber(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function isShippingBackorderProduct(product) {
+  const savedStatus = String(
+    product && (
+      product.backorderStatus ||
+      product.inventoryStatus ||
+      ""
+    )
+  ).normalize("NFKC").trim().toLowerCase();
+
+  return (
+    savedStatus === "注残" ||
+    savedStatus === "backorder" ||
+    savedStatus === "backordered" ||
+    Boolean(product && product.backorder === true)
+  );
+}
+
 function isShippingDiscontinuedProduct(product) {
   const status = String(product && (product.productStatus || product.status || "") || "").trim().toLowerCase();
   return status === "廃盤" || status === "discontinued" || Boolean(product && product.discontinued === true);
@@ -2135,7 +2201,22 @@ function createShippingScheduleStyle() {
       #shipping-schedule .shipping-warehouse-location-item { grid-template-columns: 1fr 110px; }
       #shipping-schedule .shipping-schedule-card { padding: 14px; }
     }
-  `;
+  
+    .shipping-backorder-row {
+      background: #fff8d6 !important;
+    }
+    .shipping-backorder-badge {
+      display: inline-block;
+      margin-right: 6px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: #f6c343;
+      color: #5c3a00;
+      border: 1px solid #d89b00;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+`;
   document.head.appendChild(style);
 }
 

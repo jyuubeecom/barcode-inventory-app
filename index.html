@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v57
+          画面版 v58
         </span>
       </div>
 
@@ -1155,6 +1155,29 @@
         </div>
 
         <div>
+          <label for="backorder-status">
+            在庫状態（注残設定）
+          </label>
+
+          <select
+            id="backorder-status"
+            name="backorderStatus"
+          >
+            <option value="">
+              通常
+            </option>
+
+            <option value="注残">
+              注残
+            </option>
+          </select>
+
+          <small>
+            注残にすると、商品一覧・発注必要一覧・船積リストで黄色表示されます。
+          </small>
+        </div>
+
+        <div>
           <label for="product-status">
             商品状態
           </label>
@@ -1958,6 +1981,28 @@
         </div>
 
         <div>
+          <label for="edit-backorder-status">
+            在庫状態（注残設定）
+          </label>
+
+          <select
+            id="edit-backorder-status"
+          >
+            <option value="">
+              通常
+            </option>
+
+            <option value="注残">
+              注残
+            </option>
+          </select>
+
+          <small>
+            注残にすると、商品一覧・発注必要一覧・船積リストで黄色表示されます。
+          </small>
+        </div>
+
+        <div>
           <label for="edit-product-status">
             商品状態
           </label>
@@ -2087,7 +2132,7 @@
   </main>
 
 <script src="storage.js?v=54"></script>
-<script src="app.js?v=46"></script>
+<script src="app.js?v=58"></script>
 <script src="inventory.js"></script>
 <script src="transfer-list.js?v=57"></script>
 <script src="libs/barcode-detector-zxing-adapter.js?v=31"></script>
@@ -2101,9 +2146,9 @@
 <script src="pwa.js?v=31"></script>
 <script src="sales-plan.js?v=37"></script>
 <script src="sales-actual.js?v=39"></script>
-<script src="purchase-required.js?v=46"></script>
+<script src="purchase-required.js?v=58"></script>
 <script src="low-shipment.js?v=45"></script>
-<script src="shipping-schedule.js?v=53"></script>
+<script src="shipping-schedule.js?v=58"></script>
 <script src="shipping-arrival.js?v=52"></script>
 <script src="barcode-print.js?v=50"></script>
 <script src="backup.js?v=54"></script>

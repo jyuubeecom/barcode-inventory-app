@@ -170,6 +170,11 @@ const productStatusInput =
     "#product-status"
   );
 
+const backorderStatusInput =
+  document.querySelector(
+    "#backorder-status"
+  );
+
 const editInternalCodeInput =
   document.querySelector(
     "#edit-internal-code"
@@ -216,6 +221,11 @@ const editSupplierInput =
 const editProductStatusInput =
   document.querySelector(
     "#edit-product-status"
+  );
+
+const editBackorderStatusInput =
+  document.querySelector(
+    "#edit-backorder-status"
   );
 
 const detailInternalCode =
@@ -526,6 +536,14 @@ async function handleProductSubmit(event) {
         productStatusInput.value
     });
 
+  const backorderStatus =
+    getProductBackorderStatus({
+      backorderStatus:
+        backorderStatusInput
+          ? backorderStatusInput.value
+          : ""
+    });
+
   if (!Number.isInteger(stock) || stock < 0) {
     alert(
       "初期在庫数は0以上の整数で入力してください。"
@@ -578,6 +596,7 @@ async function handleProductSubmit(event) {
     category: category,
     location: location,
     supplier: supplier,
+    backorderStatus: backorderStatus,
     productStatus: productStatus,
     createdAt: currentDateTime,
     updatedAt: currentDateTime
@@ -615,6 +634,10 @@ async function handleProductSubmit(event) {
     minStockInput.value = 0;
     productStatusInput.value =
       "通常商品";
+
+    if (backorderStatusInput) {
+      backorderStatusInput.value = "";
+    }
 
     productSearchInput.value = "";
 
@@ -871,6 +894,12 @@ function openDetailScreen(internalCode) {
       "detail-status-discontinued"
     );
   } else if (
+    getStockStatus(selectedProduct) === "注残"
+  ) {
+    detailStockStatus.classList.add(
+      "detail-status-backorder"
+    );
+  } else if (
     getStockStatus(selectedProduct) === "在庫切れ"
   ) {
     detailStockStatus.classList.add(
@@ -969,6 +998,13 @@ function openEditScreen(internalCode) {
       selectedProduct
     );
 
+  if (editBackorderStatusInput) {
+    editBackorderStatusInput.value =
+      getProductBackorderStatus(
+        selectedProduct
+      );
+  }
+
   showScreen("edit");
   editProductCodeInput.focus();
 }
@@ -1026,6 +1062,14 @@ async function handleEditProductSubmit(event) {
         editProductStatusInput.value
     });
 
+  const backorderStatus =
+    getProductBackorderStatus({
+      backorderStatus:
+        editBackorderStatusInput
+          ? editBackorderStatusInput.value
+          : ""
+    });
+
   if (
     !Number.isInteger(minStock) ||
     minStock < 0
@@ -1049,6 +1093,7 @@ async function handleEditProductSubmit(event) {
     category: category,
     location: location,
     supplier: supplier,
+    backorderStatus: backorderStatus,
     productStatus: productStatus,
     createdAt:
       currentProduct.createdAt ||
@@ -1205,6 +1250,10 @@ function normalizeProductData(product) {
     productStatus:
       getProductLifecycleStatus(
         product
+      ),
+    backorderStatus:
+      getProductBackorderStatus(
+        product
       )
   };
 }
@@ -1248,6 +1297,42 @@ function getProductLifecycleStatus(
   return "通常商品";
 }
 
+function getProductBackorderStatus(product) {
+  const savedStatus =
+    String(
+      product &&
+      (
+        product.backorderStatus ||
+        product.inventoryStatus ||
+        ""
+      )
+    )
+      .normalize("NFKC")
+      .trim()
+      .toLowerCase();
+
+  if (
+    savedStatus === "注残" ||
+    savedStatus === "backorder" ||
+    savedStatus === "backordered" ||
+    (
+      product &&
+      product.backorder === true
+    )
+  ) {
+    return "注残";
+  }
+
+  return "";
+}
+
+function isProductBackorder(product) {
+  return (
+    getProductBackorderStatus(product) ===
+    "注残"
+  );
+}
+
 function getValidStockNumber(value) {
   const numberValue = Number(value);
 
@@ -1267,7 +1352,7 @@ function getMinimumStock(product) {
   );
 }
 
-function getStockStatus(product) {
+function getBaseStockStatus(product) {
   if (
     getProductLifecycleStatus(product) ===
     "廃盤"
@@ -1293,6 +1378,21 @@ function getStockStatus(product) {
   }
 
   return "正常";
+}
+
+function getStockStatus(product) {
+  const baseStatus =
+    getBaseStockStatus(product);
+
+  if (baseStatus === "廃盤") {
+    return "廃盤";
+  }
+
+  if (isProductBackorder(product)) {
+    return "注残";
+  }
+
+  return baseStatus;
 }
 
 function createProductSortControls() {
@@ -2125,7 +2225,9 @@ function displayProducts(displayedProducts) {
         product
       );
 
-    if (stockStatus === "在庫切れ") {
+    if (stockStatus === "注残") {
+      row.classList.add("stock-backorder-row");
+    } else if (stockStatus === "在庫切れ") {
       row.classList.add("stock-out-row");
     } else if (stockStatus === "要補充") {
       row.classList.add("stock-low-row");
@@ -2420,6 +2522,8 @@ function createProductListStockStatusCell(
     badge.classList.add(
       "status-discontinued"
     );
+  } else if (stockStatus === "注残") {
+    badge.classList.add("status-backorder");
   } else if (stockStatus === "在庫切れ") {
     badge.classList.add("status-out");
   } else if (stockStatus === "要補充") {
@@ -2490,6 +2594,8 @@ function appendStockStatusCell(
     badge.classList.add(
       "status-discontinued"
     );
+  } else if (stockStatus === "注残") {
+    badge.classList.add("status-backorder");
   } else if (stockStatus === "在庫切れ") {
     badge.classList.add("status-out");
   } else if (stockStatus === "要補充") {
@@ -2604,6 +2710,35 @@ function createProductLifecycleStyle() {
       background-color: #fffaf2 !important;
     }
 
+    .stock-backorder-row {
+      background-color: #fff8d6 !important;
+    }
+
+    .status-backorder,
+    .detail-status-backorder {
+      background-color: #fff3b0;
+      color: #7a4b00;
+      border: 1px solid #f0b429;
+      font-weight: bold;
+    }
+
+    .status-backorder {
+      display: inline-block;
+      min-width: 74px;
+      padding: 6px 10px;
+      border-radius: 20px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .detail-status-backorder {
+      display: inline-block;
+      min-width: 80px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      text-align: center;
+    }
+
     .detail-product-active,
     .detail-product-planned,
     .detail-product-discontinued {
@@ -2656,7 +2791,7 @@ function updateSummary() {
     products.filter(
       function (product) {
         return (
-          getStockStatus(product) ===
+          getBaseStockStatus(product) ===
           "在庫切れ"
         );
       }
@@ -2666,7 +2801,7 @@ function updateSummary() {
     products.filter(
       function (product) {
         return (
-          getStockStatus(product) ===
+          getBaseStockStatus(product) ===
           "要補充"
         );
       }
@@ -2931,6 +3066,7 @@ function createProductListFilterControls(
   productStockFilterSelect.innerHTML = `
     <option value="all">すべて</option>
     <option value="normal">正常</option>
+    <option value="backorder">注残</option>
     <option value="low">要補充</option>
     <option value="out">在庫切れ</option>
     <option value="discontinued">廃盤</option>
@@ -3275,6 +3411,7 @@ function getFilteredProducts() {
 
       const stockFilterMap = {
         normal: "正常",
+        backorder: "注残",
         low: "要補充",
         out: "在庫切れ",
         discontinued: "廃盤"
@@ -3301,7 +3438,8 @@ function getFilteredProducts() {
         product.location,
         product.supplier,
         stockStatus,
-        lifecycleStatus
+        lifecycleStatus,
+        getProductBackorderStatus(product)
       ];
 
       return searchableValues.some(

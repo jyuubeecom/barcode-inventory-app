@@ -361,7 +361,7 @@ function renderPurchaseRequiredTable() {
         <td><strong class="purchase-required-shortage">${item.shortage.toLocaleString("ja-JP")}</strong></td>
         <td>${escapePurchaseHtml(item.internalCode)}</td>
         <td>${escapePurchaseHtml(item.productCode)}</td>
-        <td>${escapePurchaseHtml(item.productName)}</td>
+        <td>${item.isBackorder ? '<span class="purchase-required-backorder-badge">注残</span> ' : ''}${escapePurchaseHtml(item.productName)}</td>
         <td>${item.currentStock.toLocaleString("ja-JP")}</td>
         <td>${formatPurchaseQuantity(item.sixMonthSales)}</td>
         <td>${formatPurchaseWholeNumber(item.monthlyAverage)}</td>
@@ -369,7 +369,7 @@ function renderPurchaseRequiredTable() {
         <td>${formatPurchaseQuantity(item.plannedQuantity)}</td>
         <td><strong>${item.requiredStock.toLocaleString("ja-JP")}</strong></td>
         <td>${escapePurchaseHtml(item.location)}</td>
-        <td>${item.isBackorder ? '<span class="purchase-required-backorder-badge">注残</span><br>' : ''}<span class="purchase-required-badge">発注必要</span></td>
+        <td><span class="purchase-required-badge">発注必要</span></td>
       `;
       body.appendChild(row);
     });

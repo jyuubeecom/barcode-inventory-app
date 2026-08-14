@@ -292,7 +292,7 @@ function createStocktakingScreens() {
         <input
           id="stocktaking-person"
           type="text"
-          placeholder="例：テスト担当者"
+          placeholder="例：担当者"
           required
         >
       </div>

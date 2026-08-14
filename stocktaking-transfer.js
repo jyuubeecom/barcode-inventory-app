@@ -380,7 +380,7 @@ function createStocktakingAggregationScreen() {
         <input
           id="stocktaking-reflection-person"
           type="text"
-          placeholder="例：集約担当者"
+          placeholder="例：担当者"
           autocomplete="name"
         >
 

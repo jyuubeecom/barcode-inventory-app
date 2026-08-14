@@ -766,7 +766,7 @@
       message: "移動元で商品を確認した担当者名を入力してください。",
       record: record,
       inputLabel: "移動元の確認者名（必須）",
-      placeholder: "例：柳生",
+      placeholder: "例：担当者",
       notice: "確認を記録すると、次は移動先での確認へ進みます。",
       confirmText: "移動元で確認する"
     });
@@ -829,7 +829,7 @@
       message: "移動先で商品を確認した担当者名を入力してください。",
       record: record,
       inputLabel: "移動先の確認者名（必須）",
-      placeholder: "例：柳生",
+      placeholder: "例：担当者",
       notice: "「移動完了にする」を押すと、場所別在庫へ自動反映します。移動元の在庫を減らし、移動先の在庫を増やします。総在庫数は変わりません。",
       confirmText: "移動完了にする"
     });
@@ -948,7 +948,7 @@
       input.type = "text";
       input.className = "transfer-person-input";
       input.autocomplete = "name";
-      input.placeholder = dialogOptions.placeholder || "例：柳生";
+      input.placeholder = dialogOptions.placeholder || "例：担当者";
       input.setAttribute("aria-label", inputLabel.textContent);
 
       const error = document.createElement("p");

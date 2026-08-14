@@ -1,9 +1,9 @@
 "use strict";
 
-const CACHE_NAME = "barcode-inventory-app-v82";
+const CACHE_NAME = "barcode-inventory-app-v83";
 const APP_FILES = [
   "./", "./index.html", "./style.css?v=69", "./storage.js?v=65",
-  "./app.js?v=82", "./inventory.js?v=78", "./transfer-list.js?v=81",
+  "./app.js?v=83", "./inventory.js?v=78", "./transfer-list.js?v=81",
   "./libs/barcode-detector-zxing-adapter.js?v=31",
   "./libs/ZXING-LICENSE.txt",
   "./scanner.js?v=31", "./stocktaking.js?v=80",
@@ -39,18 +39,34 @@ self.addEventListener("activate", function (event) {
 self.addEventListener("fetch", function (event) {
   const request = event.request;
   if (request.method !== "GET") return;
+
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  if (request.mode === "navigate") {
+  const isAppCode =
+    request.mode === "navigate" ||
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css") ||
+    url.pathname.endsWith("/index.html");
+
+  if (isAppCode) {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: "no-store" })
         .then(function (response) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(function (cache) { cache.put("./index.html", copy); });
+          if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then(function (cache) {
+              cache.put(request.mode === "navigate" ? "./index.html" : request, copy);
+            });
+          }
           return response;
         })
-        .catch(function () { return caches.match("./index.html"); })
+        .catch(function () {
+          if (request.mode === "navigate") {
+            return caches.match("./index.html");
+          }
+          return caches.match(request);
+        })
     );
     return;
   }
@@ -58,10 +74,14 @@ self.addEventListener("fetch", function (event) {
   event.respondWith(
     caches.match(request).then(function (cached) {
       if (cached) return cached;
+
       return fetch(request).then(function (response) {
         if (!response || response.status !== 200) return response;
+
         const copy = response.clone();
-        caches.open(CACHE_NAME).then(function (cache) { cache.put(request, copy); });
+        caches.open(CACHE_NAME).then(function (cache) {
+          cache.put(request, copy);
+        });
         return response;
       });
     })

@@ -566,6 +566,76 @@ async function handleProductSubmit(event) {
           : ""
     });
 
+  if (!internalCode) {
+    await showAppDialog({
+      type: "warning",
+      icon: "✏️",
+      title: "社内コードを入力してください",
+      message:
+        "商品を登録するには、社内コードの入力が必要です。",
+      confirmText: "入力に戻る"
+    });
+
+    internalCodeInput.focus();
+    return;
+  }
+
+  if (!productName) {
+    await showAppDialog({
+      type: "warning",
+      icon: "✏️",
+      title: "商品名を入力してください",
+      message:
+        "商品を登録するには、商品名の入力が必要です。",
+      confirmText: "入力に戻る"
+    });
+
+    productNameInput.focus();
+    return;
+  }
+
+  if (stockInput.value.trim() === "") {
+    await showAppDialog({
+      type: "warning",
+      icon: "🔢",
+      title: "初期在庫数を入力してください",
+      message:
+        "初期在庫数は0以上の整数で入力してください。",
+      confirmText: "入力に戻る"
+    });
+
+    stockInput.focus();
+    return;
+  }
+
+  if (!location) {
+    await showAppDialog({
+      type: "warning",
+      icon: "📍",
+      title: "保管場所を選択してください",
+      message:
+        "商品を登録する保管場所を選択してください。",
+      confirmText: "入力に戻る"
+    });
+
+    locationInput.focus();
+    return;
+  }
+
+  if (!supplier) {
+    await showAppDialog({
+      type: "warning",
+      icon: "🏢",
+      title: "仕入先を入力してください",
+      message:
+        "商品を登録するには、仕入先の入力が必要です。",
+      confirmText: "入力に戻る"
+    });
+
+    supplierInput.focus();
+    return;
+  }
+
   if (!Number.isInteger(stock) || stock < 0) {
     await showAppDialog({
       type: "warning",
@@ -1224,6 +1294,48 @@ async function handleEditProductSubmit(event) {
           ? editBackorderStatusInput.value
           : ""
     });
+
+  if (!productName) {
+    await showAppDialog({
+      type: "warning",
+      icon: "✏️",
+      title: "商品名を入力してください",
+      message:
+        "商品情報を保存するには、商品名の入力が必要です。",
+      confirmText: "入力に戻る"
+    });
+
+    editProductNameInput.focus();
+    return;
+  }
+
+  if (!location) {
+    await showAppDialog({
+      type: "warning",
+      icon: "📍",
+      title: "保管場所を選択してください",
+      message:
+        "商品情報を保存するには、保管場所の選択が必要です。",
+      confirmText: "入力に戻る"
+    });
+
+    editLocationInput.focus();
+    return;
+  }
+
+  if (!supplier) {
+    await showAppDialog({
+      type: "warning",
+      icon: "🏢",
+      title: "仕入先を入力してください",
+      message:
+        "商品情報を保存するには、仕入先の入力が必要です。",
+      confirmText: "入力に戻る"
+    });
+
+    editSupplierInput.focus();
+    return;
+  }
 
   if (
     !Number.isInteger(minStock) ||

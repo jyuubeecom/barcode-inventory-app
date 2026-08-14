@@ -44,7 +44,13 @@ async function openSalesActualScreen() {
     renderSalesActualImportHistory();
   } catch (error) {
     console.error("販売実績読込履歴エラー", error);
-    alert("販売実績の読込履歴を表示できませんでした。");
+    await showAppDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "販売実績の読込履歴を表示できません",
+      message: "読込履歴を取得できませんでした。画面を開き直して、もう一度お試しください。",
+      confirmText: "確認して閉じる"
+    });
   }
 
   const heading = document.querySelector("#sales-actual-import");
@@ -71,7 +77,17 @@ async function handleSalesActualFileSelection(event) {
   }
 
   if (file.size > 30 * 1024 * 1024) {
-    alert("30MB以下のCSVファイルを選んでください。");
+    await showAppDialog({
+      type: "warning",
+      icon: "📄",
+      title: "CSVファイルのサイズを確認してください",
+      message: "販売実績CSVは30MB以下のファイルを選んでください。",
+      details: [
+        { label: "選択したファイル", value: file.name || "CSVファイル" },
+        { label: "ファイルサイズ", value: `${(file.size / 1024 / 1024).toFixed(1)}MB` }
+      ],
+      confirmText: "確認して閉じる"
+    });
     event.target.value = "";
     clearSalesActualPreview();
     return;
@@ -475,19 +491,35 @@ function renderSalesActualPreview(preview) {
 async function importSelectedSalesActualFile() {
   const preview = salesActualSelectedPreview;
   if (!preview || preview.importRecords.length === 0) {
-    alert("取り込める販売実績がありません。");
+    await showAppDialog({
+      type: "warning",
+      icon: "📊",
+      title: "取り込める販売実績がありません",
+      message: "CSVの内容を確認して、取り込める販売実績があるファイルを選択してください。",
+      confirmText: "確認して閉じる"
+    });
     return;
   }
 
-  const confirmed = window.confirm(
-    "販売実績CSVを取り込みます。\n\n" +
-    `新規販売実績：${preview.importRecords.length}件\n` +
-    `重複スキップ：${preview.duplicateRecords.length}件\n` +
-    `商品未登録コード：${preview.unregisteredCodes.length}件\n\n` +
-    "登録済み商品の販売数量は、場所別在庫から自動出庫します。\n" +
-    "順番：本社1階 → 本社2階 → 酒本倉庫1階 → 酒本倉庫2階\n\n" +
-    "取り込みますか？"
-  );
+  const confirmed = await showAppDialog({
+    type: "warning",
+    icon: "📊",
+    title: "販売実績CSVを取り込みますか？",
+    message: "取り込み件数と在庫への影響を確認してください。",
+    details: [
+      { label: "ファイル名", value: preview.fileName || "販売実績CSV" },
+      { label: "新規販売実績", value: `${preview.importRecords.length}件` },
+      { label: "重複スキップ", value: `${preview.duplicateRecords.length}件` },
+      { label: "商品未登録コード", value: `${preview.unregisteredCodes.length}件` }
+    ],
+    notice:
+      "登録済み商品の販売数量は場所別在庫から自動出庫します。" +
+      " 出庫順は、本社1階 A～F区 → 本社2階 A～F区 → 酒本倉庫1階 → 酒本倉庫2階です。" +
+      " 返品は本社1階 A区へ戻します。",
+    isConfirm: true,
+    cancelText: "戻る",
+    confirmText: "このCSVを取り込む"
+  });
   if (!confirmed) return;
 
   const button = document.querySelector("#import-sales-actual-button");
@@ -534,20 +566,39 @@ async function importSelectedSalesActualFile() {
       ? savedBatch.inventorySkippedCodes.length
       : 0;
 
-    alert(
-      `販売実績を${records.length}件取り込みました。\n\n` +
-      `在庫へ反映した商品：${appliedCount}商品\n` +
-      `商品未登録のため在庫未反映：${skippedCount}商品`
-    );
+    await showAppDialog({
+      type: "success",
+      icon: "✅",
+      title: "販売実績CSVを取り込みました",
+      message: "販売実績の保存と、登録済み商品の在庫反映が完了しました。",
+      details: [
+        { label: "取込件数", value: `${records.length}件` },
+        { label: "在庫へ反映", value: `${appliedCount}商品` },
+        { label: "商品未登録で未反映", value: `${skippedCount}商品` }
+      ],
+      confirmText: "確認して閉じる"
+    });
     clearSalesActualPreview();
     document.querySelector("#sales-actual-file").value = "";
     renderSalesActualImportHistory();
   } catch (error) {
     console.error("販売実績取込エラー", error);
     if (error && error.name === "ConstraintError") {
-      alert("同じ販売実績または同じCSVがすでに取り込まれています。二重登録はしていません。");
+      await showAppDialog({
+        type: "warning",
+        icon: "⚠️",
+        title: "同じ販売実績がすでに取り込まれています",
+        message: "二重登録を防ぐため、今回のCSVは取り込みませんでした。",
+        confirmText: "確認して閉じる"
+      });
     } else {
-      alert("販売実績を取り込めませんでした。\n" + (error.message || "原因を確認できませんでした。"));
+      await showAppDialog({
+        type: "danger",
+        icon: "❌",
+        title: "販売実績CSVを取り込めませんでした",
+        message: error.message || "原因を確認できませんでした。CSVの内容を確認してください。",
+        confirmText: "確認して閉じる"
+      });
     }
   } finally {
     button.textContent = "このCSVを取り込む";
@@ -619,12 +670,35 @@ function renderSalesActualImportHistory() {
         ? "このCSVで反映した在庫も、取込前の状態へ戻します。\n"
         : "このCSVでは在庫を変更していないため、在庫数は変わりません。\n";
 
-      const confirmed = window.confirm(
-        `「${batch.fileName || "販売実績CSV"}」の取込データを削除します。\n\n` +
-        "CSVを修正版へ差し替える場合などに使用してください。\n" +
-        inventoryMessage +
-        "商品マスタ・販売予定は削除されません。\n\n削除しますか？"
-      );
+      const confirmed = await showAppDialog({
+        type: "danger",
+        icon: "🗑️",
+        title: "販売実績CSVの取込を取り消しますか？",
+        message: "取り消すCSVと在庫への影響を確認してください。",
+        details: [
+          { label: "ファイル名", value: batch.fileName || "販売実績CSV" },
+          {
+            label: "帳票期間",
+            value:
+              batch.reportStartDate && batch.reportEndDate
+                ? `${formatSalesActualDate(batch.reportStartDate)} ～ ${formatSalesActualDate(batch.reportEndDate)}`
+                : "不明"
+          },
+          { label: "取込件数", value: `${Number(batch.importedCount || 0)}件` },
+          {
+            label: "在庫への影響",
+            value: inventoryWasApplied
+              ? "このCSVで反映した在庫を取込前の状態へ戻します"
+              : "このCSVでは在庫を変更していません"
+          }
+        ],
+        notice:
+          "この操作は元に戻せません。商品マスタ・販売予定は削除されません。" +
+          " 修正版CSVへ差し替える場合などに使用してください。",
+        isConfirm: true,
+        cancelText: "戻る",
+        confirmText: "取込を取り消す"
+      });
       if (!confirmed) return;
       button.disabled = true;
       try {
@@ -635,14 +709,24 @@ function renderSalesActualImportHistory() {
         applySalesActualUpdatedProducts(restoredProducts);
         salesActualImportHistory = salesActualImportHistory.filter(function (item) { return item.batchId !== batchId; });
         renderSalesActualImportHistory();
-        alert(
-          inventoryWasApplied
-            ? "販売実績CSVの取込を取り消し、在庫も元に戻しました。"
-            : "販売実績CSVの取込を取り消しました。"
-        );
+        await showAppDialog({
+          type: "success",
+          icon: "✅",
+          title: "販売実績CSVの取込を取り消しました",
+          message: inventoryWasApplied
+            ? "取込データを削除し、このCSVで反映した在庫も取込前の状態へ戻しました。"
+            : "取込データを削除しました。このCSVでは在庫を変更していないため、在庫数は変わりません。",
+          confirmText: "確認して閉じる"
+        });
       } catch (error) {
         console.error("販売実績取込取消エラー", error);
-        alert("取込データを削除できませんでした。");
+        await showAppDialog({
+          type: "danger",
+          icon: "❌",
+          title: "取込を取り消せませんでした",
+          message: "販売実績CSVの取込データを削除できませんでした。もう一度お試しください。",
+          confirmText: "確認して閉じる"
+        });
         button.disabled = false;
       }
     });

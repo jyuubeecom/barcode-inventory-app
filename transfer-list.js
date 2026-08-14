@@ -197,6 +197,11 @@
       .transfer-status-source { background: #fff3cd; color: #8a5a00; }
       .transfer-status-complete { background: #dff3e4; color: #1b5e20; }
       .transfer-status-detail { display: block; margin-top: 5px; font-size: 12px; line-height: 1.5; color: #546e7a; white-space: nowrap; }
+      .transfer-person-input-group { margin-top: 18px; }
+      .transfer-person-input-label { display: block; margin-bottom: 8px; font-size: 18px; font-weight: 700; color: #263238; }
+      .transfer-person-input { width: 100%; min-height: 58px; box-sizing: border-box; padding: 12px 14px; border: 2px solid #90a4ae; border-radius: 10px; background: #fff; color: #263238; font-size: 20px; }
+      .transfer-person-input:focus { border-color: #1565c0; outline: 4px solid #bbdefb; outline-offset: 1px; }
+      .transfer-person-input-error { min-height: 26px; margin: 8px 0 0; color: #c62828; font-size: 17px; font-weight: 700; }
       .transfer-confirm-source-button { background: #ef9a25; }
       .transfer-confirm-destination-button { background: #2e7d32; }
       @media (max-width: 760px) {
@@ -744,24 +749,29 @@
     try {
       await validateTransferSourceStock(record);
     } catch (error) {
-      alert(error.message || "移動元の在庫を確認できませんでした。");
+      await showAppDialog({
+        type: "danger",
+        icon: "⚠️",
+        title: "移動元の在庫を確認してください",
+        message: error.message || "移動元の在庫を確認できませんでした。",
+        confirmText: "閉じる"
+      });
       return;
     }
 
-    const confirmer = window.prompt(
-      `移動元「${record.sourceLocation || "-"}」の確認者名を入力してください。`
-    );
-    if (confirmer === null) return;
-    const name = String(confirmer).trim();
-    if (!name) {
-      alert("確認者名を入力してください。");
-      return;
-    }
+    const name = await showTransferPersonInputDialog({
+      type: "info",
+      icon: "📦",
+      title: "移動元の確認者を入力してください",
+      message: "移動元で商品を確認した担当者名を入力してください。",
+      record: record,
+      inputLabel: "移動元の確認者名（必須）",
+      placeholder: "例：柳生",
+      notice: "確認を記録すると、次は移動先での確認へ進みます。",
+      confirmText: "移動元で確認する"
+    });
 
-    const confirmed = window.confirm(
-      `${formatDate(record.transferDate)}\n${record.sourceLocation} → ${record.destinationLocation}\n\n移動元で商品を確認済みにしますか？`
-    );
-    if (!confirmed) return;
+    if (name === null) return;
 
     try {
       const updated = {
@@ -775,37 +785,56 @@
         updatedAt: new Date().toISOString()
       };
       await saveTransferList(updated);
-      alert("移動元の確認を記録しました。\n次は移動先で確認してください。");
       await renderSavedTransfers();
+
+      await showAppDialog({
+        type: "success",
+        icon: "✅",
+        title: "移動元の確認を記録しました",
+        message: "移動元での確認が完了しました。次は移動先で確認してください。",
+        details: [
+          { label: "移動元", value: record.sourceLocation || "-" },
+          { label: "確認者", value: name }
+        ],
+        confirmText: "閉じる"
+      });
     } catch (error) {
       console.error("移動元確認保存エラー", error);
-      alert("移動元の確認を保存できませんでした。");
+      await showAppDialog({
+        type: "danger",
+        icon: "⚠️",
+        title: "移動元の確認を保存できませんでした",
+        message: "画面を更新して、もう一度お試しください。",
+        confirmText: "閉じる"
+      });
     }
   }
 
   async function confirmTransferDestination(record) {
     if (!record?.sourceConfirmedAt) {
-      alert("先に移動元で確認してください。");
+      await showAppDialog({
+        type: "warning",
+        icon: "⚠️",
+        title: "先に移動元で確認してください",
+        message: "移動先で確認する前に、移動元で商品の確認を完了してください。",
+        confirmText: "閉じる"
+      });
       return;
     }
 
-    const confirmer = window.prompt(
-      `移動先「${record.destinationLocation || "-"}」の確認者名を入力してください。`
-    );
-    if (confirmer === null) return;
-    const name = String(confirmer).trim();
-    if (!name) {
-      alert("確認者名を入力してください。");
-      return;
-    }
+    const name = await showTransferPersonInputDialog({
+      type: "warning",
+      icon: "📦",
+      title: "移動先の確認者を入力してください",
+      message: "移動先で商品を確認した担当者名を入力してください。",
+      record: record,
+      inputLabel: "移動先の確認者名（必須）",
+      placeholder: "例：柳生",
+      notice: "「移動完了にする」を押すと、場所別在庫へ自動反映します。移動元の在庫を減らし、移動先の在庫を増やします。総在庫数は変わりません。",
+      confirmText: "移動完了にする"
+    });
 
-    const confirmed = window.confirm(
-      `${formatDate(record.transferDate)}\n${record.sourceLocation} → ${record.destinationLocation}\n\n` +
-      "移動先で商品を確認し、「移動完了」にしますか？\n\n" +
-      "「OK」を押すと、同時に場所別在庫へ自動反映します。\n" +
-      "総在庫数は変わりません。"
-    );
-    if (!confirmed) return;
+    if (name === null) return;
 
     try {
       const result = await completeTransferAndApplyInventory(
@@ -813,20 +842,206 @@
         name
       );
       applyUpdatedTransferProducts(result?.products);
-      alert(
-        "商品移動が完了しました。\n\n" +
-        `移動元「${record.sourceLocation}」の場所別在庫を減らし、\n` +
-        `移動先「${record.destinationLocation}」の場所別在庫を増やしました。\n` +
-        "総在庫数は変更していません。"
-      );
       await renderSavedTransfers();
+
+      await showAppDialog({
+        type: "success",
+        icon: "✅",
+        title: "商品移動が完了しました",
+        message: "移動先での確認と、場所別在庫への反映が完了しました。",
+        details: [
+          { label: "移動元", value: record.sourceLocation || "-" },
+          { label: "移動先", value: record.destinationLocation || "-" },
+          { label: "確認者", value: name },
+          { label: "総在庫", value: "変更なし" }
+        ],
+        confirmText: "閉じる"
+      });
     } catch (error) {
       console.error("商品移動・在庫反映エラー", error);
-      alert(
-        error.message ||
-        "商品移動を在庫へ反映できませんでした。"
-      );
+      await showAppDialog({
+        type: "danger",
+        icon: "⚠️",
+        title: "商品移動を在庫へ反映できませんでした",
+        message:
+          error.message ||
+          "商品移動を在庫へ反映できませんでした。",
+        confirmText: "閉じる"
+      });
     }
+  }
+
+  function showTransferPersonInputDialog(options) {
+    const dialogOptions = options || {};
+
+    return new Promise(function (resolve) {
+      const existing = document.querySelector("#transfer-person-input-dialog");
+      if (existing) existing.remove();
+
+      const overlay = document.createElement("div");
+      overlay.id = "transfer-person-input-dialog";
+      overlay.className = "app-dialog-overlay";
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+
+      const modal = document.createElement("div");
+      const type = dialogOptions.type || "info";
+      modal.className = `app-dialog-modal app-dialog-${type}`;
+
+      const header = document.createElement("div");
+      header.className = "app-dialog-header";
+
+      const icon = document.createElement("div");
+      icon.className = "app-dialog-icon";
+      icon.textContent = dialogOptions.icon || "📦";
+      icon.setAttribute("aria-hidden", "true");
+
+      const title = document.createElement("h2");
+      title.className = "app-dialog-title";
+      title.textContent = dialogOptions.title || "確認者を入力してください";
+
+      header.appendChild(icon);
+      header.appendChild(title);
+
+      const content = document.createElement("div");
+      content.className = "app-dialog-content";
+
+      const message = document.createElement("p");
+      message.className = "app-dialog-message";
+      message.textContent = dialogOptions.message || "確認者名を入力してください。";
+      content.appendChild(message);
+
+      const record = dialogOptions.record || {};
+      const items = Array.isArray(record.items) ? record.items : [];
+      const totalQuantity = items.reduce(function (sum, item) {
+        return sum + Number(item.quantity || 0);
+      }, 0);
+
+      const details = document.createElement("div");
+      details.className = "app-dialog-details";
+      [
+        ["移動日", formatDate(record.transferDate) || "-"],
+        ["移動元", record.sourceLocation || "-"],
+        ["移動先", record.destinationLocation || "-"],
+        ["合計個数", `${formatNumber(totalQuantity)}個`]
+      ].forEach(function (detail) {
+        const row = document.createElement("div");
+        row.className = "app-dialog-detail-row";
+        const label = document.createElement("strong");
+        label.textContent = detail[0];
+        const value = document.createElement("span");
+        value.textContent = detail[1];
+        row.appendChild(label);
+        row.appendChild(value);
+        details.appendChild(row);
+      });
+      content.appendChild(details);
+
+      const inputGroup = document.createElement("div");
+      inputGroup.className = "transfer-person-input-group";
+
+      const inputLabel = document.createElement("label");
+      inputLabel.className = "transfer-person-input-label";
+      inputLabel.textContent = dialogOptions.inputLabel || "確認者名（必須）";
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "transfer-person-input";
+      input.autocomplete = "name";
+      input.placeholder = dialogOptions.placeholder || "例：柳生";
+      input.setAttribute("aria-label", inputLabel.textContent);
+
+      const error = document.createElement("p");
+      error.className = "transfer-person-input-error";
+      error.setAttribute("aria-live", "polite");
+
+      inputGroup.appendChild(inputLabel);
+      inputGroup.appendChild(input);
+      inputGroup.appendChild(error);
+      content.appendChild(inputGroup);
+
+      if (dialogOptions.notice) {
+        const notice = document.createElement("div");
+        notice.className = "app-dialog-notice";
+        notice.textContent = String(dialogOptions.notice);
+        content.appendChild(notice);
+      }
+
+      const actions = document.createElement("div");
+      actions.className = "app-dialog-actions";
+
+      const cancelButton = document.createElement("button");
+      cancelButton.type = "button";
+      cancelButton.className = "app-dialog-button app-dialog-cancel";
+      cancelButton.textContent = dialogOptions.cancelText || "戻る";
+
+      const confirmButton = document.createElement("button");
+      confirmButton.type = "button";
+      confirmButton.className = "app-dialog-button app-dialog-confirm";
+      confirmButton.textContent = dialogOptions.confirmText || "確認する";
+
+      actions.appendChild(cancelButton);
+      actions.appendChild(confirmButton);
+
+      modal.appendChild(header);
+      modal.appendChild(content);
+      modal.appendChild(actions);
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      document.body.classList.add("app-dialog-open");
+
+      let settled = false;
+
+      function close(result) {
+        if (settled) return;
+        settled = true;
+        document.removeEventListener("keydown", handleKeydown);
+        overlay.remove();
+        document.body.classList.remove("app-dialog-open");
+        resolve(result);
+      }
+
+      function submit() {
+        const name = String(input.value || "").trim();
+        if (!name) {
+          error.textContent = "確認者名を入力してください。";
+          input.focus();
+          return;
+        }
+        close(name);
+      }
+
+      function handleKeydown(event) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          close(null);
+        }
+      }
+
+      cancelButton.addEventListener("click", function () {
+        close(null);
+      });
+      confirmButton.addEventListener("click", submit);
+      input.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          submit();
+        }
+      });
+      input.addEventListener("input", function () {
+        if (error.textContent) error.textContent = "";
+      });
+      overlay.addEventListener("click", function (event) {
+        if (event.target === overlay) {
+          close(null);
+        }
+      });
+      document.addEventListener("keydown", handleKeydown);
+
+      window.setTimeout(function () {
+        input.focus();
+      }, 0);
+    });
   }
 
   async function applyLegacyCompletedTransfer(record) {

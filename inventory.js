@@ -381,7 +381,7 @@ function initializeInventory() {
 
 /* 入庫処理 */
 
-function openStockInScreen() {
+async function openStockInScreen() {
   const internalCode =
     window.inventoryApp
       .getSelectedDetailInternalCode();
@@ -393,9 +393,14 @@ function openStockInScreen() {
       );
 
   if (!selectedProduct) {
-    alert(
-      "入庫する商品が見つかりませんでした。"
-    );
+    await showInventoryDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "入庫する商品を確認できません",
+      message:
+        "商品が見つかりませんでした。画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
 
     return;
   }
@@ -482,9 +487,14 @@ async function handleStockInSubmit(event) {
       );
 
   if (!selectedProduct) {
-    alert(
-      "入庫する商品が見つかりませんでした。"
-    );
+    await showInventoryDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "入庫する商品を確認できません",
+      message:
+        "商品が見つかりませんでした。画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
 
     return;
   }
@@ -507,7 +517,14 @@ async function handleStockInSubmit(event) {
     stockInMemoInput.value.trim();
 
   if (!INVENTORY_LOCATION_OPTIONS.includes(location)) {
-    alert("入庫先の保管場所を選択してください。");
+    await showInventoryDialog({
+      type: "warning",
+      icon: "📍",
+      title: "入庫先の保管場所を選択してください",
+      message:
+        "商品を入庫する保管場所を選んでください。",
+      confirmText: "入力に戻る"
+    });
     stockInLocationSelect.focus();
     return;
   }
@@ -516,18 +533,28 @@ async function handleStockInSubmit(event) {
     !Number.isInteger(quantity) ||
     quantity < 1
   ) {
-    alert(
-      "入庫数量は1以上の整数で入力してください。"
-    );
+    await showInventoryDialog({
+      type: "warning",
+      icon: "🔢",
+      title: "入庫数量を確認してください",
+      message:
+        "入庫数量は1以上の整数で入力してください。",
+      confirmText: "入力に戻る"
+    });
 
     stockInQuantityInput.focus();
     return;
   }
 
   if (person === "") {
-    alert(
-      "担当者を入力してください。"
-    );
+    await showInventoryDialog({
+      type: "warning",
+      icon: "👤",
+      title: "担当者を入力してください",
+      message:
+        "入庫を記録する担当者名を入力してください。",
+      confirmText: "入力に戻る"
+    });
 
     stockInPersonInput.focus();
     return;
@@ -544,6 +571,61 @@ async function handleStockInSubmit(event) {
 
   const afterStock =
     beforeStock + quantity;
+
+  const afterLocationStock =
+    beforeLocationStock + quantity;
+
+  const isConfirmed =
+    await showInventoryDialog({
+      type: "success",
+      icon: "📥",
+      title: "入庫を確定しますか？",
+      message:
+        "場所別在庫と総在庫が増えます。内容を確認してください。",
+      details: [
+        {
+          label: "商品名",
+          value:
+            selectedProduct.productName ||
+            "商品名未登録"
+        },
+        {
+          label: "入庫先",
+          value: location
+        },
+        {
+          label: "入庫数量",
+          value: `${quantity}個`
+        },
+        {
+          label: "場所別在庫",
+          value:
+            `${beforeLocationStock}個 → ${afterLocationStock}個`
+        },
+        {
+          label: "総在庫",
+          value:
+            `${beforeStock}個 → ${afterStock}個`
+        },
+        {
+          label: "担当者",
+          value: person
+        },
+        {
+          label: "理由",
+          value: reason
+        }
+      ],
+      notice:
+        "確定すると、選択した保管場所と総在庫へ反映し、入出庫履歴に「入庫」として記録します。",
+      isConfirm: true,
+      cancelText: "戻る",
+      confirmText: "入庫を確定する"
+    });
+
+  if (!isConfirmed) {
+    return;
+  }
 
   const locationStocks =
     cloneInventoryLocationStocks(
@@ -603,7 +685,7 @@ async function handleStockInSubmit(event) {
     memo: memo,
     location: location,
     beforeLocationStock: beforeLocationStock,
-    afterLocationStock: beforeLocationStock + quantity
+    afterLocationStock: afterLocationStock
   };
 
   try {
@@ -616,18 +698,34 @@ async function handleStockInSubmit(event) {
       updatedProduct
     );
 
-    alert(
-      `入庫を記録しました。
-
-` +
-      `保管場所：${location}
-` +
-      `入庫数量：${quantity}個
-` +
-      `場所別在庫：${beforeLocationStock}個 → ${beforeLocationStock + quantity}個
-` +
-      `総在庫：${beforeStock}個 → ${afterStock}個`
-    );
+    await showInventoryDialog({
+      type: "success",
+      icon: "✅",
+      title: "入庫を記録しました",
+      message:
+        "場所別在庫と総在庫を更新しました。",
+      details: [
+        {
+          label: "保管場所",
+          value: location
+        },
+        {
+          label: "入庫数量",
+          value: `${quantity}個`
+        },
+        {
+          label: "場所別在庫",
+          value:
+            `${beforeLocationStock}個 → ${afterLocationStock}個`
+        },
+        {
+          label: "総在庫",
+          value:
+            `${beforeStock}個 → ${afterStock}個`
+        }
+      ],
+      confirmText: "閉じる"
+    });
 
     stockInForm.reset();
     selectedStockInInternalCode = "";
@@ -638,15 +736,61 @@ async function handleStockInSubmit(event) {
   } catch (error) {
     console.error(error);
 
-    alert(
-      "入庫情報を保存できませんでした。"
-    );
+    await showInventoryDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "入庫情報を保存できませんでした",
+      message:
+        "保存処理でエラーが発生しました。画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
   }
 }
 
-function cancelStockIn() {
+async function cancelStockIn() {
   const internalCode =
     selectedStockInInternalCode;
+
+  const selectedProduct =
+    window.inventoryApp
+      .getProductByInternalCode(
+        internalCode
+      );
+
+  if (selectedProduct) {
+    const defaultLocation =
+      normalizeLocationStockName(
+        selectedProduct.location
+      );
+    const currentLocation =
+      normalizeLocationStockName(
+        stockInLocationSelect.value
+      );
+    const hasInput =
+      Number(stockInQuantityInput.value) !== 1 ||
+      stockInPersonInput.value.trim() !== "" ||
+      stockInReasonInput.value !== "仕入れ" ||
+      stockInMemoInput.value.trim() !== "" ||
+      currentLocation !== defaultLocation;
+
+    if (hasInput) {
+      const isConfirmed =
+        await showInventoryDialog({
+          type: "warning",
+          icon: "↩️",
+          title: "入庫をやめますか？",
+          message:
+            "入力した内容は保存されません。商品詳細画面へ戻りますか？",
+          isConfirm: true,
+          cancelText: "入力を続ける",
+          confirmText: "入庫をやめる"
+        });
+
+      if (!isConfirmed) {
+        return;
+      }
+    }
+  }
 
   stockInForm.reset();
   selectedStockInInternalCode = "";
@@ -663,7 +807,7 @@ function cancelStockIn() {
 
 /* 出庫処理 */
 
-function openStockOutScreen() {
+async function openStockOutScreen() {
   const internalCode =
     window.inventoryApp
       .getSelectedDetailInternalCode();
@@ -675,17 +819,39 @@ function openStockOutScreen() {
       );
 
   if (!selectedProduct) {
-    alert(
-      "出庫する商品が見つかりませんでした。"
-    );
+    await showInventoryDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "出庫する商品を確認できません",
+      message:
+        "商品が見つかりませんでした。画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
 
     return;
   }
 
   if (Number(selectedProduct.stock) <= 0) {
-    alert(
-      "現在庫数が0個のため、出庫できません。"
-    );
+    await showInventoryDialog({
+      type: "danger",
+      icon: "📦",
+      title: "出庫できる在庫がありません",
+      message:
+        "現在庫数が0個のため、この商品は出庫できません。",
+      details: [
+        {
+          label: "商品名",
+          value:
+            selectedProduct.productName ||
+            "商品名未登録"
+        },
+        {
+          label: "現在庫数",
+          value: "0個"
+        }
+      ],
+      confirmText: "閉じる"
+    });
 
     return;
   }
@@ -790,9 +956,14 @@ async function handleStockOutSubmit(event) {
       );
 
   if (!selectedProduct) {
-    alert(
-      "出庫する商品が見つかりませんでした。"
-    );
+    await showInventoryDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "出庫する商品を確認できません",
+      message:
+        "商品が見つかりませんでした。画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
 
     return;
   }
@@ -824,7 +995,14 @@ async function handleStockOutSubmit(event) {
     );
 
   if (!INVENTORY_LOCATION_OPTIONS.includes(location)) {
-    alert("出庫元の保管場所を選択してください。");
+    await showInventoryDialog({
+      type: "warning",
+      icon: "📍",
+      title: "出庫元の保管場所を選択してください",
+      message:
+        "商品を出庫する保管場所を選んでください。",
+      confirmText: "入力に戻る"
+    });
     stockOutLocationSelect.focus();
     return;
   }
@@ -833,34 +1011,64 @@ async function handleStockOutSubmit(event) {
     !Number.isInteger(quantity) ||
     quantity < 1
   ) {
-    alert(
-      "出庫数量は1以上の整数で入力してください。"
-    );
+    await showInventoryDialog({
+      type: "warning",
+      icon: "🔢",
+      title: "出庫数量を確認してください",
+      message:
+        "出庫数量は1以上の整数で入力してください。",
+      confirmText: "入力に戻る"
+    });
 
     stockOutQuantityInput.focus();
     return;
   }
 
   if (quantity > beforeLocationStock) {
-    alert(
-      `選択した保管場所の在庫数より多い数量は出庫できません。
-
-` +
-      `保管場所：${location}
-` +
-      `場所別在庫：${beforeLocationStock}個
-` +
-      `入力された出庫数量：${quantity}個`
-    );
+    await showInventoryDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "出庫数量が場所別在庫を超えています",
+      message:
+        "選択した保管場所の在庫数より多い数量は出庫できません。",
+      details: [
+        {
+          label: "商品名",
+          value:
+            selectedProduct.productName ||
+            "商品名未登録"
+        },
+        {
+          label: "保管場所",
+          value: location
+        },
+        {
+          label: "場所別在庫",
+          value: `${beforeLocationStock}個`
+        },
+        {
+          label: "入力した出庫数量",
+          value: `${quantity}個`
+        }
+      ],
+      notice:
+        "出庫数量を場所別在庫以下に変更してください。",
+      confirmText: "入力に戻る"
+    });
 
     stockOutQuantityInput.focus();
     return;
   }
 
   if (person === "") {
-    alert(
-      "担当者を入力してください。"
-    );
+    await showInventoryDialog({
+      type: "warning",
+      icon: "👤",
+      title: "担当者を入力してください",
+      message:
+        "出庫を記録する担当者名を入力してください。",
+      confirmText: "入力に戻る"
+    });
 
     stockOutPersonInput.focus();
     return;
@@ -868,6 +1076,9 @@ async function handleStockOutSubmit(event) {
 
   const afterStock =
     beforeStock - quantity;
+
+  const afterLocationStock =
+    beforeLocationStock - quantity;
 
   const locationStocks =
     cloneInventoryLocationStocks(
@@ -881,7 +1092,80 @@ async function handleStockOutSubmit(event) {
   );
 
   if (!sourceEntry || sourceEntry.stock < quantity) {
-    alert("選択した保管場所の在庫が不足しています。");
+    await showInventoryDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "選択した保管場所の在庫が不足しています",
+      message:
+        "最新の場所別在庫を確認してから、もう一度出庫してください。",
+      details: [
+        {
+          label: "保管場所",
+          value: location
+        },
+        {
+          label: "現在の場所別在庫",
+          value: `${beforeLocationStock}個`
+        },
+        {
+          label: "出庫数量",
+          value: `${quantity}個`
+        }
+      ],
+      confirmText: "入力に戻る"
+    });
+    return;
+  }
+
+  const isConfirmed =
+    await showInventoryDialog({
+      type: "danger",
+      icon: "📤",
+      title: "出庫を確定しますか？",
+      message:
+        "場所別在庫と総在庫が減ります。内容を確認してください。",
+      details: [
+        {
+          label: "商品名",
+          value:
+            selectedProduct.productName ||
+            "商品名未登録"
+        },
+        {
+          label: "出庫元",
+          value: location
+        },
+        {
+          label: "出庫数量",
+          value: `${quantity}個`
+        },
+        {
+          label: "場所別在庫",
+          value:
+            `${beforeLocationStock}個 → ${afterLocationStock}個`
+        },
+        {
+          label: "総在庫",
+          value:
+            `${beforeStock}個 → ${afterStock}個`
+        },
+        {
+          label: "担当者",
+          value: person
+        },
+        {
+          label: "理由",
+          value: reason
+        }
+      ],
+      notice:
+        "確定すると、選択した保管場所と総在庫へ反映し、入出庫履歴に「出庫」として記録します。",
+      isConfirm: true,
+      cancelText: "戻る",
+      confirmText: "出庫を確定する"
+    });
+
+  if (!isConfirmed) {
     return;
   }
 
@@ -930,7 +1214,7 @@ async function handleStockOutSubmit(event) {
     memo: memo,
     location: location,
     beforeLocationStock: beforeLocationStock,
-    afterLocationStock: beforeLocationStock - quantity
+    afterLocationStock: afterLocationStock
   };
 
   try {
@@ -943,18 +1227,34 @@ async function handleStockOutSubmit(event) {
       updatedProduct
     );
 
-    alert(
-      `出庫を記録しました。
-
-` +
-      `保管場所：${location}
-` +
-      `出庫数量：${quantity}個
-` +
-      `場所別在庫：${beforeLocationStock}個 → ${beforeLocationStock - quantity}個
-` +
-      `総在庫：${beforeStock}個 → ${afterStock}個`
-    );
+    await showInventoryDialog({
+      type: "success",
+      icon: "✅",
+      title: "出庫を記録しました",
+      message:
+        "場所別在庫と総在庫を更新しました。",
+      details: [
+        {
+          label: "保管場所",
+          value: location
+        },
+        {
+          label: "出庫数量",
+          value: `${quantity}個`
+        },
+        {
+          label: "場所別在庫",
+          value:
+            `${beforeLocationStock}個 → ${afterLocationStock}個`
+        },
+        {
+          label: "総在庫",
+          value:
+            `${beforeStock}個 → ${afterStock}個`
+        }
+      ],
+      confirmText: "閉じる"
+    });
 
     stockOutForm.reset();
     selectedStockOutInternalCode = "";
@@ -965,15 +1265,75 @@ async function handleStockOutSubmit(event) {
   } catch (error) {
     console.error(error);
 
-    alert(
-      "出庫情報を保存できませんでした。"
-    );
+    await showInventoryDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "出庫情報を保存できませんでした",
+      message:
+        "保存処理でエラーが発生しました。画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
   }
 }
 
-function cancelStockOut() {
+async function cancelStockOut() {
   const internalCode =
     selectedStockOutInternalCode;
+
+  const selectedProduct =
+    window.inventoryApp
+      .getProductByInternalCode(
+        internalCode
+      );
+
+  if (selectedProduct) {
+    const locationStocks =
+      sortInventoryLocationStocks(
+        cloneInventoryLocationStocks(
+          selectedProduct
+        )
+      );
+    const defaultLocationEntry =
+      locationStocks.find(
+        function (entry) {
+          return entry.stock > 0;
+        }
+      );
+    const defaultLocation =
+      normalizeLocationStockName(
+        defaultLocationEntry
+          ? defaultLocationEntry.location
+          : selectedProduct.location
+      );
+    const currentLocation =
+      normalizeLocationStockName(
+        stockOutLocationSelect.value
+      );
+    const hasInput =
+      Number(stockOutQuantityInput.value) !== 1 ||
+      stockOutPersonInput.value.trim() !== "" ||
+      stockOutReasonInput.value !== "出荷" ||
+      stockOutMemoInput.value.trim() !== "" ||
+      currentLocation !== defaultLocation;
+
+    if (hasInput) {
+      const isConfirmed =
+        await showInventoryDialog({
+          type: "warning",
+          icon: "↩️",
+          title: "出庫をやめますか？",
+          message:
+            "入力した内容は保存されません。商品詳細画面へ戻りますか？",
+          isConfirm: true,
+          cancelText: "入力を続ける",
+          confirmText: "出庫をやめる"
+        });
+
+      if (!isConfirmed) {
+        return;
+      }
+    }
+  }
 
   stockOutForm.reset();
   selectedStockOutInternalCode = "";

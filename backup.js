@@ -32,16 +32,9 @@ function createBackupStyle() {
 
 async function exportFullBackup() {
   const button = document.querySelector("#export-full-backup-button");
-  const confirmed = window.confirm(
-    "商品・在庫・入出庫履歴・棚卸履歴・集約データ・販売予定・販売実績・船便スケジュール・商品振分け・倉庫別振分け・船便入荷反映履歴・商品移動リスト・旧船積希望データ（互換用）を保存します。\n\n" +
-    "バックアップには会社の在庫情報が含まれます。\n" +
-    "第三者が見られる場所には保存しないでください。\n\n" +
-    "バックアップを作成しますか？"
-  );
-  if (!confirmed) return;
 
   button.disabled = true;
-  button.textContent = "バックアップを作成しています...";
+  button.textContent = "バックアップ内容を確認しています...";
 
   try {
     const [productsData, movements, stocktakings, submissions, reflections, salesPlans, salesActuals, salesImportBatches, shippingWishes, shippingSchedules, shippingAllocations, shippingWarehouseAllocations, shippingArrivalReceipts, transferLists, restoreLogs] =
@@ -63,12 +56,44 @@ async function exportFullBackup() {
         getAllRestoreLogs()
       ]);
 
+    const confirmed =
+      typeof showAppDialog === "function"
+        ? await showAppDialog({
+            type: "warning",
+            icon: "💾",
+            title: "全データをバックアップしますか？",
+            message: "バックアップに含まれるデータ件数を確認してください。",
+            details: [
+              { label: "商品", value: `${productsData.length}件` },
+              { label: "入出庫履歴", value: `${movements.length}件` },
+              { label: "棚卸履歴", value: `${stocktakings.length}件` },
+              { label: "販売予定", value: `${salesPlans.length}件` },
+              { label: "販売実績", value: `${salesActuals.length}件` },
+              { label: "販売実績CSV取込履歴", value: `${salesImportBatches.length}件` },
+              { label: "船便スケジュール", value: `${shippingSchedules.length}件` },
+              { label: "商品移動リスト", value: `${transferLists.length}件` }
+            ],
+            notice: "このバックアップには会社の在庫情報が含まれます。第三者が見られる場所や公開された場所には保存しないでください。",
+            isConfirm: true,
+            cancelText: "戻る",
+            confirmText: "バックアップを作成する"
+          })
+        : window.confirm(
+            "会社の在庫情報を含む全データのバックアップを作成します。\n\nバックアップを作成しますか？"
+          );
+
+    if (!confirmed) {
+      return;
+    }
+
+    button.textContent = "バックアップを作成しています...";
+
     const exportedAt = new Date();
     const appSettings = collectAppSettingsForBackup();
     const backupData = {
       backupType: "barcode-inventory-app",
       backupVersion: 9,
-      appVersion: "v54",
+      appVersion: "v73",
       appName: "バーコード在庫・棚卸管理",
       exportedAt: exportedAt.toISOString(),
       counts: {
@@ -111,27 +136,42 @@ async function exportFullBackup() {
     const jsonText = JSON.stringify(backupData, null, 2);
     const fileName = createBackupFileName(exportedAt);
     downloadBackupFile(jsonText, fileName);
-    alert(
-      "バックアップを保存しました。\n\n" +
-      `商品：${productsData.length}件\n` +
-      `入出庫履歴：${movements.length}件\n` +
-      `棚卸履歴：${stocktakings.length}件\n` +
-      `集約提出データ：${submissions.length}件\n` +
-      `集約反映履歴：${reflections.length}件\n` +
-      `販売予定：${salesPlans.length}件\n` +
-      `販売実績：${salesActuals.length}件\n` +
-      `販売実績CSV取込履歴：${salesImportBatches.length}件\n` +
-      `旧船積希望データ（互換用）：${shippingWishes.length}件\n` +
-      `船便スケジュール：${shippingSchedules.length}件\n` +
-      `船便商品振分け：${shippingAllocations.length}件\n` +
-      `倉庫別振分け：${shippingWarehouseAllocations.length}件\n` +
-      `船便入荷反映履歴：${shippingArrivalReceipts.length}件\n` +
-      `商品移動リスト：${transferLists.length}件\n\n` +
-      `ファイル名：${fileName}`
-    );
+
+    if (typeof showAppDialog === "function") {
+      await showAppDialog({
+        type: "success",
+        icon: "✅",
+        title: "バックアップを保存しました",
+        message: "バックアップファイルを大切に保管してください。",
+        details: [
+          { label: "ファイル名", value: fileName },
+          { label: "商品", value: `${productsData.length}件` },
+          { label: "入出庫履歴", value: `${movements.length}件` },
+          { label: "棚卸履歴", value: `${stocktakings.length}件` },
+          { label: "販売実績", value: `${salesActuals.length}件` },
+          { label: "商品移動リスト", value: `${transferLists.length}件` }
+        ],
+        notice: "会社の在庫情報を含むため、安全な場所に保存してください。",
+        confirmText: "確認して閉じる"
+      });
+    } else {
+      alert(`バックアップを保存しました。\n\nファイル名：${fileName}`);
+    }
   } catch (error) {
     console.error("バックアップ作成エラー", error);
-    alert("バックアップを作成できませんでした。");
+
+    if (typeof showAppDialog === "function") {
+      await showAppDialog({
+        type: "danger",
+        icon: "⚠️",
+        title: "バックアップを作成できませんでした",
+        message: "データの読み込みまたはファイル作成中にエラーが発生しました。",
+        notice: "ブラウザを更新してもう一度試してください。改善しない場合は、画面の内容を確認してください。",
+        confirmText: "確認して閉じる"
+      });
+    } else {
+      alert("バックアップを作成できませんでした。");
+    }
   } finally {
     button.disabled = false;
     button.textContent = "全データをバックアップする";

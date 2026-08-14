@@ -908,7 +908,7 @@ function updateStockOutLocationDisplay() {
 
   if (!selectedProduct) {
     stockOutLocationStockInput.value = 0;
-    stockOutQuantityInput.max = 0;
+    stockOutQuantityInput.removeAttribute("max");
     return;
   }
 
@@ -919,7 +919,7 @@ function updateStockOutLocationDisplay() {
     );
 
   stockOutLocationStockInput.value = locationStock;
-  stockOutQuantityInput.max = locationStock;
+  stockOutQuantityInput.removeAttribute("max");
   updateStockOutAfterStock();
 }
 
@@ -1049,6 +1049,10 @@ async function handleStockOutSubmit(event) {
         {
           label: "入力した出庫数量",
           value: `${quantity}個`
+        },
+        {
+          label: "不足数",
+          value: `${quantity - beforeLocationStock}個`
         }
       ],
       notice:

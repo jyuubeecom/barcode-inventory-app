@@ -320,9 +320,14 @@ async function updateExistingCsvProductsFromCsv() {
   if (
     existingRows.length === 0
   ) {
-    alert(
-      "更新できる既存商品がありません。"
-    );
+    await showAppDialog({
+      type: "warning",
+      icon: "📦",
+      title: "更新できる既存商品がありません",
+      message:
+        "CSV内に、登録済みの商品情報を更新できる対象がありません。",
+      confirmText: "確認して閉じる"
+    });
 
     return;
   }
@@ -335,9 +340,14 @@ async function updateExistingCsvProductsFromCsv() {
   } catch (error) {
     console.error(error);
 
-    alert(
-      "登録済みの商品を確認できませんでした。"
-    );
+    await showAppDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "登録済みの商品を確認できませんでした",
+      message:
+        "商品データベースを読み込めませんでした。画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
 
     return;
   }
@@ -395,26 +405,46 @@ async function updateExistingCsvProductsFromCsv() {
   if (
     updateTargets.length === 0
   ) {
-    alert(
-      "CSVと登録済み商品の内容が同じため、更新はありません。"
-    );
+    await showAppDialog({
+      type: "info",
+      icon: "ℹ️",
+      title: "更新が必要な商品はありません",
+      message:
+        "CSVと登録済み商品の内容が同じため、商品情報の更新はありません。",
+      confirmText: "確認して閉じる"
+    });
 
     refreshCsvUpdateButton();
     return;
   }
 
   const confirmed =
-    window.confirm(
-      `変更がある既存商品${updateTargets.length}件を更新します。\n\n` +
-      "更新する項目：\n" +
-      "・商品コード\n" +
-      "・商品名\n" +
-      "・JANコード\n" +
-      "・カテゴリー\n" +
-      "・仕入れ先名\n\n" +
-      "現在庫数・最低在庫数・保管場所は変更しません。\n\n" +
-      "更新してよろしいですか？"
-    );
+    await showAppDialog({
+      type: "warning",
+      icon: "🔄",
+      title: "既存の商品情報を更新しますか？",
+      message:
+        "CSVの内容で、変更がある登録済み商品の情報を一括更新します。",
+      details: [
+        {
+          label: "更新対象",
+          value: `${updateTargets.length}件`
+        },
+        {
+          label: "更新する項目",
+          value: "商品コード・商品名・JANコード・カテゴリー・仕入れ先名"
+        },
+        {
+          label: "変更しない項目",
+          value: "現在庫数・最低在庫数・保管場所"
+        }
+      ],
+      notice:
+        "在庫数や保管場所は変更しません。商品マスタの基本情報だけを更新します。",
+      isConfirm: true,
+      cancelText: "戻る",
+      confirmText: "既存商品を更新する"
+    });
 
   if (!confirmed) {
     return;
@@ -492,7 +522,13 @@ async function updateExistingCsvProductsFromCsv() {
     message +=
       "\n\n商品一覧を更新します。";
 
-    alert(message);
+    await showAppDialog({
+      type: "success",
+      icon: "✅",
+      title: "商品情報の更新が完了しました",
+      message: message,
+      confirmText: "商品一覧を更新する"
+    });
 
     window.location.reload();
     return;
@@ -501,12 +537,22 @@ async function updateExistingCsvProductsFromCsv() {
   if (
     failedMessages.length > 0
   ) {
-    alert(
-      "商品情報を更新できませんでした。\n\n" +
-      failedMessages
+    await showAppDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "商品情報を更新できませんでした",
+      message:
+        "更新処理でエラーが発生しました。",
+      details: failedMessages
         .slice(0, 5)
-        .join("\n")
-    );
+        .map(function (message, index) {
+          return {
+            label: `${index + 1}件目`,
+            value: message
+          };
+        }),
+      confirmText: "閉じる"
+    });
   }
 
   refreshCsvUpdateButton();

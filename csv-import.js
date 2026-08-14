@@ -423,7 +423,15 @@ async function handleCsvFileSelection() {
   }
 
   if (!file.name.toLowerCase().endsWith(".csv")) {
-    alert("CSVファイルを選択してください。");
+    await showAppDialog({
+      type: "warning",
+      icon: "📄",
+      title: "CSVファイルを選択してください",
+      message:
+        "選択したファイルはCSV形式ではありません。ExcelからCSV UTF-8（コンマ区切り）で保存したファイルを選択してください。",
+      confirmText: "確認して閉じる"
+    });
+
     resetCsvImportScreen();
     return;
   }
@@ -1345,20 +1353,49 @@ async function registerNewCsvProducts() {
     );
 
   if (newRows.length === 0) {
-    alert(
-      "登録できる新規商品がありません。"
-    );
+    await showAppDialog({
+      type: "warning",
+      icon: "📦",
+      title: "登録できる新規商品がありません",
+      message:
+        "CSV内に新しく登録できる商品がありません。既存商品またはエラー行のみです。",
+      confirmText: "確認して閉じる"
+    });
 
     return;
   }
 
   const confirmed =
-    window.confirm(
-      `新規商品${newRows.length}件を登録します。\n\n` +
-      "現在庫数は0個で登録されます。\n" +
-      "既存商品とエラー行は登録されません。\n\n" +
-      "登録してよろしいですか？"
-    );
+    await showAppDialog({
+      type: "warning",
+      icon: "📥",
+      title: "新規商品を登録しますか？",
+      message:
+        "CSVから新規商品を一括登録します。登録件数と在庫の扱いを確認してください。",
+      details: [
+        {
+          label: "新規登録",
+          value: `${newRows.length}件`
+        },
+        {
+          label: "初期在庫",
+          value: "すべて0個"
+        },
+        {
+          label: "既存商品",
+          value: "登録しません"
+        },
+        {
+          label: "エラー行",
+          value: "登録しません"
+        }
+      ],
+      notice:
+        "商品マスタへ一括登録します。登録後は商品一覧で内容を確認してください。",
+      isConfirm: true,
+      cancelText: "戻る",
+      confirmText: "新規商品を登録する"
+    });
 
   if (!confirmed) {
     return;
@@ -1479,7 +1516,13 @@ async function registerNewCsvProducts() {
     resultMessage +=
       "\n\n商品一覧を更新します。";
 
-    alert(resultMessage);
+    await showAppDialog({
+      type: "success",
+      icon: "✅",
+      title: "新規商品の登録が完了しました",
+      message: resultMessage,
+      confirmText: "商品一覧を更新する"
+    });
 
     window.location.reload();
     return;
@@ -1502,9 +1545,14 @@ async function registerNewCsvProducts() {
     return;
   }
 
-  alert(
-    "登録対象の商品は、すでに登録されています。"
-  );
+  await showAppDialog({
+    type: "warning",
+    icon: "ℹ️",
+    title: "新しく登録された商品はありません",
+    message:
+      "登録対象の商品は、すでに商品マスタへ登録されています。",
+    confirmText: "確認して閉じる"
+  });
 
   csvImportMessage.textContent =
     "新しく登録された商品はありません。";

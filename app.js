@@ -354,9 +354,14 @@ async function initializeApp() {
     "click",
     function () {
       if (detailInternalCodeValue === "") {
-        alert(
-          "編集する商品が選択されていません。"
-        );
+        void showAppDialog({
+          type: "warning",
+          icon: "⚠️",
+          title: "編集する商品が選択されていません",
+          message:
+            "商品一覧から編集する商品を選択して、もう一度お試しください。",
+          confirmText: "閉じる"
+        });
 
         return;
       }
@@ -369,9 +374,14 @@ async function initializeApp() {
     "click",
     async function () {
       if (detailInternalCodeValue === "") {
-        alert(
-          "削除する商品が選択されていません。"
-        );
+        await showAppDialog({
+          type: "danger",
+          icon: "⚠️",
+          title: "削除する商品が選択されていません",
+          message:
+            "商品一覧から削除する商品を選択して、もう一度お試しください。",
+          confirmText: "閉じる"
+        });
 
         return;
       }
@@ -437,9 +447,14 @@ async function initializeApp() {
   } catch (error) {
     console.error(error);
 
-    alert(
-      "保存されている商品データを読み込めませんでした。"
-    );
+    await showAppDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "商品データを読み込めませんでした",
+      message:
+        "保存されている商品データを読み込めませんでした。画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
   }
 }
 
@@ -552,9 +567,20 @@ async function handleProductSubmit(event) {
     });
 
   if (!Number.isInteger(stock) || stock < 0) {
-    alert(
-      "初期在庫数は0以上の整数で入力してください。"
-    );
+    await showAppDialog({
+      type: "warning",
+      icon: "✏️",
+      title: "初期在庫数を確認してください",
+      message:
+        "初期在庫数は0以上の整数で入力してください。",
+      details: [
+        {
+          label: "入力値",
+          value: stockInput.value || "未入力"
+        }
+      ],
+      confirmText: "入力に戻る"
+    });
 
     stockInput.focus();
     return;
@@ -564,9 +590,20 @@ async function handleProductSubmit(event) {
     !Number.isInteger(minStock) ||
     minStock < 0
   ) {
-    alert(
-      "最低在庫数は0以上の整数で入力してください。"
-    );
+    await showAppDialog({
+      type: "warning",
+      icon: "✏️",
+      title: "最低在庫数を確認してください",
+      message:
+        "最低在庫数は0以上の整数で入力してください。",
+      details: [
+        {
+          label: "入力値",
+          value: minStockInput.value || "未入力"
+        }
+      ],
+      confirmText: "入力に戻る"
+    });
 
     minStockInput.focus();
     return;
@@ -581,9 +618,26 @@ async function handleProductSubmit(event) {
   );
 
   if (duplicateInternalCode) {
-    alert(
-      "同じ社内コードの商品がすでに登録されています。"
-    );
+    await showAppDialog({
+      type: "danger",
+      icon: "🔎",
+      title: "同じ社内コードが登録されています",
+      message:
+        "社内コードは商品の識別に使うため、同じ番号を重複して登録できません。",
+      details: [
+        {
+          label: "社内コード",
+          value: internalCode
+        },
+        {
+          label: "登録済み商品",
+          value:
+            duplicateInternalCode.productName ||
+            "商品名未登録"
+        }
+      ],
+      confirmText: "入力に戻る"
+    });
 
     internalCodeInput.focus();
     return;
@@ -656,7 +710,32 @@ async function handleProductSubmit(event) {
 
     displayCurrentProducts();
 
-    alert("商品を登録しました。");
+    await showAppDialog({
+      type: "success",
+      icon: "✅",
+      title: "商品を登録しました",
+      message:
+        "商品マスタへの登録が完了しました。",
+      details: [
+        {
+          label: "商品名",
+          value: productName
+        },
+        {
+          label: "社内コード",
+          value: internalCode
+        },
+        {
+          label: "初期在庫",
+          value: `${stock}個`
+        },
+        {
+          label: "保管場所",
+          value: location || "未設定"
+        }
+      ],
+      confirmText: "閉じる"
+    });
 
     showScreen("list");
   } catch (error) {
@@ -666,16 +745,32 @@ async function handleProductSubmit(event) {
       error &&
       error.name === "ConstraintError"
     ) {
-      alert(
-        "同じ社内コードの商品がすでに登録されています。"
-      );
+      await showAppDialog({
+        type: "danger",
+        icon: "🔎",
+        title: "同じ社内コードが登録されています",
+        message:
+          "保存時に社内コードの重複が確認されました。社内コードを変更して、もう一度登録してください。",
+        details: [
+          {
+            label: "社内コード",
+            value: internalCode
+          }
+        ],
+        confirmText: "入力に戻る"
+      });
 
       return;
     }
 
-    alert(
-      "商品を保存できませんでした。"
-    );
+    await showAppDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "商品を保存できませんでした",
+      message:
+        "商品登録の保存処理でエラーが発生しました。入力内容を確認して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
   }
 }
 
@@ -727,9 +822,14 @@ async function openMovementHistoryScreen() {
       </tr>
     `;
 
-    alert(
-      "入出庫履歴を読み込めませんでした。"
-    );
+    await showAppDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "入出庫履歴を読み込めませんでした",
+      message:
+        "保存されている入出庫履歴を読み込めませんでした。画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
   }
 }
 
@@ -869,9 +969,20 @@ function openDetailScreen(internalCode) {
     getProductByInternalCode(internalCode);
 
   if (!selectedProduct) {
-    alert(
-      "商品情報が見つかりませんでした。"
-    );
+    void showAppDialog({
+      type: "danger",
+      icon: "🔎",
+      title: "商品情報が見つかりません",
+      message:
+        "指定した商品を確認できませんでした。商品一覧を更新して、もう一度お試しください。",
+      details: [
+        {
+          label: "社内コード",
+          value: internalCode || "未指定"
+        }
+      ],
+      confirmText: "閉じる"
+    });
 
     return;
   }
@@ -969,9 +1080,20 @@ function openEditScreen(internalCode) {
     getProductByInternalCode(internalCode);
 
   if (!selectedProduct) {
-    alert(
-      "編集する商品が見つかりませんでした。"
-    );
+    void showAppDialog({
+      type: "danger",
+      icon: "🔎",
+      title: "編集する商品が見つかりません",
+      message:
+        "編集対象の商品を確認できませんでした。商品一覧を更新して、もう一度お試しください。",
+      details: [
+        {
+          label: "社内コード",
+          value: internalCode || "未指定"
+        }
+      ],
+      confirmText: "閉じる"
+    });
 
     return;
   }
@@ -1030,9 +1152,14 @@ async function handleEditProductSubmit(event) {
   event.preventDefault();
 
   if (editingInternalCode === "") {
-    alert(
-      "編集する商品が選択されていません。"
-    );
+    await showAppDialog({
+      type: "warning",
+      icon: "⚠️",
+      title: "編集する商品が選択されていません",
+      message:
+        "商品一覧から編集する商品を選択して、もう一度お試しください。",
+      confirmText: "商品一覧へ戻る"
+    });
 
     showScreen("list");
     return;
@@ -1044,9 +1171,20 @@ async function handleEditProductSubmit(event) {
     );
 
   if (!currentProduct) {
-    alert(
-      "編集する商品が見つかりませんでした。"
-    );
+    await showAppDialog({
+      type: "danger",
+      icon: "🔎",
+      title: "編集する商品が見つかりません",
+      message:
+        "編集中の商品を確認できませんでした。商品一覧からもう一度選び直してください。",
+      details: [
+        {
+          label: "社内コード",
+          value: editingInternalCode
+        }
+      ],
+      confirmText: "商品一覧へ戻る"
+    });
 
     showScreen("list");
     return;
@@ -1091,9 +1229,20 @@ async function handleEditProductSubmit(event) {
     !Number.isInteger(minStock) ||
     minStock < 0
   ) {
-    alert(
-      "最低在庫数は0以上の整数で入力してください。"
-    );
+    await showAppDialog({
+      type: "warning",
+      icon: "✏️",
+      title: "最低在庫数を確認してください",
+      message:
+        "最低在庫数は0以上の整数で入力してください。",
+      details: [
+        {
+          label: "入力値",
+          value: editMinStockInput.value || "未入力"
+        }
+      ],
+      confirmText: "入力に戻る"
+    });
 
     editMinStockInput.focus();
     return;
@@ -1132,7 +1281,28 @@ async function handleEditProductSubmit(event) {
 
     productSearchInput.value = "";
 
-    alert("商品情報を変更しました。");
+    await showAppDialog({
+      type: "success",
+      icon: "✅",
+      title: "商品情報を変更しました",
+      message:
+        "商品マスタの基本情報を更新しました。",
+      details: [
+        {
+          label: "商品名",
+          value: updatedProduct.productName
+        },
+        {
+          label: "社内コード",
+          value: updatedProduct.internalCode
+        },
+        {
+          label: "主な保管場所",
+          value: updatedProduct.location || "未設定"
+        }
+      ],
+      confirmText: "閉じる"
+    });
 
     openDetailScreen(
       updatedProduct.internalCode
@@ -1140,9 +1310,14 @@ async function handleEditProductSubmit(event) {
   } catch (error) {
     console.error(error);
 
-    alert(
-      "商品情報を保存できませんでした。"
-    );
+    await showAppDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "商品情報を保存できませんでした",
+      message:
+        "商品情報の更新処理でエラーが発生しました。入力内容を確認して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
   }
 }
 

@@ -49,7 +49,13 @@ async function handleRestoreFileSelection(event) {
   const button = document.querySelector("#restore-full-backup-button");
 
   if (file.size > 50 * 1024 * 1024) {
-    alert("50MB以下のバックアップファイルを選んでください。");
+    await showRestoreDialog({
+      type: "warning",
+      icon: "⚠️",
+      title: "バックアップファイルが大きすぎます",
+      message: "50MB以下のバックアップファイルを選んでください。",
+      confirmText: "確認して閉じる"
+    });
     event.target.value = "";
     return;
   }
@@ -63,69 +69,113 @@ async function handleRestoreFileSelection(event) {
     const backup = normalizeAndValidateBackup(raw);
     const c = backup.counts;
 
-    const first = window.confirm(
-      "次のバックアップを復元します。\n\n" +
-      `作成日時：${formatBackupDate(backup.exportedAt)}\n` +
-      `商品：${c.products}件\n` +
-      `入出庫履歴：${c.stockMovements}件\n` +
-      `棚卸履歴：${c.stocktakings}件\n` +
-      `集約提出データ：${c.stocktakingSubmissions}件\n` +
-      `集約反映履歴：${c.aggregationReflections}件\n` +
-      `販売予定：${c.salesPlans}件\n` +
-      `販売実績：${c.salesActuals}件\n` +
-      `販売実績CSV取込履歴：${c.salesImportBatches}件\n` +
-      `旧船積希望データ（互換用）：${c.shippingWishes}件\n` +
-      `船便スケジュール：${c.shippingSchedules}件\n` +
-      `船便商品振分け：${c.shippingAllocations}件\n` +
-      `倉庫別振分け：${c.shippingWarehouseAllocations}件\n` +
-      `船便入荷反映履歴：${c.shippingArrivalReceipts}件\n` +
-      `商品移動リスト：${c.transferLists}件\n\n` +
-      "現在のデータはすべて置き換えられます。\n" +
-      "現在のデータを残す場合は、先にバックアップしてください。\n\n" +
-      "復元を続けますか？"
-    );
+    const first = await showRestoreDialog({
+      type: "warning",
+      icon: "💾",
+      title: "バックアップから復元しますか？",
+      message: "復元するバックアップの内容を確認してください。",
+      details: [
+        { label: "ファイル名", value: file.name },
+        { label: "作成日時", value: formatBackupDate(backup.exportedAt) },
+        { label: "商品", value: `${c.products}件` },
+        { label: "入出庫履歴", value: `${c.stockMovements}件` },
+        { label: "棚卸履歴", value: `${c.stocktakings}件` },
+        { label: "販売予定", value: `${c.salesPlans}件` },
+        { label: "販売実績", value: `${c.salesActuals}件` },
+        { label: "販売実績CSV取込履歴", value: `${c.salesImportBatches}件` },
+        { label: "船便スケジュール", value: `${c.shippingSchedules}件` },
+        { label: "商品移動リスト", value: `${c.transferLists}件` }
+      ],
+      notice: "現在のデータはバックアップの内容へ置き換えられます。現在のデータを残したい場合は、先に『全データをバックアップする』を実行してください。",
+      isConfirm: true,
+      cancelText: "戻る",
+      confirmText: "復元内容を確認する"
+    });
     if (!first) return;
 
-    const final = window.confirm(
-      "最終確認です。\n\n" +
-      "現在のデータを消してバックアップへ置き換えます。\n" +
-      "この操作は元に戻せません。\n\n本当に復元しますか？"
-    );
+    const final = await showRestoreDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "最終確認：本当に復元しますか？",
+      message: "現在のデータを消して、選択したバックアップの内容へ置き換えます。",
+      details: [
+        { label: "復元するファイル", value: file.name },
+        { label: "商品", value: `${c.products}件` },
+        { label: "入出庫履歴", value: `${c.stockMovements}件` },
+        { label: "棚卸履歴", value: `${c.stocktakings}件` }
+      ],
+      notice: "この操作は元に戻せません。必要なデータをバックアップ済みか、もう一度確認してください。",
+      isConfirm: true,
+      cancelText: "戻る",
+      confirmText: "バックアップから復元する"
+    });
     if (!final) return;
 
     button.textContent = "データを復元しています...";
     await replaceAllDataFromBackupV31(backup, file.name);
     restoreAppSettings(backup.data.appSettings);
-    alert(
-      "バックアップから復元しました。\n\n" +
-      `商品：${c.products}件\n` +
-      `入出庫履歴：${c.stockMovements}件\n` +
-      `棚卸履歴：${c.stocktakings}件\n` +
-      `集約提出データ：${c.stocktakingSubmissions}件\n` +
-      `集約反映履歴：${c.aggregationReflections}件\n` +
-      `販売予定：${c.salesPlans}件\n` +
-      `販売実績：${c.salesActuals}件\n` +
-      `販売実績CSV取込履歴：${c.salesImportBatches}件\n` +
-      `旧船積希望データ（互換用）：${c.shippingWishes}件\n` +
-      `船便スケジュール：${c.shippingSchedules}件\n` +
-      `船便商品振分け：${c.shippingAllocations}件\n` +
-      `倉庫別振分け：${c.shippingWarehouseAllocations}件\n` +
-      `船便入荷反映履歴：${c.shippingArrivalReceipts}件\n` +
-      `商品移動リスト：${c.transferLists}件\n\n` +
-      "画面を更新します。"
-    );
+    await showRestoreDialog({
+      type: "success",
+      icon: "✅",
+      title: "バックアップから復元しました",
+      message: "復元が完了しました。画面を更新して新しいデータを表示します。",
+      details: [
+        { label: "商品", value: `${c.products}件` },
+        { label: "入出庫履歴", value: `${c.stockMovements}件` },
+        { label: "棚卸履歴", value: `${c.stocktakings}件` },
+        { label: "販売予定", value: `${c.salesPlans}件` },
+        { label: "販売実績", value: `${c.salesActuals}件` },
+        { label: "商品移動リスト", value: `${c.transferLists}件` }
+      ],
+      confirmText: "画面を更新する"
+    });
     location.reload();
   } catch (error) {
     console.error("バックアップ復元エラー", error);
     const detail = error instanceof SyntaxError
       ? "JSONファイルの内容が壊れています。"
       : (error.message || "原因を確認できませんでした。");
-    alert("バックアップを復元できませんでした。\n\n" + detail + "\n\n現在のデータは変更されていません。");
+    await showRestoreDialog({
+      type: "danger",
+      icon: "❌",
+      title: "バックアップを復元できませんでした",
+      message: detail,
+      notice: "現在のデータは変更されていません。別のバックアップファイルを確認してください。",
+      confirmText: "確認して閉じる"
+    });
   } finally {
     event.target.value = "";
     button.disabled = false;
     button.textContent = "バックアップから復元する";
   }
+}
+
+function showRestoreDialog(options) {
+  if (typeof showAppDialog === "function") {
+    return showAppDialog(options);
+  }
+
+  const dialogOptions = options || {};
+  const detailsText = Array.isArray(dialogOptions.details)
+    ? dialogOptions.details
+        .map(function (detail) {
+          return `${detail.label}：${detail.value}`;
+        })
+        .join("\n")
+    : "";
+  const text = [
+    dialogOptions.title || "お知らせ",
+    dialogOptions.message || "",
+    detailsText,
+    dialogOptions.notice || ""
+  ].filter(Boolean).join("\n\n");
+
+  if (dialogOptions.isConfirm) {
+    return Promise.resolve(window.confirm(text));
+  }
+
+  window.alert(text);
+  return Promise.resolve(true);
 }
 
 function normalizeAndValidateBackup(raw) {

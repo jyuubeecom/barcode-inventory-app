@@ -595,20 +595,97 @@
       button.addEventListener("click", async function () {
         const record = records.find(function (item) { return item.id === button.dataset.transferDelete; });
         if (!record) return;
-        const confirmed = window.confirm(
-          `${formatDate(record.transferDate)}\n${record.sourceLocation} → ${record.destinationLocation}\n\nこの商品移動リストを削除しますか？`
-        );
+
+        const items = Array.isArray(record.items) ? record.items : [];
+        const totalQuantity = items.reduce(function (sum, item) {
+          return sum + Number(item.quantity || 0);
+        }, 0);
+        const statusText = getTransferDeleteStatusText(record);
+
+        const confirmed = await showAppDialog({
+          type: "danger",
+          icon: "🗑️",
+          title: "商品移動リストを削除しますか？",
+          message: "次の商品移動リストを削除しようとしています。内容を確認してください。",
+          details: [
+            {
+              label: "移動日",
+              value: formatDate(record.transferDate)
+            },
+            {
+              label: "移動元",
+              value: record.sourceLocation || "-"
+            },
+            {
+              label: "移動先",
+              value: record.destinationLocation || "-"
+            },
+            {
+              label: "商品数",
+              value: `${items.length}商品`
+            },
+            {
+              label: "合計個数",
+              value: `${formatNumber(totalQuantity)}個`
+            },
+            {
+              label: "確認状況",
+              value: statusText
+            }
+          ],
+          notice: "この操作は元に戻せません。商品そのものや入出庫履歴は削除されません。",
+          isConfirm: true,
+          cancelText: "戻る",
+          confirmText: "移動リストを削除する"
+        });
+
         if (!confirmed) return;
+
         try {
           await deleteTransferList(record.id);
           if (state.editingId === record.id) resetForm();
           await renderSavedTransfers();
+
+          await showAppDialog({
+            type: "success",
+            icon: "✅",
+            title: "商品移動リストを削除しました",
+            message: "選択した商品移動リストを削除しました。",
+            confirmText: "閉じる"
+          });
         } catch (error) {
           console.error("商品移動リスト削除エラー", error);
-          alert("商品移動リストを削除できませんでした。");
+
+          await showAppDialog({
+            type: "danger",
+            icon: "⚠️",
+            title: "商品移動リストを削除できませんでした",
+            message: "画面を更新して、もう一度お試しください。",
+            confirmText: "閉じる"
+          });
         }
       });
     });
+  }
+
+  function getTransferDeleteStatusText(record) {
+    const sourceConfirmed = Boolean(record?.sourceConfirmedAt);
+    const destinationConfirmed = Boolean(record?.destinationConfirmedAt);
+    const inventoryApplied = Boolean(record?.inventoryAppliedAt);
+
+    if (sourceConfirmed && destinationConfirmed && inventoryApplied) {
+      return "移動完了・在庫反映済み";
+    }
+
+    if (sourceConfirmed && destinationConfirmed) {
+      return "移動完了・在庫未反映";
+    }
+
+    if (sourceConfirmed) {
+      return "移動元確認済";
+    }
+
+    return "未確認";
   }
 
   function renderTransferStatus(record) {

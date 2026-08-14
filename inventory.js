@@ -157,6 +157,16 @@ const stockAdjustCurrentStockInput =
     "#stock-adjust-current-stock"
   );
 
+const stockAdjustLocationSelect =
+  document.querySelector(
+    "#stock-adjust-location"
+  );
+
+const stockAdjustLocationStockInput =
+  document.querySelector(
+    "#stock-adjust-location-stock"
+  );
+
 const stockAdjustNewStockInput =
   document.querySelector(
     "#stock-adjust-new-stock"
@@ -165,6 +175,11 @@ const stockAdjustNewStockInput =
 const stockAdjustDifferenceInput =
   document.querySelector(
     "#stock-adjust-difference"
+  );
+
+const stockAdjustAfterTotalStockInput =
+  document.querySelector(
+    "#stock-adjust-after-total-stock"
   );
 
 const stockAdjustPersonInput =
@@ -341,6 +356,11 @@ function initializeInventory() {
   stockAdjustFromDetailButton.addEventListener(
     "click",
     openStockAdjustScreen
+  );
+
+  stockAdjustLocationSelect.addEventListener(
+    "change",
+    updateStockAdjustLocationDisplay
   );
 
   stockAdjustNewStockInput.addEventListener(
@@ -970,7 +990,46 @@ function cancelStockOut() {
 
 /* 数量調整処理 */
 
-function openStockAdjustScreen() {
+async function showInventoryDialog(options) {
+  if (
+    window.inventoryApp &&
+    typeof window.inventoryApp.showAppDialog === "function"
+  ) {
+    return window.inventoryApp.showAppDialog(options);
+  }
+
+  const dialogOptions = options || {};
+  const detailText = Array.isArray(dialogOptions.details)
+    ? dialogOptions.details
+        .map(function (detail) {
+          return `${detail.label}：${detail.value}`;
+        })
+        .join("\n")
+    : "";
+  const message = [
+    dialogOptions.title || "確認",
+    dialogOptions.message || "",
+    detailText,
+    dialogOptions.notice || ""
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  if (dialogOptions.isConfirm) {
+    return window.confirm(message);
+  }
+
+  window.alert(message);
+  return true;
+}
+
+function getStockAdjustSelectedProduct() {
+  return window.inventoryApp.getProductByInternalCode(
+    selectedStockAdjustInternalCode
+  );
+}
+
+async function openStockAdjustScreen() {
   const internalCode =
     window.inventoryApp
       .getSelectedDetailInternalCode();
@@ -982,9 +1041,14 @@ function openStockAdjustScreen() {
       );
 
   if (!selectedProduct) {
-    alert(
-      "数量調整する商品が見つかりませんでした。"
-    );
+    await showInventoryDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "数量調整する商品を確認できません",
+      message:
+        "商品が見つかりませんでした。画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
 
     return;
   }
@@ -1001,16 +1065,41 @@ function openStockAdjustScreen() {
   stockAdjustCurrentStockInput.value =
     selectedProduct.stock;
 
-  stockAdjustNewStockInput.value =
-    selectedProduct.stock;
+  const locationStocks = sortInventoryLocationStocks(
+    cloneInventoryLocationStocks(
+      selectedProduct
+    )
+  );
+
+  const defaultLocationEntry = locationStocks.find(
+    function (entry) {
+      return (
+        entry.location ===
+          normalizeLocationStockName(
+            selectedProduct.location
+          ) &&
+        entry.stock >= 0
+      );
+    }
+  ) || locationStocks.find(
+    function (entry) {
+      return entry.stock > 0;
+    }
+  );
+
+  populateInventoryLocationSelect(
+    stockAdjustLocationSelect,
+    defaultLocationEntry
+      ? defaultLocationEntry.location
+      : selectedProduct.location
+  );
 
   stockAdjustPersonInput.value = "";
   stockAdjustReasonInput.value =
     "棚卸調整";
-
   stockAdjustMemoInput.value = "";
 
-  updateStockAdjustDifference();
+  updateStockAdjustLocationDisplay();
 
   window.inventoryApp.showScreen(
     "stockAdjust"
@@ -1020,27 +1109,58 @@ function openStockAdjustScreen() {
   stockAdjustNewStockInput.select();
 }
 
+function updateStockAdjustLocationDisplay() {
+  const selectedProduct =
+    getStockAdjustSelectedProduct();
+
+  if (!selectedProduct) {
+    stockAdjustLocationStockInput.value = 0;
+    stockAdjustNewStockInput.value = 0;
+    stockAdjustAfterTotalStockInput.value = 0;
+    stockAdjustDifferenceInput.value = "0個";
+    return;
+  }
+
+  const locationStock =
+    getInventoryLocationStock(
+      selectedProduct,
+      stockAdjustLocationSelect.value
+    );
+
+  stockAdjustLocationStockInput.value =
+    locationStock;
+  stockAdjustNewStockInput.value =
+    locationStock;
+
+  updateStockAdjustDifference();
+}
+
 function updateStockAdjustDifference() {
-  const currentStock = Number(
+  const currentTotalStock = Number(
     stockAdjustCurrentStockInput.value
   );
 
-  const newStock = Number(
+  const currentLocationStock = Number(
+    stockAdjustLocationStockInput.value
+  );
+
+  const newLocationStock = Number(
     stockAdjustNewStockInput.value
   );
 
   if (
-    !Number.isInteger(newStock) ||
-    newStock < 0
+    !Number.isInteger(newLocationStock) ||
+    newLocationStock < 0
   ) {
     stockAdjustDifferenceInput.value =
       "正しい在庫数を入力してください";
-
+    stockAdjustAfterTotalStockInput.value =
+      currentTotalStock;
     return;
   }
 
   const difference =
-    newStock - currentStock;
+    newLocationStock - currentLocationStock;
 
   if (difference > 0) {
     stockAdjustDifferenceInput.value =
@@ -1049,26 +1169,35 @@ function updateStockAdjustDifference() {
     stockAdjustDifferenceInput.value =
       `${difference}個`;
   }
+
+  stockAdjustAfterTotalStockInput.value =
+    currentTotalStock + difference;
 }
 
 async function handleStockAdjustSubmit(event) {
   event.preventDefault();
 
   const selectedProduct =
-    window.inventoryApp
-      .getProductByInternalCode(
-        selectedStockAdjustInternalCode
-      );
+    getStockAdjustSelectedProduct();
 
   if (!selectedProduct) {
-    alert(
-      "数量調整する商品が見つかりませんでした。"
-    );
+    await showInventoryDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "数量調整する商品を確認できません",
+      message:
+        "商品が見つかりませんでした。画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
 
     return;
   }
 
-  const newStock = Number(
+  const location = normalizeLocationStockName(
+    stockAdjustLocationSelect.value
+  );
+
+  const newLocationStock = Number(
     stockAdjustNewStockInput.value
   );
 
@@ -1081,22 +1210,45 @@ async function handleStockAdjustSubmit(event) {
   const memo =
     stockAdjustMemoInput.value.trim();
 
+  if (!INVENTORY_LOCATION_OPTIONS.includes(location)) {
+    await showInventoryDialog({
+      type: "warning",
+      icon: "⚠️",
+      title: "保管場所を選択してください",
+      message:
+        "数量を調整する保管場所を選んでください。",
+      confirmText: "確認する"
+    });
+    stockAdjustLocationSelect.focus();
+    return;
+  }
+
   if (
-    !Number.isInteger(newStock) ||
-    newStock < 0
+    !Number.isInteger(newLocationStock) ||
+    newLocationStock < 0
   ) {
-    alert(
-      "調整後の在庫数は0以上の整数で入力してください。"
-    );
+    await showInventoryDialog({
+      type: "warning",
+      icon: "⚠️",
+      title: "調整後の在庫数を確認してください",
+      message:
+        "調整後の場所別在庫数は、0以上の整数で入力してください。",
+      confirmText: "入力に戻る"
+    });
 
     stockAdjustNewStockInput.focus();
     return;
   }
 
   if (person === "") {
-    alert(
-      "担当者を入力してください。"
-    );
+    await showInventoryDialog({
+      type: "warning",
+      icon: "👤",
+      title: "担当者を入力してください",
+      message:
+        "数量調整を記録する担当者名を入力してください。",
+      confirmText: "入力に戻る"
+    });
 
     stockAdjustPersonInput.focus();
     return;
@@ -1105,16 +1257,51 @@ async function handleStockAdjustSubmit(event) {
   const beforeStock =
     Number(selectedProduct.stock);
 
-  const difference =
-    newStock - beforeStock;
-
-  if (difference === 0) {
-    alert(
-      "現在庫数と調整後の在庫数が同じです。\n" +
-      "数量を変更してから確定してください。"
+  const beforeLocationStock =
+    getInventoryLocationStock(
+      selectedProduct,
+      location
     );
 
+  const difference =
+    newLocationStock - beforeLocationStock;
+
+  if (difference === 0) {
+    await showInventoryDialog({
+      type: "warning",
+      icon: "ℹ️",
+      title: "在庫数が変更されていません",
+      message:
+        "選択した保管場所の現在庫数と、調整後の在庫数が同じです。数量を変更してから確定してください。",
+      details: [
+        {
+          label: "保管場所",
+          value: location
+        },
+        {
+          label: "現在庫数",
+          value: `${beforeLocationStock}個`
+        }
+      ],
+      confirmText: "入力に戻る"
+    });
+
     stockAdjustNewStockInput.focus();
+    return;
+  }
+
+  const afterStock =
+    beforeStock + difference;
+
+  if (afterStock < 0) {
+    await showInventoryDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "総在庫数を確認してください",
+      message:
+        "調整後の総在庫数が0個未満になるため、数量調整できません。",
+      confirmText: "入力に戻る"
+    });
     return;
   }
 
@@ -1123,18 +1310,93 @@ async function handleStockAdjustSubmit(event) {
       ? `＋${difference}個`
       : `${difference}個`;
 
-  const confirmationMessage =
-    `数量調整を確定しますか？\n\n` +
-    `商品名：${selectedProduct.productName}\n` +
-    `調整前：${beforeStock}個\n` +
-    `調整後：${newStock}個\n` +
-    `差異：${differenceText}`;
-
   const isConfirmed =
-    window.confirm(confirmationMessage);
+    await showInventoryDialog({
+      type: "warning",
+      icon: "📦",
+      title: "数量調整を確定しますか？",
+      message:
+        "場所別在庫と総在庫が変更されます。内容を確認してください。",
+      details: [
+        {
+          label: "商品名",
+          value:
+            selectedProduct.productName ||
+            "商品名未登録"
+        },
+        {
+          label: "保管場所",
+          value: location
+        },
+        {
+          label: "場所別在庫",
+          value:
+            `${beforeLocationStock}個 → ${newLocationStock}個`
+        },
+        {
+          label: "差異",
+          value: differenceText
+        },
+        {
+          label: "総在庫",
+          value:
+            `${beforeStock}個 → ${afterStock}個`
+        },
+        {
+          label: "担当者",
+          value: person
+        },
+        {
+          label: "理由",
+          value: reason
+        }
+      ],
+      notice:
+        "確定すると、選択した保管場所の在庫と総在庫を変更し、入出庫履歴へ「数量調整」として記録します。",
+      isConfirm: true,
+      cancelText: "戻る",
+      confirmText: "数量調整を確定する"
+    });
 
   if (!isConfirmed) {
     return;
+  }
+
+  const locationStocks =
+    cloneInventoryLocationStocks(
+      selectedProduct
+    );
+
+  let targetEntry = locationStocks.find(
+    function (entry) {
+      return entry.location === location;
+    }
+  );
+
+  if (!targetEntry) {
+    targetEntry = {
+      location: location,
+      stock: 0
+    };
+    locationStocks.push(targetEntry);
+  }
+
+  targetEntry.stock = newLocationStock;
+
+  let cleanedLocationStocks =
+    locationStocks.filter(
+      function (entry) {
+        return entry.stock > 0;
+      }
+    );
+
+  if (afterStock === 0) {
+    cleanedLocationStocks = [
+      {
+        location: location,
+        stock: 0
+      }
+    ];
   }
 
   const currentDateTime =
@@ -1142,7 +1404,15 @@ async function handleStockAdjustSubmit(event) {
 
   const updatedProduct = {
     ...selectedProduct,
-    stock: newStock,
+    stock: afterStock,
+    location: chooseInventoryPrimaryLocation(
+      selectedProduct,
+      cleanedLocationStocks,
+      location
+    ),
+    locationStocks: sortInventoryLocationStocks(
+      cleanedLocationStocks
+    ),
     updatedAt: currentDateTime
   };
 
@@ -1160,10 +1430,13 @@ async function handleStockAdjustSubmit(event) {
     type: "数量調整",
     quantity: difference,
     beforeStock: beforeStock,
-    afterStock: newStock,
+    afterStock: afterStock,
     person: person,
     reason: reason,
-    memo: memo
+    memo: memo,
+    location: location,
+    beforeLocationStock: beforeLocationStock,
+    afterLocationStock: newLocationStock
   };
 
   try {
@@ -1176,12 +1449,34 @@ async function handleStockAdjustSubmit(event) {
       updatedProduct
     );
 
-    alert(
-      `数量調整を記録しました。\n\n` +
-      `調整前：${beforeStock}個\n` +
-      `調整後：${newStock}個\n` +
-      `差異：${differenceText}`
-    );
+    await showInventoryDialog({
+      type: "success",
+      icon: "✅",
+      title: "数量調整を記録しました",
+      message:
+        "場所別在庫と総在庫を更新しました。",
+      details: [
+        {
+          label: "保管場所",
+          value: location
+        },
+        {
+          label: "場所別在庫",
+          value:
+            `${beforeLocationStock}個 → ${newLocationStock}個`
+        },
+        {
+          label: "差異",
+          value: differenceText
+        },
+        {
+          label: "総在庫",
+          value:
+            `${beforeStock}個 → ${afterStock}個`
+        }
+      ],
+      confirmText: "閉じる"
+    });
 
     stockAdjustForm.reset();
     selectedStockAdjustInternalCode = "";
@@ -1192,15 +1487,59 @@ async function handleStockAdjustSubmit(event) {
   } catch (error) {
     console.error(error);
 
-    alert(
-      "数量調整を保存できませんでした。"
-    );
+    await showInventoryDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "数量調整を保存できませんでした",
+      message:
+        "保存処理でエラーが発生しました。画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
   }
 }
 
-function cancelStockAdjust() {
+async function cancelStockAdjust() {
   const internalCode =
     selectedStockAdjustInternalCode;
+
+  const selectedProduct =
+    getStockAdjustSelectedProduct();
+
+  if (selectedProduct) {
+    const location = normalizeLocationStockName(
+      stockAdjustLocationSelect.value
+    );
+    const beforeLocationStock =
+      getInventoryLocationStock(
+        selectedProduct,
+        location
+      );
+    const enteredStock = Number(
+      stockAdjustNewStockInput.value
+    );
+    const hasInput =
+      enteredStock !== beforeLocationStock ||
+      stockAdjustPersonInput.value.trim() !== "" ||
+      stockAdjustMemoInput.value.trim() !== "";
+
+    if (hasInput) {
+      const isConfirmed =
+        await showInventoryDialog({
+          type: "warning",
+          icon: "↩️",
+          title: "数量調整をやめますか？",
+          message:
+            "入力した内容は保存されません。商品詳細画面へ戻りますか？",
+          isConfirm: true,
+          cancelText: "入力を続ける",
+          confirmText: "数量調整をやめる"
+        });
+
+      if (!isConfirmed) {
+        return;
+      }
+    }
+  }
 
   stockAdjustForm.reset();
   selectedStockAdjustInternalCode = "";

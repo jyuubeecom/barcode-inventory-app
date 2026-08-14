@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v75
+          画面版 v76
         </span>
       </div>
 
@@ -1772,7 +1772,7 @@
       <h2>数量調整画面</h2>
 
       <p>
-        実際に確認した正しい在庫数を入力してください。
+        調整する保管場所を選び、その場所で実際に確認した正しい在庫数を入力してください。
       </p>
 
       <form id="stock-adjust-form">
@@ -1802,7 +1802,7 @@
 
         <div>
           <label for="stock-adjust-current-stock">
-            現在庫数
+            現在庫数（総在庫）
           </label>
 
           <input
@@ -1813,8 +1813,31 @@
         </div>
 
         <div>
+          <label for="stock-adjust-location">
+            調整する保管場所（必須）
+          </label>
+
+          <select
+            id="stock-adjust-location"
+            required
+          ></select>
+        </div>
+
+        <div>
+          <label for="stock-adjust-location-stock">
+            選択場所の現在庫数
+          </label>
+
+          <input
+            id="stock-adjust-location-stock"
+            type="number"
+            readonly
+          >
+        </div>
+
+        <div>
           <label for="stock-adjust-new-stock">
-            調整後の在庫数（必須）
+            調整後の場所別在庫数（必須）
           </label>
 
           <input
@@ -1834,6 +1857,18 @@
           <input
             id="stock-adjust-difference"
             type="text"
+            readonly
+          >
+        </div>
+
+        <div>
+          <label for="stock-adjust-after-total-stock">
+            調整後の現在庫数（総在庫）
+          </label>
+
+          <input
+            id="stock-adjust-after-total-stock"
+            type="number"
             readonly
           >
         </div>
@@ -2191,8 +2226,8 @@
   </main>
 
 <script src="storage.js?v=65"></script>
-<script src="app.js?v=69"></script>
-<script src="inventory.js?v=63"></script>
+<script src="app.js?v=76"></script>
+<script src="inventory.js?v=76"></script>
 <script src="transfer-list.js?v=70"></script>
 <script src="libs/barcode-detector-zxing-adapter.js?v=31"></script>
 <script src="scanner.js?v=31"></script>

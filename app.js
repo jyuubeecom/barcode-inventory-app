@@ -3169,6 +3169,8 @@ window.inventoryApp = {
     applyUpdatedProduct,
   getSelectedDetailInternalCode:
     getSelectedDetailInternalCode,
+  showAppDialog:
+    showAppDialog,
   productLocationOptions:
     PRODUCT_LOCATION_OPTIONS,
   isValidProductLocation:

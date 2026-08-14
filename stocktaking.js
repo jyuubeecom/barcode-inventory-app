@@ -783,6 +783,227 @@ function addStocktakingEventListeners() {
   );
 }
 
+
+function showStocktakingInventoryChangedWarning(
+  changedItems,
+  locationStockAware
+) {
+  const existingModal =
+    document.querySelector(
+      "#stocktaking-inventory-changed-modal"
+    );
+
+  if (existingModal) {
+    existingModal.remove();
+  }
+
+  const overlay =
+    document.createElement("div");
+
+  overlay.id =
+    "stocktaking-inventory-changed-modal";
+  overlay.className =
+    "stocktaking-warning-overlay";
+  overlay.setAttribute(
+    "role",
+    "alertdialog"
+  );
+  overlay.setAttribute(
+    "aria-modal",
+    "true"
+  );
+  overlay.setAttribute(
+    "aria-labelledby",
+    "stocktaking-warning-title"
+  );
+
+  const modal =
+    document.createElement("div");
+  modal.className =
+    "stocktaking-warning-modal";
+
+  const header =
+    document.createElement("div");
+  header.className =
+    "stocktaking-warning-header";
+
+  const icon =
+    document.createElement("div");
+  icon.className =
+    "stocktaking-warning-icon";
+  icon.textContent = "⚠️";
+  icon.setAttribute(
+    "aria-hidden",
+    "true"
+  );
+
+  const title =
+    document.createElement("h2");
+  title.id =
+    "stocktaking-warning-title";
+  title.textContent =
+    "棚卸開始後に在庫が変更されています";
+
+  header.appendChild(icon);
+  header.appendChild(title);
+
+  const summary =
+    document.createElement("p");
+  summary.className =
+    "stocktaking-warning-summary";
+  summary.textContent =
+    "棚卸開始後に入庫・出庫・商品移動などで在庫が変わったため、この棚卸は確定できません。";
+
+  const itemList =
+    document.createElement("div");
+  itemList.className =
+    "stocktaking-warning-items";
+
+  changedItems
+    .slice(0, 5)
+    .forEach(
+      function (item) {
+        const itemCard =
+          document.createElement("div");
+        itemCard.className =
+          "stocktaking-warning-item";
+
+        const productName =
+          document.createElement("div");
+        productName.className =
+          "stocktaking-warning-product";
+        productName.textContent =
+          item.productName ||
+          "商品名未登録";
+
+        const registered =
+          document.createElement("div");
+        registered.className =
+          "stocktaking-warning-stock-line";
+
+        const registeredLabel =
+          document.createElement("strong");
+        registeredLabel.textContent =
+          "棚卸開始時：";
+
+        const registeredValue =
+          document.createElement("span");
+        registeredValue.textContent =
+          locationStockAware
+            ? item.registeredText
+            : `${item.registeredStock}個`;
+
+        registered.appendChild(
+          registeredLabel
+        );
+        registered.appendChild(
+          registeredValue
+        );
+
+        const current =
+          document.createElement("div");
+        current.className =
+          "stocktaking-warning-stock-line stocktaking-warning-current";
+
+        const currentLabel =
+          document.createElement("strong");
+        currentLabel.textContent =
+          "現在：";
+
+        const currentValue =
+          document.createElement("span");
+        currentValue.textContent =
+          locationStockAware
+            ? item.currentText
+            : `${item.currentStock}個`;
+
+        current.appendChild(
+          currentLabel
+        );
+        current.appendChild(
+          currentValue
+        );
+
+        itemCard.appendChild(
+          productName
+        );
+        itemCard.appendChild(
+          registered
+        );
+        itemCard.appendChild(
+          current
+        );
+        itemList.appendChild(
+          itemCard
+        );
+      }
+    );
+
+  if (changedItems.length > 5) {
+    const moreText =
+      document.createElement("p");
+    moreText.className =
+      "stocktaking-warning-more";
+    moreText.textContent =
+      `ほか ${changedItems.length - 5} 商品でも在庫が変更されています。`;
+    itemList.appendChild(moreText);
+  }
+
+  const instruction =
+    document.createElement("div");
+  instruction.className =
+    "stocktaking-warning-instruction";
+  instruction.textContent =
+    "入庫・出庫・商品移動の内容を確認して、棚卸をやり直してください。";
+
+  const closeButton =
+    document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className =
+    "stocktaking-warning-close";
+  closeButton.textContent =
+    "確認して閉じる";
+
+  function closeWarning() {
+    overlay.remove();
+    document.body.classList.remove(
+      "stocktaking-warning-open"
+    );
+  }
+
+  closeButton.addEventListener(
+    "click",
+    closeWarning
+  );
+
+  overlay.addEventListener(
+    "keydown",
+    function (event) {
+      if (event.key === "Escape") {
+        closeWarning();
+      }
+    }
+  );
+
+  modal.appendChild(header);
+  modal.appendChild(summary);
+  modal.appendChild(itemList);
+  modal.appendChild(instruction);
+  modal.appendChild(closeButton);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  document.body.classList.add(
+    "stocktaking-warning-open"
+  );
+
+  window.setTimeout(
+    function () {
+      closeButton.focus();
+    },
+    0
+  );
+}
+
 function createStocktakingStyle() {
   const existingStyle =
     document.querySelector(
@@ -1157,7 +1378,189 @@ function createStocktakingStyle() {
       background-color: #c62828;
     }
 
+
+    body.stocktaking-warning-open {
+      overflow: hidden;
+    }
+
+    .stocktaking-warning-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      box-sizing: border-box;
+      background-color: rgba(0, 0, 0, 0.76);
+    }
+
+    .stocktaking-warning-modal {
+      width: min(760px, 100%);
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
+      padding: 0 24px 24px;
+      box-sizing: border-box;
+      border: 5px solid #c62828;
+      border-radius: 18px;
+      background-color: #ffffff;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    .stocktaking-warning-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin: 0 -24px 20px;
+      padding: 20px 24px;
+      border-radius: 12px 12px 0 0;
+      background-color: #ffebee;
+      color: #b71c1c;
+    }
+
+    .stocktaking-warning-icon {
+      flex: 0 0 auto;
+      font-size: 46px;
+      line-height: 1;
+    }
+
+    .stocktaking-warning-header h2 {
+      margin: 0;
+      color: #b71c1c;
+      font-size: 28px;
+      line-height: 1.35;
+    }
+
+    .stocktaking-warning-summary {
+      margin: 0 0 18px;
+      color: #263238;
+      font-size: 19px;
+      font-weight: bold;
+      line-height: 1.7;
+    }
+
+    .stocktaking-warning-items {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .stocktaking-warning-item {
+      padding: 16px;
+      border: 2px solid #ef9a9a;
+      border-radius: 12px;
+      background-color: #fff8f8;
+    }
+
+    .stocktaking-warning-product {
+      margin-bottom: 10px;
+      color: #212121;
+      font-size: 21px;
+      font-weight: bold;
+      line-height: 1.45;
+    }
+
+    .stocktaking-warning-stock-line {
+      margin-top: 6px;
+      font-size: 18px;
+      line-height: 1.55;
+    }
+
+    .stocktaking-warning-current {
+      color: #c62828;
+      font-size: 20px;
+    }
+
+    .stocktaking-warning-more {
+      margin: 0;
+      padding: 12px;
+      border-radius: 10px;
+      background-color: #f5f5f5;
+      font-size: 17px;
+      font-weight: bold;
+    }
+
+    .stocktaking-warning-instruction {
+      margin: 18px 0;
+      padding: 16px 18px;
+      border-left: 7px solid #ef6c00;
+      border-radius: 10px;
+      background-color: #fff3e0;
+      color: #bf360c;
+      font-size: 19px;
+      font-weight: bold;
+      line-height: 1.65;
+    }
+
+    .stocktaking-warning-close {
+      width: 100%;
+      min-height: 64px;
+      margin: 0;
+      border: 0;
+      border-radius: 12px;
+      background-color: #c62828;
+      color: #ffffff;
+      font-size: 21px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .stocktaking-warning-close:hover,
+    .stocktaking-warning-close:focus-visible {
+      background-color: #b71c1c;
+      outline: 4px solid #ffcc80;
+      outline-offset: 2px;
+    }
+
     @media (max-width: 700px) {
+      .stocktaking-warning-overlay {
+        align-items: center;
+        padding: 12px;
+      }
+
+      .stocktaking-warning-modal {
+        max-height: calc(100vh - 24px);
+        padding: 0 16px 16px;
+        border-width: 4px;
+        border-radius: 14px;
+      }
+
+      .stocktaking-warning-header {
+        gap: 10px;
+        margin: 0 -16px 16px;
+        padding: 16px;
+      }
+
+      .stocktaking-warning-icon {
+        font-size: 38px;
+      }
+
+      .stocktaking-warning-header h2 {
+        font-size: 23px;
+      }
+
+      .stocktaking-warning-summary,
+      .stocktaking-warning-instruction {
+        font-size: 17px;
+      }
+
+      .stocktaking-warning-product {
+        font-size: 19px;
+      }
+
+      .stocktaking-warning-stock-line {
+        font-size: 17px;
+      }
+
+      .stocktaking-warning-current {
+        font-size: 19px;
+      }
+
+      .stocktaking-warning-close {
+        min-height: 60px;
+        font-size: 20px;
+      }
+
       #stocktaking-setup button,
       #stocktaking-active > button {
         width: 100%;
@@ -5192,32 +5595,9 @@ async function handleConfirmStocktaking() {
       }
 
       if (changedItems.length > 0) {
-        const changedText =
-          changedItems
-            .slice(0, 5)
-            .map(
-              function (item) {
-                if (locationStockAware) {
-                  return (
-                    `${item.productName}\n` +
-                    `棚卸開始時：${item.registeredText}\n` +
-                    `現在：${item.currentText}`
-                  );
-                }
-
-                return (
-                  `${item.productName}\n` +
-                  `棚卸開始時：${item.registeredStock}個\n` +
-                  `現在：${item.currentStock}個`
-                );
-              }
-            )
-            .join("\n\n");
-
-        alert(
-          "棚卸開始後に在庫が変更された商品があります。\n\n" +
-          changedText +
-          "\n\n入庫・出庫・商品移動の内容を確認し、棚卸をやり直してください。"
+        showStocktakingInventoryChangedWarning(
+          changedItems,
+          locationStockAware
         );
 
         return;

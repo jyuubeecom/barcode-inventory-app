@@ -2,8 +2,6 @@
 
 (function () {
   const LOCATION_OPTIONS = [
-    "酒本倉庫1階",
-    "酒本倉庫2階",
     "本社1階 A区",
     "本社1階 B区",
     "本社1階 C区",
@@ -15,7 +13,9 @@
     "本社2階 C区",
     "本社2階 D区",
     "本社2階 E区",
-    "本社2階 F区"
+    "本社2階 F区",
+    "酒本倉庫1階",
+    "酒本倉庫2階"
   ];
 
   const state = {
@@ -228,8 +228,27 @@
     document.querySelector("#transfer-source")?.addEventListener("change", renderCurrentItems);
     document.querySelector("#transfer-save-button")?.addEventListener("click", saveCurrentTransfer);
     document.querySelector("#transfer-print-current-button")?.addEventListener("click", printCurrentTransfer);
-    document.querySelector("#transfer-clear-button")?.addEventListener("click", function () {
-      if (state.items.length > 0 && !window.confirm("入力中の商品をすべてクリアしますか？")) return;
+    document.querySelector("#transfer-clear-button")?.addEventListener("click", async function () {
+      if (state.items.length > 0) {
+        const totalQuantity = state.items.reduce(function (sum, item) {
+          return sum + Number(item.quantity || 0);
+        }, 0);
+        const confirmed = await showAppDialog({
+          type: "warning",
+          icon: "🧹",
+          title: "入力中の商品をクリアしますか？",
+          message: "今回の移動商品を入力欄からすべて消します。",
+          details: [
+            { label: "商品数", value: `${state.items.length}商品` },
+            { label: "合計個数", value: `${formatNumber(totalQuantity)}個` }
+          ],
+          notice: "まだ保存していない入力内容は元に戻せません。",
+          isConfirm: true,
+          cancelText: "戻る",
+          confirmText: "入力をクリアする"
+        });
+        if (!confirmed) return;
+      }
       resetForm();
     });
   }
@@ -262,7 +281,13 @@
       }
     } catch (error) {
       console.error("商品移動リスト表示エラー", error);
-      alert("商品移動リストを表示できませんでした。");
+      await showAppDialog({
+        type: "danger",
+        icon: "⚠️",
+        title: "商品移動リストを表示できませんでした",
+        message: "画面を更新して、もう一度お試しください。",
+        confirmText: "閉じる"
+      });
     }
   }
 
@@ -310,19 +335,34 @@
     }).join("");
   }
 
-  function addProductToTransfer() {
+  async function addProductToTransfer() {
     const codeInput = document.querySelector("#transfer-internal-code");
     const quantityInput = document.querySelector("#transfer-add-quantity");
     const internalCode = String(codeInput?.value || "").trim();
     const quantity = Math.trunc(Number(quantityInput?.value || 0));
 
     if (!internalCode) {
-      alert("社内コードを入力してください。");
+      await showAppDialog({
+        type: "warning",
+        icon: "✏️",
+        title: "社内コードを入力してください",
+        message: "移動する商品の社内コードを入力してから、もう一度お試しください。",
+        confirmText: "入力に戻る"
+      });
       codeInput?.focus();
       return;
     }
     if (!Number.isFinite(quantity) || quantity <= 0) {
-      alert("移動個数は1以上の数字で入力してください。");
+      await showAppDialog({
+        type: "warning",
+        icon: "🔢",
+        title: "移動個数を確認してください",
+        message: "移動個数は1以上の整数で入力してください。",
+        details: [
+          { label: "入力した移動個数", value: String(quantityInput?.value || "未入力") }
+        ],
+        confirmText: "入力に戻る"
+      });
       quantityInput?.focus();
       return;
     }
@@ -331,7 +371,17 @@
       return String(item.internalCode || "").trim() === internalCode;
     });
     if (!product) {
-      alert(`社内コード「${internalCode}」の商品は登録されていません。`);
+      await showAppDialog({
+        type: "danger",
+        icon: "🔎",
+        title: "商品が見つかりません",
+        message: "入力した社内コードの商品は登録されていません。",
+        details: [
+          { label: "社内コード", value: internalCode }
+        ],
+        notice: "社内コードを確認するか、商品一覧から登録状況を確認してください。",
+        confirmText: "入力に戻る"
+      });
       codeInput?.focus();
       return;
     }
@@ -340,9 +390,22 @@
       return item.internalCode === internalCode;
     });
     if (existing) {
-      const add = window.confirm(
-        `${internalCode} ${existing.productName} はすでに追加されています。\n\n現在 ${existing.quantity}個 に ${quantity}個を追加しますか？`
-      );
+      const add = await showAppDialog({
+        type: "warning",
+        icon: "➕",
+        title: "同じ商品がすでに追加されています",
+        message: "入力した数量を、現在の移動個数へ追加しますか？",
+        details: [
+          { label: "商品名", value: existing.productName || "-" },
+          { label: "社内コード", value: internalCode },
+          { label: "現在の移動個数", value: `${formatNumber(Number(existing.quantity || 0))}個` },
+          { label: "今回追加する個数", value: `${formatNumber(quantity)}個` },
+          { label: "追加後", value: `${formatNumber(Number(existing.quantity || 0) + quantity)}個` }
+        ],
+        isConfirm: true,
+        cancelText: "戻る",
+        confirmText: "個数を追加する"
+      });
       if (!add) return;
       existing.quantity += quantity;
     } else {
@@ -504,16 +567,30 @@
       if (resetConfirmation) {
         message += "\n\n確認済みの内容を変更したため、確認状況を「未確認」に戻しました。";
       }
-      alert(message);
+      await showAppDialog({
+        type: "success",
+        icon: "✅",
+        title: state.editingId ? "商品移動リストを更新しました" : "商品移動リストを保存しました",
+        message: resetConfirmation
+          ? "変更内容を保存しました。確認済みの内容を変更したため、確認状況は「未確認」に戻しています。"
+          : "商品移動リストを保存しました。",
+        confirmText: "閉じる"
+      });
       resetForm();
       await renderSavedTransfers();
     } catch (error) {
       console.error("商品移動リスト保存エラー", error);
-      alert(error.message || "商品移動リストを保存できませんでした。");
+      await showAppDialog({
+        type: "danger",
+        icon: "⚠️",
+        title: "商品移動リストを保存できませんでした",
+        message: error.message || "入力内容を確認して、もう一度お試しください。",
+        confirmText: "閉じる"
+      });
     }
   }
 
-  function printCurrentTransfer() {
+  async function printCurrentTransfer() {
     try {
       const header = validateCurrentTransfer();
       const record = {
@@ -522,9 +599,15 @@
         destinationLocation: header.destinationLocation,
         items: state.items.map(function (item) { return { ...item, quantity: Number(item.quantity) }; })
       };
-      printTransferRecord(record);
+      await printTransferRecord(record);
     } catch (error) {
-      alert(error.message || "印刷する内容を確認してください。");
+      await showAppDialog({
+        type: "warning",
+        icon: "🖨️",
+        title: "印刷内容を確認してください",
+        message: error.message || "印刷する内容を確認してください。",
+        confirmText: "閉じる"
+      });
     }
   }
 
@@ -573,9 +656,9 @@
       });
     });
     body.querySelectorAll("[data-transfer-print]").forEach(function (button) {
-      button.addEventListener("click", function () {
+      button.addEventListener("click", async function () {
         const record = records.find(function (item) { return item.id === button.dataset.transferPrint; });
-        if (record) printTransferRecord(record);
+        if (record) await printTransferRecord(record);
       });
     });
     body.querySelectorAll("[data-transfer-confirm-source]").forEach(function (button) {
@@ -1046,7 +1129,13 @@
 
   async function applyLegacyCompletedTransfer(record) {
     if (record?.inventoryAppliedAt) {
-      alert("この商品移動リストは、すでに在庫へ反映済みです。");
+      await showAppDialog({
+        type: "info",
+        icon: "ℹ️",
+        title: "この移動リストは在庫反映済みです",
+        message: "場所別在庫へすでに反映されています。追加の操作は必要ありません。",
+        confirmText: "閉じる"
+      });
       return;
     }
 
@@ -1056,22 +1145,43 @@
     let person = defaultPerson;
 
     if (person === "") {
-      const entered = window.prompt(
-        "在庫へ反映する担当者名を入力してください。"
-      );
+      const entered = await showTransferPersonInputDialog({
+        type: "warning",
+        icon: "📦",
+        title: "在庫へ反映する担当者を入力してください",
+        message: "v61以前に完了した移動リストを場所別在庫へ反映します。担当者名を入力してください。",
+        inputLabel: "在庫反映の担当者名（必須）",
+        placeholder: "例：担当者",
+        notice: "在庫へ反映すると、移動元の在庫を減らし、移動先の在庫を増やします。総在庫数は変わりません。",
+        cancelText: "戻る",
+        confirmText: "次へ",
+        record: record
+      });
       if (entered === null) return;
       person = String(entered).trim();
-      if (person === "") {
-        alert("担当者名を入力してください。");
-        return;
-      }
     }
 
-    const confirmed = window.confirm(
-      `${formatDate(record.transferDate)}\n${record.sourceLocation} → ${record.destinationLocation}\n\n` +
-      "この移動リストはv61以前に「移動完了」になったため、在庫にはまだ反映されていません。\n\n" +
-      "現在の場所別在庫へ反映しますか？"
-    );
+    const items = Array.isArray(record?.items) ? record.items : [];
+    const totalQuantity = items.reduce(function (sum, item) {
+      return sum + Number(item.quantity || 0);
+    }, 0);
+    const confirmed = await showAppDialog({
+      type: "warning",
+      icon: "📦",
+      title: "場所別在庫へ反映しますか？",
+      message: "この移動リストはv61以前に移動完了となったため、在庫にはまだ反映されていません。",
+      details: [
+        { label: "移動日", value: formatDate(record.transferDate) },
+        { label: "移動元", value: record.sourceLocation || "-" },
+        { label: "移動先", value: record.destinationLocation || "-" },
+        { label: "合計個数", value: `${formatNumber(totalQuantity)}個` },
+        { label: "担当者", value: person }
+      ],
+      notice: "確定すると、移動元の場所別在庫を減らし、移動先の場所別在庫を増やします。総在庫数は変わりません。",
+      isConfirm: true,
+      cancelText: "戻る",
+      confirmText: "在庫へ反映する"
+    });
     if (!confirmed) return;
 
     try {
@@ -1080,14 +1190,23 @@
         person
       );
       applyUpdatedTransferProducts(result?.products);
-      alert("場所別在庫へ反映しました。");
+      await showAppDialog({
+        type: "success",
+        icon: "✅",
+        title: "場所別在庫へ反映しました",
+        message: "移動元と移動先の場所別在庫を更新しました。総在庫数は変わりません。",
+        confirmText: "閉じる"
+      });
       await renderSavedTransfers();
     } catch (error) {
       console.error("旧商品移動リスト在庫反映エラー", error);
-      alert(
-        error.message ||
-        "場所別在庫へ反映できませんでした。"
-      );
+      await showAppDialog({
+        type: "danger",
+        icon: "⚠️",
+        title: "場所別在庫へ反映できませんでした",
+        message: error.message || "在庫数を確認して、もう一度お試しください。",
+        confirmText: "閉じる"
+      });
     }
   }
 
@@ -1244,15 +1363,28 @@
     renderCurrentItems();
   }
 
-  function printTransferRecord(record) {
+  async function printTransferRecord(record) {
     const items = Array.isArray(record.items) ? record.items : [];
     if (items.length === 0) {
-      alert("印刷する商品がありません。");
+      await showAppDialog({
+        type: "warning",
+        icon: "🖨️",
+        title: "印刷する商品がありません",
+        message: "商品を1件以上追加してから印刷してください。",
+        confirmText: "閉じる"
+      });
       return;
     }
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
-      alert("印刷画面を開けませんでした。ブラウザのポップアップ許可を確認してください。");
+      await showAppDialog({
+        type: "danger",
+        icon: "🖨️",
+        title: "印刷画面を開けませんでした",
+        message: "ブラウザのポップアップがブロックされている可能性があります。",
+        notice: "このサイトのポップアップを許可してから、もう一度印刷してください。",
+        confirmText: "閉じる"
+      });
       return;
     }
     const total = items.reduce(function (sum, item) { return sum + Number(item.quantity || 0); }, 0);

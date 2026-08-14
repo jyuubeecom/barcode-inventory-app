@@ -1004,6 +1004,214 @@ function showStocktakingInventoryChangedWarning(
   );
 }
 
+
+let stocktakingDialogQueue = Promise.resolve();
+
+function getStocktakingDialogPreset(message) {
+  const text = String(message || "");
+
+  if (/開始しました|保存しました|完了しました|取り消しました|更新しました/.test(text)) {
+    return {
+      type: "success",
+      title: "完了しました",
+      icon: "✅"
+    };
+  }
+
+  if (/できません|失敗|エラー|削除された|変更された|不足/.test(text)) {
+    return {
+      type: "danger",
+      title: "確認が必要です",
+      icon: "⚠️"
+    };
+  }
+
+  if (/ありません|未確認|確認してください|選択してください/.test(text)) {
+    return {
+      type: "warning",
+      title: "確認してください",
+      icon: "⚠️"
+    };
+  }
+
+  return {
+    type: "info",
+    title: "お知らせ",
+    icon: "ℹ️"
+  };
+}
+
+function enqueueStocktakingDialog(options) {
+  const dialogOptions = options || {};
+  const nextDialog = stocktakingDialogQueue.then(
+    function () {
+      return new Promise(
+        function (resolve) {
+          const existing = document.querySelector(
+            "#stocktaking-common-dialog"
+          );
+
+          if (existing) {
+            existing.remove();
+          }
+
+          const preset = getStocktakingDialogPreset(
+            dialogOptions.message
+          );
+          const type = dialogOptions.type || preset.type;
+          const title = dialogOptions.title || preset.title;
+          const iconText = dialogOptions.icon || preset.icon;
+          const isConfirm = dialogOptions.isConfirm === true;
+
+          const overlay = document.createElement("div");
+          overlay.id = "stocktaking-common-dialog";
+          overlay.className = "stocktaking-warning-overlay";
+          overlay.setAttribute(
+            "role",
+            isConfirm ? "dialog" : "alertdialog"
+          );
+          overlay.setAttribute("aria-modal", "true");
+
+          const modal = document.createElement("div");
+          modal.className =
+            "stocktaking-common-modal stocktaking-common-" + type;
+
+          const header = document.createElement("div");
+          header.className = "stocktaking-common-header";
+
+          const icon = document.createElement("div");
+          icon.className = "stocktaking-common-icon";
+          icon.textContent = iconText;
+          icon.setAttribute("aria-hidden", "true");
+
+          const heading = document.createElement("h2");
+          heading.className = "stocktaking-common-title";
+          heading.textContent = title;
+
+          header.appendChild(icon);
+          header.appendChild(heading);
+
+          const message = document.createElement("div");
+          message.className = "stocktaking-common-message";
+          message.textContent = String(
+            dialogOptions.message || ""
+          );
+
+          const buttonArea = document.createElement("div");
+          buttonArea.className = "stocktaking-common-actions";
+
+          const confirmButton = document.createElement("button");
+          confirmButton.type = "button";
+          confirmButton.className =
+            "stocktaking-common-button stocktaking-common-confirm";
+          confirmButton.textContent =
+            dialogOptions.confirmText ||
+            (isConfirm ? "確認する" : "閉じる");
+
+          let cancelButton = null;
+
+          if (isConfirm) {
+            cancelButton = document.createElement("button");
+            cancelButton.type = "button";
+            cancelButton.className =
+              "stocktaking-common-button stocktaking-common-cancel";
+            cancelButton.textContent =
+              dialogOptions.cancelText || "キャンセル";
+            buttonArea.appendChild(cancelButton);
+          }
+
+          buttonArea.appendChild(confirmButton);
+          modal.appendChild(header);
+          modal.appendChild(message);
+          modal.appendChild(buttonArea);
+          overlay.appendChild(modal);
+          document.body.appendChild(overlay);
+          document.body.classList.add("stocktaking-warning-open");
+
+          let finished = false;
+
+          function finish(result) {
+            if (finished) {
+              return;
+            }
+
+            finished = true;
+            overlay.remove();
+            document.body.classList.remove(
+              "stocktaking-warning-open"
+            );
+            resolve(result);
+          }
+
+          confirmButton.addEventListener(
+            "click",
+            function () {
+              finish(true);
+            }
+          );
+
+          if (cancelButton) {
+            cancelButton.addEventListener(
+              "click",
+              function () {
+                finish(false);
+              }
+            );
+          }
+
+          overlay.addEventListener(
+            "keydown",
+            function (event) {
+              if (event.key === "Escape") {
+                finish(isConfirm ? false : true);
+              }
+            }
+          );
+
+          window.setTimeout(
+            function () {
+              confirmButton.focus();
+            },
+            0
+          );
+        }
+      );
+    }
+  );
+
+  stocktakingDialogQueue = nextDialog.catch(
+    function () {
+      return false;
+    }
+  );
+
+  return nextDialog;
+}
+
+function showStocktakingNotice(message, options) {
+  return enqueueStocktakingDialog(
+    Object.assign(
+      {
+        message: message,
+        isConfirm: false
+      },
+      options || {}
+    )
+  );
+}
+
+function showStocktakingConfirm(message, options) {
+  return enqueueStocktakingDialog(
+    Object.assign(
+      {
+        message: message,
+        isConfirm: true
+      },
+      options || {}
+    )
+  );
+}
+
 function createStocktakingStyle() {
   const existingStyle =
     document.querySelector(
@@ -1512,6 +1720,126 @@ function createStocktakingStyle() {
       outline-offset: 2px;
     }
 
+    .stocktaking-common-modal {
+      width: min(760px, 100%);
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
+      box-sizing: border-box;
+      border: 5px solid #1565c0;
+      border-radius: 18px;
+      background-color: #ffffff;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    .stocktaking-common-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 20px 24px;
+      background-color: #e3f2fd;
+      color: #0d47a1;
+    }
+
+    .stocktaking-common-icon {
+      flex: 0 0 auto;
+      font-size: 44px;
+      line-height: 1;
+    }
+
+    .stocktaking-common-title {
+      margin: 0;
+      color: inherit;
+      font-size: 28px;
+      line-height: 1.35;
+    }
+
+    .stocktaking-common-message {
+      padding: 24px;
+      color: #263238;
+      font-size: 19px;
+      font-weight: 600;
+      line-height: 1.75;
+      white-space: pre-line;
+      overflow-wrap: anywhere;
+    }
+
+    .stocktaking-common-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding: 0 24px 24px;
+    }
+
+    .stocktaking-common-actions .stocktaking-common-button:only-child {
+      grid-column: 1 / -1;
+    }
+
+    .stocktaking-common-button {
+      min-height: 62px;
+      margin: 0;
+      border: 0;
+      border-radius: 12px;
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .stocktaking-common-confirm {
+      background-color: #1565c0;
+      color: #ffffff;
+    }
+
+    .stocktaking-common-cancel {
+      background-color: #546e7a;
+      color: #ffffff;
+    }
+
+    .stocktaking-common-button:hover,
+    .stocktaking-common-button:focus-visible {
+      outline: 4px solid #ffcc80;
+      outline-offset: 2px;
+      filter: brightness(0.94);
+    }
+
+    .stocktaking-common-warning {
+      border-color: #ef6c00;
+    }
+
+    .stocktaking-common-warning .stocktaking-common-header {
+      background-color: #fff3e0;
+      color: #bf360c;
+    }
+
+    .stocktaking-common-warning .stocktaking-common-confirm {
+      background-color: #ef6c00;
+    }
+
+    .stocktaking-common-danger {
+      border-color: #c62828;
+    }
+
+    .stocktaking-common-danger .stocktaking-common-header {
+      background-color: #ffebee;
+      color: #b71c1c;
+    }
+
+    .stocktaking-common-danger .stocktaking-common-confirm {
+      background-color: #c62828;
+    }
+
+    .stocktaking-common-success {
+      border-color: #2e7d32;
+    }
+
+    .stocktaking-common-success .stocktaking-common-header {
+      background-color: #e8f5e9;
+      color: #1b5e20;
+    }
+
+    .stocktaking-common-success .stocktaking-common-confirm {
+      background-color: #2e7d32;
+    }
+
     @media (max-width: 700px) {
       .stocktaking-warning-overlay {
         align-items: center;
@@ -1559,6 +1887,40 @@ function createStocktakingStyle() {
       .stocktaking-warning-close {
         min-height: 60px;
         font-size: 20px;
+      }
+
+      .stocktaking-common-modal {
+        max-height: calc(100vh - 24px);
+        border-width: 4px;
+        border-radius: 14px;
+      }
+
+      .stocktaking-common-header {
+        gap: 10px;
+        padding: 16px;
+      }
+
+      .stocktaking-common-icon {
+        font-size: 36px;
+      }
+
+      .stocktaking-common-title {
+        font-size: 23px;
+      }
+
+      .stocktaking-common-message {
+        padding: 18px 16px;
+        font-size: 17px;
+      }
+
+      .stocktaking-common-actions {
+        grid-template-columns: 1fr;
+        padding: 0 16px 16px;
+      }
+
+      .stocktaking-common-button {
+        min-height: 58px;
+        font-size: 19px;
       }
 
       #stocktaking-setup button,
@@ -2034,12 +2396,18 @@ async function openStocktakingStart() {
         openStocktakings[0];
 
       const resumeConfirmed =
-        window.confirm(
-          "進行中の棚卸があります。\n\n" +
-          `棚卸日：${latestStocktaking.stocktakingDate}\n` +
-          `担当者：${latestStocktaking.person}\n` +
-          `保管場所：${latestStocktaking.location}\n\n` +
-          "この棚卸を開きますか？"
+        await showStocktakingConfirm(
+          "棚卸日：" + latestStocktaking.stocktakingDate + "\n" +
+          "担当者：" + latestStocktaking.person + "\n" +
+          "保管場所：" + latestStocktaking.location + "\n\n" +
+          "この棚卸を開きますか？",
+          {
+            title: "進行中の棚卸があります",
+            type: "warning",
+            icon: "📋",
+            confirmText: "この棚卸を開く",
+            cancelText: "新しく開始する"
+          }
         );
 
       if (resumeConfirmed) {
@@ -2053,7 +2421,7 @@ async function openStocktakingStart() {
   } catch (error) {
     console.error(error);
 
-    alert(
+    showStocktakingNotice(
       "進行中の棚卸を確認できませんでした。"
     );
   }
@@ -2097,7 +2465,7 @@ async function handleStocktakingStart(
       : enteredLocation;
 
   if (stocktakingDate === "") {
-    alert(
+    showStocktakingNotice(
       "棚卸日を入力してください。"
     );
 
@@ -2106,7 +2474,7 @@ async function handleStocktakingStart(
   }
 
   if (person === "") {
-    alert(
+    showStocktakingNotice(
       "担当者を入力してください。"
     );
 
@@ -2128,7 +2496,7 @@ async function handleStocktakingStart(
   } catch (error) {
     console.error(error);
 
-    alert(
+    showStocktakingNotice(
       "棚卸対象の商品を読み込めませんでした。"
     );
 
@@ -2136,7 +2504,7 @@ async function handleStocktakingStart(
   }
 
   if (targetProducts.length === 0) {
-    alert(
+    showStocktakingNotice(
       "棚卸対象の商品がありません。\n\n" +
       "登録商品数と保管場所を確認してください。"
     );
@@ -2153,8 +2521,15 @@ async function handleStocktakingStart(
     `対象商品：${targetProducts.length}件`;
 
   const isConfirmed =
-    window.confirm(
-      confirmationMessage
+    await showStocktakingConfirm(
+      confirmationMessage,
+      {
+        title: "棚卸を開始しますか？",
+        type: "info",
+        icon: "📋",
+        confirmText: "棚卸を開始する",
+        cancelText: "戻る"
+      }
     );
 
   if (!isConfirmed) {
@@ -2192,13 +2567,13 @@ async function handleStocktakingStart(
       stocktaking
     );
 
-    alert(
+    showStocktakingNotice(
       "棚卸を開始しました。"
     );
   } catch (error) {
     console.error(error);
 
-    alert(
+    showStocktakingNotice(
       "棚卸開始情報を保存できませんでした。"
     );
   }
@@ -2682,7 +3057,7 @@ async function showActiveStocktaking(
     } catch (error) {
       console.error(error);
 
-      alert(
+      showStocktakingNotice(
         "棚卸対象の商品を読み込めませんでした。"
       );
 
@@ -4008,7 +4383,7 @@ function validateStocktakingLocationEntries() {
       }
 
       if (location === "") {
-        alert(
+        showStocktakingNotice(
           `「${item.productName}」の保管場所をリストから選択してください。`
         );
 
@@ -4026,7 +4401,7 @@ function validateStocktakingLocationEntries() {
           location
         )
       ) {
-        alert(
+        showStocktakingNotice(
           `「${item.productName}」の保管場所を、指定されたリストから選び直してください。`
         );
 
@@ -4039,7 +4414,7 @@ function validateStocktakingLocationEntries() {
       }
 
       if (quantityText === "") {
-        alert(
+        showStocktakingNotice(
           `「${item.productName}」の「${location}」の数量を入力してください。\n\n` +
           "その場所に在庫がない場合は0を入力してください。"
         );
@@ -4061,7 +4436,7 @@ function validateStocktakingLocationEntries() {
         ) ||
         quantity < 0
       ) {
-        alert(
+        showStocktakingNotice(
           `「${item.productName}」の場所別数量は、0以上の整数で入力してください。`
         );
 
@@ -4083,7 +4458,7 @@ function validateStocktakingLocationEntries() {
           locationKey
         )
       ) {
-        alert(
+        showStocktakingNotice(
           `「${item.productName}」で同じ保管場所が重複しています。\n\n` +
           `重複している保管場所：${location}`
         );
@@ -4666,12 +5041,12 @@ function applyBulkZeroToStocktakingItem(
   return true;
 }
 
-function handleApplyBulkZero() {
+async function handleApplyBulkZero() {
   const eligibleItems =
     getBulkZeroEligibleItems();
 
   if (eligibleItems.length === 0) {
-    alert(
+    showStocktakingNotice(
       "登録在庫が0個で、まだ未確認の商品はありません。"
     );
 
@@ -4688,17 +5063,18 @@ function handleApplyBulkZero() {
       : selectedLocation;
 
   const isConfirmed =
-    window.confirm(
-      "登録在庫が0個で、まだ未確認の商品が" +
-      eligibleItems.length +
-      "件あります。\n\n" +
-      "保管場所：" +
-      locationText +
-      "\n\n" +
-      "この" +
-      eligibleItems.length +
-      "件を実在庫0個として一括入力しますか？\n\n" +
-      "『未確認』は、現物の保管場所をまだ確認していない記録です。"
+    await showStocktakingConfirm(
+      "対象商品：" + eligibleItems.length + "件\n" +
+      "保管場所：" + locationText + "\n\n" +
+      "この商品を実在庫0個として一括入力します。\n" +
+      "『未確認』は、現物の保管場所をまだ確認していない記録です。",
+      {
+        title: "一括0入力を実行しますか？",
+        type: "warning",
+        icon: "⚠️",
+        confirmText: "一括0入力する",
+        cancelText: "キャンセル"
+      }
     );
 
   if (!isConfirmed) {
@@ -4732,7 +5108,7 @@ function handleApplyBulkZero() {
     "件を一括で0入力しました。保管場所もまとめて設定しています。内容を確認して保存してください。";
 }
 
-function handleUndoBulkZero() {
+async function handleUndoBulkZero() {
   if (
     !currentStocktaking ||
     !Array.isArray(
@@ -4752,7 +5128,7 @@ function handleUndoBulkZero() {
     );
 
   if (bulkZeroItems.length === 0) {
-    alert(
+    showStocktakingNotice(
       "取り消せる一括0入力はありません。"
     );
 
@@ -4760,11 +5136,18 @@ function handleUndoBulkZero() {
   }
 
   const isConfirmed =
-    window.confirm(
+    await showStocktakingConfirm(
       "一括0入力した" +
       bulkZeroItems.length +
-      "件を未確認へ戻しますか？\n\n" +
-      "手入力へ変更した商品は対象になりません。"
+      "件を未確認へ戻します。\n\n" +
+      "手入力へ変更した商品は対象になりません。",
+      {
+        title: "一括0入力を取り消しますか？",
+        type: "warning",
+        icon: "↩️",
+        confirmText: "未確認へ戻す",
+        cancelText: "キャンセル"
+      }
     );
 
   if (!isConfirmed) {
@@ -4834,7 +5217,7 @@ async function handleStocktakingCardSaveAction(
     !item ||
     item.actualStock === ""
   ) {
-    alert(
+    showStocktakingNotice(
       "この商品の数量を入力してください。\n\n" +
       "在庫がない場合は0を入力します。"
     );
@@ -4949,7 +5332,7 @@ async function saveCurrentStocktaking(
   showCompletionAlert
 ) {
   if (!currentStocktaking) {
-    alert(
+    showStocktakingNotice(
       "保存する棚卸が見つかりません。"
     );
 
@@ -4982,7 +5365,7 @@ async function saveCurrentStocktaking(
     );
 
     if (showCompletionAlert) {
-      alert(
+      showStocktakingNotice(
         "棚卸の入力内容を保存しました。"
       );
     }
@@ -4991,7 +5374,7 @@ async function saveCurrentStocktaking(
   } catch (error) {
     console.error(error);
 
-    alert(
+    showStocktakingNotice(
       "棚卸の入力内容を保存できませんでした。"
     );
 
@@ -5439,7 +5822,7 @@ async function handleConfirmStocktaking() {
     getStocktakingCounts();
 
   if (counts.unchecked > 0) {
-    alert(
+    showStocktakingNotice(
       "未確認の商品が残っているため、棚卸を確定できません。\n\n" +
       `未確認商品：${counts.unchecked}件\n\n` +
       "すべての商品に実在庫を入力してください。"
@@ -5475,8 +5858,15 @@ async function handleConfirmStocktaking() {
     "確定後は、この棚卸を編集できません。";
 
   const isConfirmed =
-    window.confirm(
-      confirmationMessage
+    await showStocktakingConfirm(
+      confirmationMessage,
+      {
+        title: "棚卸を確定しますか？",
+        type: "warning",
+        icon: "✅",
+        confirmText: "棚卸を確定する",
+        cancelText: "戻る"
+      }
     );
 
   if (!isConfirmed) {
@@ -5585,7 +5975,7 @@ async function handleConfirmStocktaking() {
       );
 
       if (missingItems.length > 0) {
-        alert(
+        showStocktakingNotice(
           "棚卸開始後に削除された商品があります。\n\n" +
           missingItems.join("\n") +
           "\n\n棚卸を確定できません。"
@@ -5811,13 +6201,13 @@ async function handleConfirmStocktaking() {
         ? "棚卸を確定しました。\n\n実在庫を現在庫へ反映しました。"
         : "棚卸を確定しました。\n\n現在庫は変更していません。";
 
-    alert(completionMessage);
+    showStocktakingNotice(completionMessage);
 
     window.location.reload();
   } catch (error) {
     console.error(error);
 
-    alert(
+    showStocktakingNotice(
       "棚卸を確定できませんでした。\n\n" +
       "入力内容と商品データを確認してください。"
     );
@@ -5911,7 +6301,7 @@ async function handleDeleteStocktaking() {
     !currentStocktaking ||
     !currentStocktaking.id
   ) {
-    alert(
+    showStocktakingNotice(
       "取り消す棚卸が見つかりません。"
     );
 
@@ -5919,10 +6309,16 @@ async function handleDeleteStocktaking() {
   }
 
   const isConfirmed =
-    window.confirm(
-      "この棚卸を取り消しますか？\n\n" +
+    await showStocktakingConfirm(
       "入力した実在庫も削除されます。\n" +
-      "この操作は元に戻せません。"
+      "この操作は元に戻せません。",
+      {
+        title: "この棚卸を取り消しますか？",
+        type: "danger",
+        icon: "🗑️",
+        confirmText: "棚卸を取り消す",
+        cancelText: "キャンセル"
+      }
     );
 
   if (!isConfirmed) {
@@ -5938,7 +6334,7 @@ async function handleDeleteStocktaking() {
     stocktakingHasUnsavedChanges =
       false;
 
-    alert(
+    showStocktakingNotice(
       "棚卸を取り消しました。"
     );
 
@@ -5946,7 +6342,7 @@ async function handleDeleteStocktaking() {
   } catch (error) {
     console.error(error);
 
-    alert(
+    showStocktakingNotice(
       "棚卸を取り消せませんでした。"
     );
   }
@@ -6107,7 +6503,7 @@ function hideAllMainScreensForStocktaking() {
 
 function openStocktakingCameraScanner() {
   if (!currentStocktaking) {
-    alert(
+    showStocktakingNotice(
       "進行中の棚卸が見つかりません。"
     );
 
@@ -6119,7 +6515,7 @@ function openStocktakingCameraScanner() {
     typeof window.barcodeScanner.openForStocktaking !==
       "function"
   ) {
-    alert(
+    showStocktakingNotice(
       "バーコード読取機能を開けませんでした。\n\n" +
       "画面を更新して、もう一度棚卸を開いてください。"
     );

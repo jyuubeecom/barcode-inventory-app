@@ -329,3 +329,249 @@ hr {
     margin: 6px 0;
   }
 }
+/* 共通の警告・確認ダイアログ */
+body.app-dialog-open {
+  overflow: hidden;
+}
+
+.app-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background-color: rgba(0, 0, 0, 0.76);
+}
+
+.app-dialog-modal {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  border: 5px solid #1565c0;
+  border-radius: 18px;
+  background-color: #ffffff;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+}
+
+.app-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px;
+  background-color: #e3f2fd;
+  color: #0d47a1;
+}
+
+.app-dialog-icon {
+  flex: 0 0 auto;
+  font-size: 44px;
+  line-height: 1;
+}
+
+.app-dialog-title {
+  margin: 0;
+  color: inherit;
+  font-size: 28px;
+  line-height: 1.35;
+}
+
+.app-dialog-content {
+  padding: 24px;
+}
+
+.app-dialog-message {
+  margin: 0 0 18px;
+  color: #263238;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.7;
+}
+
+.app-dialog-details {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  margin: 0 0 18px;
+  border: 2px solid #cfd8dc;
+  border-radius: 12px;
+  background-color: #ffffff;
+}
+
+.app-dialog-detail-row {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  border-bottom: 1px solid #cfd8dc;
+}
+
+.app-dialog-detail-row:last-child {
+  border-bottom: 0;
+}
+
+.app-dialog-detail-row strong,
+.app-dialog-detail-row span {
+  padding: 13px 14px;
+  font-size: 18px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.app-dialog-detail-row strong {
+  background-color: #f5f5f5;
+}
+
+.app-dialog-notice {
+  padding: 16px 18px;
+  border-left: 7px solid #ef6c00;
+  border-radius: 10px;
+  background-color: #fff3e0;
+  color: #bf360c;
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 1.65;
+}
+
+.app-dialog-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 24px 24px;
+}
+
+.app-dialog-actions .app-dialog-button:only-child {
+  grid-column: 1 / -1;
+}
+
+.app-dialog-button {
+  min-height: 62px;
+  margin: 0;
+  border: 0;
+  border-radius: 12px;
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.app-dialog-confirm {
+  background-color: #1565c0;
+  color: #ffffff;
+}
+
+.app-dialog-cancel {
+  background-color: #546e7a;
+  color: #ffffff;
+}
+
+.app-dialog-button:hover,
+.app-dialog-button:focus-visible {
+  outline: 4px solid #ffcc80;
+  outline-offset: 2px;
+  filter: brightness(0.94);
+}
+
+.app-dialog-warning {
+  border-color: #ef6c00;
+}
+
+.app-dialog-warning .app-dialog-header {
+  background-color: #fff3e0;
+  color: #bf360c;
+}
+
+.app-dialog-warning .app-dialog-confirm {
+  background-color: #ef6c00;
+}
+
+.app-dialog-danger {
+  border-color: #c62828;
+}
+
+.app-dialog-danger .app-dialog-header {
+  background-color: #ffebee;
+  color: #b71c1c;
+}
+
+.app-dialog-danger .app-dialog-confirm {
+  background-color: #c62828;
+}
+
+.app-dialog-success {
+  border-color: #2e7d32;
+}
+
+.app-dialog-success .app-dialog-header {
+  background-color: #e8f5e9;
+  color: #1b5e20;
+}
+
+.app-dialog-success .app-dialog-confirm {
+  background-color: #2e7d32;
+}
+
+@media (max-width: 700px) {
+  .app-dialog-overlay {
+    padding: 12px;
+  }
+
+  .app-dialog-modal {
+    max-height: calc(100vh - 24px);
+    border-width: 4px;
+    border-radius: 14px;
+  }
+
+  .app-dialog-header {
+    gap: 10px;
+    padding: 16px;
+  }
+
+  .app-dialog-icon {
+    font-size: 36px;
+  }
+
+  .app-dialog-title {
+    font-size: 23px;
+  }
+
+  .app-dialog-content {
+    padding: 18px 16px;
+  }
+
+  .app-dialog-message {
+    font-size: 17px;
+  }
+
+  .app-dialog-detail-row {
+    grid-template-columns: 1fr;
+  }
+
+  .app-dialog-detail-row strong,
+  .app-dialog-detail-row span {
+    padding: 10px 12px;
+    font-size: 17px;
+  }
+
+  .app-dialog-detail-row strong {
+    padding-bottom: 6px;
+  }
+
+  .app-dialog-detail-row span {
+    padding-top: 6px;
+  }
+
+  .app-dialog-notice {
+    font-size: 17px;
+  }
+
+  .app-dialog-actions {
+    grid-template-columns: 1fr;
+    padding: 0 16px 16px;
+  }
+
+  .app-dialog-button {
+    min-height: 58px;
+    font-size: 19px;
+  }
+}

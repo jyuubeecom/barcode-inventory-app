@@ -1146,27 +1146,263 @@ async function handleEditProductSubmit(event) {
   }
 }
 
+function showAppDialog(options) {
+  const dialogOptions = options || {};
+
+  return new Promise(
+    function (resolve) {
+      const existingDialog =
+        document.querySelector("#app-common-dialog");
+
+      if (existingDialog) {
+        existingDialog.remove();
+      }
+
+      const overlay =
+        document.createElement("div");
+      overlay.id = "app-common-dialog";
+      overlay.className = "app-dialog-overlay";
+      overlay.setAttribute(
+        "role",
+        dialogOptions.isConfirm
+          ? "dialog"
+          : "alertdialog"
+      );
+      overlay.setAttribute(
+        "aria-modal",
+        "true"
+      );
+
+      const modal =
+        document.createElement("div");
+      const type =
+        dialogOptions.type || "info";
+      modal.className =
+        `app-dialog-modal app-dialog-${type}`;
+
+      const header =
+        document.createElement("div");
+      header.className = "app-dialog-header";
+
+      const icon =
+        document.createElement("div");
+      icon.className = "app-dialog-icon";
+      icon.textContent =
+        dialogOptions.icon || "ℹ️";
+      icon.setAttribute(
+        "aria-hidden",
+        "true"
+      );
+
+      const title =
+        document.createElement("h2");
+      title.className = "app-dialog-title";
+      title.textContent =
+        dialogOptions.title || "お知らせ";
+
+      header.appendChild(icon);
+      header.appendChild(title);
+
+      const content =
+        document.createElement("div");
+      content.className = "app-dialog-content";
+
+      if (dialogOptions.message) {
+        const message =
+          document.createElement("p");
+        message.className = "app-dialog-message";
+        message.textContent =
+          String(dialogOptions.message);
+        content.appendChild(message);
+      }
+
+      if (
+        Array.isArray(dialogOptions.details) &&
+        dialogOptions.details.length > 0
+      ) {
+        const details =
+          document.createElement("div");
+        details.className = "app-dialog-details";
+
+        dialogOptions.details.forEach(
+          function (detail) {
+            const row =
+              document.createElement("div");
+            row.className = "app-dialog-detail-row";
+
+            const label =
+              document.createElement("strong");
+            label.textContent =
+              String(detail.label || "");
+
+            const value =
+              document.createElement("span");
+            value.textContent =
+              String(detail.value ?? "");
+
+            row.appendChild(label);
+            row.appendChild(value);
+            details.appendChild(row);
+          }
+        );
+
+        content.appendChild(details);
+      }
+
+      if (dialogOptions.notice) {
+        const notice =
+          document.createElement("div");
+        notice.className = "app-dialog-notice";
+        notice.textContent =
+          String(dialogOptions.notice);
+        content.appendChild(notice);
+      }
+
+      const actions =
+        document.createElement("div");
+      actions.className = "app-dialog-actions";
+
+      let cancelButton = null;
+
+      if (dialogOptions.isConfirm) {
+        cancelButton =
+          document.createElement("button");
+        cancelButton.type = "button";
+        cancelButton.className =
+          "app-dialog-button app-dialog-cancel";
+        cancelButton.textContent =
+          dialogOptions.cancelText || "戻る";
+        actions.appendChild(cancelButton);
+      }
+
+      const confirmButton =
+        document.createElement("button");
+      confirmButton.type = "button";
+      confirmButton.className =
+        "app-dialog-button app-dialog-confirm";
+      confirmButton.textContent =
+        dialogOptions.confirmText ||
+        (dialogOptions.isConfirm
+          ? "確認する"
+          : "閉じる");
+      actions.appendChild(confirmButton);
+
+      modal.appendChild(header);
+      modal.appendChild(content);
+      modal.appendChild(actions);
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      document.body.classList.add(
+        "app-dialog-open"
+      );
+
+      let finished = false;
+
+      function finish(result) {
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+        overlay.remove();
+        document.body.classList.remove(
+          "app-dialog-open"
+        );
+        resolve(result);
+      }
+
+      confirmButton.addEventListener(
+        "click",
+        function () {
+          finish(true);
+        }
+      );
+
+      if (cancelButton) {
+        cancelButton.addEventListener(
+          "click",
+          function () {
+            finish(false);
+          }
+        );
+      }
+
+      overlay.addEventListener(
+        "keydown",
+        function (event) {
+          if (event.key === "Escape") {
+            finish(false);
+          }
+        }
+      );
+
+      window.setTimeout(
+        function () {
+          if (cancelButton) {
+            cancelButton.focus();
+          } else {
+            confirmButton.focus();
+          }
+        },
+        0
+      );
+    }
+  );
+}
+
 async function handleDeleteProduct(internalCode) {
   const selectedProduct =
     getProductByInternalCode(internalCode);
 
   if (!selectedProduct) {
-    alert(
-      "削除する商品が見つかりませんでした。"
-    );
+    await showAppDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "商品を確認できません",
+      message:
+        "削除する商品が見つかりませんでした。画面を更新して、もう一度確認してください。",
+      confirmText: "閉じる"
+    });
 
     return false;
   }
 
-  const confirmationMessage =
-    `「${selectedProduct.productName}」を削除しますか？\n\n` +
-    `社内コード：${selectedProduct.internalCode}\n` +
-    `商品コード：${selectedProduct.productCode}\n\n` +
-    "この操作は元に戻せません。\n" +
-    "過去の入出庫履歴は削除されません。";
-
   const isConfirmed =
-    window.confirm(confirmationMessage);
+    await showAppDialog({
+      type: "danger",
+      icon: "🗑️",
+      title: "商品を削除しますか？",
+      message:
+        "次の商品を削除しようとしています。内容を確認してください。",
+      details: [
+        {
+          label: "商品名",
+          value:
+            selectedProduct.productName ||
+            "商品名未登録"
+        },
+        {
+          label: "社内コード",
+          value:
+            selectedProduct.internalCode || "-"
+        },
+        {
+          label: "商品コード",
+          value:
+            selectedProduct.productCode || "未登録"
+        },
+        {
+          label: "現在庫数",
+          value:
+            `${Number(selectedProduct.stock) || 0}個`
+        }
+      ],
+      notice:
+        "この操作は元に戻せません。過去の入出庫履歴は削除されません。",
+      isConfirm: true,
+      cancelText: "戻る",
+      confirmText: "商品を削除する"
+    });
 
   if (!isConfirmed) {
     return false;
@@ -1186,15 +1422,27 @@ async function handleDeleteProduct(internalCode) {
     updateSummary();
     displayCurrentProducts();
 
-    alert("商品を削除しました。");
+    await showAppDialog({
+      type: "success",
+      icon: "✅",
+      title: "商品を削除しました",
+      message:
+        "商品マスタから削除しました。過去の入出庫履歴はそのまま残っています。",
+      confirmText: "閉じる"
+    });
 
     return true;
   } catch (error) {
     console.error(error);
 
-    alert(
-      "商品を削除できませんでした。"
-    );
+    await showAppDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "商品を削除できませんでした",
+      message:
+        "削除処理でエラーが発生しました。画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
 
     return false;
   }

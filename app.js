@@ -601,6 +601,10 @@ async function handleProductSubmit(event) {
       title: "初期在庫数を入力してください",
       message:
         "初期在庫数は0以上の整数で入力してください。",
+      details: [
+        { label: "入力できる値", value: "0以上の整数" },
+        { label: "入力例", value: "0、1、10" }
+      ],
       confirmText: "入力に戻る"
     });
 
@@ -639,7 +643,7 @@ async function handleProductSubmit(event) {
   if (!Number.isInteger(stock) || stock < 0) {
     await showAppDialog({
       type: "warning",
-      icon: "✏️",
+      icon: "🔢",
       title: "初期在庫数を確認してください",
       message:
         "初期在庫数は0以上の整数で入力してください。",
@@ -647,7 +651,9 @@ async function handleProductSubmit(event) {
         {
           label: "入力値",
           value: stockInput.value || "未入力"
-        }
+        },
+        { label: "入力できる値", value: "0以上の整数" },
+        { label: "入力例", value: "0、1、10" }
       ],
       confirmText: "入力に戻る"
     });
@@ -662,7 +668,7 @@ async function handleProductSubmit(event) {
   ) {
     await showAppDialog({
       type: "warning",
-      icon: "✏️",
+      icon: "🔢",
       title: "最低在庫数を確認してください",
       message:
         "最低在庫数は0以上の整数で入力してください。",
@@ -670,7 +676,9 @@ async function handleProductSubmit(event) {
         {
           label: "入力値",
           value: minStockInput.value || "未入力"
-        }
+        },
+        { label: "入力できる値", value: "0以上の整数" },
+        { label: "入力例", value: "0、5、20" }
       ],
       confirmText: "入力に戻る"
     });
@@ -1343,7 +1351,7 @@ async function handleEditProductSubmit(event) {
   ) {
     await showAppDialog({
       type: "warning",
-      icon: "✏️",
+      icon: "🔢",
       title: "最低在庫数を確認してください",
       message:
         "最低在庫数は0以上の整数で入力してください。",
@@ -1351,7 +1359,9 @@ async function handleEditProductSubmit(event) {
         {
           label: "入力値",
           value: editMinStockInput.value || "未入力"
-        }
+        },
+        { label: "入力できる値", value: "0以上の整数" },
+        { label: "入力例", value: "0、5、20" }
       ],
       confirmText: "入力に戻る"
     });

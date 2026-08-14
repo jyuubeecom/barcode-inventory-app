@@ -377,9 +377,11 @@ function openCsvImportScreen() {
   csvImportScreen.hidden = false;
   resetCsvImportScreen();
 
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
+  requestAnimationFrame(function () {
+    csvImportScreen.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
   });
 }
 

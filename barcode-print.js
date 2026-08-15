@@ -7,6 +7,42 @@ let barcodePrintCurrentPage = 1;
 const barcodePrintSelected = new Set();
 const barcodePrintCopies = new Map();
 
+
+async function showBarcodePrintDialog(options) {
+  const dialogOptions = options || {};
+
+  if (
+    window.inventoryApp &&
+    typeof window.inventoryApp.showAppDialog === "function"
+  ) {
+    return window.inventoryApp.showAppDialog(dialogOptions);
+  }
+
+  const details = Array.isArray(dialogOptions.details)
+    ? dialogOptions.details
+        .map(function (item) {
+          return `${item.label || ""}：${item.value ?? ""}`;
+        })
+        .join("\n")
+    : "";
+
+  const message = [
+    dialogOptions.title || "お知らせ",
+    dialogOptions.message || "",
+    details,
+    dialogOptions.notice || ""
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  if (dialogOptions.isConfirm) {
+    return window.confirm(message);
+  }
+
+  window.alert(message);
+  return true;
+}
+
 window.addEventListener("DOMContentLoaded", initializeBarcodePrintFeature);
 
 function initializeBarcodePrintFeature() {
@@ -63,7 +99,14 @@ async function openBarcodePrintScreen() {
     applyBarcodePrintFilter();
   } catch (error) {
     console.error("バーコード印刷 商品読込エラー", error);
-    alert("商品データを読み込めませんでした。");
+    await showBarcodePrintDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "商品データを読み込めませんでした",
+      message: "バーコード印刷に使用する商品一覧を読み込めませんでした。",
+      notice: "画面を開き直しても改善しない場合は、アプリを再読み込みしてもう一度お試しください。",
+      confirmText: "閉じる"
+    });
   }
 
   screen.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -315,9 +358,15 @@ function scrollBarcodePrintTableIntoView() {
   document.querySelector("#barcode-print-table-area")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function printSelectedBarcodeLabels() {
+async function printSelectedBarcodeLabels() {
   if (barcodePrintSelected.size === 0) {
-    alert("印刷する商品を選択してください。");
+    await showBarcodePrintDialog({
+      type: "warning",
+      icon: "🖨️",
+      title: "印刷する商品を選択してください",
+      message: "商品一覧から、バーコードを印刷する商品にチェックを入れてください。",
+      confirmText: "商品を選ぶ"
+    });
     return;
   }
 
@@ -346,14 +395,44 @@ function printSelectedBarcodeLabels() {
   });
 
   if (labels.length === 0) {
-    alert("印刷できるラベルがありません。JANコードのみを選んだ場合は、JANコードが正しく登録されているか確認してください。");
+    await showBarcodePrintDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "印刷できるラベルがありません",
+      message: "選択した条件では、印刷できるバーコードラベルを作成できませんでした。",
+      notice: "「JANコードのみ」を選んでいる場合は、商品のJANコードが登録されていて、JAN形式が正しいか確認してください。",
+      confirmText: "選択内容を確認する"
+    });
     return;
   }
 
   if (skippedJanOnly.length > 0) {
-    const proceed = confirm(
-      `JANコードが未登録または形式不正のため、${skippedJanOnly.length}商品を印刷対象から外します。\n\nそのほかのラベルを印刷しますか？`
-    );
+    const skippedPreview = skippedJanOnly.slice(0, 5);
+    const proceed = await showBarcodePrintDialog({
+      type: "warning",
+      icon: "⚠️",
+      title: "JANコードを印刷できない商品があります",
+      message: "JANコードが未登録または形式不正の商品を印刷対象から外します。",
+      details: [
+        {
+          label: "対象外の商品数",
+          value: `${skippedJanOnly.length}商品`
+        },
+        {
+          label: "対象外の商品",
+          value:
+            skippedPreview.join("、") +
+            (skippedJanOnly.length > 5
+              ? ` ほか${skippedJanOnly.length - 5}商品`
+              : "")
+        }
+      ],
+      notice: "そのほかの商品のJANコードラベルは印刷できます。",
+      isConfirm: true,
+      cancelText: "戻る",
+      confirmText: "印刷を続ける"
+    });
+
     if (!proceed) return;
   }
 
@@ -370,16 +449,53 @@ function printSelectedBarcodeLabels() {
     selectedLines.push(`・ほか ${printableSelectedProducts.length - 10}商品`);
   }
 
-  const confirmMessage = [
-    "この内容で印刷しますか？",
-    "",
-    `印刷対象：${printableSelectedProducts.length}商品`,
-    `合計ラベル：${labels.length}枚`,
-    "",
-    ...selectedLines
-  ].join("\n");
+  const modeLabel =
+    barcodeMode === "internal"
+      ? "社内コード"
+      : barcodeMode === "jan"
+        ? "JANコード"
+        : "社内コード＋JANコード";
 
-  if (!confirm(confirmMessage)) return;
+  const layoutLabel =
+    layout === "8"
+      ? "A4 8分割"
+      : "A4 4分割";
+
+  const printConfirmed = await showBarcodePrintDialog({
+    type: "info",
+    icon: "🖨️",
+    title: "この内容でバーコードを印刷しますか？",
+    message: "印刷する商品数・ラベル枚数・印刷形式を確認してください。",
+    details: [
+      {
+        label: "印刷対象",
+        value: `${printableSelectedProducts.length}商品`
+      },
+      {
+        label: "合計ラベル",
+        value: `${labels.length}枚`
+      },
+      {
+        label: "レイアウト",
+        value: layoutLabel
+      },
+      {
+        label: "バーコード",
+        value: modeLabel
+      },
+      {
+        label: "対象商品",
+        value:
+          selectedLines.join(" / ") || "選択商品"
+      }
+    ],
+    notice: "続けるとブラウザーの印刷画面を開きます。",
+    isConfirm: true,
+    cancelText: "戻る",
+    confirmText: "印刷画面を開く"
+  });
+
+  if (!printConfirmed) return;
 
   const perPage = Number(layout) || 4;
   const pages = [];
@@ -389,7 +505,24 @@ function printSelectedBarcodeLabels() {
 
   const printWindow = window.open("", "_blank");
   if (!printWindow) {
-    alert("印刷画面を開けませんでした。ブラウザのポップアップを許可して、もう一度お試しください。");
+    await showBarcodePrintDialog({
+      type: "danger",
+      icon: "🚫",
+      title: "印刷画面を開けませんでした",
+      message: "ブラウザーが印刷用の新しい画面をブロックした可能性があります。",
+      details: [
+        {
+          label: "印刷対象",
+          value: `${printableSelectedProducts.length}商品`
+        },
+        {
+          label: "合計ラベル",
+          value: `${labels.length}枚`
+        }
+      ],
+      notice: "このサイトのポップアップを許可してから、もう一度「印刷」をお試しください。",
+      confirmText: "閉じる"
+    });
     return;
   }
 

@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v91
+          画面版 v92
         </span>
       </div>
 
@@ -379,7 +379,7 @@
             </p>
 
             <div class="sales-plan-full">
-              <label for="sales-plan-internal-code">社内コード（必須）</label>
+              <label for="sales-plan-internal-code">社内コード・商品コード（必須）</label>
               <div class="sales-plan-product-row">
                 <input
                   id="sales-plan-internal-code"
@@ -387,11 +387,12 @@
                   list="sales-plan-product-list"
                   autocomplete="off"
                   required
-                  placeholder="社内コードを入力または選択"
+                  placeholder="社内コードまたは商品コードを入力・選択"
                 >
-                <button id="sales-plan-product-lookup-button" type="button">商品を読み込む</button>
+                <button id="sales-plan-product-lookup-button" type="button">商品を検索・読み込む</button>
               </div>
               <datalist id="sales-plan-product-list"></datalist>
+              <small>社内コード・商品コードのどちらでも検索できます。商品コードが重複している場合は候補から商品を選択します。</small>
             </div>
 
             <div>
@@ -2240,7 +2241,7 @@
 <script src="csv-import.js?v=75"></script>
 <script src="csv-update.js?v=74"></script>
 <script src="pwa.js?v=31"></script>
-<script src="sales-plan.js?v=91"></script>
+<script src="sales-plan.js?v=92"></script>
 <script src="sales-actual.js?v=71"></script>
 <script src="purchase-required.js?v=59"></script>
 <script src="low-shipment.js?v=45"></script>

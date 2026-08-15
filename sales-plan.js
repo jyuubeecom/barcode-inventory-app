@@ -165,7 +165,7 @@ function populateSalesPlanInternalCodeList() {
   const datalist = document.querySelector("#sales-plan-product-list");
   datalist.innerHTML = "";
 
-  salesPlanProducts
+  const sortedProducts = salesPlanProducts
     .slice()
     .sort(function (a, b) {
       return String(a.internalCode || "").localeCompare(
@@ -173,48 +173,243 @@ function populateSalesPlanInternalCodeList() {
         "ja",
         { numeric: true }
       );
-    })
-    .forEach(function (product) {
-      const option = document.createElement("option");
-      option.value = String(product.internalCode || "");
-      option.label = `${product.productName || ""} ${product.productCode || ""}`.trim();
-      datalist.appendChild(option);
     });
+
+  sortedProducts.forEach(function (product) {
+    const internalCode = String(product.internalCode || "").trim();
+    const productCode = String(product.productCode || "").trim();
+    const productName = String(product.productName || "").trim();
+
+    if (internalCode) {
+      const internalOption = document.createElement("option");
+      internalOption.value = internalCode;
+      internalOption.label = `社内コード｜${productName}${productCode ? `｜商品コード ${productCode}` : ""}`;
+      datalist.appendChild(internalOption);
+    }
+
+    if (productCode) {
+      const productCodeOption = document.createElement("option");
+      productCodeOption.value = productCode;
+      productCodeOption.label = `商品コード｜${productName}${internalCode ? `｜社内コード ${internalCode}` : ""}`;
+      datalist.appendChild(productCodeOption);
+    }
+  });
 }
 
 async function loadSalesPlanProduct() {
-  const internalCodeInput = document.querySelector("#sales-plan-internal-code");
-  const internalCode = internalCodeInput.value.trim();
-  const product = findSalesPlanProduct(internalCode);
+  const codeInput = document.querySelector("#sales-plan-internal-code");
+  const enteredCode = codeInput.value.trim();
+  const product = await resolveSalesPlanProduct(enteredCode);
 
   if (!product) {
     clearSalesPlanProductFields();
-    await showSalesPlanDialog({
-      type: "danger",
-      icon: "🔎",
-      title: "商品が見つかりません",
-      message: "入力した社内コードの商品は登録されていません。",
-      details: [
-        { label: "社内コード", value: internalCode || "未入力" }
-      ],
-      notice: "社内コードを確認するか、商品一覧で登録状況を確認してください。",
-      confirmText: "入力に戻る"
-    });
-    internalCodeInput.focus();
-    internalCodeInput.select();
+
+    if (!enteredCode) {
+      await showSalesPlanDialog({
+        type: "warning",
+        icon: "✏️",
+        title: "社内コードまたは商品コードを入力してください",
+        message: "販売予定の商品を検索するコードを入力してください。",
+        notice: "社内コード・商品コードのどちらでも検索できます。",
+        confirmText: "入力に戻る"
+      });
+    } else if (!findSalesPlanProductMatches(enteredCode).length) {
+      await showSalesPlanDialog({
+        type: "danger",
+        icon: "🔎",
+        title: "商品が見つかりません",
+        message: "入力した社内コード・商品コードに一致する商品は登録されていません。",
+        details: [
+          { label: "入力したコード", value: enteredCode }
+        ],
+        notice: "コードを確認するか、商品一覧で登録状況を確認してください。",
+        confirmText: "入力に戻る"
+      });
+    }
+
+    codeInput.focus();
+    codeInput.select();
     return;
   }
 
+  applySalesPlanProductToForm(product);
+}
+
+function findSalesPlanProductMatches(code) {
+  const target = String(code || "").trim();
+  if (!target) return [];
+
+  const internalMatch = salesPlanProducts.find(function (product) {
+    return String(product.internalCode || "").trim() === target;
+  });
+
+  // 社内コードは商品を一意に識別するため、完全一致した場合は最優先します。
+  if (internalMatch) {
+    return [internalMatch];
+  }
+
+  return salesPlanProducts.filter(function (product) {
+    return String(product.productCode || "").trim() === target;
+  });
+}
+
+function findSalesPlanProduct(code) {
+  const matches = findSalesPlanProductMatches(code);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+async function resolveSalesPlanProduct(code) {
+  const matches = findSalesPlanProductMatches(code);
+
+  if (matches.length === 0) {
+    return null;
+  }
+
+  if (matches.length === 1) {
+    return matches[0];
+  }
+
+  return showSalesPlanProductChoiceDialog(code, matches);
+}
+
+function applySalesPlanProductToForm(product) {
+  const codeInput = document.querySelector("#sales-plan-internal-code");
+  codeInput.value = product.internalCode || "";
   document.querySelector("#sales-plan-product-code").value = product.productCode || "";
   document.querySelector("#sales-plan-product-name").value = product.productName || "";
 }
 
-function findSalesPlanProduct(internalCode) {
-  const target = String(internalCode || "").trim();
-  if (!target) return null;
-  return salesPlanProducts.find(function (product) {
-    return String(product.internalCode || "").trim() === target;
-  }) || null;
+function showSalesPlanProductChoiceDialog(enteredCode, products) {
+  return new Promise(function (resolve) {
+    const existingDialog = document.querySelector("#sales-plan-product-choice-dialog");
+    if (existingDialog) existingDialog.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "sales-plan-product-choice-dialog";
+    overlay.className = "app-dialog-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+
+    const modal = document.createElement("div");
+    modal.className = "app-dialog-modal app-dialog-info sales-plan-product-choice-modal";
+
+    const header = document.createElement("div");
+    header.className = "app-dialog-header";
+
+    const icon = document.createElement("div");
+    icon.className = "app-dialog-icon";
+    icon.textContent = "🔎";
+    icon.setAttribute("aria-hidden", "true");
+
+    const title = document.createElement("h2");
+    title.className = "app-dialog-title";
+    title.textContent = "同じ商品コードの商品が複数あります";
+
+    header.appendChild(icon);
+    header.appendChild(title);
+
+    const content = document.createElement("div");
+    content.className = "app-dialog-content";
+
+    const message = document.createElement("p");
+    message.className = "app-dialog-message";
+    message.textContent = "登録する商品を選んでください。商品コードは重複登録できるため、社内コードと商品名を確認してください。";
+    content.appendChild(message);
+
+    const details = document.createElement("div");
+    details.className = "app-dialog-details";
+    const row = document.createElement("div");
+    row.className = "app-dialog-detail-row";
+    const label = document.createElement("strong");
+    label.textContent = "入力した商品コード";
+    const value = document.createElement("span");
+    value.textContent = enteredCode;
+    row.appendChild(label);
+    row.appendChild(value);
+    details.appendChild(row);
+    content.appendChild(details);
+
+    const list = document.createElement("div");
+    list.className = "sales-plan-product-choice-list";
+
+    products
+      .slice()
+      .sort(function (a, b) {
+        return String(a.internalCode || "").localeCompare(
+          String(b.internalCode || ""),
+          "ja",
+          { numeric: true }
+        );
+      })
+      .forEach(function (product) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "sales-plan-product-choice-button";
+
+        const name = document.createElement("strong");
+        name.textContent = product.productName || "商品名未登録";
+
+        const codes = document.createElement("span");
+        codes.textContent = `社内コード：${product.internalCode || "未登録"}　商品コード：${product.productCode || "未登録"}`;
+
+        button.appendChild(name);
+        button.appendChild(codes);
+        button.addEventListener("click", function () {
+          finish(product);
+        });
+        list.appendChild(button);
+      });
+
+    content.appendChild(list);
+
+    const notice = document.createElement("div");
+    notice.className = "app-dialog-notice";
+    notice.textContent = "商品コードが同じでも、社内コードが違えば別の商品として管理されています。";
+    content.appendChild(notice);
+
+    const actions = document.createElement("div");
+    actions.className = "app-dialog-actions";
+    actions.style.gridTemplateColumns = "1fr";
+
+    const cancelButton = document.createElement("button");
+    cancelButton.type = "button";
+    cancelButton.className = "app-dialog-button app-dialog-cancel";
+    cancelButton.textContent = "入力に戻る";
+    cancelButton.addEventListener("click", function () {
+      finish(null);
+    });
+
+    actions.appendChild(cancelButton);
+    modal.appendChild(header);
+    modal.appendChild(content);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    document.body.classList.add("app-dialog-open");
+
+    let finished = false;
+
+    function finish(product) {
+      if (finished) return;
+      finished = true;
+      overlay.remove();
+      document.body.classList.remove("app-dialog-open");
+      resolve(product);
+    }
+
+    overlay.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        finish(null);
+      }
+    });
+
+    const firstChoice = list.querySelector("button");
+    if (firstChoice) {
+      window.setTimeout(function () {
+        firstChoice.focus();
+      }, 0);
+    }
+  });
 }
 
 function updateSalesPlanShippingFields() {
@@ -347,9 +542,9 @@ async function saveSalesPlanFromForm(event) {
   event.preventDefault();
 
   const customerName = document.querySelector("#sales-plan-customer").value.trim();
-  const internalCode = document.querySelector("#sales-plan-internal-code").value.trim();
+  const codeInput = document.querySelector("#sales-plan-internal-code");
+  const enteredCode = codeInput.value.trim();
   const quantity = Number(document.querySelector("#sales-plan-quantity").value);
-  const product = findSalesPlanProduct(internalCode);
 
   if (!customerName) {
     await showSalesPlanDialog({
@@ -366,21 +561,37 @@ async function saveSalesPlanFromForm(event) {
   const shipping = await readSalesPlanShippingFromForm();
   if (!shipping) return;
 
+  const product = await resolveSalesPlanProduct(enteredCode);
+
   if (!product) {
-    await showSalesPlanDialog({
-      type: "danger",
-      icon: "🔎",
-      title: "登録済みの商品を選択してください",
-      message: "入力した社内コードの商品が見つかりません。",
-      details: [
-        { label: "社内コード", value: internalCode || "未入力" }
-      ],
-      notice: "商品を検索して、登録済みの商品を選んでください。",
-      confirmText: "入力に戻る"
-    });
-    document.querySelector("#sales-plan-internal-code").focus();
+    if (!enteredCode) {
+      await showSalesPlanDialog({
+        type: "warning",
+        icon: "✏️",
+        title: "社内コードまたは商品コードを入力してください",
+        message: "販売予定を登録する商品を指定してください。",
+        notice: "社内コード・商品コードのどちらでも検索できます。",
+        confirmText: "入力に戻る"
+      });
+    } else if (!findSalesPlanProductMatches(enteredCode).length) {
+      await showSalesPlanDialog({
+        type: "danger",
+        icon: "🔎",
+        title: "登録済みの商品を選択してください",
+        message: "入力した社内コード・商品コードの商品が見つかりません。",
+        details: [
+          { label: "入力したコード", value: enteredCode }
+        ],
+        notice: "商品を検索して、登録済みの商品を選んでください。",
+        confirmText: "入力に戻る"
+      });
+    }
+    codeInput.focus();
+    codeInput.select();
     return;
   }
+
+  applySalesPlanProductToForm(product);
   if (!Number.isInteger(quantity) || quantity <= 0) {
     await showSalesPlanDialog({
       type: "warning",
@@ -811,6 +1022,12 @@ function createSalesPlanStyle() {
     .sales-plan-actions button { margin-right: 6px; }
     .sales-plan-delete-button { background: #c62828 !important; }
     .sales-plan-summary-box { background: #e8f5e9; border-radius: 10px; padding: 12px 14px; font-weight: 700; margin-top: 12px; }
+    .sales-plan-product-choice-modal { width: min(760px, calc(100vw - 28px)); }
+    .sales-plan-product-choice-list { display: grid; gap: 10px; max-height: 42vh; overflow-y: auto; margin: 14px 0; padding: 4px; }
+    .sales-plan-product-choice-button { width: 100%; margin: 0; padding: 14px 16px; border: 2px solid #90caf9; border-radius: 10px; background: #fff; color: #16324a; text-align: left; display: grid; gap: 5px; }
+    .sales-plan-product-choice-button:hover, .sales-plan-product-choice-button:focus { background: #e3f2fd; border-color: #1976d2; }
+    .sales-plan-product-choice-button strong { font-size: 1.05rem; }
+    .sales-plan-product-choice-button span { font-size: .95rem; font-weight: 600; }
     .sales-plan-pager { justify-content: center; margin-top: 14px; }
     #show-sales-plan-button { background: #00897b; }
     #show-sales-plan-list-button { background: #00695c; }

@@ -4,6 +4,41 @@ let exportProductsCsvButton = null;
 let exportMovementsCsvButton = null;
 let exportStocktakingCsvButton = null;
 
+async function showCsvDialog(options) {
+  const dialogOptions = options || {};
+
+  if (
+    window.inventoryApp &&
+    typeof window.inventoryApp.showAppDialog ===
+      "function"
+  ) {
+    return window.inventoryApp.showAppDialog(
+      dialogOptions
+    );
+  }
+
+  const detailsText =
+    Array.isArray(dialogOptions.details)
+      ? dialogOptions.details
+          .map(function (detail) {
+            return `${detail.label || ""}：${detail.value ?? ""}`;
+          })
+          .join("\n")
+      : "";
+
+  const fallbackText = [
+    dialogOptions.title || "お知らせ",
+    dialogOptions.message || "",
+    detailsText,
+    dialogOptions.notice || ""
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  window.alert(fallbackText);
+  return true;
+}
+
 document.addEventListener(
   "DOMContentLoaded",
   initializeCsvFunctions
@@ -245,10 +280,14 @@ async function exportProductsCsv() {
       !Array.isArray(products) ||
       products.length === 0
     ) {
-      alert(
-        "CSVへ出力する商品がありません。\n\n" +
-        "商品を1件以上登録してください。"
-      );
+      await showCsvDialog({
+        type: "warning",
+        icon: "📦",
+        title: "CSVへ出力する商品がありません",
+        message: "商品一覧CSVを作成するには、商品が1件以上登録されている必要があります。",
+        notice: "商品登録後に、もう一度「商品一覧CSVを出力する」をお試しください。",
+        confirmText: "閉じる"
+      });
 
       return;
     }
@@ -355,17 +394,29 @@ async function exportProductsCsv() {
       fileName
     );
 
-    alert(
-      `${sortedProducts.length}件の商品をCSVへ出力しました。\n\n` +
-      `ファイル名：${fileName}`
-    );
+    await showCsvDialog({
+      type: "success",
+      icon: "✅",
+      title: "商品一覧CSVを出力しました",
+      message: "商品一覧のCSVファイルを作成しました。",
+      details: [
+        { label: "出力件数", value: `${sortedProducts.length}件` },
+        { label: "ファイル名", value: fileName }
+      ],
+      notice: "Excelで開く場合も、日本語が文字化けしにくいUTF-8 BOM付きで出力しています。",
+      confirmText: "閉じる"
+    });
   } catch (error) {
     console.error(error);
 
-    alert(
-      "商品一覧CSVを作成できませんでした。\n\n" +
-      "商品データとブラウザーの設定を確認してください。"
-    );
+    await showCsvDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "商品一覧CSVを作成できませんでした",
+      message: "商品一覧CSVの作成中にエラーが発生しました。",
+      notice: "商品データを確認し、画面を開き直してからもう一度お試しください。",
+      confirmText: "閉じる"
+    });
   } finally {
     exportProductsCsvButton.disabled =
       false;
@@ -399,10 +450,14 @@ async function exportMovementsCsv() {
       !Array.isArray(movements) ||
       movements.length === 0
     ) {
-      alert(
-        "CSVへ出力する入出庫履歴がありません。\n\n" +
-        "商品登録、入庫、出庫などを行ってください。"
-      );
+      await showCsvDialog({
+        type: "warning",
+        icon: "📋",
+        title: "CSVへ出力する入出庫履歴がありません",
+        message: "入出庫履歴CSVを作成できる履歴がまだありません。",
+        notice: "商品登録・入庫・出庫・数量調整などを行うと、履歴が記録されます。",
+        confirmText: "閉じる"
+      });
 
       return;
     }
@@ -523,17 +578,29 @@ async function exportMovementsCsv() {
       fileName
     );
 
-    alert(
-      `${sortedMovements.length}件の入出庫履歴をCSVへ出力しました。\n\n` +
-      `ファイル名：${fileName}`
-    );
+    await showCsvDialog({
+      type: "success",
+      icon: "✅",
+      title: "入出庫履歴CSVを出力しました",
+      message: "入出庫履歴のCSVファイルを作成しました。",
+      details: [
+        { label: "出力件数", value: `${sortedMovements.length}件` },
+        { label: "ファイル名", value: fileName }
+      ],
+      notice: "入庫・出庫・数量調整などの履歴を確認できます。",
+      confirmText: "閉じる"
+    });
   } catch (error) {
     console.error(error);
 
-    alert(
-      "入出庫履歴CSVを作成できませんでした。\n\n" +
-      "入出庫履歴とブラウザーの設定を確認してください。"
-    );
+    await showCsvDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "入出庫履歴CSVを作成できませんでした",
+      message: "入出庫履歴CSVの作成中にエラーが発生しました。",
+      notice: "入出庫履歴を確認し、画面を開き直してからもう一度お試しください。",
+      confirmText: "閉じる"
+    });
   } finally {
     exportMovementsCsvButton.disabled =
       false;
@@ -576,10 +643,14 @@ async function exportStocktakingCsv() {
     if (
       completedSessions.length === 0
     ) {
-      alert(
-        "CSVへ出力できる確定済みの棚卸がありません。\n\n" +
-        "棚卸を開始し、すべての実在庫を入力して確定してください。"
-      );
+      await showCsvDialog({
+        type: "warning",
+        icon: "📋",
+        title: "確定済みの棚卸がありません",
+        message: "棚卸結果CSVへ出力できる、確定済みの棚卸が見つかりません。",
+        notice: "棚卸を開始し、実在庫を入力して棚卸を確定してからお試しください。",
+        confirmText: "閉じる"
+      });
 
       return;
     }
@@ -615,9 +686,14 @@ async function exportStocktakingCsv() {
     if (
       stocktakingItems.length === 0
     ) {
-      alert(
-        "最新の確定済み棚卸に商品データがありません。"
-      );
+      await showCsvDialog({
+        type: "danger",
+        icon: "⚠️",
+        title: "棚卸結果の商品データがありません",
+        message: "最新の確定済み棚卸に、CSVへ出力できる商品データがありません。",
+        notice: "棚卸履歴の内容を確認してください。",
+        confirmText: "閉じる"
+      });
 
       return;
     }
@@ -771,19 +847,31 @@ async function exportStocktakingCsv() {
       fileName
     );
 
-    alert(
-      `${stocktakingItems.length}件の棚卸結果をCSVへ出力しました。\n\n` +
-      `棚卸日：${latestStocktaking.stocktakingDate}\n` +
-      `担当者：${latestStocktaking.person}\n` +
-      `ファイル名：${fileName}`
-    );
+    await showCsvDialog({
+      type: "success",
+      icon: "✅",
+      title: "棚卸結果CSVを出力しました",
+      message: "最新の確定済み棚卸をCSVファイルへ出力しました。",
+      details: [
+        { label: "出力件数", value: `${stocktakingItems.length}件` },
+        { label: "棚卸日", value: latestStocktaking.stocktakingDate },
+        { label: "担当者", value: latestStocktaking.person || "未入力" },
+        { label: "ファイル名", value: fileName }
+      ],
+      notice: "場所別実在庫・差異・在庫反映状況もCSVで確認できます。",
+      confirmText: "閉じる"
+    });
   } catch (error) {
     console.error(error);
 
-    alert(
-      "棚卸結果CSVを作成できませんでした。\n\n" +
-      "棚卸履歴とブラウザーの設定を確認してください。"
-    );
+    await showCsvDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "棚卸結果CSVを作成できませんでした",
+      message: "棚卸結果CSVの作成中にエラーが発生しました。",
+      notice: "棚卸履歴を確認し、画面を開き直してからもう一度お試しください。",
+      confirmText: "閉じる"
+    });
   } finally {
     exportStocktakingCsvButton.disabled =
       false;

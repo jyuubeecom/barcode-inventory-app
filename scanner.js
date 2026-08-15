@@ -104,6 +104,245 @@ async function showScannerDialog(options) {
   return true;
 }
 
+
+function showScannerRegistrationTypeDialog(
+  enteredCode
+) {
+  return new Promise(
+    function (resolve) {
+      if (
+        !window.inventoryApp ||
+        typeof window.inventoryApp.showAppDialog !==
+          "function"
+      ) {
+        const useInternalCode =
+          window.confirm(
+            "このコードを社内コードとして登録しますか？\n\n" +
+            `入力したコード：${enteredCode}\n\n` +
+            "「OK」：社内コードとして登録\n" +
+            "「キャンセル」：JANコードとして登録"
+          );
+
+        resolve(
+          useInternalCode
+            ? "internal"
+            : "jan"
+        );
+        return;
+      }
+
+      const existingDialog =
+        document.querySelector(
+          "#app-common-dialog"
+        );
+
+      if (existingDialog) {
+        existingDialog.remove();
+      }
+
+      const overlay =
+        document.createElement("div");
+      overlay.id = "app-common-dialog";
+      overlay.className = "app-dialog-overlay";
+      overlay.setAttribute(
+        "role",
+        "dialog"
+      );
+      overlay.setAttribute(
+        "aria-modal",
+        "true"
+      );
+
+      const modal =
+        document.createElement("div");
+      modal.className =
+        "app-dialog-modal app-dialog-warning";
+
+      const header =
+        document.createElement("div");
+      header.className =
+        "app-dialog-header";
+
+      const icon =
+        document.createElement("div");
+      icon.className =
+        "app-dialog-icon";
+      icon.textContent = "🆕";
+      icon.setAttribute(
+        "aria-hidden",
+        "true"
+      );
+
+      const title =
+        document.createElement("h2");
+      title.className =
+        "app-dialog-title";
+      title.textContent =
+        "このコードをどちらとして登録しますか？";
+
+      header.appendChild(icon);
+      header.appendChild(title);
+
+      const content =
+        document.createElement("div");
+      content.className =
+        "app-dialog-content";
+
+      const message =
+        document.createElement("p");
+      message.className =
+        "app-dialog-message";
+      message.textContent =
+        "このコードに一致する商品は登録されていません。登録するコードの種類を選んでください。";
+      content.appendChild(message);
+
+      const details =
+        document.createElement("div");
+      details.className =
+        "app-dialog-details";
+
+      const detailRow =
+        document.createElement("div");
+      detailRow.className =
+        "app-dialog-detail-row";
+
+      const detailLabel =
+        document.createElement("strong");
+      detailLabel.textContent =
+        "入力したコード";
+
+      const detailValue =
+        document.createElement("span");
+      detailValue.textContent =
+        enteredCode;
+
+      detailRow.appendChild(
+        detailLabel
+      );
+      detailRow.appendChild(
+        detailValue
+      );
+      details.appendChild(
+        detailRow
+      );
+      content.appendChild(details);
+
+      const notice =
+        document.createElement("div");
+      notice.className =
+        "app-dialog-notice";
+      notice.textContent =
+        "社内で発行した管理コードなら「社内コードとして登録」、商品のJANコードなら「JANコードとして登録」を選んでください。";
+      content.appendChild(notice);
+
+      const actions =
+        document.createElement("div");
+      actions.className =
+        "app-dialog-actions";
+      actions.style.gridTemplateColumns =
+        "1fr";
+
+      const cancelButton =
+        document.createElement("button");
+      cancelButton.type = "button";
+      cancelButton.className =
+        "app-dialog-button app-dialog-cancel";
+      cancelButton.textContent = "戻る";
+
+      const internalButton =
+        document.createElement("button");
+      internalButton.type = "button";
+      internalButton.className =
+        "app-dialog-button app-dialog-confirm";
+      internalButton.textContent =
+        "社内コードとして登録";
+      internalButton.style.backgroundColor =
+        "#1565c0";
+
+      const janButton =
+        document.createElement("button");
+      janButton.type = "button";
+      janButton.className =
+        "app-dialog-button app-dialog-confirm";
+      janButton.textContent =
+        "JANコードとして登録";
+
+      actions.appendChild(
+        cancelButton
+      );
+      actions.appendChild(
+        internalButton
+      );
+      actions.appendChild(
+        janButton
+      );
+
+      modal.appendChild(header);
+      modal.appendChild(content);
+      modal.appendChild(actions);
+      overlay.appendChild(modal);
+      document.body.appendChild(
+        overlay
+      );
+      document.body.classList.add(
+        "app-dialog-open"
+      );
+
+      let finished = false;
+
+      function finish(result) {
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+        overlay.remove();
+        document.body.classList.remove(
+          "app-dialog-open"
+        );
+        resolve(result);
+      }
+
+      cancelButton.addEventListener(
+        "click",
+        function () {
+          finish(null);
+        }
+      );
+
+      internalButton.addEventListener(
+        "click",
+        function () {
+          finish("internal");
+        }
+      );
+
+      janButton.addEventListener(
+        "click",
+        function () {
+          finish("jan");
+        }
+      );
+
+      overlay.addEventListener(
+        "keydown",
+        function (event) {
+          if (event.key === "Escape") {
+            finish(null);
+          }
+        }
+      );
+
+      window.setTimeout(
+        function () {
+          internalButton.focus();
+        },
+        0
+      );
+    }
+  );
+}
+
 function initializeScanner() {
   createCameraScannerButton();
   createCameraScannerScreen();
@@ -1099,25 +1338,15 @@ async function processBarcodeValue(
 
     stopCameraScan();
 
-    const registrationConfirmed =
-      await showScannerDialog({
-        type: "warning",
-        icon: "🆕",
-        title: "未登録のバーコードです",
-        message: "このコードに一致する商品は登録されていません。",
-        details: [
-          { label: "バーコード番号", value: enteredCode }
-        ],
-        notice: "新しい商品として登録する場合は、商品登録画面へ進んでください。",
-        isConfirm: true,
-        cancelText: "戻る",
-        confirmText: "商品登録へ進む"
-      });
+    const registrationType =
+      await showScannerRegistrationTypeDialog(
+        enteredCode
+      );
 
-    if (!registrationConfirmed) {
+    if (!registrationType) {
       if (inputMethod === "camera") {
         cameraScannerMessage.textContent =
-          "未登録のバーコードです。読み取りをやり直せます。";
+          "未登録のコードです。読み取りをやり直せます。";
 
         cameraScannerScreen.hidden = false;
       } else {
@@ -1131,8 +1360,9 @@ async function processBarcodeValue(
       return;
     }
 
-    openRegisterScreenWithJanCode(
-      enteredCode
+    openRegisterScreenWithCode(
+      enteredCode,
+      registrationType
     );
   } catch (error) {
     console.error(error);
@@ -1228,8 +1458,9 @@ async function processStocktakingBarcodeValue(
   }
 }
 
-function openRegisterScreenWithJanCode(
-  janCode
+function openRegisterScreenWithCode(
+  code,
+  registrationType
 ) {
   const productForm =
     document.querySelector(
@@ -1239,6 +1470,11 @@ function openRegisterScreenWithJanCode(
   const internalCodeInput =
     document.querySelector(
       "#internal-code"
+    );
+
+  const productNameInput =
+    document.querySelector(
+      "#product-name"
     );
 
   const stockInput =
@@ -1256,7 +1492,14 @@ function openRegisterScreenWithJanCode(
 
   stockInput.value = 0;
   minStockInput.value = 0;
-  janCodeInput.value = janCode;
+
+  if (registrationType === "internal") {
+    internalCodeInput.value = code;
+    janCodeInput.value = "";
+  } else {
+    internalCodeInput.value = "";
+    janCodeInput.value = code;
+  }
 
   cameraScannerScreen.hidden = true;
   barcodeLookupScreen.hidden = true;
@@ -1265,7 +1508,14 @@ function openRegisterScreenWithJanCode(
     "register"
   );
 
-  internalCodeInput.focus();
+  if (
+    registrationType === "internal" &&
+    productNameInput
+  ) {
+    productNameInput.focus();
+  } else {
+    internalCodeInput.focus();
+  }
 }
 
 function hideAllMainScreens() {

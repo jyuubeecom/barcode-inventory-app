@@ -8,6 +8,41 @@ let salesPlanCurrentPage = 1;
 
 window.addEventListener("DOMContentLoaded", initializeSalesPlanFeature);
 
+async function showSalesPlanDialog(options) {
+  const dialogOptions = options || {};
+
+  if (
+    window.inventoryApp &&
+    typeof window.inventoryApp.showAppDialog === "function"
+  ) {
+    return window.inventoryApp.showAppDialog(dialogOptions);
+  }
+
+  const details = Array.isArray(dialogOptions.details)
+    ? dialogOptions.details
+        .map(function (item) {
+          return `${item.label || ""}：${item.value ?? ""}`;
+        })
+        .join("\n")
+    : "";
+
+  const text = [
+    dialogOptions.title || "お知らせ",
+    dialogOptions.message || "",
+    details,
+    dialogOptions.notice || ""
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  if (dialogOptions.isConfirm) {
+    return window.confirm(text);
+  }
+
+  window.alert(text);
+  return true;
+}
+
 async function initializeSalesPlanFeature() {
   const showButton = document.querySelector("#show-sales-plan-button");
   const showListButton = document.querySelector("#show-sales-plan-list-button");
@@ -84,7 +119,14 @@ async function showSalesPlanScreen() {
     await refreshSalesPlanData();
   } catch (error) {
     console.error("販売予定表読込エラー", error);
-    alert("販売予定表を読み込めませんでした。");
+    await showSalesPlanDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "販売予定表を読み込めませんでした",
+      message: "保存されている販売予定データを読み込めませんでした。",
+      notice: "画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
   }
 }
 
@@ -140,15 +182,26 @@ function populateSalesPlanInternalCodeList() {
     });
 }
 
-function loadSalesPlanProduct() {
+async function loadSalesPlanProduct() {
   const internalCodeInput = document.querySelector("#sales-plan-internal-code");
   const internalCode = internalCodeInput.value.trim();
   const product = findSalesPlanProduct(internalCode);
 
   if (!product) {
     clearSalesPlanProductFields();
-    alert("入力した社内コードの商品が見つかりません。");
+    await showSalesPlanDialog({
+      type: "danger",
+      icon: "🔎",
+      title: "商品が見つかりません",
+      message: "入力した社内コードの商品は登録されていません。",
+      details: [
+        { label: "社内コード", value: internalCode || "未入力" }
+      ],
+      notice: "社内コードを確認するか、商品一覧で登録状況を確認してください。",
+      confirmText: "入力に戻る"
+    });
     internalCodeInput.focus();
+    internalCodeInput.select();
     return;
   }
 
@@ -205,7 +258,7 @@ function updateSalesPlanShippingFields() {
   }
 }
 
-function readSalesPlanShippingFromForm() {
+async function readSalesPlanShippingFromForm() {
   const shippingType = document.querySelector("#sales-plan-shipping-type").value;
   const shippingDate = document.querySelector("#sales-plan-shipping-date").value;
   const shippingStartDate = document.querySelector("#sales-plan-shipping-start-date").value;
@@ -213,7 +266,13 @@ function readSalesPlanShippingFromForm() {
 
   if (shippingType === "date") {
     if (!isIsoDate(shippingDate)) {
-      alert("出荷日を選択してください。");
+      await showSalesPlanDialog({
+        type: "warning",
+        icon: "📅",
+        title: "出荷日を選択してください",
+        message: "出荷日を1日選んでから保存してください。",
+        confirmText: "入力に戻る"
+      });
       document.querySelector("#sales-plan-shipping-date").focus();
       return null;
     }
@@ -228,17 +287,39 @@ function readSalesPlanShippingFromForm() {
 
   if (shippingType === "period") {
     if (!isIsoDate(shippingStartDate)) {
-      alert("出荷期間の開始日を選択してください。");
+      await showSalesPlanDialog({
+        type: "warning",
+        icon: "📅",
+        title: "出荷期間の開始日を選択してください",
+        message: "出荷期間の開始日を入力してください。",
+        confirmText: "入力に戻る"
+      });
       document.querySelector("#sales-plan-shipping-start-date").focus();
       return null;
     }
     if (!isIsoDate(shippingEndDate)) {
-      alert("出荷期間の終了日を選択してください。");
+      await showSalesPlanDialog({
+        type: "warning",
+        icon: "📅",
+        title: "出荷期間の終了日を選択してください",
+        message: "出荷期間の終了日を入力してください。",
+        confirmText: "入力に戻る"
+      });
       document.querySelector("#sales-plan-shipping-end-date").focus();
       return null;
     }
     if (shippingEndDate < shippingStartDate) {
-      alert("出荷期間の終了日は、開始日以降の日付を選択してください。");
+      await showSalesPlanDialog({
+        type: "danger",
+        icon: "📅",
+        title: "出荷期間の日付を確認してください",
+        message: "終了日は開始日以降の日付を選択してください。",
+        details: [
+          { label: "開始日", value: shippingStartDate || "未入力" },
+          { label: "終了日", value: shippingEndDate || "未入力" }
+        ],
+        confirmText: "入力に戻る"
+      });
       document.querySelector("#sales-plan-shipping-end-date").focus();
       return null;
     }
@@ -251,7 +332,13 @@ function readSalesPlanShippingFromForm() {
     };
   }
 
-  alert("出荷日の指定方法を選択してください。");
+  await showSalesPlanDialog({
+    type: "warning",
+    icon: "📅",
+    title: "出荷日の指定方法を選択してください",
+    message: "「出荷日」または「出荷期間」のどちらかを選択してください。",
+    confirmText: "入力に戻る"
+  });
   document.querySelector("#sales-plan-shipping-type").focus();
   return null;
 }
@@ -265,21 +352,47 @@ async function saveSalesPlanFromForm(event) {
   const product = findSalesPlanProduct(internalCode);
 
   if (!customerName) {
-    alert("取引先名を入力してください。");
+    await showSalesPlanDialog({
+      type: "warning",
+      icon: "🏢",
+      title: "取引先名を入力してください",
+      message: "販売予定を登録するには、取引先名の入力が必要です。",
+      confirmText: "入力に戻る"
+    });
     document.querySelector("#sales-plan-customer").focus();
     return;
   }
 
-  const shipping = readSalesPlanShippingFromForm();
+  const shipping = await readSalesPlanShippingFromForm();
   if (!shipping) return;
 
   if (!product) {
-    alert("登録済みの商品を社内コードから選んでください。");
+    await showSalesPlanDialog({
+      type: "danger",
+      icon: "🔎",
+      title: "登録済みの商品を選択してください",
+      message: "入力した社内コードの商品が見つかりません。",
+      details: [
+        { label: "社内コード", value: internalCode || "未入力" }
+      ],
+      notice: "商品を検索して、登録済みの商品を選んでください。",
+      confirmText: "入力に戻る"
+    });
     document.querySelector("#sales-plan-internal-code").focus();
     return;
   }
   if (!Number.isInteger(quantity) || quantity <= 0) {
-    alert("数量は1以上の整数で入力してください。");
+    await showSalesPlanDialog({
+      type: "warning",
+      icon: "🔢",
+      title: "数量を確認してください",
+      message: "数量は1以上の整数で入力してください。",
+      details: [
+        { label: "入力値", value: document.querySelector("#sales-plan-quantity").value || "未入力" },
+        { label: "入力できる値", value: "1以上の整数" }
+      ],
+      confirmText: "入力に戻る"
+    });
     document.querySelector("#sales-plan-quantity").focus();
     return;
   }
@@ -317,14 +430,32 @@ async function saveSalesPlanFromForm(event) {
       : "販売予定を登録しました。";
     resetSalesPlanForm();
     await refreshSalesPlanData();
-    alert(message);
+    await showSalesPlanDialog({
+      type: "success",
+      icon: "✅",
+      title: message,
+      details: [
+        { label: "取引先", value: customerName },
+        { label: "商品", value: product.productName || product.internalCode },
+        { label: "出荷時期", value: formatSalesPlanShipping(record) },
+        { label: "数量", value: `${quantity}個` }
+      ],
+      confirmText: "閉じる"
+    });
   } catch (error) {
     console.error("販売予定保存エラー", error);
-    alert("販売予定を保存できませんでした。");
+    await showSalesPlanDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "販売予定を保存できませんでした",
+      message: "販売予定の保存中にエラーが発生しました。",
+      notice: "入力内容を確認し、画面を開き直してもう一度お試しください。",
+      confirmText: "閉じる"
+    });
   }
 }
 
-function editSalesPlan(id) {
+async function editSalesPlan(id) {
   const record = salesPlanRecords.find(function (item) { return item.id === id; });
   if (!record) return;
 
@@ -353,10 +484,17 @@ function editSalesPlan(id) {
     dateInput.value = record.shippingDate || "";
   } else {
     typeSelect.value = "date";
-    alert(
-      "この予定はv34で登録した『月指定』のデータです。\n" +
-      `${formatSalesPlanMonth(record.shippingMonth)} の正しい出荷日、または出荷期間を選び直して保存してください。`
-    );
+    await showSalesPlanDialog({
+      type: "warning",
+      icon: "📅",
+      title: "出荷時期を選び直してください",
+      message: "この予定は旧バージョンで『月指定』として登録されたデータです。",
+      details: [
+        { label: "登録済みの月", value: formatSalesPlanMonth(record.shippingMonth) }
+      ],
+      notice: "正しい出荷日、または出荷期間を選び直して保存してください。",
+      confirmText: "入力に戻る"
+    });
   }
 
   updateSalesPlanShippingFields();
@@ -369,18 +507,50 @@ async function removeSalesPlan(id) {
   const record = salesPlanRecords.find(function (item) { return item.id === id; });
   if (!record) return;
 
-  const confirmed = window.confirm(
-    `${record.productName}\n${formatSalesPlanShipping(record)} / ${record.quantity}個\n\nこの販売予定を削除しますか？`
-  );
+  const confirmed = await showSalesPlanDialog({
+    type: "danger",
+    icon: "🗑️",
+    title: "販売予定を削除しますか？",
+    message: "次の販売予定を削除しようとしています。内容を確認してください。",
+    details: [
+      { label: "取引先", value: record.customerName || "未登録" },
+      { label: "商品", value: record.productName || record.internalCode },
+      { label: "社内コード", value: record.internalCode || "未登録" },
+      { label: "出荷時期", value: formatSalesPlanShipping(record) },
+      { label: "数量", value: `${record.quantity || 0}個` }
+    ],
+    notice: "削除した販売予定は、発注必要数などの計算対象から外れます。",
+    isConfirm: true,
+    cancelText: "戻る",
+    confirmText: "販売予定を削除する"
+  });
   if (!confirmed) return;
 
   try {
     await deleteSalesPlan(id);
     if (salesPlanEditingId === id) resetSalesPlanForm();
     await refreshSalesPlanData();
+    await showSalesPlanDialog({
+      type: "success",
+      icon: "✅",
+      title: "販売予定を削除しました",
+      details: [
+        { label: "商品", value: record.productName || record.internalCode },
+        { label: "出荷時期", value: formatSalesPlanShipping(record) },
+        { label: "数量", value: `${record.quantity || 0}個` }
+      ],
+      confirmText: "閉じる"
+    });
   } catch (error) {
     console.error("販売予定削除エラー", error);
-    alert("販売予定を削除できませんでした。");
+    await showSalesPlanDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "販売予定を削除できませんでした",
+      message: "削除処理中にエラーが発生しました。",
+      notice: "画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
   }
 }
 

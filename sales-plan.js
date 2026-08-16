@@ -180,12 +180,20 @@ async function refreshSalesPlanData() {
   renderSalesPlanTable();
 }
 
+
+function normalizeSalesPlanSearchText(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .trim()
+    .toLowerCase();
+}
+
 function renderSalesPlanProductSuggestions(keyword) {
   const suggestionBox = document.querySelector("#sales-plan-product-suggestions");
   const input = document.querySelector("#sales-plan-internal-code");
   if (!suggestionBox || !input) return;
 
-  const target = String(keyword || "").trim().toLowerCase();
+  const target = normalizeSalesPlanSearchText(keyword);
   suggestionBox.innerHTML = "";
 
   if (!target) {
@@ -194,11 +202,11 @@ function renderSalesPlanProductSuggestions(keyword) {
   }
 
   const exactInternalMatches = salesPlanProducts.filter(function (product) {
-    return String(product.internalCode || "").trim().toLowerCase() === target;
+    return normalizeSalesPlanSearchText(product.internalCode) === target;
   });
 
   const exactProductCodeMatches = salesPlanProducts.filter(function (product) {
-    return String(product.productCode || "").trim().toLowerCase() === target;
+    return normalizeSalesPlanSearchText(product.productCode) === target;
   });
 
   let matches;
@@ -221,9 +229,9 @@ function renderSalesPlanProductSuggestions(keyword) {
     // 完全一致がないときだけ、社内コード・商品コード・商品名の部分一致候補を表示します。
     matches = salesPlanProducts
       .filter(function (product) {
-        const internalCode = String(product.internalCode || "").trim().toLowerCase();
-        const productCode = String(product.productCode || "").trim().toLowerCase();
-        const productName = String(product.productName || "").trim().toLowerCase();
+        const internalCode = normalizeSalesPlanSearchText(product.internalCode);
+        const productCode = normalizeSalesPlanSearchText(product.productCode);
+        const productName = normalizeSalesPlanSearchText(product.productName);
 
         return (
           internalCode.includes(target) ||
@@ -232,10 +240,10 @@ function renderSalesPlanProductSuggestions(keyword) {
         );
       })
       .sort(function (a, b) {
-        const aInternal = String(a.internalCode || "").trim().toLowerCase();
-        const bInternal = String(b.internalCode || "").trim().toLowerCase();
-        const aProduct = String(a.productCode || "").trim().toLowerCase();
-        const bProduct = String(b.productCode || "").trim().toLowerCase();
+        const aInternal = normalizeSalesPlanSearchText(a.internalCode);
+        const bInternal = normalizeSalesPlanSearchText(b.internalCode);
+        const aProduct = normalizeSalesPlanSearchText(a.productCode);
+        const bProduct = normalizeSalesPlanSearchText(b.productCode);
 
         const getRank = function (internalCode, productCode) {
           if (internalCode.startsWith(target)) return 0;
@@ -341,11 +349,11 @@ async function loadSalesPlanProduct() {
 }
 
 function findSalesPlanProductMatches(code) {
-  const target = String(code || "").trim().toLowerCase();
+  const target = normalizeSalesPlanSearchText(code);
   if (!target) return [];
 
   const internalMatch = salesPlanProducts.find(function (product) {
-    return String(product.internalCode || "").trim().toLowerCase() === target;
+    return normalizeSalesPlanSearchText(product.internalCode) === target;
   });
 
   // 社内コードは商品を一意に識別するため、完全一致した場合は最優先します。
@@ -354,7 +362,7 @@ function findSalesPlanProductMatches(code) {
   }
 
   return salesPlanProducts.filter(function (product) {
-    return String(product.productCode || "").trim().toLowerCase() === target;
+    return normalizeSalesPlanSearchText(product.productCode) === target;
   });
 }
 

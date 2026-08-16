@@ -193,37 +193,70 @@ function renderSalesPlanProductSuggestions(keyword) {
     return;
   }
 
-  const matches = salesPlanProducts
-    .filter(function (product) {
-      const internalCode = String(product.internalCode || "").trim().toLowerCase();
-      const productCode = String(product.productCode || "").trim().toLowerCase();
-      const productName = String(product.productName || "").trim().toLowerCase();
-      return internalCode.includes(target) || productCode.includes(target) || productName.includes(target);
-    })
-    .sort(function (a, b) {
-      const aInternal = String(a.internalCode || "").trim().toLowerCase();
-      const bInternal = String(b.internalCode || "").trim().toLowerCase();
-      const aProduct = String(a.productCode || "").trim().toLowerCase();
-      const bProduct = String(b.productCode || "").trim().toLowerCase();
+  const exactInternalMatches = salesPlanProducts.filter(function (product) {
+    return String(product.internalCode || "").trim().toLowerCase() === target;
+  });
 
-      const getRank = function (internalCode, productCode) {
-        if (internalCode === target) return 0;
-        if (productCode === target) return 1;
-        if (internalCode.startsWith(target)) return 2;
-        if (productCode.startsWith(target)) return 3;
-        return 4;
-      };
+  const exactProductCodeMatches = salesPlanProducts.filter(function (product) {
+    return String(product.productCode || "").trim().toLowerCase() === target;
+  });
 
-      const rankDiff = getRank(aInternal, aProduct) - getRank(bInternal, bProduct);
-      if (rankDiff !== 0) return rankDiff;
+  let matches;
 
-      return String(a.internalCode || "").localeCompare(
-        String(b.internalCode || ""),
-        "ja",
-        { numeric: true }
-      );
-    })
-    .slice(0, 20);
+  if (exactInternalMatches.length > 0) {
+    // 社内コードは一意なので、完全一致した商品だけを表示します。
+    matches = exactInternalMatches;
+  } else if (exactProductCodeMatches.length > 0) {
+    // 商品コードは重複可なので、完全一致した商品が複数ある場合はすべて候補に表示します。
+    matches = exactProductCodeMatches
+      .slice()
+      .sort(function (a, b) {
+        return String(a.internalCode || "").localeCompare(
+          String(b.internalCode || ""),
+          "ja",
+          { numeric: true }
+        );
+      });
+  } else {
+    // 完全一致がないときだけ、社内コード・商品コード・商品名の部分一致候補を表示します。
+    matches = salesPlanProducts
+      .filter(function (product) {
+        const internalCode = String(product.internalCode || "").trim().toLowerCase();
+        const productCode = String(product.productCode || "").trim().toLowerCase();
+        const productName = String(product.productName || "").trim().toLowerCase();
+
+        return (
+          internalCode.includes(target) ||
+          productCode.includes(target) ||
+          productName.includes(target)
+        );
+      })
+      .sort(function (a, b) {
+        const aInternal = String(a.internalCode || "").trim().toLowerCase();
+        const bInternal = String(b.internalCode || "").trim().toLowerCase();
+        const aProduct = String(a.productCode || "").trim().toLowerCase();
+        const bProduct = String(b.productCode || "").trim().toLowerCase();
+
+        const getRank = function (internalCode, productCode) {
+          if (internalCode.startsWith(target)) return 0;
+          if (productCode.startsWith(target)) return 1;
+          return 2;
+        };
+
+        const rankDiff =
+          getRank(aInternal, aProduct) -
+          getRank(bInternal, bProduct);
+
+        if (rankDiff !== 0) return rankDiff;
+
+        return String(a.internalCode || "").localeCompare(
+          String(b.internalCode || ""),
+          "ja",
+          { numeric: true }
+        );
+      })
+      .slice(0, 20);
+  }
 
   if (matches.length === 0) {
     closeSalesPlanProductSuggestions();

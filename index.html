@@ -47,7 +47,7 @@
         </div>
 
         <span class="home-version-badge">
-          画面版 v92
+          画面版 v93
         </span>
       </div>
 
@@ -380,19 +380,28 @@
 
             <div class="sales-plan-full">
               <label for="sales-plan-internal-code">社内コード・商品コード（必須）</label>
-              <div class="sales-plan-product-row">
-                <input
-                  id="sales-plan-internal-code"
-                  type="text"
-                  list="sales-plan-product-list"
-                  autocomplete="off"
-                  required
-                  placeholder="社内コードまたは商品コードを入力・選択"
-                >
-                <button id="sales-plan-product-lookup-button" type="button">商品を検索・読み込む</button>
+              <div class="sales-plan-product-search-wrap">
+                <div class="sales-plan-product-row">
+                  <input
+                    id="sales-plan-internal-code"
+                    type="text"
+                    autocomplete="off"
+                    required
+                    aria-autocomplete="list"
+                    aria-controls="sales-plan-product-suggestions"
+                    aria-expanded="false"
+                    placeholder="社内コード・商品コード・商品名で検索"
+                  >
+                  <button id="sales-plan-product-lookup-button" type="button">商品を検索・読み込む</button>
+                </div>
+                <div
+                  id="sales-plan-product-suggestions"
+                  class="sales-plan-product-suggestions"
+                  role="listbox"
+                  hidden
+                ></div>
               </div>
-              <datalist id="sales-plan-product-list"></datalist>
-              <small>社内コード・商品コードのどちらでも検索できます。商品コードが重複している場合は候補から商品を選択します。</small>
+              <small>入力すると候補を1商品につき1行で表示します。社内コード・商品コード・商品名で検索できます。</small>
             </div>
 
             <div>
@@ -2241,7 +2250,7 @@
 <script src="csv-import.js?v=75"></script>
 <script src="csv-update.js?v=74"></script>
 <script src="pwa.js?v=31"></script>
-<script src="sales-plan.js?v=92"></script>
+<script src="sales-plan.js?v=93"></script>
 <script src="sales-actual.js?v=71"></script>
 <script src="purchase-required.js?v=59"></script>
 <script src="low-shipment.js?v=45"></script>

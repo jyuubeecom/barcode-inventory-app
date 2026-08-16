@@ -51,6 +51,7 @@ async function initializeSalesPlanFeature() {
   const backButton = document.querySelector("#back-home-from-sales-plan");
   const form = document.querySelector("#sales-plan-form");
   const lookupButton = document.querySelector("#sales-plan-product-lookup-button");
+  const productSearchInput = document.querySelector("#sales-plan-internal-code");
   const cancelEditButton = document.querySelector("#cancel-sales-plan-edit-button");
   const searchInput = document.querySelector("#sales-plan-search");
   const monthFilter = document.querySelector("#sales-plan-month-filter");
@@ -67,6 +68,24 @@ async function initializeSalesPlanFeature() {
   if (jumpListButton) jumpListButton.addEventListener("click", scrollSalesPlanTableIntoView);
   backButton.addEventListener("click", closeSalesPlanScreen);
   lookupButton.addEventListener("click", loadSalesPlanProduct);
+  productSearchInput.addEventListener("input", function () {
+    clearSalesPlanProductFields();
+    renderSalesPlanProductSuggestions(productSearchInput.value);
+  });
+  productSearchInput.addEventListener("focus", function () {
+    renderSalesPlanProductSuggestions(productSearchInput.value);
+  });
+  productSearchInput.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      closeSalesPlanProductSuggestions();
+    }
+  });
+  document.addEventListener("click", function (event) {
+    const wrap = event.target.closest(".sales-plan-product-search-wrap");
+    if (!wrap) {
+      closeSalesPlanProductSuggestions();
+    }
+  });
   form.addEventListener("submit", saveSalesPlanFromForm);
   cancelEditButton.addEventListener("click", resetSalesPlanForm);
   shippingType.addEventListener("change", updateSalesPlanShippingFields);
@@ -157,43 +176,96 @@ async function refreshSalesPlanData() {
 
   salesPlanRecords = plans.slice().sort(compareSalesPlans);
   salesPlanProducts = products.slice();
-  populateSalesPlanInternalCodeList();
+  closeSalesPlanProductSuggestions();
   renderSalesPlanTable();
 }
 
-function populateSalesPlanInternalCodeList() {
-  const datalist = document.querySelector("#sales-plan-product-list");
-  datalist.innerHTML = "";
+function renderSalesPlanProductSuggestions(keyword) {
+  const suggestionBox = document.querySelector("#sales-plan-product-suggestions");
+  const input = document.querySelector("#sales-plan-internal-code");
+  if (!suggestionBox || !input) return;
 
-  const sortedProducts = salesPlanProducts
-    .slice()
+  const target = String(keyword || "").trim().toLowerCase();
+  suggestionBox.innerHTML = "";
+
+  if (!target) {
+    closeSalesPlanProductSuggestions();
+    return;
+  }
+
+  const matches = salesPlanProducts
+    .filter(function (product) {
+      const internalCode = String(product.internalCode || "").trim().toLowerCase();
+      const productCode = String(product.productCode || "").trim().toLowerCase();
+      const productName = String(product.productName || "").trim().toLowerCase();
+      return internalCode.includes(target) || productCode.includes(target) || productName.includes(target);
+    })
     .sort(function (a, b) {
+      const aInternal = String(a.internalCode || "").trim().toLowerCase();
+      const bInternal = String(b.internalCode || "").trim().toLowerCase();
+      const aProduct = String(a.productCode || "").trim().toLowerCase();
+      const bProduct = String(b.productCode || "").trim().toLowerCase();
+
+      const getRank = function (internalCode, productCode) {
+        if (internalCode === target) return 0;
+        if (productCode === target) return 1;
+        if (internalCode.startsWith(target)) return 2;
+        if (productCode.startsWith(target)) return 3;
+        return 4;
+      };
+
+      const rankDiff = getRank(aInternal, aProduct) - getRank(bInternal, bProduct);
+      if (rankDiff !== 0) return rankDiff;
+
       return String(a.internalCode || "").localeCompare(
         String(b.internalCode || ""),
         "ja",
         { numeric: true }
       );
+    })
+    .slice(0, 20);
+
+  if (matches.length === 0) {
+    closeSalesPlanProductSuggestions();
+    return;
+  }
+
+  matches.forEach(function (product) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "sales-plan-product-suggestion";
+    button.setAttribute("role", "option");
+
+    const name = document.createElement("strong");
+    name.textContent = product.productName || "商品名未登録";
+
+    const codes = document.createElement("span");
+    codes.textContent = `社内コード：${product.internalCode || "未登録"}　商品コード：${product.productCode || "未登録"}`;
+
+    button.appendChild(name);
+    button.appendChild(codes);
+    button.addEventListener("click", function () {
+      applySalesPlanProductToForm(product);
+      closeSalesPlanProductSuggestions();
     });
 
-  sortedProducts.forEach(function (product) {
-    const internalCode = String(product.internalCode || "").trim();
-    const productCode = String(product.productCode || "").trim();
-    const productName = String(product.productName || "").trim();
-
-    if (internalCode) {
-      const internalOption = document.createElement("option");
-      internalOption.value = internalCode;
-      internalOption.label = `社内コード｜${productName}${productCode ? `｜商品コード ${productCode}` : ""}`;
-      datalist.appendChild(internalOption);
-    }
-
-    if (productCode) {
-      const productCodeOption = document.createElement("option");
-      productCodeOption.value = productCode;
-      productCodeOption.label = `商品コード｜${productName}${internalCode ? `｜社内コード ${internalCode}` : ""}`;
-      datalist.appendChild(productCodeOption);
-    }
+    suggestionBox.appendChild(button);
   });
+
+  suggestionBox.hidden = false;
+  input.setAttribute("aria-expanded", "true");
+}
+
+function closeSalesPlanProductSuggestions() {
+  const suggestionBox = document.querySelector("#sales-plan-product-suggestions");
+  const input = document.querySelector("#sales-plan-internal-code");
+  if (suggestionBox) {
+    suggestionBox.hidden = true;
+    suggestionBox.innerHTML = "";
+  }
+  if (input) {
+    input.setAttribute("aria-expanded", "false");
+  }
 }
 
 async function loadSalesPlanProduct() {
@@ -236,11 +308,11 @@ async function loadSalesPlanProduct() {
 }
 
 function findSalesPlanProductMatches(code) {
-  const target = String(code || "").trim();
+  const target = String(code || "").trim().toLowerCase();
   if (!target) return [];
 
   const internalMatch = salesPlanProducts.find(function (product) {
-    return String(product.internalCode || "").trim() === target;
+    return String(product.internalCode || "").trim().toLowerCase() === target;
   });
 
   // 社内コードは商品を一意に識別するため、完全一致した場合は最優先します。
@@ -249,7 +321,7 @@ function findSalesPlanProductMatches(code) {
   }
 
   return salesPlanProducts.filter(function (product) {
-    return String(product.productCode || "").trim() === target;
+    return String(product.productCode || "").trim().toLowerCase() === target;
   });
 }
 
@@ -277,6 +349,7 @@ function applySalesPlanProductToForm(product) {
   codeInput.value = product.internalCode || "";
   document.querySelector("#sales-plan-product-code").value = product.productCode || "";
   document.querySelector("#sales-plan-product-name").value = product.productName || "";
+  closeSalesPlanProductSuggestions();
 }
 
 function showSalesPlanProductChoiceDialog(enteredCode, products) {
@@ -1003,6 +1076,14 @@ function createSalesPlanStyle() {
     .sales-plan-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
     .sales-plan-form-grid .sales-plan-full { grid-column: 1 / -1; }
     .sales-plan-product-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+    .sales-plan-product-search-wrap { position: relative; }
+    .sales-plan-product-suggestions { position: absolute; z-index: 60; top: calc(100% + 6px); left: 0; right: 0; max-height: 360px; overflow-y: auto; padding: 8px; border: 2px solid #90caf9; border-radius: 10px; background: #fff; box-shadow: 0 12px 28px rgba(15, 45, 70, .22); }
+    .sales-plan-product-suggestions[hidden] { display: none !important; }
+    .sales-plan-product-suggestion { width: 100%; margin: 0 0 7px; padding: 12px 14px; border: 1px solid #c8d7e1; border-radius: 8px; background: #fff; color: #16324a; text-align: left; display: grid; gap: 4px; }
+    .sales-plan-product-suggestion:last-child { margin-bottom: 0; }
+    .sales-plan-product-suggestion:hover, .sales-plan-product-suggestion:focus { background: #e3f2fd; border-color: #1976d2; outline: none; }
+    .sales-plan-product-suggestion strong { font-size: 1rem; }
+    .sales-plan-product-suggestion span { font-size: .92rem; font-weight: 600; line-height: 1.45; }
     .sales-plan-readonly { background: #eef3f6; }
     .sales-plan-shipping-note { margin: -4px 0 0; padding: 10px 12px; border-radius: 8px; background: #e3f2fd; color: #164e63; }
     #sales-plan-shipping-date-area[hidden],

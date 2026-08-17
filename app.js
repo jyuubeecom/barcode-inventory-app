@@ -1245,7 +1245,9 @@ function openDetailScreen(internalCode) {
       ? "detail-product-discontinued"
       : productLifecycleStatus === "廃盤予定"
         ? "detail-product-planned"
-        : "detail-product-active";
+        : productLifecycleStatus === "専用商品"
+          ? "detail-product-dedicated"
+          : "detail-product-active";
 
   detailUpdatedAt.textContent =
     formatDateTime(selectedProduct.updatedAt);
@@ -1984,6 +1986,15 @@ function getProductLifecycleStatus(
       .normalize("NFKC")
       .trim()
       .toLowerCase();
+
+  if (
+    savedStatus === "専用商品" ||
+    savedStatus === "専用" ||
+    savedStatus === "dedicated" ||
+    savedStatus === "exclusive"
+  ) {
+    return "専用商品";
+  }
 
   if (
     savedStatus === "廃盤予定" ||
@@ -2954,6 +2965,10 @@ function displayProducts(displayedProducts) {
       row.classList.add(
         "product-planned-row"
       );
+    } else if (lifecycleStatus === "専用商品") {
+      row.classList.add(
+        "product-dedicated-row"
+      );
     }
 
     row.appendChild(
@@ -3278,7 +3293,9 @@ function createProductListLifecycleCell(
       ? "product-lifecycle-discontinued"
       : productStatus === "廃盤予定"
         ? "product-lifecycle-planned"
-        : "product-lifecycle-active"
+        : productStatus === "専用商品"
+          ? "product-lifecycle-dedicated"
+          : "product-lifecycle-active"
   );
 
   cell.appendChild(badge);
@@ -3343,7 +3360,9 @@ function appendProductLifecycleStatusCell(
       ? "product-lifecycle-discontinued"
       : productStatus === "廃盤予定"
         ? "product-lifecycle-planned"
-        : "product-lifecycle-active"
+        : productStatus === "専用商品"
+          ? "product-lifecycle-dedicated"
+          : "product-lifecycle-active"
   );
 
   cell.appendChild(badge);
@@ -3379,6 +3398,12 @@ function createProductLifecycleStyle() {
     .product-lifecycle-active {
       background-color: #e8f5e9;
       color: #1b5e20;
+    }
+
+    .product-lifecycle-dedicated {
+      background-color: #f3e5f5;
+      color: #6a1b9a;
+      border: 1px solid #ba68c8;
     }
 
     .product-lifecycle-planned {
@@ -3423,6 +3448,10 @@ function createProductLifecycleStyle() {
       background-color: #fffaf2 !important;
     }
 
+    .product-dedicated-row {
+      background-color: #fcf7ff !important;
+    }
+
     .stock-backorder-row {
       background-color: #fff8d6 !important;
     }
@@ -3454,6 +3483,7 @@ function createProductLifecycleStyle() {
 
     .detail-product-active,
     .detail-product-planned,
+    .detail-product-dedicated,
     .detail-product-discontinued {
       display: inline-block;
       min-width: 80px;
@@ -3466,6 +3496,12 @@ function createProductLifecycleStyle() {
     .detail-product-active {
       background-color: #e8f5e9;
       color: #1b5e20;
+    }
+
+    .detail-product-dedicated {
+      background-color: #f3e5f5;
+      color: #6a1b9a;
+      border: 1px solid #ba68c8;
     }
 
     .detail-product-planned {

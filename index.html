@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v107
+            画面版 v108
           </span>
         </div>
       </div>
@@ -905,6 +905,7 @@
         <div id="shipping-allocation-summary" class="shipping-allocation-summary">船便を選択すると、今回の倉庫到着日から次便の倉庫到着日前日までに必要な商品を自動計算します。</div>
 
         <div class="shipping-allocation-note">
+          <strong>専用商品は船積振り分け対象外のため、この一覧には表示しません。</strong><br>
           対象期間は「今回の倉庫到着日 ～ 次便の倉庫到着日前日」です。<br>
           期間販売見込 ＝ 直前6か月の月平均販売数 ÷ 30日 × 対象日数（小数切り上げ）。<br>
           推奨数量 ＝ 「期間販売見込 ＋ 対象期間の販売予定数」－ 現在庫 － 前の船便への振分数量です。<br>
@@ -1323,6 +1324,10 @@
               通常商品
             </option>
 
+            <option value="専用商品">
+              専用商品
+            </option>
+
             <option value="廃盤予定">
               廃盤予定
             </option>
@@ -1333,6 +1338,7 @@
           </select>
 
           <small>
+            専用商品は通常どおり在庫・棚卸を管理しますが、船便別の商品振り分け（船積候補）には表示しません。<br>
             廃盤予定は発注必要一覧の対象外です。棚卸・船積の対象には含まれます。廃盤にすると、新しく開始する棚卸には表示されません。
           </small>
         </div>
@@ -2428,6 +2434,10 @@
               通常商品
             </option>
 
+            <option value="専用商品">
+              専用商品
+            </option>
+
             <option value="廃盤予定">
               廃盤予定
             </option>
@@ -2438,6 +2448,7 @@
           </select>
 
           <small>
+            専用商品は通常どおり在庫・棚卸を管理しますが、船便別の商品振り分け（船積候補）には表示しません。<br>
             廃盤予定は発注必要一覧の対象外です。棚卸・船積の対象には含まれます。廃盤にすると、新しく開始する棚卸には表示されません。
           </small>
         </div>
@@ -2546,7 +2557,7 @@
   </main>
 
 <script src="storage.js?v=105"></script>
-<script src="app.js?v=104"></script>
+<script src="app.js?v=108"></script>
 <script src="product-history.js?v=107"></script>
 <script src="inventory.js?v=97"></script>
 <script src="transfer-list.js?v=81"></script>
@@ -2564,6 +2575,7 @@
 <script src="purchase-required.js?v=59"></script>
 <script src="low-shipment.js?v=45"></script>
 <script src="shipping-schedule.js?v=58"></script>
+<script src="dedicated-product.js?v=108"></script>
 <script src="shipping-arrival.js?v=52"></script>
 <script src="barcode-print.js?v=89"></script>
 <script src="backup.js?v=73"></script>

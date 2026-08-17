@@ -1,16 +1,16 @@
 "use strict";
 
-const CACHE_NAME = "barcode-inventory-app-v107";
+const CACHE_NAME = "barcode-inventory-app-v108";
 const APP_FILES = [
   "./", "./index.html", "./style.css?v=107", "./storage.js?v=105",
-  "./app.js?v=104", "./product-history.js?v=107", "./inventory.js?v=97", "./transfer-list.js?v=81",
+  "./app.js?v=108", "./product-history.js?v=107", "./inventory.js?v=97", "./transfer-list.js?v=81",
   "./libs/barcode-detector-zxing-adapter.js?v=31",
   "./libs/ZXING-LICENSE.txt",
   "./scanner.js?v=88", "./stocktaking.js?v=104",
   "./stocktaking-history.js?v=33", "./stocktaking-transfer.js?v=80",
   "./csv.js?v=90", "./csv-import.js?v=75", "./csv-update.js?v=74",
   "./sales-plan.js?v=95", "./sales-actual.js?v=71", "./purchase-required.js?v=59", "./low-shipment.js?v=45",
-  "./shipping-schedule.js?v=58", "./shipping-arrival.js?v=52", "./barcode-print.js?v=89",
+  "./shipping-schedule.js?v=58", "./dedicated-product.js?v=108", "./shipping-arrival.js?v=52", "./barcode-print.js?v=89",
   "./backup.js?v=73", "./restore.js?v=72", "./location-management.js?v=100",
   "./home-dashboard.js?v=96", "./app-settings.js?v=102", "./pwa.js?v=31", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png"

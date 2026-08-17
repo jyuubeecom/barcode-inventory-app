@@ -4565,6 +4565,77 @@ function formatStocktakingLocationBreakdown(
     .join(" / ");
 }
 
+function createStocktakingMovementLocationChanges(
+  beforeEntries,
+  afterEntries
+) {
+  const beforeMap = new Map();
+  const afterMap = new Map();
+
+  (Array.isArray(beforeEntries)
+    ? beforeEntries
+    : []
+  ).forEach(function (entry) {
+    const location =
+      String(entry.location || "").trim();
+
+    if (location === "") {
+      return;
+    }
+
+    beforeMap.set(
+      location,
+      Number(entry.stock || 0)
+    );
+  });
+
+  (Array.isArray(afterEntries)
+    ? afterEntries
+    : []
+  ).forEach(function (entry) {
+    const location =
+      String(entry.location || "").trim();
+
+    if (location === "") {
+      return;
+    }
+
+    afterMap.set(
+      location,
+      Number(entry.stock || 0)
+    );
+  });
+
+  const locations =
+    new Set([
+      ...beforeMap.keys(),
+      ...afterMap.keys()
+    ]);
+
+  return Array.from(locations)
+    .map(function (location) {
+      const beforeStock =
+        Number(
+          beforeMap.get(location) || 0
+        );
+      const afterStock =
+        Number(
+          afterMap.get(location) || 0
+        );
+
+      return {
+        location: location,
+        beforeStock: beforeStock,
+        afterStock: afterStock,
+        change:
+          afterStock - beforeStock
+      };
+    })
+    .filter(function (change) {
+      return change.change !== 0;
+    });
+}
+
 function createStocktakingLocationEntryId() {
   const randomText =
     Math.random()
@@ -6089,7 +6160,12 @@ async function handleConfirmStocktaking() {
               memo:
                 memoParts.join(" / "),
               stocktakingLocation:
-                currentStocktaking.location
+                currentStocktaking.location,
+              locationChanges:
+                createStocktakingMovementLocationChanges(
+                  updateResult.beforeLocationStocks,
+                  updateResult.afterLocationStocks
+                )
             });
 
             return;
@@ -6175,7 +6251,9 @@ async function handleConfirmStocktaking() {
               currentStocktaking.person,
             reason: "棚卸調整",
             memo:
-              memoParts.join(" / ")
+              memoParts.join(" / "),
+            stocktakingLocation:
+              currentStocktaking.location
           });
         }
       );

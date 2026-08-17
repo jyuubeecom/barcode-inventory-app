@@ -846,7 +846,7 @@ body.app-dialog-open {
 
 .product-history-overview {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
   margin: 14px 0;
 }
@@ -873,6 +873,10 @@ body.app-dialog-open {
 
 .product-history-overview strong {
   font-size: 21px;
+}
+
+.history-overview-registration {
+  border-top: 4px solid #7e57c2 !important;
 }
 
 .history-overview-in {
@@ -972,6 +976,11 @@ body.app-dialog-open {
   border-radius: 999px;
   font-weight: 900;
   white-space: nowrap;
+}
+
+.product-history-type-registration {
+  background: #ede7f6;
+  color: #4527a0;
 }
 
 .product-history-type-in {
@@ -1098,4 +1107,9 @@ body.app-dialog-open {
   #back-detail-from-product-history-bottom {
     width: 100%;
   }
+}
+
+
+.product-history-registration {
+  background-color: #faf7ff;
 }

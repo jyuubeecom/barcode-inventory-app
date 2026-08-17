@@ -855,7 +855,10 @@ async function handleProductSubmit(event) {
     afterStock: stock,
     person: "商品登録時",
     reason: "初期登録",
-    memo: ""
+    memo: "",
+    location: location,
+    beforeLocationStock: 0,
+    afterLocationStock: stock
   };
 
   try {

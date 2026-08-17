@@ -416,6 +416,7 @@ function renderProductHistorySummary(
 
   const counts = {
     all: source.length,
+    registration: 0,
     in: 0,
     out: 0,
     adjust: 0,
@@ -436,6 +437,10 @@ function renderProductHistorySummary(
   setProductHistoryText(
     "#product-history-summary-all",
     `${counts.all}件`
+  );
+  setProductHistoryText(
+    "#product-history-summary-registration",
+    `${counts.registration}件`
   );
   setProductHistoryText(
     "#product-history-summary-in",
@@ -494,6 +499,10 @@ function matchesProductHistoryFilter(
 function getProductHistoryFilterLabel(
   filter
 ) {
+  if (filter === "registration") {
+    return "初期登録";
+  }
+
   if (filter === "in") {
     return "入庫";
   }
@@ -503,7 +512,7 @@ function getProductHistoryFilterLabel(
   }
 
   if (filter === "adjust") {
-    return "調整・その他";
+    return "調整・棚卸";
   }
 
   if (filter === "transfer") {
@@ -523,6 +532,10 @@ function getProductHistoryGroup(
         ""
     ).trim();
 
+  if (type === "初期登録") {
+    return "registration";
+  }
+
   if (
     type.includes("移動")
   ) {
@@ -530,8 +543,7 @@ function getProductHistoryGroup(
   }
 
   if (
-    type.includes("入庫") ||
-    type === "初期登録"
+    type.includes("入庫")
   ) {
     return "in";
   }
@@ -772,10 +784,30 @@ function formatProductHistoryLocation(
           change && change.change || 0
         );
         const sign =
-          quantity > 0 ? "＋" : "－";
+          quantity > 0
+            ? "＋"
+            : quantity < 0
+              ? "－"
+              : "±";
+
+        const locationName =
+          change.location ||
+          "保管場所不明";
+
+        if (
+          change.beforeStock !== undefined &&
+          change.afterStock !== undefined
+        ) {
+          return (
+            `${locationName}：` +
+            `${Number(change.beforeStock || 0)}個 → ` +
+            `${Number(change.afterStock || 0)}個 ` +
+            `(${sign}${Math.abs(quantity)}個)`
+          );
+        }
 
         return (
-          `${change.location || "保管場所不明"} ` +
+          `${locationName} ` +
           `${sign}${Math.abs(quantity)}個`
         );
       })
@@ -813,10 +845,10 @@ function formatProductHistoryLocation(
   }
 
   if (movement.type === "初期登録") {
-    return "商品登録時";
+    return "商品登録時（保管場所記録なし）";
   }
 
-  return "記録なし";
+  return "保管場所記録なし";
 }
 
 function getProductHistoryRowClass(type) {
@@ -824,6 +856,10 @@ function getProductHistoryRowClass(type) {
     getProductHistoryGroup({
       type: type
     });
+
+  if (group === "registration") {
+    return "product-history-registration";
+  }
 
   if (group === "in") {
     return "product-history-in";

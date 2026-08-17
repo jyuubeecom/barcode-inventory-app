@@ -1541,6 +1541,16 @@ function updateStockAdjustDifference() {
 async function handleStockAdjustSubmit(event) {
   event.preventDefault();
 
+  if (
+    window.inventoryPermissions &&
+    typeof window.inventoryPermissions.requireAdmin === "function" &&
+    !(await window.inventoryPermissions.requireAdmin(
+      "数量調整"
+    ))
+  ) {
+    return;
+  }
+
   const selectedProduct =
     getStockAdjustSelectedProduct();
 

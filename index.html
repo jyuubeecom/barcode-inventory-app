@@ -46,10 +46,27 @@
           </p>
         </div>
 
-        <span class="home-version-badge">
-          画面版 v95
-        </span>
+        <div class="home-mode-actions">
+          <span id="home-mode-status" aria-live="polite">
+            自動 / 管理者
+          </span>
+
+          <button
+            id="show-app-settings-button"
+            type="button"
+          >
+            表示・権限設定
+          </button>
+
+          <span class="home-version-badge">
+            画面版 v97
+          </span>
+        </div>
       </div>
+
+      <p id="home-role-notice" hidden>
+        作業者モードです。日常作業に必要なメニューだけを表示しています。
+      </p>
 
       <div
         class="home-summary-grid"
@@ -325,6 +342,104 @@
       <p class="home-storage-note">
         この画面の在庫データは、現在開いている端末内に保存されています。
       </p>
+    </section>
+
+
+    <!-- 表示・権限設定 -->
+    <section id="app-settings-screen" hidden>
+      <h2>表示・権限設定</h2>
+
+      <p>
+        この端末で使う画面表示と、ホームに表示するメニューを設定します。
+        設定内容はこの端末に保存されます。
+      </p>
+
+      <div class="app-settings-card">
+        <div class="app-settings-grid">
+          <div>
+            <label for="app-display-mode">
+              表示モード
+            </label>
+            <select id="app-display-mode">
+              <option value="auto">自動</option>
+              <option value="pc">PC表示</option>
+              <option value="mobile">スマホ表示</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="app-role-mode">
+              権限モード
+            </label>
+            <select id="app-role-mode">
+              <option value="admin">管理者</option>
+              <option value="worker">作業者</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="app-settings-worker-menu">
+          <strong>作業者モードで表示する主なメニュー</strong>
+          バーコード読み取り、商品一覧、手入力検索、入出庫履歴、棚卸、商品移動、販売予定一覧、発注必要一覧、出荷低迷一覧など。
+        </div>
+
+        <div id="admin-pin-settings">
+          <strong id="admin-pin-status">管理者PIN：未設定</strong>
+          <p>
+            作業者モードから管理者モードへ戻るときに使用するPINです。
+            4～8桁の数字で設定してください。
+          </p>
+
+          <div class="admin-pin-fields">
+            <div>
+              <label for="admin-pin-input">新しい管理者PIN</label>
+              <input
+                id="admin-pin-input"
+                type="password"
+                inputmode="numeric"
+                maxlength="8"
+                autocomplete="off"
+                placeholder="例：4～8桁"
+              >
+            </div>
+
+            <div>
+              <label for="admin-pin-confirm-input">確認用PIN</label>
+              <input
+                id="admin-pin-confirm-input"
+                type="password"
+                inputmode="numeric"
+                maxlength="8"
+                autocomplete="off"
+                placeholder="同じPINを入力"
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="app-settings-note">
+          <strong>権限について</strong><br>
+          作業者モードでは、商品登録・商品編集・商品削除・数量調整などの管理操作を制限します。<br>
+          管理者モードへ戻るときは、設定した管理者PINが必要です。<br>
+          <small>※ このPINは端末内の誤操作防止用です。本格的な社員ログイン機能は、将来データ共有を導入するときに追加します。</small>
+        </div>
+
+        <div class="app-settings-actions">
+          <button
+            id="back-home-from-app-settings"
+            type="button"
+          >
+            ホームへ戻る
+          </button>
+
+          <button
+            id="save-app-settings-button"
+            type="button"
+          >
+            設定を保存する
+          </button>
+        </div>
+      </div>
     </section>
 
     <!-- 販売予定表 -->
@@ -1423,6 +1538,11 @@
         </tbody>
       </table>
 
+      <p id="product-detail-worker-notice" hidden>
+        🔒 作業者モードでは「入庫」「出庫」は利用できますが、
+        数量調整・商品編集・商品削除は管理者専用です。
+      </p>
+
       <button
         id="stock-in-from-detail-button"
         type="button"
@@ -2238,8 +2358,8 @@
   </main>
 
 <script src="storage.js?v=65"></script>
-<script src="app.js?v=85"></script>
-<script src="inventory.js?v=78"></script>
+<script src="app.js?v=97"></script>
+<script src="inventory.js?v=97"></script>
 <script src="transfer-list.js?v=81"></script>
 <script src="libs/barcode-detector-zxing-adapter.js?v=31"></script>
 <script src="scanner.js?v=88"></script>
@@ -2260,6 +2380,7 @@
 <script src="backup.js?v=73"></script>
 <script src="restore.js?v=72"></script>
 <script src="location-management.js?v=61"></script>
-<script src="home-dashboard.js?v=42"></script>
+<script src="home-dashboard.js?v=96"></script>
+<script src="app-settings.js?v=97"></script>
 </body>
 </html>

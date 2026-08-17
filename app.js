@@ -300,10 +300,42 @@ document.addEventListener(
   initializeApp
 );
 
+
+function isWorkerPermissionMode() {
+  return Boolean(
+    window.inventoryPermissions &&
+    typeof window.inventoryPermissions.isWorker === "function" &&
+    window.inventoryPermissions.isWorker()
+  );
+}
+
+async function requireAdminPermission(
+  actionName
+) {
+  if (
+    window.inventoryPermissions &&
+    typeof window.inventoryPermissions.requireAdmin === "function"
+  ) {
+    return window.inventoryPermissions.requireAdmin(
+      actionName
+    );
+  }
+
+  return true;
+}
+
 async function initializeApp() {
   showRegisterButton.addEventListener(
     "click",
-    function () {
+    async function () {
+      if (
+        !(await requireAdminPermission(
+          "商品の新規登録"
+        ))
+      ) {
+        return;
+      }
+
       showScreen("register");
       internalCodeInput.focus();
     }
@@ -352,7 +384,15 @@ async function initializeApp() {
 
   editFromDetailButton.addEventListener(
     "click",
-    function () {
+    async function () {
+      if (
+        !(await requireAdminPermission(
+          "商品情報の編集"
+        ))
+      ) {
+        return;
+      }
+
       if (detailInternalCodeValue === "") {
         void showAppDialog({
           type: "warning",
@@ -373,6 +413,14 @@ async function initializeApp() {
   deleteFromDetailButton.addEventListener(
     "click",
     async function () {
+      if (
+        !(await requireAdminPermission(
+          "商品の削除"
+        ))
+      ) {
+        return;
+      }
+
       if (detailInternalCodeValue === "") {
         await showAppDialog({
           type: "danger",
@@ -459,6 +507,30 @@ async function initializeApp() {
 }
 
 function showScreen(screenName) {
+  const protectedScreens =
+    new Set([
+      "register",
+      "edit",
+      "stockAdjust",
+      "unassignedLocation"
+    ]);
+
+  if (
+    protectedScreens.has(screenName) &&
+    isWorkerPermissionMode()
+  ) {
+    void requireAdminPermission(
+      screenName === "register"
+        ? "商品の新規登録"
+        : screenName === "edit"
+          ? "商品情報の編集"
+          : screenName === "stockAdjust"
+            ? "数量調整"
+            : "保管場所の一括変更"
+    );
+    return;
+  }
+
   homeScreen.hidden = true;
   registerScreen.hidden = true;
   listScreen.hidden = true;
@@ -525,6 +597,14 @@ function showScreen(screenName) {
 
 async function handleProductSubmit(event) {
   event.preventDefault();
+
+  if (
+    !(await requireAdminPermission(
+      "商品の新規登録"
+    ))
+  ) {
+    return;
+  }
 
   const internalCode =
     internalCodeInput.value.trim();
@@ -1229,6 +1309,14 @@ function openEditScreen(internalCode) {
 async function handleEditProductSubmit(event) {
   event.preventDefault();
 
+  if (
+    !(await requireAdminPermission(
+      "商品情報の編集"
+    ))
+  ) {
+    return;
+  }
+
   if (editingInternalCode === "") {
     await showAppDialog({
       type: "warning",
@@ -1648,6 +1736,14 @@ function showAppDialog(options) {
 }
 
 async function handleDeleteProduct(internalCode) {
+  if (
+    !(await requireAdminPermission(
+      "商品の削除"
+    ))
+  ) {
+    return false;
+  }
+
   const selectedProduct =
     getProductByInternalCode(internalCode);
 

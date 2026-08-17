@@ -14,6 +14,11 @@ const historyScreen =
     "#stock-movement-history"
   );
 
+const productStockHistoryScreen =
+  document.querySelector(
+    "#product-stock-history"
+  );
+
 const detailScreen =
   document.querySelector("#product-detail");
 
@@ -535,6 +540,11 @@ function showScreen(screenName) {
   registerScreen.hidden = true;
   listScreen.hidden = true;
   historyScreen.hidden = true;
+
+  if (productStockHistoryScreen) {
+    productStockHistoryScreen.hidden = true;
+  }
+
   detailScreen.hidden = true;
   stockInScreen.hidden = true;
   stockOutScreen.hidden = true;
@@ -557,6 +567,13 @@ function showScreen(screenName) {
 
   if (screenName === "history") {
     historyScreen.hidden = false;
+    return;
+  }
+
+  if (screenName === "productHistory") {
+    if (productStockHistoryScreen) {
+      productStockHistoryScreen.hidden = false;
+    }
     return;
   }
 

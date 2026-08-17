@@ -575,3 +575,155 @@ body.app-dialog-open {
     font-size: 19px;
   }
 }
+
+
+/* =========================================================
+   v101 商品別在庫履歴
+   ========================================================= */
+#product-history-from-detail-button,
+#back-detail-from-product-history,
+#back-detail-from-product-history-bottom {
+  background-color: #1565c0;
+}
+
+#product-stock-history {
+  overflow-x: hidden;
+}
+
+.product-history-help {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background-color: #e3f2fd;
+  color: #0d47a1;
+  font-weight: 700;
+  line-height: 1.7;
+}
+
+.product-history-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.product-history-summary > div {
+  padding: 12px 14px;
+  border: 1px solid #bbdefb;
+  border-radius: 10px;
+  background-color: #f8fbff;
+}
+
+.product-history-summary span,
+.product-history-summary strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.product-history-summary span {
+  margin-bottom: 5px;
+  color: #546e7a;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.product-history-summary strong {
+  color: #263238;
+  font-size: 18px;
+}
+
+.product-history-summary-wide {
+  grid-column: 1 / -1;
+}
+
+#product-history-count {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background-color: #e3f2fd;
+  font-weight: 800;
+}
+
+.product-history-table-wrap {
+  width: 100%;
+  margin: 14px 0;
+  overflow-x: auto;
+  border: 1px solid #cfd8dc;
+  border-radius: 10px;
+}
+
+#product-stock-history table {
+  width: 100%;
+  min-width: 1180px;
+  border-collapse: collapse;
+  background-color: #ffffff;
+}
+
+#product-stock-history th,
+#product-stock-history td {
+  padding: 11px 10px;
+  border: 1px solid #cfd8dc;
+  text-align: left;
+  vertical-align: top;
+  line-height: 1.55;
+}
+
+#product-stock-history th {
+  background-color: #1565c0;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+#product-stock-history tbody tr.product-history-in {
+  background-color: #e8f5e9;
+}
+
+#product-stock-history tbody tr.product-history-out {
+  background-color: #ffebee;
+}
+
+#product-stock-history tbody tr.product-history-transfer {
+  background-color: #e3f2fd;
+}
+
+#product-stock-history tbody tr.product-history-other {
+  background-color: #fff8e1;
+}
+
+.product-history-type {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.product-history-qty-plus {
+  color: #1b5e20;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.product-history-qty-minus {
+  color: #b71c1c;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.product-history-qty-transfer {
+  color: #0d47a1;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .product-history-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .product-history-summary-wide {
+    grid-column: 1 / -1;
+  }
+
+  #product-history-from-detail-button,
+  #back-detail-from-product-history,
+  #back-detail-from-product-history-bottom {
+    width: 100%;
+    margin: 6px 0;
+  }
+}

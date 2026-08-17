@@ -88,11 +88,21 @@ function getFilteredUnassignedProducts() {
 
   return getUnassignedLocationProducts().filter(function (product) {
     if (!keyword) return true;
+
+    const rawLocation =
+      String(product.location || "").trim();
+
+    const locationDisplayTerms =
+      rawLocation === ""
+        ? ["未設定", "未登録"]
+        : [rawLocation];
+
     return [
       product.internalCode,
       product.productCode,
       product.productName,
-      product.location
+      rawLocation,
+      ...locationDisplayTerms
     ].some(function (value) {
       return String(value || "")
         .normalize("NFKC")

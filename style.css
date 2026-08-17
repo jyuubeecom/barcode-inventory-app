@@ -1127,3 +1127,22 @@ body.app-dialog-open {
   overflow-wrap: anywhere;
   line-height: 1.6;
 }
+
+
+/* =========================================================
+   v107 棚卸履歴メモを項目ごとに改行して整理
+   ========================================================= */
+#product-stock-history td[data-label="メモ"] {
+  white-space: pre-line;
+  line-height: 1.75;
+}
+
+#product-stock-history th:nth-child(7) {
+  width: 270px;
+}
+
+@media (max-width: 700px) {
+  #product-stock-history td[data-label="メモ"] {
+    white-space: pre-line;
+  }
+}

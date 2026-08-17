@@ -397,7 +397,9 @@ function renderProductHistoryRows(movements) {
 
       appendProductHistoryCell(
         row,
-        movement.memo || "－",
+        formatProductHistoryMemo(
+          movement
+        ),
         "メモ"
       );
 
@@ -945,6 +947,112 @@ function getMovementTime(movement) {
   return Number.isNaN(time)
     ? 0
     : time;
+}
+
+function formatProductHistoryMemo(
+  movement
+) {
+  const memo =
+    String(
+      movement &&
+        movement.memo ||
+        ""
+    ).trim();
+
+  if (memo === "") {
+    return "－";
+  }
+
+  const type =
+    String(
+      movement &&
+        movement.type ||
+        ""
+    ).trim();
+
+  if (!type.includes("棚卸")) {
+    return memo;
+  }
+
+  const parts =
+    memo
+      .split(/\s*\/\s*/)
+      .map(function (part) {
+        return part.trim();
+      })
+      .filter(Boolean);
+
+  const sectionLabels = [
+    "棚卸日",
+    "棚卸対象",
+    "開始時場所別",
+    "反映後場所別",
+    "実在庫入力",
+    "場所別",
+    "入力方法"
+  ];
+
+  const lines = [];
+  let currentSection = "";
+
+  parts.forEach(function (part) {
+    const matchedLabel =
+      sectionLabels.find(
+        function (label) {
+          return part.startsWith(
+            `${label}：`
+          );
+        }
+      );
+
+    if (matchedLabel) {
+      currentSection = matchedLabel;
+
+      const value =
+        part.slice(
+          matchedLabel.length + 1
+        ).trim();
+
+      if (
+        matchedLabel === "開始時場所別" ||
+        matchedLabel === "反映後場所別" ||
+        matchedLabel === "実在庫入力" ||
+        matchedLabel === "場所別"
+      ) {
+        lines.push(
+          `${matchedLabel}：`
+        );
+
+        if (value !== "") {
+          lines.push(
+            `・${value}`
+          );
+        }
+      } else {
+        lines.push(
+          `${matchedLabel}：${value}`
+        );
+      }
+
+      return;
+    }
+
+    if (
+      currentSection === "開始時場所別" ||
+      currentSection === "反映後場所別" ||
+      currentSection === "実在庫入力" ||
+      currentSection === "場所別"
+    ) {
+      lines.push(
+        `・${part}`
+      );
+      return;
+    }
+
+    lines.push(part);
+  });
+
+  return lines.join("\n");
 }
 
 function formatProductHistoryDateTime(value) {

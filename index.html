@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v108
+            画面版 v109
           </span>
         </div>
       </div>
@@ -675,10 +675,14 @@
 
       <p>
         「前月までの直近6か月の月平均販売数 × 3か月 ＋ 今後3か月の販売予定数」
-        より現在庫が少ない商品を自動表示します。廃盤商品は対象外です。
+        より現在庫が少ない商品を自動表示します。廃盤・廃盤予定・専用商品は対象外です。
       </p>
 
       <div class="purchase-required-card">
+        <div style="margin-bottom: 12px; padding: 12px 14px; border: 2px solid #ba68c8; border-radius: 10px; background: #f8f0fb; color: #6a1b9a; font-weight: 700;">
+          専用商品は発注対象外のため、この一覧には表示しません。
+        </div>
+
         <div id="purchase-required-summary" class="purchase-required-summary">
           発注判定を計算します。
         </div>
@@ -1338,8 +1342,8 @@
           </select>
 
           <small>
-            専用商品は通常どおり在庫・棚卸を管理しますが、船便別の商品振り分け（船積候補）には表示しません。<br>
-            廃盤予定は発注必要一覧の対象外です。棚卸・船積の対象には含まれます。廃盤にすると、新しく開始する棚卸には表示されません。
+            専用商品は通常どおり在庫・棚卸を管理しますが、発注必要一覧と船便別の商品振り分け（船積候補）には表示しません。<br>
+            廃盤予定も発注必要一覧の対象外です。棚卸・船積の対象には含まれます。廃盤にすると、新しく開始する棚卸には表示されません。
           </small>
         </div>
 
@@ -2448,8 +2452,8 @@
           </select>
 
           <small>
-            専用商品は通常どおり在庫・棚卸を管理しますが、船便別の商品振り分け（船積候補）には表示しません。<br>
-            廃盤予定は発注必要一覧の対象外です。棚卸・船積の対象には含まれます。廃盤にすると、新しく開始する棚卸には表示されません。
+            専用商品は通常どおり在庫・棚卸を管理しますが、発注必要一覧と船便別の商品振り分け（船積候補）には表示しません。<br>
+            廃盤予定も発注必要一覧の対象外です。棚卸・船積の対象には含まれます。廃盤にすると、新しく開始する棚卸には表示されません。
           </small>
         </div>
 
@@ -2572,7 +2576,7 @@
 <script src="pwa.js?v=31"></script>
 <script src="sales-plan.js?v=95"></script>
 <script src="sales-actual.js?v=71"></script>
-<script src="purchase-required.js?v=59"></script>
+<script src="purchase-required.js?v=109"></script>
 <script src="low-shipment.js?v=45"></script>
 <script src="shipping-schedule.js?v=58"></script>
 <script src="dedicated-product.js?v=108"></script>

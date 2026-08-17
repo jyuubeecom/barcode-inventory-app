@@ -287,8 +287,36 @@ function isPurchaseBackorderProduct(product) {
 }
 
 function isPurchaseDiscontinuedProduct(product) {
-  const status = String(product && (product.productStatus || product.status || "") || "").normalize("NFKC").trim().toLowerCase();
-  return status === "廃盤予定" || status === "廃盤" || status === "discontinued" || status === "inactive" || Boolean(product && product.discontinued === true);
+  const status = String(
+    product &&
+      (
+        product.productStatus ||
+        product.status ||
+        ""
+      ) ||
+      ""
+  )
+    .normalize("NFKC")
+    .trim()
+    .toLowerCase();
+
+  return (
+    status === "廃盤予定" ||
+    status === "廃盤" ||
+    status === "専用商品" ||
+    status === "専用" ||
+    status === "discontinued" ||
+    status === "inactive" ||
+    status === "dedicated" ||
+    status === "exclusive" ||
+    Boolean(
+      product &&
+        (
+          product.discontinued === true ||
+          product.dedicated === true
+        )
+    )
+  );
 }
 
 function getPurchaseStockNumber(value) {

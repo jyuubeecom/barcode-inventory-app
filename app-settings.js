@@ -369,10 +369,23 @@
       )
       .forEach(
         function (section) {
+          if (
+            section.id ===
+            "app-settings-screen"
+          ) {
+            return;
+          }
+
           section.hidden = true;
+          section.classList.add(
+            "app-settings-exclusive-hidden"
+          );
         }
       );
 
+    settingsScreen.classList.remove(
+      "app-settings-exclusive-hidden"
+    );
     settingsScreen.hidden = false;
     settingsScreen.scrollIntoView({
       behavior: "smooth",
@@ -389,6 +402,18 @@
     if (settingsScreen) {
       settingsScreen.hidden = true;
     }
+
+    document
+      .querySelectorAll(
+        "main > section"
+      )
+      .forEach(
+        function (section) {
+          section.classList.remove(
+            "app-settings-exclusive-hidden"
+          );
+        }
+      );
 
     if (
       window.inventoryApp &&
@@ -1168,6 +1193,10 @@
     style.textContent = `
       .role-menu-hidden,
       [hidden].role-menu-hidden {
+        display: none !important;
+      }
+
+      .app-settings-exclusive-hidden {
         display: none !important;
       }
 

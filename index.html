@@ -10,7 +10,7 @@
 
   <meta name="theme-color" content="#1565c0">
 
-  <link rel="stylesheet" href="style.css?v=101">
+  <link rel="stylesheet" href="style.css?v=102">
 
   <link rel="manifest" href="manifest.json">
 
@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v101
+            画面版 v102
           </span>
         </div>
       </div>
@@ -1539,58 +1539,77 @@
       </table>
 
       <p id="product-detail-worker-notice" hidden>
-        🔒 作業者モードでは「入庫」「出庫」は利用できますが、
+        🔒 作業者モードでは「入庫」「出庫」「在庫履歴」は利用できますが、
         数量調整・商品編集・商品削除は管理者専用です。
       </p>
 
-      <button
-        id="stock-in-from-detail-button"
-        type="button"
-      >
-        入庫する
-      </button>
+      <div class="product-detail-actions">
+        <div class="product-detail-action-group product-detail-action-group-main">
+          <h3>在庫操作</h3>
 
-      <button
-        id="stock-out-from-detail-button"
-        type="button"
-      >
-        出庫する
-      </button>
+          <div class="product-detail-action-buttons">
+            <button
+              id="stock-in-from-detail-button"
+              type="button"
+            >
+              入庫する
+            </button>
 
-      <button
-        id="product-history-from-detail-button"
-        type="button"
-      >
-        在庫履歴を見る
-      </button>
+            <button
+              id="stock-out-from-detail-button"
+              type="button"
+            >
+              出庫する
+            </button>
 
-      <button
-        id="stock-adjust-from-detail-button"
-        type="button"
-      >
-        数量調整する
-      </button>
+            <button
+              id="product-history-from-detail-button"
+              type="button"
+            >
+              在庫履歴を見る
+            </button>
+          </div>
+        </div>
 
-      <button
-        id="edit-from-detail-button"
-        type="button"
-      >
-        商品情報を編集する
-      </button>
+        <div
+          id="product-detail-admin-actions"
+          class="product-detail-action-group product-detail-action-group-admin"
+        >
+          <h3>管理操作</h3>
 
-      <button
-        id="delete-from-detail-button"
-        type="button"
-      >
-        商品を削除する
-      </button>
+          <div class="product-detail-action-buttons">
+            <button
+              id="stock-adjust-from-detail-button"
+              type="button"
+            >
+              数量調整する
+            </button>
 
-      <button
-        id="back-list-from-detail"
-        type="button"
-      >
-        商品一覧へ戻る
-      </button>
+            <button
+              id="edit-from-detail-button"
+              type="button"
+            >
+              商品情報を編集する
+            </button>
+
+            <button
+              id="delete-from-detail-button"
+              type="button"
+            >
+              商品を削除する
+            </button>
+          </div>
+        </div>
+
+        <div class="product-detail-action-group product-detail-action-group-back">
+          <button
+            id="back-list-from-detail"
+            type="button"
+          >
+            商品一覧へ戻る
+          </button>
+        </div>
+      </div>
     </section>
 
     <!-- 商品別在庫履歴画面 -->
@@ -2467,6 +2486,6 @@
 <script src="restore.js?v=72"></script>
 <script src="location-management.js?v=100"></script>
 <script src="home-dashboard.js?v=96"></script>
-<script src="app-settings.js?v=99"></script>
+<script src="app-settings.js?v=102"></script>
 </body>
 </html>

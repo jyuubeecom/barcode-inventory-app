@@ -1009,6 +1009,18 @@
         shouldHide
       );
     }
+
+    const adminActionGroup =
+      document.querySelector(
+        "#product-detail-admin-actions"
+      );
+
+    if (adminActionGroup) {
+      adminActionGroup.classList.toggle(
+        "role-menu-hidden",
+        roleMode === "worker"
+      );
+    }
   }
 
   function enforceWorkerScreenRestriction(

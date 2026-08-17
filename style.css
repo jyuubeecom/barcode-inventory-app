@@ -727,3 +727,79 @@ body.app-dialog-open {
     margin: 6px 0;
   }
 }
+
+
+/* =========================================================
+   v102 商品詳細画面の操作ボタン整理
+   ========================================================= */
+.product-detail-actions {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.product-detail-action-group {
+  padding: 14px;
+  border: 1px solid #d7e0e8;
+  border-radius: 12px;
+  background-color: #f8fafc;
+}
+
+.product-detail-action-group h3 {
+  margin: 0 0 10px;
+  color: #37474f;
+  font-size: 17px;
+}
+
+.product-detail-action-group-main {
+  border-left: 5px solid #2e7d32;
+  background-color: #f5fbf6;
+}
+
+.product-detail-action-group-admin {
+  border-left: 5px solid #ef6c00;
+  background-color: #fffaf5;
+}
+
+.product-detail-action-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.product-detail-action-buttons button,
+.product-detail-action-group-back button {
+  width: 100%;
+  min-height: 54px;
+  margin: 0;
+}
+
+#product-history-from-detail-button {
+  background-color: #1565c0;
+}
+
+#back-list-from-detail {
+  background-color: #546e7a;
+}
+
+.product-detail-action-group-back {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+@media (max-width: 700px) {
+  .product-detail-action-buttons {
+    grid-template-columns: 1fr;
+  }
+
+  .product-detail-action-group {
+    padding: 12px;
+  }
+
+  .product-detail-action-buttons button,
+  .product-detail-action-group-back button {
+    min-height: 56px;
+    font-size: 17px;
+  }
+}

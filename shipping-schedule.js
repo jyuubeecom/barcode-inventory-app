@@ -660,7 +660,10 @@ function getShippingAllocationRows(schedule) {
 
   return shippingScheduleProducts
     .filter(function (product) {
-      return !isShippingDiscontinuedProduct(product) && String(product.internalCode || "").trim();
+      return (
+        isShippingAllocationTargetProduct(product) &&
+        String(product.internalCode || "").trim()
+      );
     })
     .map(function (product) {
       const internalCode = String(product.internalCode || "").trim();
@@ -1986,6 +1989,59 @@ function formatShippingPrintNumber(value) {
 function getShippingNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
+}
+
+function normalizeShippingMasterText(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .trim();
+}
+
+function isShippingDedicatedProduct(product) {
+  const status =
+    normalizeShippingMasterText(
+      product &&
+        (
+          product.productStatus ||
+          product.status ||
+          ""
+        )
+    ).toLowerCase();
+
+  return (
+    status === "専用商品" ||
+    status === "専用" ||
+    status === "dedicated" ||
+    status === "exclusive" ||
+    Boolean(
+      product &&
+        product.dedicated === true
+    )
+  );
+}
+
+function isShippingMobikSupplierProduct(product) {
+  const supplier =
+    normalizeShippingMasterText(
+      product &&
+        (
+          product.supplier ||
+          product.supplierName ||
+          ""
+        )
+    );
+
+  return (
+    supplier === "株式会社モービック"
+  );
+}
+
+function isShippingAllocationTargetProduct(product) {
+  return (
+    !isShippingDiscontinuedProduct(product) &&
+    !isShippingDedicatedProduct(product) &&
+    isShippingMobikSupplierProduct(product)
+  );
 }
 
 function isShippingBackorderProduct(product) {

@@ -801,7 +801,7 @@ function formatProductHistoryLocation(
           `${sign}${Math.abs(quantity)}個`
         );
       })
-      .join(" / ");
+      .join("\n");
   }
 
   if (
@@ -809,9 +809,8 @@ function formatProductHistoryLocation(
     destinationLocation
   ) {
     return (
-      `${sourceLocation} → ` +
-      `${destinationLocation} ` +
-      "（場所別在庫の変更前後は旧履歴のため記録なし）"
+      `${sourceLocation} → ${destinationLocation}\n` +
+      "（旧履歴のため、場所別在庫の変更前後は記録されていません）"
     );
   }
 

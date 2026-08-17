@@ -1113,3 +1113,17 @@ body.app-dialog-open {
 .product-history-registration {
   background-color: #faf7ff;
 }
+
+
+/* =========================================================
+   v106 商品別在庫履歴：保管場所・移動を行ごとに改行
+   ========================================================= */
+#product-stock-history td[data-label="保管場所・移動"] {
+  white-space: pre-line;
+  line-height: 1.7;
+}
+
+#product-stock-history td[data-label="メモ"] {
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}

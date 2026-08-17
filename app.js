@@ -170,6 +170,11 @@ const locationInput =
 const supplierInput =
   document.querySelector("#supplier");
 
+const orderRemainingInput =
+  document.querySelector(
+    "#order-remaining"
+  );
+
 const productStatusInput =
   document.querySelector(
     "#product-status"
@@ -221,6 +226,11 @@ const editLocationInput =
 const editSupplierInput =
   document.querySelector(
     "#edit-supplier"
+  );
+
+const editOrderRemainingInput =
+  document.querySelector(
+    "#edit-order-remaining"
   );
 
 const editProductStatusInput =
@@ -284,6 +294,11 @@ const detailLocationStocks =
 const detailSupplier =
   document.querySelector(
     "#detail-supplier"
+  );
+
+const detailOrderRemaining =
+  document.querySelector(
+    "#detail-order-remaining"
   );
 
 const detailProductStatus =
@@ -649,6 +664,13 @@ async function handleProductSubmit(event) {
   const supplier =
     supplierInput.value.trim();
 
+  const orderRemaining =
+    getValidStockNumber(
+      orderRemainingInput
+        ? orderRemainingInput.value
+        : 0
+    );
+
   const productStatus =
     getProductLifecycleStatus({
       productStatus:
@@ -784,6 +806,39 @@ async function handleProductSubmit(event) {
     return;
   }
 
+  if (
+    orderRemainingInput &&
+    (
+      orderRemainingInput.value.trim() === "" ||
+      !Number.isInteger(Number(orderRemainingInput.value)) ||
+      Number(orderRemainingInput.value) < 0
+    )
+  ) {
+    await showAppDialog({
+      type: "warning",
+      icon: "📦",
+      title: "発注残数を確認してください",
+      message:
+        "発注残数は0以上の整数で入力してください。",
+      details: [
+        {
+          label: "入力値",
+          value:
+            orderRemainingInput.value ||
+            "未入力"
+        },
+        {
+          label: "入力例",
+          value: "0、120、300"
+        }
+      ],
+      confirmText: "入力に戻る"
+    });
+
+    orderRemainingInput.focus();
+    return;
+  }
+
   const duplicateInternalCode = products.find(
     function (product) {
       return (
@@ -836,6 +891,7 @@ async function handleProductSubmit(event) {
       location: location
     }),
     supplier: supplier,
+    orderRemaining: orderRemaining,
     backorderStatus: backorderStatus,
     productStatus: productStatus,
     createdAt: currentDateTime,
@@ -877,6 +933,11 @@ async function handleProductSubmit(event) {
     productForm.reset();
     stockInput.value = 0;
     minStockInput.value = 0;
+
+    if (orderRemainingInput) {
+      orderRemainingInput.value = 0;
+    }
+
     productStatusInput.value =
       "通常商品";
 
@@ -1232,6 +1293,13 @@ function openDetailScreen(internalCode) {
   detailSupplier.textContent =
     selectedProduct.supplier;
 
+  if (detailOrderRemaining) {
+    detailOrderRemaining.textContent =
+      `${getOrderRemaining(
+        selectedProduct
+      ).toLocaleString("ja-JP")}個`;
+  }
+
   const productLifecycleStatus =
     getProductLifecycleStatus(
       selectedProduct
@@ -1311,6 +1379,13 @@ function openEditScreen(internalCode) {
 
   editSupplierInput.value =
     selectedProduct.supplier;
+
+  if (editOrderRemainingInput) {
+    editOrderRemainingInput.value =
+      getOrderRemaining(
+        selectedProduct
+      );
+  }
 
   editProductStatusInput.value =
     getProductLifecycleStatus(
@@ -1399,6 +1474,15 @@ async function handleEditProductSubmit(event) {
   const supplier =
     editSupplierInput.value.trim();
 
+  const orderRemaining =
+    getValidStockNumber(
+      editOrderRemainingInput
+        ? editOrderRemainingInput.value
+        : getOrderRemaining(
+            currentProduct
+          )
+    );
+
   const productStatus =
     getProductLifecycleStatus({
       productStatus:
@@ -1480,6 +1564,39 @@ async function handleEditProductSubmit(event) {
     return;
   }
 
+  if (
+    editOrderRemainingInput &&
+    (
+      editOrderRemainingInput.value.trim() === "" ||
+      !Number.isInteger(Number(editOrderRemainingInput.value)) ||
+      Number(editOrderRemainingInput.value) < 0
+    )
+  ) {
+    await showAppDialog({
+      type: "warning",
+      icon: "📦",
+      title: "発注残数を確認してください",
+      message:
+        "発注残数は0以上の整数で入力してください。",
+      details: [
+        {
+          label: "入力値",
+          value:
+            editOrderRemainingInput.value ||
+            "未入力"
+        },
+        {
+          label: "入力例",
+          value: "0、120、300"
+        }
+      ],
+      confirmText: "入力に戻る"
+    });
+
+    editOrderRemainingInput.focus();
+    return;
+  }
+
 
   const updatedProduct = {
     internalCode: editingInternalCode,
@@ -1496,6 +1613,7 @@ async function handleEditProductSubmit(event) {
         location
       ),
     supplier: supplier,
+    orderRemaining: orderRemaining,
     backorderStatus: backorderStatus,
     productStatus: productStatus,
     createdAt:
@@ -1937,6 +2055,10 @@ function normalizeProductData(product) {
     minStock: getValidStockNumber(
       normalizedLocationProduct.minStock
     ),
+    orderRemaining:
+      getOrderRemaining(
+        normalizedLocationProduct
+      ),
     productStatus:
       getProductLifecycleStatus(
         normalizedLocationProduct
@@ -2068,6 +2190,13 @@ function getValidStockNumber(value) {
   }
 
   return numberValue;
+}
+
+function getOrderRemaining(product) {
+  return getValidStockNumber(
+    product &&
+      product.orderRemaining
+  );
 }
 
 function getMinimumStock(product) {

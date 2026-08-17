@@ -94,9 +94,40 @@ async function checkAndReflectDueShippingArrivals(options) {
         const product = productMap.get(item.internalCode);
         const beforeStock = Number(product.stock) || 0;
         const afterStock = beforeStock + item.quantity;
+
+        const beforeOrderRemaining =
+          getShippingArrivalOrderRemaining(
+            product
+          );
+
+        const afterOrderRemaining =
+          Math.max(
+            0,
+            beforeOrderRemaining -
+              item.quantity
+          );
+
+        const orderRemainingReduced =
+          Math.max(
+            0,
+            beforeOrderRemaining -
+              afterOrderRemaining
+          );
+
+        const orderRemainingOverage =
+          beforeOrderRemaining > 0
+            ? Math.max(
+                0,
+                item.quantity -
+                  beforeOrderRemaining
+              )
+            : 0;
+
         const updatedProduct = {
           ...product,
           stock: afterStock,
+          orderRemaining:
+            afterOrderRemaining,
           updatedAt: movementDateTime
         };
         const movement = {
@@ -114,7 +145,8 @@ async function checkAndReflectDueShippingArrivals(options) {
           reason: "船便入荷",
           memo:
             `船便：${schedule.name || schedule.id} / ` +
-            `倉庫到着日：${schedule.warehouseArrivalDate} / 自動入荷反映`
+            `倉庫到着日：${schedule.warehouseArrivalDate} / 自動入荷反映 / ` +
+            `発注残：${beforeOrderRemaining}→${afterOrderRemaining}`
         };
 
         updatedProducts.push(updatedProduct);
@@ -126,6 +158,14 @@ async function checkAndReflectDueShippingArrivals(options) {
           quantity: item.quantity,
           beforeStock: beforeStock,
           afterStock: afterStock,
+          beforeOrderRemaining:
+            beforeOrderRemaining,
+          afterOrderRemaining:
+            afterOrderRemaining,
+          orderRemainingReduced:
+            orderRemainingReduced,
+          orderRemainingOverage:
+            orderRemainingOverage,
           movementId: movement.id
         });
       });
@@ -133,6 +173,35 @@ async function checkAndReflectDueShippingArrivals(options) {
       const totalQuantity = receiptItems.reduce(function (sum, item) {
         return sum + item.quantity;
       }, 0);
+
+      const totalOrderRemainingReduced =
+        receiptItems.reduce(
+          function (sum, item) {
+            return (
+              sum +
+              Number(
+                item.orderRemainingReduced ||
+                0
+              )
+            );
+          },
+          0
+        );
+
+      const totalOrderRemainingOverage =
+        receiptItems.reduce(
+          function (sum, item) {
+            return (
+              sum +
+              Number(
+                item.orderRemainingOverage ||
+                0
+              )
+            );
+          },
+          0
+        );
+
       const receipt = {
         id: schedule.id,
         scheduleId: schedule.id,
@@ -144,6 +213,10 @@ async function checkAndReflectDueShippingArrivals(options) {
         movementDateTime: movementDateTime,
         productCount: receiptItems.length,
         totalQuantity: totalQuantity,
+        orderRemainingReduced:
+          totalOrderRemainingReduced,
+        orderRemainingOverage:
+          totalOrderRemainingOverage,
         items: receiptItems
       };
 
@@ -179,7 +252,33 @@ async function checkAndReflectDueShippingArrivals(options) {
           message +=
             `・${receipt.scheduleName || receipt.scheduleId}：` +
             `${receipt.productCount.toLocaleString("ja-JP")}商品 / ` +
-            `${receipt.totalQuantity.toLocaleString("ja-JP")}個\n`;
+            `${receipt.totalQuantity.toLocaleString("ja-JP")}個`;
+
+          if (
+            Number(
+              receipt.orderRemainingReduced ||
+              0
+            ) > 0
+          ) {
+            message +=
+              ` / 発注残 -${Number(
+                receipt.orderRemainingReduced
+              ).toLocaleString("ja-JP")}個`;
+          }
+
+          message += "\n";
+
+          if (
+            Number(
+              receipt.orderRemainingOverage ||
+              0
+            ) > 0
+          ) {
+            message +=
+              `  ⚠ 発注残数を超えた入荷：${Number(
+                receipt.orderRemainingOverage
+              ).toLocaleString("ja-JP")}個\n`;
+          }
         });
       }
       if (failed.length > 0) {
@@ -359,6 +458,24 @@ function getShippingArrivalScheduleQuantity(allocations, scheduleId) {
     .reduce(function (sum, allocation) {
       return sum + (Number(allocation.quantity) || 0);
     }, 0);
+}
+
+function getShippingArrivalOrderRemaining(
+  product
+) {
+  const number = Number(
+    product &&
+      product.orderRemaining
+  );
+
+  if (
+    !Number.isInteger(number) ||
+    number < 0
+  ) {
+    return 0;
+  }
+
+  return number;
 }
 
 function getShippingArrivalTodayKey() {

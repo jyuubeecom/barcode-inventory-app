@@ -11,6 +11,7 @@ function initializePurchaseRequiredFeature() {
   const showButton = document.querySelector("#show-purchase-required-button");
   const backButton = document.querySelector("#back-home-from-purchase-required");
   const searchInput = document.querySelector("#purchase-required-search");
+  const statusFilter = document.querySelector("#purchase-required-status-filter");
   const prevButton = document.querySelector("#purchase-required-prev-page");
   const nextButton = document.querySelector("#purchase-required-next-page");
   const refreshButton = document.querySelector("#refresh-purchase-required-button");
@@ -21,6 +22,12 @@ function initializePurchaseRequiredFeature() {
   if (backButton) backButton.addEventListener("click", closePurchaseRequiredScreen);
   if (searchInput) {
     searchInput.addEventListener("input", function () {
+      purchaseRequiredCurrentPage = 1;
+      renderPurchaseRequiredTable();
+    });
+  }
+  if (statusFilter) {
+    statusFilter.addEventListener("change", function () {
       purchaseRequiredCurrentPage = 1;
       renderPurchaseRequiredTable();
     });
@@ -102,24 +109,49 @@ async function refreshPurchaseRequiredData() {
         const requiredStockRaw = threeMonthBase + plannedQuantity;
         const requiredStock = Math.ceil(requiredStockRaw);
         const currentStock = getPurchaseStockNumber(product.stock);
-        const shortage = Math.max(0, requiredStock - currentStock);
+        const orderRemaining = getPurchaseOrderRemaining(product);
+        const currentShortage = Math.max(0, requiredStock - currentStock);
+        const shortage = Math.max(
+          0,
+          requiredStock -
+            currentStock -
+            orderRemaining
+        );
+        const judgment =
+          shortage > 0
+            ? "required"
+            : "ordered";
+
         return {
           internalCode: internalCode,
           productCode: product.productCode || "",
           productName: product.productName || "",
           currentStock: currentStock,
+          orderRemaining: orderRemaining,
+          stockWithOrderRemaining:
+            currentStock +
+            orderRemaining,
+          currentShortage: currentShortage,
           sixMonthSales: sixMonthSales,
           monthlyAverage: monthlyAverage,
           threeMonthBase: threeMonthBase,
           plannedQuantity: plannedQuantity,
           requiredStock: requiredStock,
           shortage: shortage,
+          judgment: judgment,
           location: product.location || "",
           isBackorder: isPurchaseBackorderProduct(product)
         };
       })
-      .filter(function (row) { return row.shortage > 0; })
+      .filter(function (row) {
+        return row.currentShortage > 0;
+      })
       .sort(function (a, b) {
+        if (a.judgment !== b.judgment) {
+          return a.judgment === "required"
+            ? -1
+            : 1;
+        }
         if (a.isBackorder !== b.isBackorder) return a.isBackorder ? -1 : 1;
         if (b.shortage !== a.shortage) return b.shortage - a.shortage;
         return a.internalCode.localeCompare(b.internalCode, "ja", { numeric: true });
@@ -324,16 +356,65 @@ function getPurchaseStockNumber(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function getPurchaseOrderRemaining(product) {
+  const number = Number(
+    product &&
+      product.orderRemaining
+  );
+
+  if (
+    !Number.isInteger(number) ||
+    number < 0
+  ) {
+    return 0;
+  }
+
+  return number;
+}
+
 function renderPurchaseRequiredSummary() {
   const summary = document.querySelector("#purchase-required-summary");
   if (!summary || !purchaseRequiredContext) return;
-  const totalShortage = purchaseRequiredRows.reduce(function (sum, row) { return sum + row.shortage; }, 0);
+  const requiredRows =
+    purchaseRequiredRows.filter(
+      function (row) {
+        return row.judgment === "required";
+      }
+    );
+
+  const orderedRows =
+    purchaseRequiredRows.filter(
+      function (row) {
+        return row.judgment === "ordered";
+      }
+    );
+
+  const totalShortage =
+    requiredRows.reduce(
+      function (sum, row) {
+        return sum + row.shortage;
+      },
+      0
+    );
+
+  const totalOrderRemaining =
+    purchaseRequiredRows.reduce(
+      function (sum, row) {
+        return sum + row.orderRemaining;
+      },
+      0
+    );
+
   const backorderCount = purchaseRequiredRows.filter(function (row) { return row.isBackorder; }).length;
   summary.innerHTML = `
     <strong>判定日：</strong>${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.evaluationDate))}<br>
     <strong>平均販売数：</strong>${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.actualStartDate))} ～ ${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.actualEndDate))} の6か月平均<br>
     <strong>販売予定：</strong>${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.forecastStartDate))} ～ ${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.forecastEndDate))}<br>
-    <strong>発注が必要：</strong>${purchaseRequiredRows.length.toLocaleString("ja-JP")}商品 / <strong>不足数量合計：</strong>${totalShortage.toLocaleString("ja-JP")}個 / <strong>注残：</strong>${backorderCount.toLocaleString("ja-JP")}商品
+    <strong>発注必要：</strong>${requiredRows.length.toLocaleString("ja-JP")}商品 /
+    <strong>発注済み：</strong>${orderedRows.length.toLocaleString("ja-JP")}商品 /
+    <strong>追加発注必要数合計：</strong>${totalShortage.toLocaleString("ja-JP")}個<br>
+    <strong>表示商品の発注残数合計：</strong>${totalOrderRemaining.toLocaleString("ja-JP")}個 /
+    <strong>注残：</strong>${backorderCount.toLocaleString("ja-JP")}商品
   `;
 }
 
@@ -352,12 +433,54 @@ function renderPurchaseRequiredCoverageWarning() {
 
 function getFilteredPurchaseRequiredRows() {
   const input = document.querySelector("#purchase-required-search");
-  const term = String(input ? input.value : "").trim().toLowerCase();
-  if (!term) return purchaseRequiredRows.slice();
-  return purchaseRequiredRows.filter(function (row) {
-    return [row.internalCode, row.productCode, row.productName, row.location]
-      .some(function (value) { return String(value || "").toLowerCase().includes(term); });
-  });
+  const statusFilter =
+    document.querySelector(
+      "#purchase-required-status-filter"
+    );
+
+  const term =
+    String(
+      input
+        ? input.value
+        : ""
+    )
+      .normalize("NFKC")
+      .trim()
+      .toLowerCase();
+
+  const judgment =
+    String(
+      statusFilter
+        ? statusFilter.value
+        : "all"
+    );
+
+  return purchaseRequiredRows.filter(
+    function (row) {
+      if (
+        judgment !== "all" &&
+        row.judgment !== judgment
+      ) {
+        return false;
+      }
+
+      if (!term) {
+        return true;
+      }
+
+      return [
+        row.internalCode,
+        row.productCode,
+        row.productName,
+        row.location
+      ].some(function (value) {
+        return String(value || "")
+          .normalize("NFKC")
+          .toLowerCase()
+          .includes(term);
+      });
+    }
+  );
 }
 
 function renderPurchaseRequiredTable() {
@@ -377,27 +500,42 @@ function renderPurchaseRequiredTable() {
 
   if (rows.length === 0) {
     const row = document.createElement("tr");
-    row.innerHTML = '<td colspan="12">条件に該当する商品はありません。</td>';
+    row.innerHTML = '<td colspan="14">条件に該当する商品はありません。</td>';
     body.appendChild(row);
   } else {
     rows.forEach(function (item) {
       const row = document.createElement("tr");
+
       if (item.isBackorder) {
         row.classList.add("purchase-required-backorder-row");
       }
+
+      if (item.judgment === "ordered") {
+        row.classList.add(
+          "purchase-required-ordered-row"
+        );
+      }
+
+      const judgmentBadge =
+        item.judgment === "ordered"
+          ? '<span class="purchase-required-badge purchase-required-badge-ordered">発注済み</span>'
+          : '<span class="purchase-required-badge">発注必要</span>';
+
       row.innerHTML = `
         <td><strong class="purchase-required-shortage">${item.shortage.toLocaleString("ja-JP")}</strong></td>
         <td>${escapePurchaseHtml(item.internalCode)}</td>
         <td>${escapePurchaseHtml(item.productCode)}</td>
         <td>${item.isBackorder ? '<span class="purchase-required-backorder-badge">注残</span> ' : ''}${escapePurchaseHtml(item.productName)}</td>
         <td>${item.currentStock.toLocaleString("ja-JP")}</td>
+        <td><strong>${item.orderRemaining.toLocaleString("ja-JP")}</strong></td>
+        <td>${item.stockWithOrderRemaining.toLocaleString("ja-JP")}</td>
         <td>${formatPurchaseQuantity(item.sixMonthSales)}</td>
         <td>${formatPurchaseWholeNumber(item.monthlyAverage)}</td>
         <td>${formatPurchaseWholeNumber(item.threeMonthBase)}</td>
         <td>${formatPurchaseQuantity(item.plannedQuantity)}</td>
         <td><strong>${item.requiredStock.toLocaleString("ja-JP")}</strong></td>
         <td>${escapePurchaseHtml(item.location)}</td>
-        <td><span class="purchase-required-badge">発注必要</span></td>
+        <td>${judgmentBadge}</td>
       `;
       body.appendChild(row);
     });
@@ -465,9 +603,11 @@ function createPurchaseRequiredStyle() {
     #purchase-required .purchase-required-filter { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 12px; }
     #purchase-required .purchase-required-filter > div { flex: 1 1 300px; }
     #purchase-required .purchase-required-table-wrap { overflow-x: auto; }
-    #purchase-required table { min-width: 1280px; }
+    #purchase-required table { min-width: 1500px; }
     #purchase-required .purchase-required-shortage { color: #c62828; font-size: 18px; }
     #purchase-required .purchase-required-badge { display: inline-block; background: #c62828; color: #fff; padding: 4px 9px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+    #purchase-required .purchase-required-badge-ordered { background: #2e7d32; }
+    #purchase-required .purchase-required-ordered-row { background: #eef8ef; }
     #purchase-required .purchase-required-backorder-row { background: #fff8d6; }
     #purchase-required .purchase-required-backorder-badge { display: inline-block; background: #f6c343; color: #5c3a00; padding: 4px 9px; border-radius: 999px; font-weight: 800; white-space: nowrap; margin-bottom: 4px; border: 1px solid #d89b00; }
     #purchase-required .purchase-required-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 14px; }

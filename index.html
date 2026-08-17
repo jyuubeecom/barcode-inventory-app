@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v110
+            画面版 v111
           </span>
         </div>
       </div>
@@ -675,7 +675,8 @@
 
       <p>
         「前月までの直近6か月の月平均販売数 × 3か月 ＋ 今後3か月の販売予定数」
-        より現在庫が少ない商品を自動表示します。廃盤・廃盤予定・専用商品は対象外です。
+        を必要数として、現在庫と発注残数を差し引いて追加発注が必要か判定します。<br>
+        現在庫だけでは不足する商品を「発注必要」「発注済み」に振り分けます。廃盤・廃盤予定・専用商品は対象外です。
       </p>
 
       <div class="purchase-required-card">
@@ -698,6 +699,16 @@
             <label for="purchase-required-search">商品を検索</label>
             <input id="purchase-required-search" type="search" placeholder="社内コード・商品コード・商品名・保管場所">
           </div>
+
+          <div>
+            <label for="purchase-required-status-filter">判定で絞り込み</label>
+            <select id="purchase-required-status-filter">
+              <option value="all">すべて</option>
+              <option value="required">発注必要</option>
+              <option value="ordered">発注済み</option>
+            </select>
+          </div>
+
           <strong id="purchase-required-filter-count">表示：0商品</strong>
         </div>
 
@@ -705,11 +716,13 @@
           <table>
             <thead>
               <tr>
-                <th>不足数</th>
+                <th>発注必要数</th>
                 <th>社内コード</th>
                 <th>商品コード</th>
                 <th>商品名</th>
                 <th>現在庫</th>
+                <th>発注残数</th>
+                <th>現在庫＋発注残</th>
                 <th>6か月販売数（返品差引後）</th>
                 <th>月平均販売数</th>
                 <th>月平均×3</th>
@@ -881,6 +894,7 @@
           <p class="shipping-arrival-note">
             <strong>「船積内容を確定する」まで在庫へ自動反映しません。</strong><br>
             船積数量を確認して確定した船便だけ、倉庫到着日になったあとに一度だけ現在庫へ「入庫」として自動反映します。<br>
+            商品に発注残数が登録されている場合は、同じ入荷数量分を発注残数から自動で減らします。発注残数は0未満にはなりません。<br>
             アプリを閉じている間に勝手に処理するのではなく、倉庫到着日以降に最初にこのアプリを開いた時点で反映します。入出庫履歴の日付は船便の「倉庫到着日」で記録します。
           </p>
           <button id="check-shipping-arrivals-button" type="button">到着済み船便を今すぐ確認する</button>
@@ -1294,6 +1308,26 @@
         </div>
 
         <div>
+          <label for="order-remaining">
+            発注残数
+          </label>
+
+          <input
+            id="order-remaining"
+            name="orderRemaining"
+            type="number"
+            min="0"
+            step="1"
+            value="0"
+            inputmode="numeric"
+          >
+
+          <small>
+            すでに発注していて、まだ入荷していない数量を入力します。船便の自動入荷が反映されると、その入荷数量分を自動で減らします。
+          </small>
+        </div>
+
+        <div>
           <label for="backorder-status">
             在庫状態（注残設定）
           </label>
@@ -1535,6 +1569,11 @@
           <tr>
             <th>仕入先</th>
             <td id="detail-supplier"></td>
+          </tr>
+
+          <tr>
+            <th>発注残数</th>
+            <td id="detail-order-remaining"></td>
           </tr>
 
           <tr>
@@ -2406,6 +2445,25 @@
         </div>
 
         <div>
+          <label for="edit-order-remaining">
+            発注残数
+          </label>
+
+          <input
+            id="edit-order-remaining"
+            type="number"
+            min="0"
+            step="1"
+            value="0"
+            inputmode="numeric"
+          >
+
+          <small>
+            すでに発注していて、まだ入荷していない数量です。船便入荷時に自動で減ります。
+          </small>
+        </div>
+
+        <div>
           <label for="edit-backorder-status">
             在庫状態（注残設定）
           </label>
@@ -2562,7 +2620,7 @@
   </main>
 
 <script src="storage.js?v=105"></script>
-<script src="app.js?v=108"></script>
+<script src="app.js?v=111"></script>
 <script src="product-history.js?v=107"></script>
 <script src="inventory.js?v=97"></script>
 <script src="transfer-list.js?v=81"></script>
@@ -2577,11 +2635,11 @@
 <script src="pwa.js?v=31"></script>
 <script src="sales-plan.js?v=95"></script>
 <script src="sales-actual.js?v=71"></script>
-<script src="purchase-required.js?v=109"></script>
+<script src="purchase-required.js?v=111"></script>
 <script src="low-shipment.js?v=45"></script>
 <script src="shipping-schedule.js?v=110"></script>
 <script src="dedicated-product.js?v=108"></script>
-<script src="shipping-arrival.js?v=52"></script>
+<script src="shipping-arrival.js?v=111"></script>
 <script src="barcode-print.js?v=89"></script>
 <script src="backup.js?v=73"></script>
 <script src="restore.js?v=72"></script>

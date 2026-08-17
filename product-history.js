@@ -763,16 +763,6 @@ function formatProductHistoryLocation(
   ).trim();
 
   if (
-    sourceLocation &&
-    destinationLocation
-  ) {
-    return (
-      `${sourceLocation} → ` +
-      destinationLocation
-    );
-  }
-
-  if (
     Array.isArray(
       movement.locationChanges
     ) &&
@@ -812,6 +802,17 @@ function formatProductHistoryLocation(
         );
       })
       .join(" / ");
+  }
+
+  if (
+    sourceLocation &&
+    destinationLocation
+  ) {
+    return (
+      `${sourceLocation} → ` +
+      `${destinationLocation} ` +
+      "（場所別在庫の変更前後は旧履歴のため記録なし）"
+    );
   }
 
   const location = String(

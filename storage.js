@@ -3274,6 +3274,13 @@ async function completeTransferAndApplyInventory(
           }
         );
 
+        const destinationStockBefore =
+          destinationEntry
+            ? normalizeLocationStockQuantity(
+                destinationEntry.stock
+              )
+            : 0;
+
         if (!destinationEntry) {
           destinationEntry = {
             location: destinationLocation,
@@ -3340,6 +3347,20 @@ async function completeTransferAndApplyInventory(
           memo: `${sourceLocation} → ${destinationLocation}`,
           sourceLocation: sourceLocation,
           destinationLocation: destinationLocation,
+          locationChanges: [
+            {
+              location: sourceLocation,
+              beforeStock: sourceStock,
+              afterStock: sourceEntry.stock,
+              change: -item.quantity
+            },
+            {
+              location: destinationLocation,
+              beforeStock: destinationStockBefore,
+              afterStock: destinationEntry.stock,
+              change: item.quantity
+            }
+          ],
           transferListId: transferId
         });
       }

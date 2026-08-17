@@ -1,6 +1,8 @@
 "use strict";
 
 let selectedProductHistoryInternalCode = "";
+let allProductHistoryMovements = [];
+let productHistoryFilter = "all";
 
 window.addEventListener(
   "DOMContentLoaded",
@@ -24,6 +26,26 @@ function initializeProductHistoryFeature() {
       openSelectedProductHistory
     );
   }
+
+  document
+    .querySelectorAll(
+      "[data-product-history-filter]"
+    )
+    .forEach(function (button) {
+      button.addEventListener(
+        "click",
+        function () {
+          productHistoryFilter =
+            button.dataset.productHistoryFilter ||
+            "all";
+
+          updateProductHistoryFilterButtons();
+          renderProductHistoryRows(
+            allProductHistoryMovements
+          );
+        }
+      );
+    });
 
   if (backButton) {
     backButton.addEventListener(
@@ -155,6 +177,14 @@ async function openProductStockHistory(
           );
         });
 
+    allProductHistoryMovements =
+      productMovements;
+    productHistoryFilter = "all";
+
+    updateProductHistoryFilterButtons();
+    renderProductHistorySummary(
+      productMovements
+    );
     renderProductHistoryRows(
       productMovements
     );
@@ -241,8 +271,8 @@ function renderProductHistoryLoading() {
 
   if (body) {
     body.innerHTML = `
-      <tr>
-        <td colspan="8">
+      <tr class="product-history-empty-row">
+        <td colspan="7">
           履歴を読み込んでいます。
         </td>
       </tr>
@@ -264,89 +294,368 @@ function renderProductHistoryRows(movements) {
     return;
   }
 
+  const sourceMovements =
+    Array.isArray(movements)
+      ? movements
+      : [];
+
+  const visibleMovements =
+    sourceMovements.filter(
+      function (movement) {
+        return matchesProductHistoryFilter(
+          movement,
+          productHistoryFilter
+        );
+      }
+    );
+
+  const filterLabel =
+    getProductHistoryFilterLabel(
+      productHistoryFilter
+    );
+
   count.textContent =
-    `この商品の在庫履歴：${movements.length}件`;
+    productHistoryFilter === "all"
+      ? `この商品の在庫履歴：${visibleMovements.length}件`
+      : `${filterLabel}：${visibleMovements.length}件 / 全${sourceMovements.length}件`;
+
   body.innerHTML = "";
 
-  if (movements.length === 0) {
+  if (visibleMovements.length === 0) {
     const row = document.createElement("tr");
+    row.className =
+      "product-history-empty-row";
+
     const cell = document.createElement("td");
-    cell.colSpan = 8;
+    cell.colSpan = 7;
     cell.textContent =
-      "この商品の在庫履歴はまだありません。";
+      productHistoryFilter === "all"
+        ? "この商品の在庫履歴はまだありません。"
+        : `「${filterLabel}」に該当する履歴はありません。`;
+
     row.appendChild(cell);
     body.appendChild(row);
     return;
   }
 
-  movements.forEach(function (movement) {
-    const row = document.createElement("tr");
-    row.classList.add(
-      getProductHistoryRowClass(
-        movement.type
-      )
-    );
+  visibleMovements.forEach(
+    function (movement) {
+      const row =
+        document.createElement("tr");
 
-    appendProductHistoryCell(
-      row,
-      formatProductHistoryDateTime(
-        movement.dateTime
-      )
-    );
-
-    const typeCell =
-      appendProductHistoryCell(
-        row,
-        movement.type || "未登録"
+      row.classList.add(
+        getProductHistoryRowClass(
+          movement.type
+        )
       );
-    typeCell.classList.add(
-      "product-history-type"
-    );
 
-    const quantityCell =
-      appendProductHistoryCell(
+      appendProductHistoryDateTimeCell(
         row,
-        formatProductHistoryQuantity(
+        movement.dateTime
+      );
+
+      appendProductHistoryTypeCell(
+        row,
+        movement
+      );
+
+      const quantityCell =
+        appendProductHistoryCell(
+          row,
+          formatProductHistoryQuantity(
+            movement
+          ),
+          "数量"
+        );
+
+      quantityCell.classList.add(
+        getProductHistoryQuantityClass(
           movement
         )
       );
-    quantityCell.classList.add(
-      getProductHistoryQuantityClass(
+
+      appendProductHistoryCell(
+        row,
+        formatProductHistoryStockChange(
+          movement
+        ),
+        "総在庫"
+      );
+
+      appendProductHistoryCell(
+        row,
+        formatProductHistoryLocation(
+          movement
+        ),
+        "保管場所・移動"
+      );
+
+      appendProductHistoryPersonReasonCell(
+        row,
         movement
-      )
-    );
+      );
 
-    appendProductHistoryCell(
-      row,
-      formatProductHistoryStockChange(
+      appendProductHistoryCell(
+        row,
+        movement.memo || "－",
+        "メモ"
+      );
+
+      body.appendChild(row);
+    }
+  );
+}
+
+function renderProductHistorySummary(
+  movements
+) {
+  const source =
+    Array.isArray(movements)
+      ? movements
+      : [];
+
+  const counts = {
+    all: source.length,
+    in: 0,
+    out: 0,
+    adjust: 0,
+    transfer: 0
+  };
+
+  source.forEach(function (movement) {
+    const group =
+      getProductHistoryGroup(
         movement
-      )
-    );
+      );
 
-    appendProductHistoryCell(
-      row,
-      formatProductHistoryLocation(
-        movement
-      )
-    );
-
-    appendProductHistoryCell(
-      row,
-      movement.person || "未入力"
-    );
-
-    appendProductHistoryCell(
-      row,
-      movement.reason || "未入力"
-    );
-
-    appendProductHistoryCell(
-      row,
-      movement.memo || ""
-    );
-
-    body.appendChild(row);
+    if (counts[group] !== undefined) {
+      counts[group] += 1;
+    }
   });
+
+  setProductHistoryText(
+    "#product-history-summary-all",
+    `${counts.all}件`
+  );
+  setProductHistoryText(
+    "#product-history-summary-in",
+    `${counts.in}件`
+  );
+  setProductHistoryText(
+    "#product-history-summary-out",
+    `${counts.out}件`
+  );
+  setProductHistoryText(
+    "#product-history-summary-adjust",
+    `${counts.adjust}件`
+  );
+  setProductHistoryText(
+    "#product-history-summary-transfer",
+    `${counts.transfer}件`
+  );
+}
+
+function updateProductHistoryFilterButtons() {
+  document
+    .querySelectorAll(
+      "[data-product-history-filter]"
+    )
+    .forEach(function (button) {
+      const isActive =
+        button.dataset.productHistoryFilter ===
+        productHistoryFilter;
+
+      button.classList.toggle(
+        "is-active",
+        isActive
+      );
+
+      button.setAttribute(
+        "aria-pressed",
+        isActive ? "true" : "false"
+      );
+    });
+}
+
+function matchesProductHistoryFilter(
+  movement,
+  filter
+) {
+  if (!filter || filter === "all") {
+    return true;
+  }
+
+  return (
+    getProductHistoryGroup(movement) ===
+    filter
+  );
+}
+
+function getProductHistoryFilterLabel(
+  filter
+) {
+  if (filter === "in") {
+    return "入庫";
+  }
+
+  if (filter === "out") {
+    return "出庫";
+  }
+
+  if (filter === "adjust") {
+    return "調整・その他";
+  }
+
+  if (filter === "transfer") {
+    return "商品移動";
+  }
+
+  return "すべて";
+}
+
+function getProductHistoryGroup(
+  movement
+) {
+  const type =
+    String(
+      movement &&
+        movement.type ||
+        ""
+    ).trim();
+
+  if (
+    type.includes("移動")
+  ) {
+    return "transfer";
+  }
+
+  if (
+    type.includes("入庫") ||
+    type === "初期登録"
+  ) {
+    return "in";
+  }
+
+  if (
+    type.includes("出庫") ||
+    type.includes("販売")
+  ) {
+    return "out";
+  }
+
+  return "adjust";
+}
+
+function appendProductHistoryDateTimeCell(
+  row,
+  value
+) {
+  const cell =
+    document.createElement("td");
+
+  cell.dataset.label = "日時";
+  cell.className =
+    "product-history-datetime";
+
+  const date =
+    value ? new Date(value) : null;
+
+  if (
+    !date ||
+    Number.isNaN(date.getTime())
+  ) {
+    cell.textContent =
+      value || "記録なし";
+    row.appendChild(cell);
+    return cell;
+  }
+
+  const dateLine =
+    document.createElement("strong");
+  dateLine.textContent =
+    date.toLocaleDateString("ja-JP");
+
+  const timeLine =
+    document.createElement("span");
+  timeLine.textContent =
+    date.toLocaleTimeString(
+      "ja-JP",
+      {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      }
+    );
+
+  cell.appendChild(dateLine);
+  cell.appendChild(timeLine);
+  row.appendChild(cell);
+
+  return cell;
+}
+
+function appendProductHistoryTypeCell(
+  row,
+  movement
+) {
+  const cell =
+    document.createElement("td");
+  cell.dataset.label = "内容";
+  cell.className =
+    "product-history-type";
+
+  const badge =
+    document.createElement("span");
+  badge.className =
+    "product-history-type-badge";
+
+  const group =
+    getProductHistoryGroup(
+      movement
+    );
+
+  badge.classList.add(
+    `product-history-type-${group}`
+  );
+
+  badge.textContent =
+    movement.type || "未登録";
+
+  cell.appendChild(badge);
+  row.appendChild(cell);
+
+  return cell;
+}
+
+function appendProductHistoryPersonReasonCell(
+  row,
+  movement
+) {
+  const cell =
+    document.createElement("td");
+
+  cell.dataset.label =
+    "担当者・理由";
+  cell.className =
+    "product-history-person-reason";
+
+  const person =
+    document.createElement("strong");
+  person.textContent =
+    movement.person || "未入力";
+
+  const reason =
+    document.createElement("span");
+  reason.textContent =
+    movement.reason
+      ? `理由：${movement.reason}`
+      : "理由：未入力";
+
+  cell.appendChild(person);
+  cell.appendChild(reason);
+  row.appendChild(cell);
+
+  return cell;
 }
 
 function renderProductHistoryError() {
@@ -366,8 +675,8 @@ function renderProductHistoryError() {
 
   if (body) {
     body.innerHTML = `
-      <tr>
-        <td colspan="8">
+      <tr class="product-history-empty-row">
+        <td colspan="7">
           在庫履歴の読み込みでエラーが発生しました。
         </td>
       </tr>
@@ -511,15 +820,20 @@ function formatProductHistoryLocation(
 }
 
 function getProductHistoryRowClass(type) {
-  if (type === "入庫") {
+  const group =
+    getProductHistoryGroup({
+      type: type
+    });
+
+  if (group === "in") {
     return "product-history-in";
   }
 
-  if (type === "出庫") {
+  if (group === "out") {
     return "product-history-out";
   }
 
-  if (type === "移動") {
+  if (group === "transfer") {
     return "product-history-transfer";
   }
 
@@ -557,10 +871,18 @@ function getProductHistoryQuantityClass(
 
 function appendProductHistoryCell(
   row,
-  text
+  text,
+  label
 ) {
-  const cell = document.createElement("td");
-  cell.textContent = String(text ?? "");
+  const cell =
+    document.createElement("td");
+
+  if (label) {
+    cell.dataset.label = label;
+  }
+
+  cell.textContent =
+    String(text ?? "");
   row.appendChild(cell);
   return cell;
 }

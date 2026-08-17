@@ -10,7 +10,7 @@
 
   <meta name="theme-color" content="#1565c0">
 
-  <link rel="stylesheet" href="style.css?v=102">
+  <link rel="stylesheet" href="style.css?v=103">
 
   <link rel="manifest" href="manifest.json">
 
@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v102
+            画面版 v103
           </span>
         </div>
       </div>
@@ -1617,14 +1617,24 @@
       id="product-stock-history"
       hidden
     >
-      <h2>商品別在庫履歴</h2>
+      <div class="product-history-heading">
+        <div>
+          <h2>商品別在庫履歴</h2>
+          <p>
+            いつ・何個・どこで在庫が動いたかを、新しい履歴から確認できます。
+          </p>
+        </div>
 
-      <p class="product-history-help">
-        この商品について、いつ・何個・どのように在庫が動いたかを新しい順に確認できます。
-      </p>
+        <button
+          id="back-detail-from-product-history"
+          type="button"
+        >
+          商品詳細へ戻る
+        </button>
+      </div>
 
       <div class="product-history-summary">
-        <div>
+        <div class="product-history-product-main">
           <span>商品名</span>
           <strong id="product-history-product-name">-</strong>
         </div>
@@ -1636,7 +1646,7 @@
           <span>商品コード</span>
           <strong id="product-history-product-code">-</strong>
         </div>
-        <div>
+        <div class="product-history-stock-card">
           <span>現在庫</span>
           <strong id="product-history-current-stock">-</strong>
         </div>
@@ -1646,34 +1656,96 @@
         </div>
       </div>
 
+      <div class="product-history-overview">
+        <div>
+          <span>全履歴</span>
+          <strong id="product-history-summary-all">0件</strong>
+        </div>
+        <div class="history-overview-in">
+          <span>入庫</span>
+          <strong id="product-history-summary-in">0件</strong>
+        </div>
+        <div class="history-overview-out">
+          <span>出庫</span>
+          <strong id="product-history-summary-out">0件</strong>
+        </div>
+        <div class="history-overview-adjust">
+          <span>調整・その他</span>
+          <strong id="product-history-summary-adjust">0件</strong>
+        </div>
+        <div class="history-overview-transfer">
+          <span>商品移動</span>
+          <strong id="product-history-summary-transfer">0件</strong>
+        </div>
+      </div>
+
+      <div class="product-history-filter-area">
+        <strong>表示する履歴</strong>
+
+        <div class="product-history-filter-buttons">
+          <button
+            type="button"
+            class="is-active"
+            data-product-history-filter="all"
+            aria-pressed="true"
+          >
+            すべて
+          </button>
+
+          <button
+            type="button"
+            data-product-history-filter="in"
+            aria-pressed="false"
+          >
+            入庫
+          </button>
+
+          <button
+            type="button"
+            data-product-history-filter="out"
+            aria-pressed="false"
+          >
+            出庫
+          </button>
+
+          <button
+            type="button"
+            data-product-history-filter="adjust"
+            aria-pressed="false"
+          >
+            調整・その他
+          </button>
+
+          <button
+            type="button"
+            data-product-history-filter="transfer"
+            aria-pressed="false"
+          >
+            商品移動
+          </button>
+        </div>
+      </div>
+
       <p id="product-history-count">
         履歴を読み込んでいます。
       </p>
-
-      <button
-        id="back-detail-from-product-history"
-        type="button"
-      >
-        商品詳細へ戻る
-      </button>
 
       <div class="product-history-table-wrap">
         <table>
           <thead>
             <tr>
               <th>日時</th>
-              <th>区分</th>
+              <th>内容</th>
               <th>数量</th>
               <th>総在庫</th>
-              <th>保管場所・移動内容</th>
-              <th>担当者</th>
-              <th>理由</th>
+              <th>保管場所・移動</th>
+              <th>担当者・理由</th>
               <th>メモ</th>
             </tr>
           </thead>
           <tbody id="product-history-body">
-            <tr>
-              <td colspan="8">
+            <tr class="product-history-empty-row">
+              <td colspan="7">
                 履歴を読み込んでいます。
               </td>
             </tr>
@@ -2463,7 +2535,7 @@
 
 <script src="storage.js?v=65"></script>
 <script src="app.js?v=101"></script>
-<script src="product-history.js?v=101"></script>
+<script src="product-history.js?v=103"></script>
 <script src="inventory.js?v=97"></script>
 <script src="transfer-list.js?v=81"></script>
 <script src="libs/barcode-detector-zxing-adapter.js?v=31"></script>

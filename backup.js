@@ -37,7 +37,7 @@ async function exportFullBackup() {
   button.textContent = "バックアップ内容を確認しています...";
 
   try {
-    const [productsData, movements, stocktakings, submissions, reflections, salesPlans, salesActuals, salesImportBatches, shippingWishes, shippingSchedules, shippingAllocations, shippingWarehouseAllocations, shippingArrivalReceipts, transferLists, restoreLogs] =
+    const [productsData, movements, stocktakings, submissions, reflections, salesPlans, salesActuals, salesImportBatches, shippingWishes, shippingSchedules, shippingAllocations, shippingWarehouseAllocations, shippingArrivalReceipts, transferLists, orderRemainingHistories, restoreLogs] =
       await Promise.all([
         getAllProducts(),
         getAllStockMovements(),
@@ -53,6 +53,7 @@ async function exportFullBackup() {
         getAllShippingWarehouseAllocations(),
         getAllShippingArrivalReceipts(),
         getAllTransferLists(),
+        getAllOrderRemainingHistories(),
         getAllRestoreLogs()
       ]);
 
@@ -71,7 +72,9 @@ async function exportFullBackup() {
               { label: "販売実績", value: `${salesActuals.length}件` },
               { label: "販売実績CSV取込履歴", value: `${salesImportBatches.length}件` },
               { label: "船便スケジュール", value: `${shippingSchedules.length}件` },
-              { label: "商品移動リスト", value: `${transferLists.length}件` }
+              { label: "商品移動リスト", value: `${transferLists.length}件` },
+          { label: "発注残変更履歴", value: `${orderRemainingHistories.length}件` },
+              { label: "発注残変更履歴", value: `${orderRemainingHistories.length}件` }
             ],
             notice: "このバックアップには会社の在庫情報が含まれます。第三者が見られる場所や公開された場所には保存しないでください。",
             isConfirm: true,
@@ -92,8 +95,8 @@ async function exportFullBackup() {
     const appSettings = collectAppSettingsForBackup();
     const backupData = {
       backupType: "barcode-inventory-app",
-      backupVersion: 9,
-      appVersion: "v73",
+      backupVersion: 10,
+      appVersion: "v118",
       appName: "バーコード在庫・棚卸管理",
       exportedAt: exportedAt.toISOString(),
       counts: {
@@ -111,6 +114,8 @@ async function exportFullBackup() {
         shippingWarehouseAllocations: shippingWarehouseAllocations.length,
         shippingArrivalReceipts: shippingArrivalReceipts.length,
         transferLists: transferLists.length,
+        orderRemainingHistories:
+          orderRemainingHistories.length,
         restoreLogs: restoreLogs.length
       },
       data: {
@@ -128,6 +133,8 @@ async function exportFullBackup() {
         shippingWarehouseAllocations: shippingWarehouseAllocations,
         shippingArrivalReceipts: shippingArrivalReceipts,
         transferLists: transferLists,
+        orderRemainingHistories:
+          orderRemainingHistories,
         appSettings: appSettings,
         restoreLogs: restoreLogs
       }

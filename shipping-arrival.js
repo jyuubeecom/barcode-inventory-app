@@ -89,6 +89,7 @@ async function checkAndReflectDueShippingArrivals(options) {
       const updatedProducts = [];
       const movements = [];
       const receiptItems = [];
+      const orderRemainingHistories = [];
 
       grouped.forEach(function (item) {
         const product = productMap.get(item.internalCode);
@@ -151,6 +152,42 @@ async function checkAndReflectDueShippingArrivals(options) {
 
         updatedProducts.push(updatedProduct);
         movements.push(movement);
+
+        if (
+          beforeOrderRemaining !==
+          afterOrderRemaining
+        ) {
+          orderRemainingHistories.push({
+            id:
+              `order-remaining-shipping-${schedule.id}-` +
+              `${item.internalCode}-${Date.now()}-` +
+              `${Math.random().toString(36).slice(2, 8)}`,
+            dateTime:
+              movementDateTime,
+            recordedAt:
+              reflectedAt,
+            internalCode:
+              item.internalCode,
+            productCode:
+              movement.productCode,
+            productName:
+              movement.productName,
+            beforeOrderRemaining:
+              beforeOrderRemaining,
+            afterOrderRemaining:
+              afterOrderRemaining,
+            change:
+              afterOrderRemaining -
+              beforeOrderRemaining,
+            source:
+              "船便入荷",
+            memo:
+              `船便：${schedule.name || schedule.id} / ` +
+              `倉庫到着日：${schedule.warehouseArrivalDate} / ` +
+              `入荷数量：${item.quantity}個`
+          });
+        }
+
         receiptItems.push({
           internalCode: item.internalCode,
           productCode: movement.productCode,
@@ -221,7 +258,12 @@ async function checkAndReflectDueShippingArrivals(options) {
       };
 
       try {
-        await applyShippingArrivalReceipt(updatedProducts, movements, receipt);
+        await applyShippingArrivalReceipt(
+          updatedProducts,
+          movements,
+          receipt,
+          orderRemainingHistories
+        );
         updatedProducts.forEach(function (updatedProduct) {
           productMap.set(String(updatedProduct.internalCode || "").trim(), updatedProduct);
           if (window.inventoryApp && typeof window.inventoryApp.applyUpdatedProduct === "function") {

@@ -3,7 +3,7 @@
 const DATABASE_NAME =
   "barcodeInventoryDatabase";
 
-const DATABASE_VERSION = 14;
+const DATABASE_VERSION = 15;
 
 const PRODUCT_STORE_NAME =
   "products";
@@ -49,6 +49,9 @@ const SHIPPING_ARRIVAL_RECEIPT_STORE_NAME =
 
 const TRANSFER_LIST_STORE_NAME =
   "transferLists";
+
+const ORDER_REMAINING_HISTORY_STORE_NAME =
+  "orderRemainingHistories";
 
 const LOCATION_STOCK_UNCONFIRMED_NAME =
   "未確認";
@@ -930,6 +933,36 @@ function openDatabase() {
             { unique: false }
           );
         }
+
+        if (
+          !database.objectStoreNames.contains(
+            ORDER_REMAINING_HISTORY_STORE_NAME
+          )
+        ) {
+          const orderRemainingHistoryStore =
+            database.createObjectStore(
+              ORDER_REMAINING_HISTORY_STORE_NAME,
+              { keyPath: "id" }
+            );
+
+          orderRemainingHistoryStore.createIndex(
+            "internalCode",
+            "internalCode",
+            { unique: false }
+          );
+
+          orderRemainingHistoryStore.createIndex(
+            "dateTime",
+            "dateTime",
+            { unique: false }
+          );
+
+          orderRemainingHistoryStore.createIndex(
+            "source",
+            "source",
+            { unique: false }
+          );
+        }
       };
 
     request.onsuccess =
@@ -1118,6 +1151,142 @@ async function updateProduct(
         reject(error);
       };
   });
+}
+
+async function saveOrderRemainingChange(
+  updatedProduct,
+  history
+) {
+  const database =
+    await openDatabase();
+
+  return new Promise(function (
+    resolve,
+    reject
+  ) {
+    const transaction =
+      database.transaction(
+        [
+          PRODUCT_STORE_NAME,
+          ORDER_REMAINING_HISTORY_STORE_NAME
+        ],
+        "readwrite"
+      );
+
+    const productStore =
+      transaction.objectStore(
+        PRODUCT_STORE_NAME
+      );
+
+    const historyStore =
+      transaction.objectStore(
+        ORDER_REMAINING_HISTORY_STORE_NAME
+      );
+
+    productStore.put(
+      normalizeProductLocationStocks(
+        updatedProduct
+      )
+    );
+
+    historyStore.add(
+      history
+    );
+
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve();
+      };
+
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
+
+    transaction.onabort =
+      transaction.onerror;
+  });
+}
+
+async function applyOrderRemainingBulkChanges(
+  changes
+) {
+  const items =
+    Array.isArray(changes)
+      ? changes
+      : [];
+
+  if (items.length === 0) {
+    return;
+  }
+
+  const database =
+    await openDatabase();
+
+  return new Promise(function (
+    resolve,
+    reject
+  ) {
+    const transaction =
+      database.transaction(
+        [
+          PRODUCT_STORE_NAME,
+          ORDER_REMAINING_HISTORY_STORE_NAME
+        ],
+        "readwrite"
+      );
+
+    const productStore =
+      transaction.objectStore(
+        PRODUCT_STORE_NAME
+      );
+
+    const historyStore =
+      transaction.objectStore(
+        ORDER_REMAINING_HISTORY_STORE_NAME
+      );
+
+    items.forEach(function (item) {
+      productStore.put(
+        normalizeProductLocationStocks(
+          item.product
+        )
+      );
+
+      historyStore.add(
+        item.history
+      );
+    });
+
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve();
+      };
+
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
+
+    transaction.onabort =
+      transaction.onerror;
+  });
+}
+
+async function getAllOrderRemainingHistories() {
+  return getAllRecordsFromStore(
+    ORDER_REMAINING_HISTORY_STORE_NAME
+  );
 }
 
 async function deleteProduct(
@@ -2869,14 +3038,20 @@ async function getShippingArrivalReceipt(scheduleId) {
   });
 }
 
-async function applyShippingArrivalReceipt(updatedProducts, movements, receipt) {
+async function applyShippingArrivalReceipt(
+  updatedProducts,
+  movements,
+  receipt,
+  orderRemainingHistories
+) {
   const database = await openDatabase();
   return new Promise(function (resolve, reject) {
     const transaction = database.transaction(
       [
         PRODUCT_STORE_NAME,
         MOVEMENT_STORE_NAME,
-        SHIPPING_ARRIVAL_RECEIPT_STORE_NAME
+        SHIPPING_ARRIVAL_RECEIPT_STORE_NAME,
+        ORDER_REMAINING_HISTORY_STORE_NAME
       ],
       "readwrite"
     );
@@ -2884,6 +3059,9 @@ async function applyShippingArrivalReceipt(updatedProducts, movements, receipt) 
     const productStore = transaction.objectStore(PRODUCT_STORE_NAME);
     const movementStore = transaction.objectStore(MOVEMENT_STORE_NAME);
     const receiptStore = transaction.objectStore(SHIPPING_ARRIVAL_RECEIPT_STORE_NAME);
+    const orderRemainingHistoryStore = transaction.objectStore(
+      ORDER_REMAINING_HISTORY_STORE_NAME
+    );
 
     updatedProducts.forEach(function (product) {
       productStore.put(
@@ -2895,6 +3073,14 @@ async function applyShippingArrivalReceipt(updatedProducts, movements, receipt) 
     movements.forEach(function (movement) {
       movementStore.add(movement);
     });
+
+    (Array.isArray(orderRemainingHistories)
+      ? orderRemainingHistories
+      : []
+    ).forEach(function (history) {
+      orderRemainingHistoryStore.add(history);
+    });
+
     receiptStore.add(receipt);
 
     transaction.oncomplete = function () {

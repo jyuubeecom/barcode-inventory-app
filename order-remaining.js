@@ -1,10 +1,13 @@
 "use strict";
 
 const ORDER_REMAINING_PAGE_SIZE = 20;
+const ORDER_REMAINING_HISTORY_PAGE_SIZE = 20;
 
 let orderRemainingProducts = [];
 let orderRemainingCurrentPage = 1;
 let orderRemainingCsvPreview = null;
+let orderRemainingHistories = [];
+let orderRemainingHistoryCurrentPage = 1;
 
 window.addEventListener(
   "DOMContentLoaded",
@@ -75,6 +78,31 @@ function initializeOrderRemainingFeature() {
   const closeCsvPreviewButton =
     document.querySelector(
       "#close-order-remaining-csv-preview"
+    );
+
+  const historyToggleButton =
+    document.querySelector(
+      "#toggle-order-remaining-history"
+    );
+
+  const historySearchInput =
+    document.querySelector(
+      "#order-remaining-history-search"
+    );
+
+  const historySourceFilter =
+    document.querySelector(
+      "#order-remaining-history-source"
+    );
+
+  const historyPrevButton =
+    document.querySelector(
+      "#order-remaining-history-prev"
+    );
+
+  const historyNextButton =
+    document.querySelector(
+      "#order-remaining-history-next"
     );
 
   if (!showButton) {
@@ -217,6 +245,68 @@ function initializeOrderRemainingFeature() {
       clearOrderRemainingCsvPreview
     );
   }
+
+  if (historyToggleButton) {
+    historyToggleButton.addEventListener(
+      "click",
+      function () {
+        void toggleOrderRemainingHistoryPanel();
+      }
+    );
+  }
+
+  if (historySearchInput) {
+    historySearchInput.addEventListener(
+      "input",
+      function () {
+        orderRemainingHistoryCurrentPage = 1;
+        renderOrderRemainingHistory();
+      }
+    );
+  }
+
+  if (historySourceFilter) {
+    historySourceFilter.addEventListener(
+      "change",
+      function () {
+        orderRemainingHistoryCurrentPage = 1;
+        renderOrderRemainingHistory();
+      }
+    );
+  }
+
+  if (historyPrevButton) {
+    historyPrevButton.addEventListener(
+      "click",
+      function () {
+        if (
+          orderRemainingHistoryCurrentPage >
+          1
+        ) {
+          orderRemainingHistoryCurrentPage -= 1;
+          renderOrderRemainingHistory();
+        }
+      }
+    );
+  }
+
+  if (historyNextButton) {
+    historyNextButton.addEventListener(
+      "click",
+      function () {
+        const totalPages =
+          getOrderRemainingHistoryTotalPages();
+
+        if (
+          orderRemainingHistoryCurrentPage <
+          totalPages
+        ) {
+          orderRemainingHistoryCurrentPage += 1;
+          renderOrderRemainingHistory();
+        }
+      }
+    );
+  }
 }
 
 async function openOrderRemainingScreen() {
@@ -264,6 +354,25 @@ async function openOrderRemainingScreen() {
 
 function closeOrderRemainingScreen() {
   clearOrderRemainingCsvPreview();
+
+  const historyPanel =
+    document.querySelector(
+      "#order-remaining-history-panel"
+    );
+
+  const historyToggleButton =
+    document.querySelector(
+      "#toggle-order-remaining-history"
+    );
+
+  if (historyPanel) {
+    historyPanel.hidden = true;
+  }
+
+  if (historyToggleButton) {
+    historyToggleButton.textContent =
+      "発注残変更履歴を見る";
+  }
 
   const screen =
     document.querySelector(
@@ -1100,16 +1209,44 @@ async function saveOrderRemainingProduct(
     return;
   }
 
+  const now =
+    new Date().toISOString();
+
   const updatedProduct = {
     ...product,
     orderRemaining: newValue,
-    updatedAt:
-      new Date().toISOString()
+    updatedAt: now
+  };
+
+  const history = {
+    id:
+      `order-remaining-manual-${Date.now()}-` +
+      `${Math.random().toString(36).slice(2, 8)}`,
+    dateTime: now,
+    recordedAt: now,
+    internalCode:
+      product.internalCode || "",
+    productCode:
+      product.productCode || "",
+    productName:
+      product.productName || "",
+    beforeOrderRemaining:
+      product.orderRemaining,
+    afterOrderRemaining:
+      newValue,
+    change:
+      newValue -
+      product.orderRemaining,
+    source:
+      "手動編集",
+    memo:
+      "発注残一覧・編集画面から変更"
   };
 
   try {
-    await updateProduct(
-      updatedProduct
+    await saveOrderRemainingChange(
+      updatedProduct,
+      history
     );
 
     if (
@@ -1139,6 +1276,14 @@ async function saveOrderRemainingProduct(
     }
 
     await loadOrderRemainingProducts();
+
+    if (
+      !document.querySelector(
+        "#order-remaining-history-panel"
+      )?.hidden
+    ) {
+      await loadOrderRemainingHistories();
+    }
   } catch (error) {
     console.error(
       "発注残数保存エラー",
@@ -2218,47 +2363,86 @@ async function applyOrderRemainingCsv() {
     return;
   }
 
-  let updatedCount = 0;
-  const failures = [];
+  const now =
+    new Date().toISOString();
 
-  for (
-    const row of changes
-  ) {
-    try {
-      const updatedProduct = {
-        ...row.product,
-        orderRemaining:
-          row.newValue,
-        updatedAt:
-          new Date().toISOString()
-      };
+  const bulkChanges =
+    changes.map(
+      function (row) {
+        const updatedProduct = {
+          ...row.product,
+          orderRemaining:
+            row.newValue,
+          updatedAt: now
+        };
 
-      await updateProduct(
-        updatedProduct
-      );
-
-      if (
-        window.inventoryApp &&
-        typeof window.inventoryApp
-          .applyUpdatedProduct ===
-          "function"
-      ) {
-        window.inventoryApp.applyUpdatedProduct(
-          updatedProduct
-        );
+        return {
+          product:
+            updatedProduct,
+          history: {
+            id:
+              `order-remaining-csv-${Date.now()}-` +
+              `${row.internalCode}-` +
+              `${Math.random().toString(36).slice(2, 8)}`,
+            dateTime: now,
+            recordedAt: now,
+            internalCode:
+              row.internalCode,
+            productCode:
+              row.product.productCode || "",
+            productName:
+              row.product.productName || "",
+            beforeOrderRemaining:
+              row.oldValue,
+            afterOrderRemaining:
+              row.newValue,
+            change:
+              row.newValue -
+              row.oldValue,
+            source:
+              "CSV一括更新",
+            memo:
+              `ファイル：${preview.fileName}`
+          }
+        };
       }
+    );
 
-      updatedCount += 1;
-    } catch (error) {
-      console.error(
-        "発注残CSV反映エラー",
-        error
-      );
+  try {
+    await applyOrderRemainingBulkChanges(
+      bulkChanges
+    );
 
-      failures.push(
-        row.internalCode
-      );
-    }
+    bulkChanges.forEach(
+      function (item) {
+        if (
+          window.inventoryApp &&
+          typeof window.inventoryApp
+            .applyUpdatedProduct ===
+            "function"
+        ) {
+          window.inventoryApp.applyUpdatedProduct(
+            item.product
+          );
+        }
+      }
+    );
+  } catch (error) {
+    console.error(
+      "発注残CSV反映エラー",
+      error
+    );
+
+    await showOrderRemainingDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "発注残CSVを反映できませんでした",
+      message:
+        "商品データは更新されていません。画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
+
+    return;
   }
 
   clearOrderRemainingCsvPreview();
@@ -2266,36 +2450,11 @@ async function applyOrderRemainingCsv() {
   await loadOrderRemainingProducts();
 
   if (
-    failures.length > 0
+    !document.querySelector(
+      "#order-remaining-history-panel"
+    )?.hidden
   ) {
-    await showOrderRemainingDialog({
-      type: "warning",
-      icon: "⚠️",
-      title: "一部の商品を更新できませんでした",
-      message:
-        `${updatedCount.toLocaleString(
-          "ja-JP"
-        )}件を更新しました。`,
-      details: [
-        {
-          label: "更新失敗",
-          value:
-            `${failures.length.toLocaleString(
-              "ja-JP"
-            )}件`
-        },
-        {
-          label: "社内コード",
-          value:
-            failures
-              .slice(0, 10)
-              .join(", ")
-        }
-      ],
-      confirmText: "閉じる"
-    });
-
-    return;
+    await loadOrderRemainingHistories();
   }
 
   await showOrderRemainingDialog({
@@ -2303,11 +2462,396 @@ async function applyOrderRemainingCsv() {
     icon: "✅",
     title: "発注残CSVを反映しました",
     message:
-      `${updatedCount.toLocaleString(
+      `${bulkChanges.length.toLocaleString(
         "ja-JP"
       )}件の発注残数を更新しました。`,
     confirmText: "閉じる"
   });
+}
+
+async function toggleOrderRemainingHistoryPanel() {
+  const panel =
+    document.querySelector(
+      "#order-remaining-history-panel"
+    );
+
+  const button =
+    document.querySelector(
+      "#toggle-order-remaining-history"
+    );
+
+  if (!panel) {
+    return;
+  }
+
+  if (panel.hidden) {
+    panel.hidden = false;
+
+    if (button) {
+      button.textContent =
+        "発注残変更履歴を閉じる";
+    }
+
+    orderRemainingHistoryCurrentPage =
+      1;
+
+    await loadOrderRemainingHistories();
+
+    panel.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
+  } else {
+    panel.hidden = true;
+
+    if (button) {
+      button.textContent =
+        "発注残変更履歴を見る";
+    }
+  }
+}
+
+async function loadOrderRemainingHistories() {
+  const list =
+    document.querySelector(
+      "#order-remaining-history-list"
+    );
+
+  if (list) {
+    list.innerHTML =
+      '<div class="order-remaining-history-empty">履歴を読み込んでいます...</div>';
+  }
+
+  try {
+    const histories =
+      await getAllOrderRemainingHistories();
+
+    orderRemainingHistories =
+      (Array.isArray(histories)
+        ? histories
+        : []
+      ).slice();
+
+    renderOrderRemainingHistory();
+  } catch (error) {
+    console.error(
+      "発注残変更履歴読み込みエラー",
+      error
+    );
+
+    if (list) {
+      list.innerHTML =
+        '<div class="order-remaining-history-empty">履歴を読み込めませんでした。</div>';
+    }
+  }
+}
+
+function getFilteredOrderRemainingHistories() {
+  const searchInput =
+    document.querySelector(
+      "#order-remaining-history-search"
+    );
+
+  const sourceFilter =
+    document.querySelector(
+      "#order-remaining-history-source"
+    );
+
+  const term =
+    normalizeOrderRemainingSearchText(
+      searchInput
+        ? searchInput.value
+        : ""
+    );
+
+  const source =
+    sourceFilter
+      ? sourceFilter.value
+      : "all";
+
+  return orderRemainingHistories
+    .filter(function (history) {
+      if (
+        source !== "all" &&
+        history.source !== source
+      ) {
+        return false;
+      }
+
+      if (!term) {
+        return true;
+      }
+
+      return [
+        history.internalCode,
+        history.productCode,
+        history.productName,
+        history.memo
+      ].some(function (value) {
+        return normalizeOrderRemainingSearchText(
+          value
+        ).includes(term);
+      });
+    })
+    .sort(function (a, b) {
+      return String(
+        b.dateTime ||
+        b.recordedAt ||
+        ""
+      ).localeCompare(
+        String(
+          a.dateTime ||
+          a.recordedAt ||
+          ""
+        )
+      );
+    });
+}
+
+function renderOrderRemainingHistory() {
+  const list =
+    document.querySelector(
+      "#order-remaining-history-list"
+    );
+
+  const count =
+    document.querySelector(
+      "#order-remaining-history-count"
+    );
+
+  const pageStatus =
+    document.querySelector(
+      "#order-remaining-history-page-status"
+    );
+
+  const prev =
+    document.querySelector(
+      "#order-remaining-history-prev"
+    );
+
+  const next =
+    document.querySelector(
+      "#order-remaining-history-next"
+    );
+
+  if (!list) {
+    return;
+  }
+
+  const filtered =
+    getFilteredOrderRemainingHistories();
+
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        filtered.length /
+        ORDER_REMAINING_HISTORY_PAGE_SIZE
+      )
+    );
+
+  if (
+    orderRemainingHistoryCurrentPage >
+    totalPages
+  ) {
+    orderRemainingHistoryCurrentPage =
+      totalPages;
+  }
+
+  const start =
+    (
+      orderRemainingHistoryCurrentPage -
+      1
+    ) *
+    ORDER_REMAINING_HISTORY_PAGE_SIZE;
+
+  const visible =
+    filtered.slice(
+      start,
+      start +
+      ORDER_REMAINING_HISTORY_PAGE_SIZE
+    );
+
+  list.innerHTML = "";
+
+  if (visible.length === 0) {
+    const empty =
+      document.createElement("div");
+
+    empty.className =
+      "order-remaining-history-empty";
+
+    empty.textContent =
+      "発注残の変更履歴はありません。";
+
+    list.appendChild(empty);
+  } else {
+    visible.forEach(function (history) {
+      const card =
+        document.createElement("article");
+
+      card.className =
+        "order-remaining-history-card";
+
+      const change =
+        Number(history.change || 0);
+
+      if (change < 0) {
+        card.classList.add(
+          "order-remaining-history-decrease"
+        );
+      } else if (change > 0) {
+        card.classList.add(
+          "order-remaining-history-increase"
+        );
+      }
+
+      const sign =
+        change > 0
+          ? "+"
+          : "";
+
+      const sourceClass =
+        history.source === "船便入荷"
+          ? "shipping"
+          : history.source ===
+              "CSV一括更新"
+            ? "csv"
+            : "manual";
+
+      card.innerHTML = `
+        <div class="order-remaining-history-head">
+          <div>
+            <span class="order-remaining-history-source ${sourceClass}">
+              ${escapeOrderRemainingHtml(
+                history.source ||
+                  "不明"
+              )}
+            </span>
+
+            <strong class="order-remaining-history-name">
+              ${escapeOrderRemainingHtml(
+                history.productName ||
+                  history.internalCode ||
+                  "商品未登録"
+              )}
+            </strong>
+          </div>
+
+          <strong class="order-remaining-history-change ${
+            change < 0
+              ? "decrease"
+              : change > 0
+                ? "increase"
+                : ""
+          }">
+            ${sign}${change.toLocaleString(
+              "ja-JP"
+            )}個
+          </strong>
+        </div>
+
+        <div class="order-remaining-history-codes">
+          <span>
+            社内コード：
+            <strong>${escapeOrderRemainingHtml(
+              history.internalCode ||
+                ""
+            )}</strong>
+          </span>
+
+          <span>
+            商品コード：
+            <strong>${escapeOrderRemainingHtml(
+              history.productCode ||
+                "未登録"
+            )}</strong>
+          </span>
+        </div>
+
+        <div class="order-remaining-history-values">
+          <div>
+            <span>変更前</span>
+            <strong>
+              ${getOrderRemainingNumber(
+                history.beforeOrderRemaining
+              ).toLocaleString(
+                "ja-JP"
+              )}個
+            </strong>
+          </div>
+
+          <div>
+            <span>変更後</span>
+            <strong>
+              ${getOrderRemainingNumber(
+                history.afterOrderRemaining
+              ).toLocaleString(
+                "ja-JP"
+              )}個
+            </strong>
+          </div>
+
+          <div>
+            <span>日時</span>
+            <strong>
+              ${escapeOrderRemainingHtml(
+                formatOrderRemainingDateTime(
+                  history.dateTime ||
+                    history.recordedAt
+                )
+              )}
+            </strong>
+          </div>
+        </div>
+
+        ${
+          history.memo
+            ? `<div class="order-remaining-history-memo">${escapeOrderRemainingHtml(
+                history.memo
+              )}</div>`
+            : ""
+        }
+      `;
+
+      list.appendChild(card);
+    });
+  }
+
+  if (count) {
+    count.textContent =
+      `表示：${filtered.length.toLocaleString(
+        "ja-JP"
+      )}件`;
+  }
+
+  if (pageStatus) {
+    pageStatus.textContent =
+      `${orderRemainingHistoryCurrentPage} / ${totalPages}ページ`;
+  }
+
+  if (prev) {
+    prev.disabled =
+      orderRemainingHistoryCurrentPage <=
+      1;
+  }
+
+  if (next) {
+    next.disabled =
+      orderRemainingHistoryCurrentPage >=
+      totalPages;
+  }
+}
+
+function getOrderRemainingHistoryTotalPages() {
+  return Math.max(
+    1,
+    Math.ceil(
+      getFilteredOrderRemainingHistories()
+        .length /
+        ORDER_REMAINING_HISTORY_PAGE_SIZE
+    )
+  );
 }
 
 function createOrderRemainingStyle() {
@@ -2481,6 +3025,186 @@ function createOrderRemainingStyle() {
     }
 
     #order-remaining-management .order-remaining-csv-preview-actions button {
+      width: auto;
+      margin: 0;
+    }
+
+    #order-remaining-management .order-remaining-history-toggle-area {
+      margin: 0 0 14px;
+    }
+
+    #order-remaining-management .order-remaining-history-toggle-area button {
+      width: auto;
+      margin: 0;
+      background: #6a1b9a;
+    }
+
+    #order-remaining-management .order-remaining-history-panel {
+      margin-bottom: 14px;
+      padding: 14px;
+      border: 2px solid #ce93d8;
+      border-radius: 12px;
+      background: #fcf7ff;
+    }
+
+    #order-remaining-management .order-remaining-history-panel h3 {
+      margin: 0 0 8px;
+      color: #6a1b9a;
+    }
+
+    #order-remaining-management .order-remaining-history-controls {
+      display: grid;
+      grid-template-columns: 2fr 1fr auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 12px;
+    }
+
+    #order-remaining-management .order-remaining-history-controls input,
+    #order-remaining-management .order-remaining-history-controls select {
+      width: 100%;
+      min-height: 44px;
+      margin: 0;
+      box-sizing: border-box;
+    }
+
+    #order-remaining-management .order-remaining-history-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    #order-remaining-management .order-remaining-history-empty {
+      padding: 18px 12px;
+      border: 1px dashed #b0bec5;
+      border-radius: 10px;
+      background: #ffffff;
+      color: #607d8b;
+      text-align: center;
+      font-weight: 700;
+    }
+
+    #order-remaining-management .order-remaining-history-card {
+      padding: 12px;
+      border: 1px solid #d7e0e8;
+      border-left: 5px solid #90a4ae;
+      border-radius: 10px;
+      background: #ffffff;
+    }
+
+    #order-remaining-management .order-remaining-history-increase {
+      border-left-color: #1976d2;
+    }
+
+    #order-remaining-management .order-remaining-history-decrease {
+      border-left-color: #ef6c00;
+    }
+
+    #order-remaining-management .order-remaining-history-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 7px;
+    }
+
+    #order-remaining-management .order-remaining-history-source {
+      display: inline-block;
+      margin-right: 7px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      background: #eceff1;
+      color: #455a64;
+    }
+
+    #order-remaining-management .order-remaining-history-source.manual {
+      background: #e3f2fd;
+      color: #0d47a1;
+    }
+
+    #order-remaining-management .order-remaining-history-source.csv {
+      background: #e8f5e9;
+      color: #1b5e20;
+    }
+
+    #order-remaining-management .order-remaining-history-source.shipping {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    #order-remaining-management .order-remaining-history-name {
+      color: #263238;
+      font-size: 16px;
+    }
+
+    #order-remaining-management .order-remaining-history-change {
+      white-space: nowrap;
+      font-size: 20px;
+      color: #455a64;
+    }
+
+    #order-remaining-management .order-remaining-history-change.increase {
+      color: #1565c0;
+    }
+
+    #order-remaining-management .order-remaining-history-change.decrease {
+      color: #e65100;
+    }
+
+    #order-remaining-management .order-remaining-history-codes {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+      color: #607d8b;
+      font-size: 13px;
+    }
+
+    #order-remaining-management .order-remaining-history-values {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    #order-remaining-management .order-remaining-history-values > div {
+      padding: 8px 9px;
+      border-radius: 8px;
+      background: #f4f7f9;
+      border: 1px solid #e0e6ea;
+    }
+
+    #order-remaining-management .order-remaining-history-values span {
+      display: block;
+      margin-bottom: 3px;
+      color: #78909c;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    #order-remaining-management .order-remaining-history-values strong {
+      font-size: 14px;
+      color: #263238;
+    }
+
+    #order-remaining-management .order-remaining-history-memo {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #eceff1;
+      color: #546e7a;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    #order-remaining-management .order-remaining-history-pager {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    #order-remaining-management .order-remaining-history-pager button {
       width: auto;
       margin: 0;
     }
@@ -2850,6 +3574,19 @@ function createOrderRemainingStyle() {
       #order-remaining-management .order-remaining-csv-actions button,
       #order-remaining-management .order-remaining-csv-preview-actions button {
         width: 100%;
+      }
+
+      #order-remaining-management .order-remaining-history-controls {
+        grid-template-columns: 1fr;
+      }
+
+      #order-remaining-management .order-remaining-history-values {
+        grid-template-columns: 1fr;
+      }
+
+      #order-remaining-management .order-remaining-history-head {
+        display: grid;
+        grid-template-columns: 1fr;
       }
 
       #order-remaining-management .order-remaining-summary-grid {

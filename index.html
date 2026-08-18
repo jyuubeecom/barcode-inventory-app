@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v117
+            画面版 v118
           </span>
         </div>
       </div>
@@ -773,6 +773,83 @@
             accept=".csv,text/csv"
             hidden
           >
+        </div>
+      </div>
+
+      <div class="order-remaining-history-toggle-area">
+        <button
+          id="toggle-order-remaining-history"
+          type="button"
+        >
+          発注残変更履歴を見る
+        </button>
+      </div>
+
+      <div
+        id="order-remaining-history-panel"
+        class="order-remaining-history-panel"
+        hidden
+      >
+        <h3>発注残変更履歴</h3>
+
+        <p>
+          手動編集、CSV一括更新、船便入荷による発注残数の変更を記録します。
+        </p>
+
+        <div class="order-remaining-history-controls">
+          <div>
+            <label for="order-remaining-history-search">
+              商品を検索
+            </label>
+
+            <input
+              id="order-remaining-history-search"
+              type="search"
+              placeholder="社内コード・商品コード・商品名"
+            >
+          </div>
+
+          <div>
+            <label for="order-remaining-history-source">
+              変更方法
+            </label>
+
+            <select id="order-remaining-history-source">
+              <option value="all">すべて</option>
+              <option value="手動編集">手動編集</option>
+              <option value="CSV一括更新">CSV一括更新</option>
+              <option value="船便入荷">船便入荷</option>
+            </select>
+          </div>
+
+          <strong id="order-remaining-history-count">
+            表示：0件
+          </strong>
+        </div>
+
+        <div
+          id="order-remaining-history-list"
+          class="order-remaining-history-list"
+        ></div>
+
+        <div class="order-remaining-history-pager">
+          <button
+            id="order-remaining-history-prev"
+            type="button"
+          >
+            前へ
+          </button>
+
+          <strong id="order-remaining-history-page-status">
+            1 / 1ページ
+          </strong>
+
+          <button
+            id="order-remaining-history-next"
+            type="button"
+          >
+            次へ
+          </button>
         </div>
       </div>
 
@@ -2793,7 +2870,7 @@
 
   </main>
 
-<script src="storage.js?v=105"></script>
+<script src="storage.js?v=118"></script>
 <script src="app.js?v=111"></script>
 <script src="product-history.js?v=107"></script>
 <script src="inventory.js?v=97"></script>
@@ -2810,14 +2887,14 @@
 <script src="sales-plan.js?v=95"></script>
 <script src="sales-actual.js?v=71"></script>
 <script src="purchase-required.js?v=112"></script>
-<script src="order-remaining.js?v=117"></script>
+<script src="order-remaining.js?v=118"></script>
 <script src="low-shipment.js?v=45"></script>
 <script src="shipping-schedule.js?v=114"></script>
 <script src="dedicated-product.js?v=108"></script>
-<script src="shipping-arrival.js?v=111"></script>
+<script src="shipping-arrival.js?v=118"></script>
 <script src="barcode-print.js?v=89"></script>
-<script src="backup.js?v=73"></script>
-<script src="restore.js?v=72"></script>
+<script src="backup.js?v=118"></script>
+<script src="restore.js?v=118"></script>
 <script src="location-management.js?v=100"></script>
 <script src="home-dashboard.js?v=96"></script>
 <script src="app-settings.js?v=102"></script>

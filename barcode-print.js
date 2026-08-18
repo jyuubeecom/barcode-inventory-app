@@ -457,9 +457,11 @@ async function printSelectedBarcodeLabels() {
         : "社内コード＋JANコード";
 
   const layoutLabel =
-    layout === "8"
-      ? "A4 8分割"
-      : "A4 4分割";
+    layout === "12"
+      ? "A4 12分割"
+      : layout === "8"
+        ? "A4 8分割"
+        : "A4 4分割";
 
   const printConfirmed = await showBarcodePrintDialog({
     type: "info",
@@ -533,7 +535,7 @@ async function printSelectedBarcodeLabels() {
   printWindow.focus();
   setTimeout(function () {
     printWindow.print();
-  }, 300);
+  }, 500);
 }
 
 function buildBarcodePrintLabel(product, barcodeMode) {
@@ -612,6 +614,9 @@ function buildBarcodePrintDocument(pages, layout, barcodeMode) {
     flex-direction: column;
     justify-content: flex-start;
     min-width: 0;
+    min-height: 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .product-name {
     font-size: 16pt;
@@ -638,13 +643,55 @@ function buildBarcodePrintDocument(pages, layout, barcodeMode) {
   .layout-8 .barcode-svg { height: 11mm; }
   .layout-8 .barcode-number { font-size: 9pt; }
   .layout-8.mode-single .barcode-svg { height: 20mm; }
-  .layout-12 .barcode-label-card { padding: 1.8mm; }
-  .layout-12 .product-name { font-size: 10pt; }
-  .layout-12 .product-sub { font-size: 6.5pt; }
-  .layout-12 .barcode-label-title { font-size: 6.5pt; }
-  .layout-12 .barcode-svg { height: 9mm; }
-  .layout-12 .barcode-number { font-size: 8pt; letter-spacing: 0.3mm; }
-  .layout-12.mode-single .barcode-svg { height: 17mm; }
+  .print-page.layout-12 {
+    height: 186mm;
+    min-height: 186mm;
+    max-height: 186mm;
+    gap: 2mm;
+    overflow: hidden;
+    align-content: stretch;
+  }
+  .layout-12 .barcode-label-card {
+    height: 100%;
+    min-height: 0;
+    padding: 1.2mm;
+    border-radius: 1.5mm;
+  }
+  .layout-12 .product-name {
+    font-size: 9pt;
+    line-height: 1.05;
+    margin-bottom: 0.7mm;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .layout-12 .product-sub {
+    font-size: 5.5pt;
+    line-height: 1.05;
+    margin-bottom: 0.7mm;
+  }
+  .layout-12 .barcode-blocks {
+    gap: 0.5mm;
+  }
+  .layout-12 .barcode-label-title {
+    font-size: 5.5pt;
+    line-height: 1;
+    margin-bottom: 0.2mm;
+  }
+  .layout-12 .barcode-svg {
+    height: 8mm;
+  }
+  .layout-12 .barcode-number {
+    font-size: 7.2pt;
+    letter-spacing: 0.22mm;
+    line-height: 0.95;
+  }
+  .layout-12.mode-single .barcode-svg {
+    height: 15mm;
+  }
+  .layout-12.mode-single .barcode-number {
+    font-size: 8pt;
+  }
   @media screen {
     body { background: #ddd; padding: 8mm; }
     .print-page { background: #fff; padding: 0; margin: 0 auto 8mm; max-width: 281mm; }

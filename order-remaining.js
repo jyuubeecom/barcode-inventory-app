@@ -4,6 +4,7 @@ const ORDER_REMAINING_PAGE_SIZE = 20;
 
 let orderRemainingProducts = [];
 let orderRemainingCurrentPage = 1;
+let orderRemainingCsvPreview = null;
 
 window.addEventListener(
   "DOMContentLoaded",
@@ -49,6 +50,31 @@ function initializeOrderRemainingFeature() {
   const nextButton =
     document.querySelector(
       "#order-remaining-next-page"
+    );
+
+  const exportCsvButton =
+    document.querySelector(
+      "#export-order-remaining-csv"
+    );
+
+  const importCsvButton =
+    document.querySelector(
+      "#import-order-remaining-csv"
+    );
+
+  const csvFileInput =
+    document.querySelector(
+      "#order-remaining-csv-file"
+    );
+
+  const applyCsvButton =
+    document.querySelector(
+      "#apply-order-remaining-csv"
+    );
+
+  const closeCsvPreviewButton =
+    document.querySelector(
+      "#close-order-remaining-csv-preview"
     );
 
   if (!showButton) {
@@ -140,6 +166,57 @@ function initializeOrderRemainingFeature() {
       }
     );
   }
+
+  if (exportCsvButton) {
+    exportCsvButton.addEventListener(
+      "click",
+      exportOrderRemainingCsv
+    );
+  }
+
+  if (
+    importCsvButton &&
+    csvFileInput
+  ) {
+    importCsvButton.addEventListener(
+      "click",
+      function () {
+        csvFileInput.value = "";
+        csvFileInput.click();
+      }
+    );
+
+    csvFileInput.addEventListener(
+      "change",
+      function () {
+        const file =
+          csvFileInput.files &&
+          csvFileInput.files[0];
+
+        if (file) {
+          void previewOrderRemainingCsv(
+            file
+          );
+        }
+      }
+    );
+  }
+
+  if (applyCsvButton) {
+    applyCsvButton.addEventListener(
+      "click",
+      function () {
+        void applyOrderRemainingCsv();
+      }
+    );
+  }
+
+  if (closeCsvPreviewButton) {
+    closeCsvPreviewButton.addEventListener(
+      "click",
+      clearOrderRemainingCsvPreview
+    );
+  }
 }
 
 async function openOrderRemainingScreen() {
@@ -186,6 +263,8 @@ async function openOrderRemainingScreen() {
 }
 
 function closeOrderRemainingScreen() {
+  clearOrderRemainingCsvPreview();
+
   const screen =
     document.querySelector(
       "#order-remaining-management"
@@ -1294,6 +1373,943 @@ function showOrderRemainingDialog(
   return Promise.resolve(true);
 }
 
+function exportOrderRemainingCsv() {
+  if (
+    !Array.isArray(
+      orderRemainingProducts
+    ) ||
+    orderRemainingProducts.length === 0
+  ) {
+    void showOrderRemainingDialog({
+      type: "warning",
+      icon: "📄",
+      title: "出力する商品がありません",
+      message:
+        "商品データを読み込んでから、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
+
+    return;
+  }
+
+  const rows = [
+    [
+      "社内コード",
+      "商品コード",
+      "商品名",
+      "仕入先",
+      "現在庫",
+      "発注残数"
+    ]
+  ];
+
+  orderRemainingProducts
+    .slice()
+    .sort(
+      function (a, b) {
+        return String(
+          a.internalCode || ""
+        ).localeCompare(
+          String(
+            b.internalCode || ""
+          ),
+          "ja",
+          {
+            numeric: true
+          }
+        );
+      }
+    )
+    .forEach(
+      function (product) {
+        rows.push([
+          product.internalCode || "",
+          product.productCode || "",
+          product.productName || "",
+          product.supplier || "",
+          product.stock,
+          product.orderRemaining
+        ]);
+      }
+    );
+
+  const csv =
+    "\uFEFF" +
+    rows
+      .map(
+        function (row) {
+          return row
+            .map(
+              escapeOrderRemainingCsvValue
+            )
+            .join(",");
+        }
+      )
+      .join("\r\n");
+
+  const blob =
+    new Blob(
+      [csv],
+      {
+        type:
+          "text/csv;charset=utf-8"
+      }
+    );
+
+  const url =
+    URL.createObjectURL(blob);
+
+  const link =
+    document.createElement("a");
+
+  link.href = url;
+  link.download =
+    `発注残一覧_${getOrderRemainingTodayKey()}.csv`;
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
+}
+
+function escapeOrderRemainingCsvValue(
+  value
+) {
+  const text =
+    String(value ?? "");
+
+  if (
+    /[",\r\n]/.test(text)
+  ) {
+    return (
+      '"' +
+      text.replaceAll(
+        '"',
+        '""'
+      ) +
+      '"'
+    );
+  }
+
+  return text;
+}
+
+function getOrderRemainingTodayKey() {
+  const date =
+    new Date();
+
+  const year =
+    date.getFullYear();
+
+  const month =
+    String(
+      date.getMonth() + 1
+    ).padStart(2, "0");
+
+  const day =
+    String(
+      date.getDate()
+    ).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+async function previewOrderRemainingCsv(
+  file
+) {
+  try {
+    const text =
+      await file.text();
+
+    const parsedRows =
+      parseOrderRemainingCsv(
+        text
+      );
+
+    if (
+      parsedRows.length < 2
+    ) {
+      throw new Error(
+        "CSVにデータ行がありません。"
+      );
+    }
+
+    const headers =
+      parsedRows[0].map(
+        normalizeOrderRemainingCsvHeader
+      );
+
+    const internalCodeIndex =
+      findOrderRemainingCsvHeaderIndex(
+        headers,
+        [
+          "社内コード",
+          "internalcode",
+          "internal_code"
+        ]
+      );
+
+    const remainingIndex =
+      findOrderRemainingCsvHeaderIndex(
+        headers,
+        [
+          "発注残数",
+          "orderremaining",
+          "order_remaining"
+        ]
+      );
+
+    if (
+      internalCodeIndex < 0 ||
+      remainingIndex < 0
+    ) {
+      throw new Error(
+        "CSVの1行目に「社内コード」と「発注残数」が必要です。"
+      );
+    }
+
+    const productMap =
+      new Map(
+        orderRemainingProducts.map(
+          function (product) {
+            return [
+              normalizeOrderRemainingCode(
+                product.internalCode
+              ),
+              product
+            ];
+          }
+        )
+      );
+
+    const dataRows =
+      parsedRows
+        .slice(1)
+        .filter(
+          function (row) {
+            return row.some(
+              function (cell) {
+                return String(
+                  cell || ""
+                ).trim() !== "";
+              }
+            );
+          }
+        );
+
+    const codeCounts =
+      new Map();
+
+    dataRows.forEach(
+      function (row) {
+        const code =
+          normalizeOrderRemainingCode(
+            row[
+              internalCodeIndex
+            ]
+          );
+
+        if (code) {
+          codeCounts.set(
+            code,
+            (
+              codeCounts.get(
+                code
+              ) || 0
+            ) + 1
+          );
+        }
+      }
+    );
+
+    const previewRows =
+      dataRows.map(
+        function (
+          row,
+          index
+        ) {
+          const rowNumber =
+            index + 2;
+
+          const rawCode =
+            String(
+              row[
+                internalCodeIndex
+              ] || ""
+            ).trim();
+
+          const code =
+            normalizeOrderRemainingCode(
+              rawCode
+            );
+
+          const rawRemaining =
+            String(
+              row[
+                remainingIndex
+              ] || ""
+            ).trim();
+
+          const product =
+            productMap.get(code);
+
+          const newValue =
+            Number(
+              rawRemaining
+            );
+
+          let error = "";
+
+          if (!code) {
+            error =
+              "社内コードが空欄です。";
+          } else if (
+            (
+              codeCounts.get(
+                code
+              ) || 0
+            ) > 1
+          ) {
+            error =
+              "同じ社内コードがCSV内で重複しています。";
+          } else if (!product) {
+            error =
+              "登録されていない社内コードです。";
+          } else if (
+            rawRemaining === ""
+          ) {
+            error =
+              "発注残数が空欄です。";
+          } else if (
+            !Number.isInteger(
+              newValue
+            ) ||
+            newValue < 0
+          ) {
+            error =
+              "発注残数は0以上の整数で入力してください。";
+          }
+
+          const oldValue =
+            product
+              ? product.orderRemaining
+              : null;
+
+          const status =
+            error
+              ? "error"
+              : newValue === oldValue
+                ? "unchanged"
+                : "change";
+
+          return {
+            rowNumber: rowNumber,
+            internalCode: rawCode,
+            productName:
+              product
+                ? product.productName ||
+                  ""
+                : "",
+            oldValue: oldValue,
+            newValue:
+              Number.isFinite(
+                newValue
+              )
+                ? newValue
+                : null,
+            status: status,
+            error: error,
+            product: product
+          };
+        }
+      );
+
+    const errorCount =
+      previewRows.filter(
+        function (row) {
+          return (
+            row.status === "error"
+          );
+        }
+      ).length;
+
+    const changeCount =
+      previewRows.filter(
+        function (row) {
+          return (
+            row.status === "change"
+          );
+        }
+      ).length;
+
+    const unchangedCount =
+      previewRows.filter(
+        function (row) {
+          return (
+            row.status ===
+            "unchanged"
+          );
+        }
+      ).length;
+
+    orderRemainingCsvPreview = {
+      fileName:
+        file.name || "CSV",
+      rows: previewRows,
+      errorCount: errorCount,
+      changeCount: changeCount,
+      unchangedCount:
+        unchangedCount
+    };
+
+    renderOrderRemainingCsvPreview();
+  } catch (error) {
+    console.error(
+      "発注残CSV読込エラー",
+      error
+    );
+
+    clearOrderRemainingCsvPreview();
+
+    await showOrderRemainingDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "CSVを読み込めませんでした",
+      message:
+        error &&
+        error.message
+          ? error.message
+          : "CSVの内容を確認してください。",
+      details: [
+        {
+          label: "必要な項目",
+          value:
+            "社内コード、発注残数"
+        }
+      ],
+      confirmText: "閉じる"
+    });
+  }
+}
+
+function normalizeOrderRemainingCsvHeader(
+  value
+) {
+  return String(value || "")
+    .replace(/^\uFEFF/, "")
+    .normalize("NFKC")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
+function findOrderRemainingCsvHeaderIndex(
+  headers,
+  candidates
+) {
+  const normalizedCandidates =
+    candidates.map(
+      normalizeOrderRemainingCsvHeader
+    );
+
+  return headers.findIndex(
+    function (header) {
+      return normalizedCandidates.includes(
+        header
+      );
+    }
+  );
+}
+
+function normalizeOrderRemainingCode(
+  value
+) {
+  return String(value || "")
+    .normalize("NFKC")
+    .trim()
+    .toUpperCase();
+}
+
+function parseOrderRemainingCsv(
+  text
+) {
+  const source =
+    String(text || "")
+      .replace(/^\uFEFF/, "");
+
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for (
+    let index = 0;
+    index < source.length;
+    index += 1
+  ) {
+    const char =
+      source[index];
+
+    const next =
+      source[
+        index + 1
+      ];
+
+    if (char === '"') {
+      if (
+        inQuotes &&
+        next === '"'
+      ) {
+        cell += '"';
+        index += 1;
+      } else {
+        inQuotes =
+          !inQuotes;
+      }
+
+      continue;
+    }
+
+    if (
+      char === "," &&
+      !inQuotes
+    ) {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+
+    if (
+      (
+        char === "\n" ||
+        char === "\r"
+      ) &&
+      !inQuotes
+    ) {
+      if (
+        char === "\r" &&
+        next === "\n"
+      ) {
+        index += 1;
+      }
+
+      row.push(cell);
+      rows.push(row);
+
+      row = [];
+      cell = "";
+      continue;
+    }
+
+    cell += char;
+  }
+
+  if (
+    cell !== "" ||
+    row.length > 0
+  ) {
+    row.push(cell);
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function renderOrderRemainingCsvPreview() {
+  const panel =
+    document.querySelector(
+      "#order-remaining-csv-preview"
+    );
+
+  const summary =
+    document.querySelector(
+      "#order-remaining-csv-summary"
+    );
+
+  const list =
+    document.querySelector(
+      "#order-remaining-csv-preview-list"
+    );
+
+  const applyButton =
+    document.querySelector(
+      "#apply-order-remaining-csv"
+    );
+
+  if (
+    !panel ||
+    !summary ||
+    !list ||
+    !orderRemainingCsvPreview
+  ) {
+    return;
+  }
+
+  const preview =
+    orderRemainingCsvPreview;
+
+  panel.hidden = false;
+
+  summary.innerHTML = `
+    <strong>${escapeOrderRemainingHtml(
+      preview.fileName
+    )}</strong><br>
+    変更：${preview.changeCount.toLocaleString(
+      "ja-JP"
+    )}件 /
+    変更なし：${preview.unchangedCount.toLocaleString(
+      "ja-JP"
+    )}件 /
+    エラー：${preview.errorCount.toLocaleString(
+      "ja-JP"
+    )}件
+  `;
+
+  list.innerHTML = "";
+
+  const displayRows =
+    preview.rows.slice(
+      0,
+      100
+    );
+
+  displayRows.forEach(
+    function (row) {
+      const item =
+        document.createElement(
+          "div"
+        );
+
+      item.className =
+        "order-remaining-csv-preview-item";
+
+      item.classList.add(
+        `order-remaining-csv-${row.status}`
+      );
+
+      let statusText =
+        "変更なし";
+
+      if (
+        row.status === "change"
+      ) {
+        statusText =
+          "変更";
+      } else if (
+        row.status === "error"
+      ) {
+        statusText =
+          "エラー";
+      }
+
+      const oldValueText =
+        row.oldValue === null
+          ? "-"
+          : `${row.oldValue.toLocaleString(
+              "ja-JP"
+            )}個`;
+
+      const newValueText =
+        row.newValue === null ||
+        !Number.isInteger(
+          row.newValue
+        )
+          ? "-"
+          : `${row.newValue.toLocaleString(
+              "ja-JP"
+            )}個`;
+
+      item.innerHTML = `
+        <div class="order-remaining-csv-preview-head">
+          <span class="order-remaining-csv-status">
+            ${statusText}
+          </span>
+
+          <strong>
+            ${escapeOrderRemainingHtml(
+              row.productName ||
+                "商品未確認"
+            )}
+          </strong>
+        </div>
+
+        <div class="order-remaining-csv-preview-body">
+          <span>
+            行：${row.rowNumber}
+          </span>
+
+          <span>
+            社内コード：
+            <strong>${escapeOrderRemainingHtml(
+              row.internalCode ||
+                "空欄"
+            )}</strong>
+          </span>
+
+          <span>
+            ${oldValueText}
+            →
+            <strong>${newValueText}</strong>
+          </span>
+        </div>
+
+        ${
+          row.error
+            ? `<div class="order-remaining-csv-error-text">${escapeOrderRemainingHtml(
+                row.error
+              )}</div>`
+            : ""
+        }
+      `;
+
+      list.appendChild(item);
+    }
+  );
+
+  if (
+    preview.rows.length >
+    displayRows.length
+  ) {
+    const note =
+      document.createElement(
+        "div"
+      );
+
+    note.className =
+      "order-remaining-csv-preview-limit";
+
+    note.textContent =
+      `プレビューは先頭${displayRows.length}件まで表示しています。反映時はCSV全体を処理します。`;
+
+    list.appendChild(note);
+  }
+
+  if (applyButton) {
+    applyButton.disabled =
+      preview.errorCount > 0 ||
+      preview.changeCount === 0;
+  }
+
+  panel.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
+}
+
+function clearOrderRemainingCsvPreview() {
+  orderRemainingCsvPreview =
+    null;
+
+  const panel =
+    document.querySelector(
+      "#order-remaining-csv-preview"
+    );
+
+  const summary =
+    document.querySelector(
+      "#order-remaining-csv-summary"
+    );
+
+  const list =
+    document.querySelector(
+      "#order-remaining-csv-preview-list"
+    );
+
+  const applyButton =
+    document.querySelector(
+      "#apply-order-remaining-csv"
+    );
+
+  if (panel) {
+    panel.hidden = true;
+  }
+
+  if (summary) {
+    summary.textContent = "";
+  }
+
+  if (list) {
+    list.innerHTML = "";
+  }
+
+  if (applyButton) {
+    applyButton.disabled = true;
+  }
+}
+
+async function applyOrderRemainingCsv() {
+  const preview =
+    orderRemainingCsvPreview;
+
+  if (!preview) {
+    return;
+  }
+
+  if (
+    preview.errorCount > 0
+  ) {
+    await showOrderRemainingDialog({
+      type: "warning",
+      icon: "⚠️",
+      title: "CSVにエラーがあります",
+      message:
+        "エラーを修正してから、もう一度CSVを読み込んでください。",
+      details: [
+        {
+          label: "エラー",
+          value:
+            `${preview.errorCount.toLocaleString(
+              "ja-JP"
+            )}件`
+        }
+      ],
+      confirmText: "閉じる"
+    });
+
+    return;
+  }
+
+  const changes =
+    preview.rows.filter(
+      function (row) {
+        return (
+          row.status === "change"
+        );
+      }
+    );
+
+  if (
+    changes.length === 0
+  ) {
+    return;
+  }
+
+  const confirmed =
+    await showOrderRemainingDialog({
+      type: "confirm",
+      icon: "📥",
+      title: "発注残CSVを反映しますか？",
+      message:
+        "CSVの発注残数で商品データを一括更新します。",
+      details: [
+        {
+          label: "変更する商品",
+          value:
+            `${changes.length.toLocaleString(
+              "ja-JP"
+            )}件`
+        },
+        {
+          label: "変更なし",
+          value:
+            `${preview.unchangedCount.toLocaleString(
+              "ja-JP"
+            )}件`
+        }
+      ],
+      notice:
+        "反映前にバックアップを取っておくと、必要な場合に元の状態へ戻せます。",
+      confirmText: "CSVを反映",
+      cancelText: "キャンセル"
+    });
+
+  if (!confirmed) {
+    return;
+  }
+
+  let updatedCount = 0;
+  const failures = [];
+
+  for (
+    const row of changes
+  ) {
+    try {
+      const updatedProduct = {
+        ...row.product,
+        orderRemaining:
+          row.newValue,
+        updatedAt:
+          new Date().toISOString()
+      };
+
+      await updateProduct(
+        updatedProduct
+      );
+
+      if (
+        window.inventoryApp &&
+        typeof window.inventoryApp
+          .applyUpdatedProduct ===
+          "function"
+      ) {
+        window.inventoryApp.applyUpdatedProduct(
+          updatedProduct
+        );
+      }
+
+      updatedCount += 1;
+    } catch (error) {
+      console.error(
+        "発注残CSV反映エラー",
+        error
+      );
+
+      failures.push(
+        row.internalCode
+      );
+    }
+  }
+
+  clearOrderRemainingCsvPreview();
+
+  await loadOrderRemainingProducts();
+
+  if (
+    failures.length > 0
+  ) {
+    await showOrderRemainingDialog({
+      type: "warning",
+      icon: "⚠️",
+      title: "一部の商品を更新できませんでした",
+      message:
+        `${updatedCount.toLocaleString(
+          "ja-JP"
+        )}件を更新しました。`,
+      details: [
+        {
+          label: "更新失敗",
+          value:
+            `${failures.length.toLocaleString(
+              "ja-JP"
+            )}件`
+        },
+        {
+          label: "社内コード",
+          value:
+            failures
+              .slice(0, 10)
+              .join(", ")
+        }
+      ],
+      confirmText: "閉じる"
+    });
+
+    return;
+  }
+
+  await showOrderRemainingDialog({
+    type: "success",
+    icon: "✅",
+    title: "発注残CSVを反映しました",
+    message:
+      `${updatedCount.toLocaleString(
+        "ja-JP"
+      )}件の発注残数を更新しました。`,
+    confirmText: "閉じる"
+  });
+}
+
 function createOrderRemainingStyle() {
   if (
     document.querySelector(
@@ -1323,6 +2339,150 @@ function createOrderRemainingStyle() {
       background: #f3f9ff;
       color: #37474f;
       line-height: 1.7;
+    }
+
+    #order-remaining-management .order-remaining-csv-panel {
+      margin-bottom: 14px;
+      padding: 14px;
+      border: 2px solid #80cbc4;
+      border-radius: 12px;
+      background: #f1fbfa;
+    }
+
+    #order-remaining-management .order-remaining-csv-panel h3 {
+      margin: 0 0 7px;
+      color: #00695c;
+    }
+
+    #order-remaining-management .order-remaining-csv-panel p {
+      margin: 0 0 12px;
+      line-height: 1.65;
+    }
+
+    #order-remaining-management .order-remaining-csv-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    #order-remaining-management .order-remaining-csv-actions button {
+      width: auto;
+      margin: 0;
+    }
+
+    #order-remaining-management .order-remaining-csv-preview {
+      margin: 14px 0;
+      padding: 14px;
+      border: 2px solid #90caf9;
+      border-radius: 12px;
+      background: #ffffff;
+    }
+
+    #order-remaining-management .order-remaining-csv-preview h3 {
+      margin: 0 0 8px;
+      color: #1565c0;
+    }
+
+    #order-remaining-management .order-remaining-csv-summary {
+      margin-bottom: 12px;
+      line-height: 1.7;
+    }
+
+    #order-remaining-management .order-remaining-csv-preview-list {
+      display: grid;
+      gap: 8px;
+      max-height: 480px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    #order-remaining-management .order-remaining-csv-preview-item {
+      padding: 10px 11px;
+      border: 1px solid #dfe6eb;
+      border-left: 5px solid #90a4ae;
+      border-radius: 9px;
+      background: #fafafa;
+    }
+
+    #order-remaining-management .order-remaining-csv-change {
+      border-left-color: #1976d2;
+      background: #f3f9ff;
+    }
+
+    #order-remaining-management .order-remaining-csv-error {
+      border-left-color: #c62828;
+      background: #fff5f5;
+    }
+
+    #order-remaining-management .order-remaining-csv-unchanged {
+      border-left-color: #2e7d32;
+      background: #f5fbf5;
+    }
+
+    #order-remaining-management .order-remaining-csv-preview-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 5px;
+    }
+
+    #order-remaining-management .order-remaining-csv-status {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #eceff1;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    #order-remaining-management .order-remaining-csv-change .order-remaining-csv-status {
+      background: #e3f2fd;
+      color: #0d47a1;
+    }
+
+    #order-remaining-management .order-remaining-csv-error .order-remaining-csv-status {
+      background: #ffebee;
+      color: #b71c1c;
+    }
+
+    #order-remaining-management .order-remaining-csv-unchanged .order-remaining-csv-status {
+      background: #e8f5e9;
+      color: #1b5e20;
+    }
+
+    #order-remaining-management .order-remaining-csv-preview-body {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      color: #546e7a;
+      font-size: 13px;
+    }
+
+    #order-remaining-management .order-remaining-csv-error-text {
+      margin-top: 6px;
+      color: #b71c1c;
+      font-weight: 800;
+    }
+
+    #order-remaining-management .order-remaining-csv-preview-limit {
+      padding: 9px;
+      border-radius: 8px;
+      background: #fff8e1;
+      color: #6d4c00;
+      font-weight: 700;
+    }
+
+    #order-remaining-management .order-remaining-csv-preview-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    #order-remaining-management .order-remaining-csv-preview-actions button {
+      width: auto;
+      margin: 0;
     }
 
     #order-remaining-management .order-remaining-summary-grid {
@@ -1681,6 +2841,17 @@ function createOrderRemainingStyle() {
     }
 
     @media (max-width: 700px) {
+      #order-remaining-management .order-remaining-csv-actions,
+      #order-remaining-management .order-remaining-csv-preview-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      #order-remaining-management .order-remaining-csv-actions button,
+      #order-remaining-management .order-remaining-csv-preview-actions button {
+        width: 100%;
+      }
+
       #order-remaining-management .order-remaining-summary-grid {
         grid-template-columns: 1fr;
       }

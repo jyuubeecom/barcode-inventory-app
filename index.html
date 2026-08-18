@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v116
+            画面版 v117
           </span>
         </div>
       </div>
@@ -742,6 +742,73 @@
       <div class="order-remaining-intro">
         すでに発注していて、まだ入荷していない数量を商品ごとにまとめて確認・編集できます。<br>
         船便が入荷反映されると、入荷数量分は発注残数から自動で減ります。
+      </div>
+
+      <div class="order-remaining-csv-panel">
+        <h3>発注残CSV 一括更新</h3>
+
+        <p>
+          「発注残CSVを出力」で現在の商品データをExcel用CSVに出力できます。<br>
+          CSVの「発注残数」だけを編集して読み込むと、内容を確認してから一括更新できます。
+        </p>
+
+        <div class="order-remaining-csv-actions">
+          <button
+            id="export-order-remaining-csv"
+            type="button"
+          >
+            発注残CSVを出力
+          </button>
+
+          <button
+            id="import-order-remaining-csv"
+            type="button"
+          >
+            発注残CSVを読み込む
+          </button>
+
+          <input
+            id="order-remaining-csv-file"
+            type="file"
+            accept=".csv,text/csv"
+            hidden
+          >
+        </div>
+      </div>
+
+      <div
+        id="order-remaining-csv-preview"
+        class="order-remaining-csv-preview"
+        hidden
+      >
+        <h3>CSV読込プレビュー</h3>
+
+        <div
+          id="order-remaining-csv-summary"
+          class="order-remaining-csv-summary"
+        ></div>
+
+        <div
+          id="order-remaining-csv-preview-list"
+          class="order-remaining-csv-preview-list"
+        ></div>
+
+        <div class="order-remaining-csv-preview-actions">
+          <button
+            id="apply-order-remaining-csv"
+            type="button"
+            disabled
+          >
+            CSVを反映する
+          </button>
+
+          <button
+            id="close-order-remaining-csv-preview"
+            type="button"
+          >
+            プレビューを閉じる
+          </button>
+        </div>
       </div>
 
       <div class="order-remaining-summary-grid">
@@ -2743,7 +2810,7 @@
 <script src="sales-plan.js?v=95"></script>
 <script src="sales-actual.js?v=71"></script>
 <script src="purchase-required.js?v=112"></script>
-<script src="order-remaining.js?v=116"></script>
+<script src="order-remaining.js?v=117"></script>
 <script src="low-shipment.js?v=45"></script>
 <script src="shipping-schedule.js?v=114"></script>
 <script src="dedicated-product.js?v=108"></script>

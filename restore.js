@@ -85,7 +85,6 @@ async function handleRestoreFileSelection(event) {
         { label: "販売実績CSV取込履歴", value: `${c.salesImportBatches}件` },
         { label: "船便スケジュール", value: `${c.shippingSchedules}件` },
         { label: "商品移動リスト", value: `${c.transferLists}件` },
-        { label: "発注残変更履歴", value: `${c.orderRemainingHistories}件` },
         { label: "発注残変更履歴", value: `${c.orderRemainingHistories}件` }
       ],
       notice: "現在のデータはバックアップの内容へ置き換えられます。現在のデータを残したい場合は、先に『全データをバックアップする』を実行してください。",
@@ -127,7 +126,8 @@ async function handleRestoreFileSelection(event) {
         { label: "棚卸履歴", value: `${c.stocktakings}件` },
         { label: "販売予定", value: `${c.salesPlans}件` },
         { label: "販売実績", value: `${c.salesActuals}件` },
-        { label: "商品移動リスト", value: `${c.transferLists}件` }
+        { label: "商品移動リスト", value: `${c.transferLists}件` },
+        { label: "発注残変更履歴", value: `${c.orderRemainingHistories}件` }
       ],
       confirmText: "画面を更新する"
     });

@@ -73,7 +73,6 @@ async function exportFullBackup() {
               { label: "販売実績CSV取込履歴", value: `${salesImportBatches.length}件` },
               { label: "船便スケジュール", value: `${shippingSchedules.length}件` },
               { label: "商品移動リスト", value: `${transferLists.length}件` },
-          { label: "発注残変更履歴", value: `${orderRemainingHistories.length}件` },
               { label: "発注残変更履歴", value: `${orderRemainingHistories.length}件` }
             ],
             notice: "このバックアップには会社の在庫情報が含まれます。第三者が見られる場所や公開された場所には保存しないでください。",
@@ -156,7 +155,8 @@ async function exportFullBackup() {
           { label: "入出庫履歴", value: `${movements.length}件` },
           { label: "棚卸履歴", value: `${stocktakings.length}件` },
           { label: "販売実績", value: `${salesActuals.length}件` },
-          { label: "商品移動リスト", value: `${transferLists.length}件` }
+          { label: "商品移動リスト", value: `${transferLists.length}件` },
+          { label: "発注残変更履歴", value: `${orderRemainingHistories.length}件` }
         ],
         notice: "会社の在庫情報を含むため、安全な場所に保存してください。",
         confirmText: "確認して閉じる"

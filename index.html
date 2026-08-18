@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v112
+            画面版 v113
           </span>
         </div>
       </div>
@@ -912,27 +912,10 @@
           「今回の船便」には推奨数量を初期表示します。積まない商品は0個に変更してから保存してください。
         </div>
 
-        <div class="shipping-allocation-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>社内コード</th>
-                <th>商品コード</th>
-                <th>商品名</th>
-                <th>月平均販売数</th>
-                <th>期間販売見込</th>
-                <th>期間販売予定</th>
-                <th>現在庫</th>
-                <th>前便振分済</th>
-                <th>必要数</th>
-                <th>推奨数量</th>
-                <th>今回の船便</th>
-                <th>保管場所</th>
-              </tr>
-            </thead>
-            <tbody id="shipping-allocation-table-body"></tbody>
-          </table>
-        </div>
+        <div
+          id="shipping-allocation-card-list"
+          class="shipping-allocation-card-list"
+        ></div>
 
         <div class="shipping-schedule-actions">
           <button id="save-visible-shipping-allocations" type="button" disabled>表示中の振分数量を保存する</button>
@@ -2618,7 +2601,7 @@
 <script src="sales-actual.js?v=71"></script>
 <script src="purchase-required.js?v=112"></script>
 <script src="low-shipment.js?v=45"></script>
-<script src="shipping-schedule.js?v=110"></script>
+<script src="shipping-schedule.js?v=113"></script>
 <script src="dedicated-product.js?v=108"></script>
 <script src="shipping-arrival.js?v=111"></script>
 <script src="barcode-print.js?v=89"></script>

@@ -1239,6 +1239,24 @@ function escapeOrderRemainingHtml(
 function showOrderRemainingDialog(
   options
 ) {
+  const dialogOptions = {
+    ...(options || {})
+  };
+
+  const isConfirmDialog =
+    dialogOptions.type === "confirm" ||
+    dialogOptions.isConfirm === true;
+
+  if (isConfirmDialog) {
+    dialogOptions.isConfirm = true;
+
+    if (
+      dialogOptions.type === "confirm"
+    ) {
+      dialogOptions.type = "info";
+    }
+  }
+
   if (
     window.inventoryApp &&
     typeof window.inventoryApp
@@ -1246,19 +1264,16 @@ function showOrderRemainingDialog(
       "function"
   ) {
     return window.inventoryApp.showAppDialog(
-      options || {}
+      dialogOptions
     );
   }
 
-  if (
-    options &&
-    options.type === "confirm"
-  ) {
+  if (isConfirmDialog) {
     return Promise.resolve(
       window.confirm(
         [
-          options.title || "",
-          options.message || ""
+          dialogOptions.title || "",
+          dialogOptions.message || ""
         ]
           .filter(Boolean)
           .join("\n\n")
@@ -1268,8 +1283,9 @@ function showOrderRemainingDialog(
 
   window.alert(
     [
-      options?.title || "お知らせ",
-      options?.message || ""
+      dialogOptions.title ||
+        "お知らせ",
+      dialogOptions.message || ""
     ]
       .filter(Boolean)
       .join("\n\n")

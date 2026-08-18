@@ -852,7 +852,7 @@ function renderShippingAllocationTable() {
 
       const allocationControl = scheduleLocked
         ? `<div class="shipping-allocation-locked-box"><span>今回の船便</span><strong class="shipping-allocation-readonly-quantity">${item.currentAllocation.toLocaleString("ja-JP")}個</strong></div>`
-        : `<label class="shipping-allocation-input-box"><span>今回の船便</span><div class="shipping-allocation-input-row"><input type="number" min="0" step="1" value="${item.currentAllocation > 0 ? item.currentAllocation : item.recommendedQuantity}" class="shipping-allocation-quantity" data-internal-code="${escapeShippingHtml(item.internalCode)}" data-recommended-quantity="${item.recommendedQuantity}" inputmode="numeric"><strong>個</strong></div><small>推奨 ${item.recommendedQuantity.toLocaleString("ja-JP")}個</small></label>`;
+        : `<label class="shipping-allocation-input-box"><span>今回の船便</span><div class="shipping-allocation-input-row"><input type="number" min="0" step="1" value="${item.currentAllocation > 0 ? item.currentAllocation : 0}" class="shipping-allocation-quantity" data-internal-code="${escapeShippingHtml(item.internalCode)}" data-recommended-quantity="${item.recommendedQuantity}" inputmode="numeric"><strong>個</strong></div><div class="shipping-allocation-recommended-row"><small>推奨 ${item.recommendedQuantity.toLocaleString("ja-JP")}個</small><button type="button" class="shipping-allocation-apply-recommended">推奨を入れる</button></div></label>`;
 
       card.innerHTML = `
         <div class="shipping-allocation-item-head">
@@ -876,6 +876,33 @@ function renderShippingAllocationTable() {
           <div class="shipping-allocation-metric shipping-allocation-metric-recommended"><span>推奨数量</span><strong>${item.recommendedQuantity.toLocaleString("ja-JP")}個</strong></div>
           <div class="shipping-allocation-metric"><span>保管場所</span><strong>${escapeShippingHtml(item.location || "未設定")}</strong></div>
         </div>`;
+
+      const applyRecommendedButton =
+        card.querySelector(
+          ".shipping-allocation-apply-recommended"
+        );
+
+      if (applyRecommendedButton) {
+        applyRecommendedButton.addEventListener(
+          "click",
+          function () {
+            const quantityInput =
+              card.querySelector(
+                ".shipping-allocation-quantity"
+              );
+
+            if (!quantityInput) {
+              return;
+            }
+
+            quantityInput.value =
+              item.recommendedQuantity;
+
+            quantityInput.focus();
+          }
+        );
+      }
+
       list.appendChild(card);
     });
   }
@@ -2159,7 +2186,10 @@ function createShippingScheduleStyle() {
     #shipping-schedule .shipping-allocation-input-box > span, #shipping-schedule .shipping-allocation-locked-box > span { display: block; margin-bottom: 6px; color: #1565c0; font-weight: 800; }
     #shipping-schedule .shipping-allocation-input-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 7px; align-items: center; }
     #shipping-schedule .shipping-allocation-input-row > strong { font-size: 18px; }
-    #shipping-schedule .shipping-allocation-input-box small { display: block; margin-top: 5px; color: #607d8b; font-weight: 700; }
+    #shipping-schedule .shipping-allocation-input-box small { display: block; color: #607d8b; font-weight: 700; }
+    #shipping-schedule .shipping-allocation-recommended-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 7px; }
+    #shipping-schedule .shipping-allocation-apply-recommended { width: auto; min-width: 0; padding: 6px 10px; border: 1px solid #90caf9; border-radius: 8px; background: #e3f2fd; color: #1565c0; font-size: 12px; font-weight: 800; line-height: 1.2; }
+    #shipping-schedule .shipping-allocation-apply-recommended:hover { background: #bbdefb; }
     #shipping-schedule .shipping-allocation-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
     #shipping-schedule .shipping-allocation-metric { min-width: 0; padding: 10px 11px; border: 1px solid #dfe6eb; border-radius: 10px; background: #f4f7f9; }
     #shipping-schedule .shipping-allocation-metric-recommended { border-color: #90caf9; background: #edf6ff; }

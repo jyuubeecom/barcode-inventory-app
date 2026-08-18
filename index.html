@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v113
+            画面版 v114
           </span>
         </div>
       </div>
@@ -909,7 +909,8 @@
           対象期間は「今回の倉庫到着日 ～ 次便の倉庫到着日前日」です。<br>
           期間販売見込 ＝ 直前6か月の月平均販売数 ÷ 30日 × 対象日数（小数切り上げ）。<br>
           推奨数量 ＝ 「期間販売見込 ＋ 対象期間の販売予定数」－ 現在庫 － 前の船便への振分数量です。<br>
-          「今回の船便」には推奨数量を初期表示します。積まない商品は0個に変更してから保存してください。
+          <strong>未保存の商品は「今回の船便」を0個で表示します。実際に積む商品だけ数量を入力して保存してください。</strong><br>
+          推奨数量をそのまま使う場合は、各商品の「推奨を入れる」ボタンを押せます。
         </div>
 
         <div
@@ -918,7 +919,7 @@
         ></div>
 
         <div class="shipping-schedule-actions">
-          <button id="save-visible-shipping-allocations" type="button" disabled>表示中の振分数量を保存する</button>
+          <button id="save-visible-shipping-allocations" type="button" disabled>入力した振分数量を保存する</button>
           <span id="shipping-allocation-readonly-message" class="shipping-allocation-readonly-message" hidden></span>
           <button id="print-shipping-allocation-list" type="button" disabled>この船便の振分リストを印刷する</button>
         </div>
@@ -2601,7 +2602,7 @@
 <script src="sales-actual.js?v=71"></script>
 <script src="purchase-required.js?v=112"></script>
 <script src="low-shipment.js?v=45"></script>
-<script src="shipping-schedule.js?v=113"></script>
+<script src="shipping-schedule.js?v=114"></script>
 <script src="dedicated-product.js?v=108"></script>
 <script src="shipping-arrival.js?v=111"></script>
 <script src="barcode-print.js?v=89"></script>

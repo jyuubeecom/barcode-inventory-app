@@ -105,6 +105,11 @@ function initializeOrderRemainingFeature() {
       "#order-remaining-history-next"
     );
 
+  const exportHistoryCsvButton =
+    document.querySelector(
+      "#export-order-remaining-history-csv"
+    );
+
   if (!showButton) {
     return;
   }
@@ -305,6 +310,13 @@ function initializeOrderRemainingFeature() {
           renderOrderRemainingHistory();
         }
       }
+    );
+  }
+
+  if (exportHistoryCsvButton) {
+    exportHistoryCsvButton.addEventListener(
+      "click",
+      exportOrderRemainingHistoryCsv
     );
   }
 }
@@ -2843,6 +2855,199 @@ function renderOrderRemainingHistory() {
   }
 }
 
+function exportOrderRemainingHistoryCsv() {
+  const histories =
+    getFilteredOrderRemainingHistories();
+
+  if (histories.length === 0) {
+    void showOrderRemainingDialog({
+      type: "warning",
+      icon: "📄",
+      title: "出力する履歴がありません",
+      message:
+        "現在の検索・絞り込み条件に該当する発注残変更履歴がありません。",
+      confirmText: "閉じる"
+    });
+
+    return;
+  }
+
+  const rows = [
+    [
+      "日時",
+      "社内コード",
+      "商品コード",
+      "商品名",
+      "変更方法",
+      "変更前",
+      "変更後",
+      "増減数",
+      "メモ"
+    ]
+  ];
+
+  histories.forEach(
+    function (history) {
+      const before =
+        getOrderRemainingNumber(
+          history.beforeOrderRemaining
+        );
+
+      const after =
+        getOrderRemainingNumber(
+          history.afterOrderRemaining
+        );
+
+      const change =
+        Number.isFinite(
+          Number(history.change)
+        )
+          ? Number(history.change)
+          : after - before;
+
+      rows.push([
+        formatOrderRemainingCsvDateTime(
+          history.dateTime ||
+            history.recordedAt
+        ),
+        history.internalCode || "",
+        history.productCode || "",
+        history.productName || "",
+        history.source || "",
+        before,
+        after,
+        change,
+        history.memo || ""
+      ]);
+    }
+  );
+
+  const csv =
+    "\uFEFF" +
+    rows
+      .map(
+        function (row) {
+          return row
+            .map(
+              escapeOrderRemainingCsvValue
+            )
+            .join(",");
+        }
+      )
+      .join("\r\n");
+
+  const blob =
+    new Blob(
+      [csv],
+      {
+        type:
+          "text/csv;charset=utf-8"
+      }
+    );
+
+  const url =
+    URL.createObjectURL(blob);
+
+  const link =
+    document.createElement("a");
+
+  const sourceFilter =
+    document.querySelector(
+      "#order-remaining-history-source"
+    );
+
+  const source =
+    sourceFilter &&
+    sourceFilter.value &&
+    sourceFilter.value !== "all"
+      ? `_${sourceFilter.value}`
+      : "";
+
+  link.href = url;
+  link.download =
+    `発注残変更履歴${source}_${getOrderRemainingTodayKey()}.csv`;
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
+
+  void showOrderRemainingDialog({
+    type: "success",
+    icon: "✅",
+    title: "発注残変更履歴CSVを出力しました",
+    message:
+      `${histories.length.toLocaleString(
+        "ja-JP"
+      )}件の履歴をCSVに出力しました。`,
+    details: [
+      {
+        label: "出力対象",
+        value:
+          sourceFilter &&
+          sourceFilter.value &&
+          sourceFilter.value !== "all"
+            ? sourceFilter.value
+            : "すべての変更方法"
+      }
+    ],
+    confirmText: "閉じる"
+  });
+}
+
+function formatOrderRemainingCsvDateTime(
+  value
+) {
+  if (!value) {
+    return "";
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return String(value);
+  }
+
+  const year =
+    date.getFullYear();
+
+  const month =
+    String(
+      date.getMonth() + 1
+    ).padStart(2, "0");
+
+  const day =
+    String(
+      date.getDate()
+    ).padStart(2, "0");
+
+  const hour =
+    String(
+      date.getHours()
+    ).padStart(2, "0");
+
+  const minute =
+    String(
+      date.getMinutes()
+    ).padStart(2, "0");
+
+  const second =
+    String(
+      date.getSeconds()
+    ).padStart(2, "0");
+
+  return (
+    `${year}/${month}/${day} ` +
+    `${hour}:${minute}:${second}`
+  );
+}
+
 function getOrderRemainingHistoryTotalPages() {
   return Math.max(
     1,
@@ -3066,6 +3271,20 @@ function createOrderRemainingStyle() {
       min-height: 44px;
       margin: 0;
       box-sizing: border-box;
+    }
+
+    #order-remaining-management .order-remaining-history-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 0 0 12px;
+    }
+
+    #order-remaining-management .order-remaining-history-toolbar button {
+      width: auto;
+      margin: 0;
+      background: #455a64;
     }
 
     #order-remaining-management .order-remaining-history-list {
@@ -3573,6 +3792,15 @@ function createOrderRemainingStyle() {
 
       #order-remaining-management .order-remaining-csv-actions button,
       #order-remaining-management .order-remaining-csv-preview-actions button {
+        width: 100%;
+      }
+
+      #order-remaining-management .order-remaining-history-toolbar {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      #order-remaining-management .order-remaining-history-toolbar button {
         width: 100%;
       }
 

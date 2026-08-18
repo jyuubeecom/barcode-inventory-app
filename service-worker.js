@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "barcode-inventory-app-v114";
+const CACHE_NAME = "barcode-inventory-app-v115";
 const APP_FILES = [
   "./", "./index.html", "./style.css?v=107", "./storage.js?v=105",
   "./app.js?v=111", "./product-history.js?v=107", "./inventory.js?v=97", "./transfer-list.js?v=81",
@@ -9,7 +9,7 @@ const APP_FILES = [
   "./scanner.js?v=88", "./stocktaking.js?v=104",
   "./stocktaking-history.js?v=33", "./stocktaking-transfer.js?v=80",
   "./csv.js?v=90", "./csv-import.js?v=75", "./csv-update.js?v=74",
-  "./sales-plan.js?v=95", "./sales-actual.js?v=71", "./purchase-required.js?v=112", "./low-shipment.js?v=45",
+  "./sales-plan.js?v=95", "./sales-actual.js?v=71", "./purchase-required.js?v=112", "./order-remaining.js?v=115", "./low-shipment.js?v=45",
   "./shipping-schedule.js?v=114", "./dedicated-product.js?v=108", "./shipping-arrival.js?v=111", "./barcode-print.js?v=89",
   "./backup.js?v=73", "./restore.js?v=72", "./location-management.js?v=100",
   "./home-dashboard.js?v=96", "./app-settings.js?v=102", "./pwa.js?v=31", "./manifest.json",

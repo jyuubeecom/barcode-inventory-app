@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v114
+            画面版 v115
           </span>
         </div>
       </div>
@@ -236,7 +236,7 @@
           </summary>
 
           <p class="home-panel-description">
-            販売予定、発注判定、出荷低迷、船便スケジュールを管理します。
+            販売予定、発注判定、発注残、出荷低迷、船便スケジュールを管理します。
           </p>
 
           <div
@@ -269,6 +269,13 @@
               type="button"
             >
               発注が必要な商品一覧
+            </button>
+
+            <button
+              id="show-order-remaining-button"
+              type="button"
+            >
+              発注残一覧・編集
             </button>
 
             <button
@@ -725,6 +732,141 @@
       </div>
 
       <button id="back-home-from-purchase-required" type="button">ホームへ戻る</button>
+    </section>
+
+
+    <!-- 発注残一覧・編集 -->
+    <section id="order-remaining-management" hidden>
+      <h2>発注残一覧・編集</h2>
+
+      <div class="order-remaining-intro">
+        すでに発注していて、まだ入荷していない数量を商品ごとにまとめて確認・編集できます。<br>
+        船便が入荷反映されると、入荷数量分は発注残数から自動で減ります。
+      </div>
+
+      <div class="order-remaining-summary-grid">
+        <div class="order-remaining-summary-card">
+          <span>発注残がある商品</span>
+          <strong>
+            <span id="order-remaining-product-count">0</span>商品
+          </strong>
+        </div>
+
+        <div class="order-remaining-summary-card">
+          <span>発注残数 合計</span>
+          <strong>
+            <span id="order-remaining-total-count">0</span>個
+          </strong>
+        </div>
+      </div>
+
+      <div class="order-remaining-controls">
+        <div>
+          <label for="order-remaining-search">
+            商品を検索
+          </label>
+
+          <input
+            id="order-remaining-search"
+            type="search"
+            placeholder="社内コード・商品コード・商品名・仕入先・保管場所"
+          >
+        </div>
+
+        <div>
+          <label for="order-remaining-filter">
+            発注残で絞り込み
+          </label>
+
+          <select id="order-remaining-filter">
+            <option value="remaining">
+              発注残あり
+            </option>
+            <option value="all">
+              すべての商品
+            </option>
+            <option value="zero">
+              発注残0
+            </option>
+          </select>
+        </div>
+
+        <div>
+          <label for="order-remaining-sort">
+            並べ替え
+          </label>
+
+          <select id="order-remaining-sort">
+            <option value="remaining-desc">
+              発注残数が多い順
+            </option>
+            <option value="internal-code">
+              社内コード順
+            </option>
+            <option value="product-name">
+              商品名順
+            </option>
+            <option value="supplier">
+              仕入先順
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <div class="order-remaining-toolbar">
+        <button
+          id="refresh-order-remaining-button"
+          type="button"
+        >
+          最新データを読み込む
+        </button>
+
+        <strong id="order-remaining-filter-count">
+          表示：0商品
+        </strong>
+      </div>
+
+      <p
+        id="order-remaining-save-message"
+        class="order-remaining-save-message"
+        aria-live="polite"
+      ></p>
+
+      <div
+        id="order-remaining-list-area"
+      >
+        <div
+          id="order-remaining-card-list"
+          class="order-remaining-card-list"
+        ></div>
+      </div>
+
+      <div class="order-remaining-pager">
+        <button
+          id="order-remaining-prev-page"
+          type="button"
+        >
+          前へ
+        </button>
+
+        <strong id="order-remaining-page-status">
+          1 / 1ページ
+        </strong>
+
+        <button
+          id="order-remaining-next-page"
+          type="button"
+        >
+          次へ
+        </button>
+      </div>
+
+      <button
+        id="back-home-from-order-remaining"
+        type="button"
+      >
+        ホームへ戻る
+      </button>
     </section>
 
 
@@ -2601,6 +2743,7 @@
 <script src="sales-plan.js?v=95"></script>
 <script src="sales-actual.js?v=71"></script>
 <script src="purchase-required.js?v=112"></script>
+<script src="order-remaining.js?v=115"></script>
 <script src="low-shipment.js?v=45"></script>
 <script src="shipping-schedule.js?v=114"></script>
 <script src="dedicated-product.js?v=108"></script>

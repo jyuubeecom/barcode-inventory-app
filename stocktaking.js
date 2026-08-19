@@ -7165,8 +7165,11 @@ function handleStocktakingScannedBarcode(
   if (normalizedBarcode === "") {
     return {
       success: false,
+      reason: "invalid",
       message:
-        "バーコード番号を確認できませんでした。"
+        "バーコード番号を確認できませんでした。",
+      manualMessage:
+        "バーコード番号を読み取れなかったため、手入力検索へ切り替えました。商品名・社内コード・商品コード・JANコードで検索してください。"
     };
   }
 
@@ -7214,18 +7217,29 @@ function handleStocktakingScannedBarcode(
   if (matchingItems.length === 0) {
     return {
       success: false,
+      reason: "not-found",
       message:
         "このバーコードの商品は、今回の棚卸対象にありません。\n\n" +
-        "JANコード・社内コード・保管場所を確認してください。"
+        "JANコード・社内コード・保管場所を確認してください。",
+      manualMessage:
+        "棚卸対象の商品を自動で特定できなかったため、手入力検索へ切り替えました。商品名・社内コード・商品コード・JANコードで検索してください。"
     };
   }
 
   if (matchingItems.length > 1) {
+    const duplicateManualMessage =
+      matchedCodeType === "JANコード"
+        ? "同じJANコードが複数の商品に登録されています。商品名・社内コード・商品コードを手入力して商品を選んでください。"
+        : `同じ${matchedCodeType}の商品が複数あります。商品名・商品コードなどを手入力して商品を選んでください。`;
+
     return {
       success: false,
+      reason: "duplicate",
       message:
         `同じ${matchedCodeType}の商品が棚卸対象に複数あります。\n\n` +
-        "商品名または社内コードで検索してください。"
+        "自動で1商品に決められないため、手入力で商品を選んでください。",
+      manualMessage:
+        duplicateManualMessage
     };
   }
 
@@ -7269,7 +7283,8 @@ function handleStocktakingScannedBarcode(
 }
 
 function returnFromStocktakingScanner(
-  focusSearch
+  focusSearch,
+  manualMessage
 ) {
   if (!currentStocktaking) {
     window.inventoryApp.showScreen(
@@ -7290,6 +7305,7 @@ function returnFromStocktakingScanner(
     filterStocktakingItems();
 
     stocktakingSearchMessage.textContent =
+      manualMessage ||
       "JANコード・商品名・社内コード・商品コードを入力してください。";
 
     window.setTimeout(

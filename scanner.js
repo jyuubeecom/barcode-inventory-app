@@ -1109,7 +1109,9 @@ function closeCameraScannerScreen() {
   window.inventoryApp.showScreen("home");
 }
 
-function switchToManualLookup() {
+function switchToManualLookup(
+  manualMessage
+) {
   const returnMode =
     cameraScannerMode;
 
@@ -1126,7 +1128,8 @@ function switchToManualLookup() {
       "function"
   ) {
     window.stocktakingApp.returnFromScanner(
-      true
+      true,
+      manualMessage || ""
     );
 
     return;
@@ -1430,31 +1433,50 @@ async function processStocktakingBarcodeValue(
         ? result.message
         : "棚卸対象の商品を確認できませんでした。";
 
+    const manualMessage =
+      result && result.manualMessage
+        ? result.manualMessage
+        : "バーコードで商品を特定できなかったため、手入力検索へ切り替えました。商品名・社内コード・商品コード・JANコードで検索してください。";
+
     cameraScannerMessage.textContent =
-      `${message} 「読み取りをやり直す」を押してください。`;
+      `${message} 手入力検索へ切り替えます。`;
 
     await showScannerDialog({
       type: "warning",
-      icon: "🔎",
-      title: "棚卸商品を確認できませんでした",
+      icon: "✏️",
+      title:
+        result &&
+        result.reason === "duplicate"
+          ? "同じコードの商品が複数あります"
+          : "手入力検索へ切り替えます",
       message: message,
-      notice: "コードを確認して、もう一度読み取ってください。",
-      confirmText: "閉じる"
+      notice:
+        "「手入力へ切り替える」を押すと、棚卸画面の検索欄へ戻ります。",
+      confirmText: "手入力へ切り替える"
     });
+
+    switchToManualLookup(
+      manualMessage
+    );
   } catch (error) {
     console.error(error);
 
     cameraScannerMessage.textContent =
-      "棚卸商品を確認できませんでした。";
+      "棚卸商品を確認できませんでした。手入力検索へ切り替えます。";
 
     await showScannerDialog({
       type: "danger",
-      icon: "⚠️",
-      title: "棚卸商品を確認できませんでした",
+      icon: "✏️",
+      title: "手入力検索へ切り替えます",
       message: "棚卸商品の確認処理でエラーが発生しました。",
-      notice: "もう一度読み取るか、棚卸商品の手入力検索を使用してください。",
-      confirmText: "閉じる"
+      notice:
+        "「手入力へ切り替える」を押すと、商品名・社内コード・商品コード・JANコードで検索できます。",
+      confirmText: "手入力へ切り替える"
     });
+
+    switchToManualLookup(
+      "読取処理でエラーが発生したため、手入力検索へ切り替えました。商品名・社内コード・商品コード・JANコードで検索してください。"
+    );
   }
 }
 
@@ -1707,6 +1729,22 @@ function loadZxingLibrary() {
   );
 }
 
+function switchStocktakingCameraErrorToManual(
+  message
+) {
+  if (
+    cameraScannerMode !==
+    "stocktaking"
+  ) {
+    return;
+  }
+
+  switchToManualLookup(
+    message ||
+    "カメラを使用できないため、手入力検索へ切り替えました。"
+  );
+}
+
 async function showCameraErrorMessage(error) {
   const errorName =
     error && error.name
@@ -1731,8 +1769,15 @@ async function showCameraErrorMessage(error) {
       title: "カメラを使用できません",
       message: "カメラを使用できる方法でアプリが開かれていません。",
       notice: "index.htmlを直接開かず、GitHub PagesまたはLive Serverからアプリを開いてください。",
-      confirmText: "閉じる"
+      confirmText:
+        cameraScannerMode === "stocktaking"
+          ? "手入力へ切り替える"
+          : "閉じる"
     });
+
+    switchStocktakingCameraErrorToManual(
+      "カメラを使用できないため、手入力検索へ切り替えました。商品名・社内コード・商品コード・JANコードで検索してください。"
+    );
 
     return;
   }
@@ -1750,8 +1795,15 @@ async function showCameraErrorMessage(error) {
       title: "カメラの使用が許可されていません",
       message: "ブラウザーのカメラ権限が許可されていません。",
       notice: `ブラウザーのカメラ許可を「許可」に変更してください。 ${getStocktakingManualGuidance()}`,
-      confirmText: "閉じる"
+      confirmText:
+        cameraScannerMode === "stocktaking"
+          ? "手入力へ切り替える"
+          : "閉じる"
     });
+
+    switchStocktakingCameraErrorToManual(
+      "カメラの使用が許可されていないため、手入力検索へ切り替えました。"
+    );
 
     return;
   }
@@ -1769,8 +1821,15 @@ async function showCameraErrorMessage(error) {
       title: "使用できるカメラが見つかりません",
       message: "この端末で使用できるカメラを確認できませんでした。",
       notice: "カメラ付きの端末で確認するか、手入力で商品を検索してください。",
-      confirmText: "閉じる"
+      confirmText:
+        cameraScannerMode === "stocktaking"
+          ? "手入力へ切り替える"
+          : "閉じる"
     });
+
+    switchStocktakingCameraErrorToManual(
+      "使用できるカメラが見つからないため、手入力検索へ切り替えました。"
+    );
 
     return;
   }
@@ -1788,8 +1847,15 @@ async function showCameraErrorMessage(error) {
       title: "カメラを起動できませんでした",
       message: "ほかのアプリがカメラを使用している可能性があります。",
       notice: "カメラアプリやビデオ会議アプリを閉じてから、もう一度お試しください。",
-      confirmText: "閉じる"
+      confirmText:
+        cameraScannerMode === "stocktaking"
+          ? "手入力へ切り替える"
+          : "閉じる"
     });
+
+    switchStocktakingCameraErrorToManual(
+      "カメラを起動できないため、手入力検索へ切り替えました。"
+    );
 
     return;
   }
@@ -1809,8 +1875,15 @@ async function showCameraErrorMessage(error) {
       title: "バーコード読み取り機能を読み込めませんでした",
       message: "バーコード読み取り用のプログラムを読み込めませんでした。",
       notice: "インターネット接続を確認して、もう一度お試しください。",
-      confirmText: "閉じる"
+      confirmText:
+        cameraScannerMode === "stocktaking"
+          ? "手入力へ切り替える"
+          : "閉じる"
     });
+
+    switchStocktakingCameraErrorToManual(
+      "バーコード読み取り機能を読み込めないため、手入力検索へ切り替えました。"
+    );
 
     return;
   }
@@ -1824,8 +1897,15 @@ async function showCameraErrorMessage(error) {
     title: "カメラを起動できませんでした",
     message: "カメラの起動処理でエラーが発生しました。",
     notice: `ブラウザーのカメラ設定を確認してください。 ${getStocktakingManualGuidance()}`,
-    confirmText: "閉じる"
+    confirmText:
+      cameraScannerMode === "stocktaking"
+        ? "手入力へ切り替える"
+        : "閉じる"
   });
+
+  switchStocktakingCameraErrorToManual(
+    "カメラの起動でエラーが発生したため、手入力検索へ切り替えました。"
+  );
 }
 
 function getStocktakingManualGuidance() {

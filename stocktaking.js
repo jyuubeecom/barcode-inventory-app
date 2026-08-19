@@ -3491,7 +3491,7 @@ function updateStocktakingMobileFocusMode() {
   if (stocktakingProductSearchInput) {
     if (mobileMode) {
       stocktakingProductSearchInput.placeholder =
-        "商品名・社内コード・商品コード・JANコード";
+        "商品名・コード・JANを入力";
     } else {
       stocktakingProductSearchInput.placeholder =
         "商品名・社内コード・商品コード・JANコード";
@@ -3526,22 +3526,22 @@ function updateStocktakingMobileContext(
 
     context.className =
       "stocktaking-mobile-context";
+  }
 
-    const title =
-      stocktakingActiveScreen.querySelector(
-        "h2"
-      );
+  const title =
+    stocktakingActiveScreen.querySelector(
+      "h2"
+    );
 
-    if (title) {
-      title.insertAdjacentElement(
-        "afterend",
-        context
-      );
-    } else {
-      stocktakingActiveScreen.prepend(
-        context
-      );
-    }
+  if (title) {
+    title.insertAdjacentElement(
+      "afterend",
+      context
+    );
+  } else {
+    stocktakingActiveScreen.prepend(
+      context
+    );
   }
 
   context.hidden = false;
@@ -3651,8 +3651,8 @@ function createStocktakingMobileFocusStyle() {
         display: flex;
         flex-wrap: wrap;
         gap: 6px 12px;
-        margin: 0 12px 10px;
-        padding: 10px 12px;
+        margin: 0 12px 8px;
+        padding: 9px 12px;
         border: 2px solid #b39ddb;
         border-radius: 12px;
         background: #faf5fc;
@@ -3710,7 +3710,7 @@ function createStocktakingMobileFocusStyle() {
       #stocktaking-active.stocktaking-mobile-focus-mode
         .stocktaking-search-area {
         margin: 0 0 8px !important;
-        padding: 12px;
+        padding: 10px;
         border: 2px solid #90caf9;
         border-radius: 12px;
         background: #f4f9ff;
@@ -3738,7 +3738,12 @@ function createStocktakingMobileFocusStyle() {
         .stocktaking-search-area
         label[for="stocktaking-display-filter"],
       #stocktaking-active.stocktaking-mobile-focus-mode
-        #stocktaking-display-filter {
+        #stocktaking-display-filter,
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-search-area
+        .stocktaking-page-size-area,
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-page-size {
         display: none !important;
       }
 

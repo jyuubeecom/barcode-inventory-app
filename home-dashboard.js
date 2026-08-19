@@ -696,6 +696,10 @@ function createHomeDashboardStyle() {
       box-shadow: none;
     }
 
+    #home.home-dashboard[hidden] {
+      display: none !important;
+    }
+
     #home .home-dashboard-heading,
     #home .home-quick-section,
     #home .home-function-panel,

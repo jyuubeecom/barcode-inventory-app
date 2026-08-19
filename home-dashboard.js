@@ -70,6 +70,8 @@ const HOME_DASHBOARD_ACTION_CLASSES = Object.freeze({
 let homeDashboardObserver = null;
 let homeDashboardOrganizeScheduled = false;
 let homeDashboardDesktopMode = null;
+let homeDashboardMobileExtrasOpen = false;
+let homeDashboardVisibilityObserver = null;
 
 document.addEventListener(
   "DOMContentLoaded",
@@ -86,8 +88,11 @@ function initializeHomeDashboard() {
 
   createHomeDashboardStyle();
   organizeHomeDashboardButtons();
+  createMobileHomeControls(homeScreen);
   initializeHomeDashboardPanels();
+  initializeMobileHomeLayout(homeScreen);
   watchHomeDashboardButtons(homeScreen);
+  watchHomeDashboardVisibility(homeScreen);
 }
 
 function organizeHomeDashboardButtons() {
@@ -170,12 +175,26 @@ function updateHomeDashboardEmptyPanels() {
   panels.forEach(
     function (panel) {
       const buttons =
-        panel.querySelectorAll(
-          ".home-panel-buttons button"
+        Array.from(
+          panel.querySelectorAll(
+            ".home-panel-buttons button"
+          )
+        );
+
+      const visibleButtons =
+        buttons.filter(
+          function (button) {
+            return (
+              !button.hidden &&
+              !button.classList.contains(
+                "role-menu-hidden"
+              )
+            );
+          }
         );
 
       panel.hidden =
-        buttons.length === 0;
+        visibleButtons.length === 0;
     }
   );
 }
@@ -219,6 +238,257 @@ function watchHomeDashboardButtons(
   );
 }
 
+function createMobileHomeControls(
+  homeScreen
+) {
+  if (
+    homeScreen.querySelector(
+      ".mobile-home-more-control"
+    )
+  ) {
+    return;
+  }
+
+  const functionGrid =
+    homeScreen.querySelector(
+      ".home-function-grid"
+    );
+
+  if (!functionGrid) {
+    return;
+  }
+
+  const control =
+    document.createElement("div");
+
+  control.className =
+    "mobile-home-more-control";
+
+  const button =
+    document.createElement("button");
+
+  button.type = "button";
+  button.className =
+    "mobile-home-more-button";
+  button.textContent =
+    "その他の機能を表示";
+
+  const note =
+    document.createElement("p");
+
+  note.className =
+    "mobile-home-more-note";
+  note.textContent =
+    "入出庫履歴、販売・発注、バックアップなどを使う場合はこちら。";
+
+  button.addEventListener(
+    "click",
+    function () {
+      homeDashboardMobileExtrasOpen =
+        !homeDashboardMobileExtrasOpen;
+
+      applyMobileExtrasState(
+        homeScreen
+      );
+    }
+  );
+
+  control.appendChild(button);
+  control.appendChild(note);
+
+  functionGrid.parentElement.insertBefore(
+    control,
+    functionGrid
+  );
+}
+
+function isResolvedMobileHomeMode() {
+  const resolvedMode =
+    document.body.dataset
+      .resolvedDisplayMode;
+
+  if (resolvedMode === "mobile") {
+    return true;
+  }
+
+  if (resolvedMode === "pc") {
+    return false;
+  }
+
+  return !window.matchMedia(
+    "(min-width: 901px)"
+  ).matches;
+}
+
+function initializeMobileHomeLayout(
+  homeScreen
+) {
+  const applyMode =
+    function () {
+      const isMobile =
+        isResolvedMobileHomeMode();
+
+      homeScreen.classList.toggle(
+        "mobile-primary-mode",
+        isMobile
+      );
+
+      const quickTitle =
+        homeScreen.querySelector(
+          "#home-quick-title"
+        );
+
+      const quickDescription =
+        quickTitle
+          ? quickTitle
+              .closest(
+                ".home-section-heading"
+              )
+              ?.querySelector("p")
+          : null;
+
+      if (quickTitle) {
+        quickTitle.textContent =
+          isMobile
+            ? "スマホ用かんたん操作"
+            : "よく使う操作";
+      }
+
+      if (quickDescription) {
+        quickDescription.textContent =
+          isMobile
+            ? "商品一覧と棚卸を大きなボタンからすぐ開けます。"
+            : "日常作業はこちらから始めます。";
+      }
+
+      if (isMobile) {
+        homeDashboardMobileExtrasOpen =
+          false;
+
+        homeScreen
+          .querySelectorAll(
+            ".home-function-panel"
+          )
+          .forEach(
+            function (panel) {
+              panel.open = false;
+            }
+          );
+      } else {
+        homeDashboardMobileExtrasOpen =
+          true;
+      }
+
+      applyMobileExtrasState(
+        homeScreen
+      );
+    };
+
+  applyMode();
+
+  window.addEventListener(
+    "inventory-display-mode-change",
+    function () {
+      applyMode();
+    }
+  );
+}
+
+function applyMobileExtrasState(
+  homeScreen
+) {
+  const isMobile =
+    isResolvedMobileHomeMode();
+
+  const open =
+    !isMobile ||
+    homeDashboardMobileExtrasOpen;
+
+  homeScreen.classList.toggle(
+    "mobile-extra-open",
+    open
+  );
+
+  const button =
+    homeScreen.querySelector(
+      ".mobile-home-more-button"
+    );
+
+  if (button) {
+    button.textContent =
+      homeDashboardMobileExtrasOpen
+        ? "その他の機能を閉じる"
+        : "その他の機能を表示";
+
+    button.setAttribute(
+      "aria-expanded",
+      homeDashboardMobileExtrasOpen
+        ? "true"
+        : "false"
+    );
+  }
+}
+
+function watchHomeDashboardVisibility(
+  homeScreen
+) {
+  if (
+    homeDashboardVisibilityObserver
+  ) {
+    homeDashboardVisibilityObserver.disconnect();
+  }
+
+  homeDashboardVisibilityObserver =
+    new MutationObserver(
+      function (mutations) {
+        const becameVisible =
+          mutations.some(
+            function (mutation) {
+              return (
+                mutation.type ===
+                  "attributes" &&
+                mutation.attributeName ===
+                  "hidden" &&
+                !homeScreen.hidden
+              );
+            }
+          );
+
+        if (
+          !becameVisible ||
+          !isResolvedMobileHomeMode()
+        ) {
+          return;
+        }
+
+        homeDashboardMobileExtrasOpen =
+          false;
+
+        homeScreen
+          .querySelectorAll(
+            ".home-function-panel"
+          )
+          .forEach(
+            function (panel) {
+              panel.open = false;
+            }
+          );
+
+        applyMobileExtrasState(
+          homeScreen
+        );
+      }
+    );
+
+  homeDashboardVisibilityObserver.observe(
+    homeScreen,
+    {
+      attributes: true,
+      attributeFilter: ["hidden"]
+    }
+  );
+}
+
 function initializeHomeDashboardPanels() {
   const desktopMedia =
     window.matchMedia(
@@ -226,8 +496,16 @@ function initializeHomeDashboardPanels() {
     );
 
   const applyMode = function () {
+    const resolvedMode =
+      document.body.dataset
+        .resolvedDisplayMode;
+
     const isDesktop =
-      desktopMedia.matches;
+      resolvedMode === "pc"
+        ? true
+        : resolvedMode === "mobile"
+          ? false
+          : desktopMedia.matches;
 
     if (
       homeDashboardDesktopMode ===
@@ -252,6 +530,21 @@ function initializeHomeDashboardPanels() {
   };
 
   applyMode();
+
+  window.addEventListener(
+    "inventory-display-mode-change",
+    function () {
+      homeDashboardDesktopMode = null;
+      applyMode();
+    }
+  );
+
+  window.addEventListener(
+    "inventory-role-mode-change",
+    function () {
+      updateHomeDashboardEmptyPanels();
+    }
+  );
 
   if (
     typeof desktopMedia.addEventListener ===
@@ -597,6 +890,143 @@ function createHomeDashboardStyle() {
       text-align: center;
     }
 
+    #home .mobile-home-more-control {
+      display: none;
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      .home-dashboard-heading {
+      order: 0;
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      .home-quick-section {
+      order: 1;
+      border: 2px solid #90caf9;
+      background:
+        linear-gradient(
+          180deg,
+          #ffffff 0%,
+          #f4f9ff 100%
+        );
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      .home-summary-grid {
+      order: 2;
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      .mobile-home-more-control {
+      display: grid;
+      order: 3;
+      gap: 8px;
+      padding: 14px;
+      border: 1px solid #d9e2ec;
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow:
+        0 4px 14px
+        rgba(31, 54, 77, 0.08);
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      .mobile-home-more-button {
+      width: 100%;
+      min-height: 54px;
+      margin: 0;
+      border-radius: 12px;
+      background: #546e7a;
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      .mobile-home-more-note {
+      margin: 0;
+      color: #607d8b;
+      font-size: 13px;
+      line-height: 1.55;
+      text-align: center;
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      .home-function-grid {
+      display: none !important;
+      order: 4;
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode.mobile-extra-open
+      .home-function-grid {
+      display: grid !important;
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      .home-storage-note {
+      order: 5;
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      #home-quick-action-buttons
+      > button {
+      display: none !important;
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      #show-list-button,
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      #show-stocktaking-button {
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      min-height: 92px !important;
+      padding: 18px 16px !important;
+      border-radius: 16px !important;
+      font-size: 21px !important;
+      font-weight: 900 !important;
+      line-height: 1.35 !important;
+      box-shadow:
+        0 5px 12px
+        rgba(31, 54, 77, 0.14) !important;
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      #show-list-button {
+      background: #00796b !important;
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      #show-stocktaking-button {
+      background: #6a1b9a !important;
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      .home-section-heading h3 {
+      font-size: 22px;
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      .home-section-heading p {
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
     @media (max-width: 1000px) {
       #home .home-summary-grid,
       #home .home-action-grid {
@@ -690,6 +1120,22 @@ function createHomeDashboardStyle() {
 
       #home .home-quick-section {
         padding: 17px;
+      }
+
+      body[data-resolved-display-mode="mobile"]
+        #home.mobile-primary-mode
+        .home-quick-section {
+        padding: 16px;
+      }
+
+      body[data-resolved-display-mode="mobile"]
+        #home.mobile-primary-mode
+        #show-list-button,
+      body[data-resolved-display-mode="mobile"]
+        #home.mobile-primary-mode
+        #show-stocktaking-button {
+        min-height: 96px !important;
+        font-size: 21px !important;
       }
 
       #home .home-section-heading {

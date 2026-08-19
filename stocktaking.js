@@ -650,7 +650,7 @@ function createStocktakingScreens() {
       <h3>棚卸結果を送る</h3>
 
       <p>
-        スマートフォンでは共有画面から、メール・AirDrop・Quick Shareなど利用できる送信方法を選べます。
+        「棚卸結果を送信する」を押すと、端末の共有画面からメール・AirDrop・Quick Shareなど利用できる送信方法を選べます。
       </p>
 
       <button
@@ -7566,7 +7566,8 @@ function getCompletedStocktakingCsvFileName(
 }
 
 function createCompletedStocktakingCsvFile(
-  stocktaking
+  stocktaking,
+  shareMode
 ) {
   return new File(
     [
@@ -7579,7 +7580,9 @@ function createCompletedStocktakingCsvFile(
     ),
     {
       type:
-        "text/csv;charset=utf-8"
+        shareMode
+          ? "text/plain"
+          : "text/csv"
     }
   );
 }
@@ -7597,7 +7600,7 @@ function downloadCompletedStocktakingCsv(
       [csvText],
       {
         type:
-          "text/csv;charset=utf-8"
+          "text/csv"
       }
     );
 
@@ -7643,18 +7646,18 @@ async function handleShareCompletedStocktaking() {
       "#stocktaking-share-message"
     );
 
+  if (message) {
+    message.textContent =
+      "";
+  }
+
   const file =
     createCompletedStocktakingCsvFile(
-      lastCompletedStocktaking
+      lastCompletedStocktaking,
+      true
     );
 
   const shareData = {
-    title:
-      "棚卸結果",
-    text:
-      `棚卸日：${lastCompletedStocktaking.stocktakingDate || ""}\n` +
-      `担当者：${lastCompletedStocktaking.person || ""}\n` +
-      `棚卸場所：${lastCompletedStocktaking.location || ""}`,
     files: [file]
   };
 
@@ -7664,9 +7667,9 @@ async function handleShareCompletedStocktaking() {
     (
       typeof navigator.canShare !==
         "function" ||
-      navigator.canShare({
-        files: [file]
-      })
+      navigator.canShare(
+        shareData
+      )
     );
 
   if (!fileShareSupported) {
@@ -7674,15 +7677,14 @@ async function handleShareCompletedStocktaking() {
       lastCompletedStocktaking
     );
 
-    await showStocktakingConfirm(
+    await showStocktakingNotice(
       "この端末ではCSVファイルを直接共有できないため、棚卸結果CSVを保存しました。\n\nメールなどを開き、保存したCSVを添付して送信してください。",
       {
         title:
           "CSVを保存しました",
         type: "info",
         icon: "📤",
-        confirmText: "閉じる",
-        cancelText: "閉じる"
+        confirmText: "閉じる"
       }
     );
 
@@ -7711,21 +7713,23 @@ async function handleShareCompletedStocktaking() {
       return;
     }
 
-    console.error(error);
+    console.error(
+      "棚卸結果共有エラー",
+      error
+    );
 
     downloadCompletedStocktakingCsv(
       lastCompletedStocktaking
     );
 
-    await showStocktakingConfirm(
+    await showStocktakingNotice(
       "共有画面を開けなかったため、棚卸結果CSVを保存しました。\n\nメールなどを開き、保存したCSVを添付して送信してください。",
       {
         title:
           "送信できませんでした",
         type: "warning",
         icon: "📤",
-        confirmText: "閉じる",
-        cancelText: "閉じる"
+        confirmText: "閉じる"
       }
     );
   }

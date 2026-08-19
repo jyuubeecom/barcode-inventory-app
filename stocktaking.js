@@ -4,6 +4,8 @@ let stocktakingStartButton = null;
 
 let stocktakingSetupScreen = null;
 let stocktakingActiveScreen = null;
+let stocktakingCompleteScreen = null;
+let lastCompletedStocktaking = null;
 
 let stocktakingSetupForm = null;
 let stocktakingDateInput = null;
@@ -254,12 +256,21 @@ function createStocktakingScreens() {
       "#stocktaking-active"
     );
 
+  const existingCompleteScreen =
+    document.querySelector(
+      "#stocktaking-complete"
+    );
+
   if (existingSetupScreen) {
     existingSetupScreen.remove();
   }
 
   if (existingActiveScreen) {
     existingActiveScreen.remove();
+  }
+
+  if (existingCompleteScreen) {
+    existingCompleteScreen.remove();
   }
 
   const mainElement =
@@ -579,8 +590,143 @@ function createStocktakingScreens() {
     stocktakingActiveScreen
   );
 
+  stocktakingCompleteScreen =
+    document.createElement("section");
+
+  stocktakingCompleteScreen.id =
+    "stocktaking-complete";
+
+  stocktakingCompleteScreen.hidden =
+    true;
+
+  stocktakingCompleteScreen.innerHTML = `
+    <h2>棚卸完了</h2>
+
+    <div class="stocktaking-complete-success">
+      <strong>棚卸を確定しました</strong>
+      <p>
+        棚卸結果をCSVで送信または保存できます。
+      </p>
+    </div>
+
+    <div class="stocktaking-complete-summary">
+      <div>
+        <span>棚卸日</span>
+        <strong id="stocktaking-complete-date">-</strong>
+      </div>
+
+      <div>
+        <span>担当者</span>
+        <strong id="stocktaking-complete-person">-</strong>
+      </div>
+
+      <div>
+        <span>棚卸場所</span>
+        <strong id="stocktaking-complete-location">-</strong>
+      </div>
+
+      <div>
+        <span>対象商品</span>
+        <strong id="stocktaking-complete-target">0件</strong>
+      </div>
+
+      <div>
+        <span>差異なし</span>
+        <strong id="stocktaking-complete-match">0件</strong>
+      </div>
+
+      <div>
+        <span>在庫不足</span>
+        <strong id="stocktaking-complete-shortage">0件</strong>
+      </div>
+
+      <div>
+        <span>在庫過剰</span>
+        <strong id="stocktaking-complete-surplus">0件</strong>
+      </div>
+    </div>
+
+    <div class="stocktaking-send-area">
+      <h3>棚卸結果を送る</h3>
+
+      <p>
+        スマートフォンでは共有画面から、メール・AirDrop・Quick Shareなど利用できる送信方法を選べます。
+      </p>
+
+      <button
+        id="stocktaking-share-result-button"
+        type="button"
+      >
+        棚卸結果を送信する
+      </button>
+
+      <button
+        id="stocktaking-download-result-button"
+        type="button"
+      >
+        棚卸結果CSVを保存する
+      </button>
+
+      <p
+        id="stocktaking-share-message"
+        class="stocktaking-share-message"
+      ></p>
+    </div>
+
+    <button
+      id="stocktaking-complete-home-button"
+      type="button"
+      class="stocktaking-complete-home-button"
+    >
+      ホームへ戻る
+    </button>
+  `;
+
+  mainElement.appendChild(
+    stocktakingCompleteScreen
+  );
+
   getStocktakingElements();
   addStocktakingEventListeners();
+
+  document
+    .querySelector(
+      "#stocktaking-share-result-button"
+    )
+    ?.addEventListener(
+      "click",
+      handleShareCompletedStocktaking
+    );
+
+  document
+    .querySelector(
+      "#stocktaking-download-result-button"
+    )
+    ?.addEventListener(
+      "click",
+      function () {
+        if (
+          !lastCompletedStocktaking
+        ) {
+          return;
+        }
+
+        downloadCompletedStocktakingCsv(
+          lastCompletedStocktaking
+        );
+      }
+    );
+
+  document
+    .querySelector(
+      "#stocktaking-complete-home-button"
+    )
+    ?.addEventListener(
+      "click",
+      function () {
+        window.location.reload();
+      }
+    );
 }
 
 function getStocktakingElements() {
@@ -3630,11 +3776,180 @@ function createStocktakingMobileFocusStyle() {
     "stocktaking-mobile-focus-style";
 
   style.textContent = `
+    #stocktaking-complete {
+      max-width: 980px;
+      margin: 0 auto 28px;
+      padding: 22px;
+      border-radius: 16px;
+      background: #ffffff;
+      box-shadow:
+        0 5px 18px
+        rgba(38, 50, 56, 0.10);
+    }
+
+    #stocktaking-complete[hidden] {
+      display: none !important;
+    }
+
+    #stocktaking-complete > h2 {
+      margin: 0 0 14px;
+      color: #1565c0;
+    }
+
+    #stocktaking-complete
+      .stocktaking-complete-success {
+      margin-bottom: 14px;
+      padding: 16px;
+      border: 2px solid #81c784;
+      border-radius: 12px;
+      background: #f1f8e9;
+    }
+
+    #stocktaking-complete
+      .stocktaking-complete-success
+      strong {
+      display: block;
+      margin-bottom: 5px;
+      color: #1b5e20;
+      font-size: 20px;
+    }
+
+    #stocktaking-complete
+      .stocktaking-complete-success
+      p {
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    #stocktaking-complete
+      .stocktaking-complete-summary {
+      display: grid;
+      grid-template-columns:
+        repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    #stocktaking-complete
+      .stocktaking-complete-summary
+      > div {
+      padding: 12px;
+      border: 1px solid #d7e0e8;
+      border-radius: 10px;
+      background: #f7f9fb;
+    }
+
+    #stocktaking-complete
+      .stocktaking-complete-summary
+      span {
+      display: block;
+      margin-bottom: 4px;
+      color: #607d8b;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    #stocktaking-complete
+      .stocktaking-complete-summary
+      strong {
+      display: block;
+      color: #263238;
+      font-size: 16px;
+      overflow-wrap: anywhere;
+    }
+
+    #stocktaking-complete
+      .stocktaking-send-area {
+      margin-bottom: 14px;
+      padding: 16px;
+      border: 2px solid #90caf9;
+      border-radius: 12px;
+      background: #f4f9ff;
+    }
+
+    #stocktaking-complete
+      .stocktaking-send-area
+      h3 {
+      margin: 0 0 7px;
+      color: #0d47a1;
+    }
+
+    #stocktaking-complete
+      .stocktaking-send-area
+      p {
+      line-height: 1.6;
+    }
+
+    #stocktaking-complete
+      #stocktaking-share-result-button,
+    #stocktaking-complete
+      #stocktaking-download-result-button,
+    #stocktaking-complete
+      .stocktaking-complete-home-button {
+      width: 100%;
+      min-height: 54px;
+      margin: 8px 0 0;
+      border-radius: 12px;
+      font-size: 17px;
+      font-weight: 800;
+    }
+
+    #stocktaking-complete
+      #stocktaking-share-result-button {
+      background: #2e7d32;
+    }
+
+    #stocktaking-complete
+      #stocktaking-download-result-button {
+      background: #1565c0;
+    }
+
+    #stocktaking-complete
+      .stocktaking-complete-home-button {
+      background: #546e7a;
+    }
+
+    #stocktaking-complete
+      .stocktaking-share-message {
+      min-height: 22px;
+      margin: 9px 0 0;
+      color: #2e7d32;
+      font-weight: 700;
+    }
+
     #stocktaking-active .stocktaking-mobile-context {
       display: none;
     }
 
     @media (max-width: 900px) {
+      #stocktaking-complete {
+        margin: 12px;
+        padding: 16px;
+      }
+
+      #stocktaking-complete
+        .stocktaking-complete-summary {
+        grid-template-columns:
+          repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      #stocktaking-complete
+        .stocktaking-complete-success
+        strong {
+        font-size: 19px;
+      }
+
+      #stocktaking-complete
+        #stocktaking-share-result-button,
+      #stocktaking-complete
+        #stocktaking-download-result-button,
+      #stocktaking-complete
+        .stocktaking-complete-home-button {
+        min-height: 62px;
+        font-size: 18px;
+      }
+
       #stocktaking-active.stocktaking-mobile-focus-mode {
         padding-left: 0;
         padding-right: 0;
@@ -6811,14 +7126,16 @@ async function handleConfirmStocktaking() {
       movements
     );
 
-    const completionMessage =
+    currentStocktaking =
+      completedStocktaking;
+
+    stocktakingHasUnsavedChanges =
+      false;
+
+    showCompletedStocktakingScreen(
+      completedStocktaking,
       reflectToInventory
-        ? "棚卸を確定しました。\n\n実在庫を現在庫へ反映しました。"
-        : "棚卸を確定しました。\n\n現在庫は変更していません。";
-
-    showStocktakingNotice(completionMessage);
-
-    window.location.reload();
+    );
   } catch (error) {
     console.error(error);
 
@@ -6959,6 +7276,457 @@ async function handleDeleteStocktaking() {
 
     showStocktakingNotice(
       "棚卸を取り消せませんでした。"
+    );
+  }
+}
+
+function getCompletedStocktakingCounts(
+  stocktaking
+) {
+  const items =
+    stocktaking &&
+    Array.isArray(stocktaking.items)
+      ? stocktaking.items
+      : [];
+
+  return items.reduce(
+    function (counts, item) {
+      counts.target += 1;
+
+      if (item.result === "差異なし") {
+        counts.match += 1;
+      } else if (
+        item.result === "在庫不足"
+      ) {
+        counts.shortage += 1;
+      } else if (
+        item.result === "在庫過剰"
+      ) {
+        counts.surplus += 1;
+      }
+
+      return counts;
+    },
+    {
+      target: 0,
+      match: 0,
+      shortage: 0,
+      surplus: 0
+    }
+  );
+}
+
+function showCompletedStocktakingScreen(
+  completedStocktaking,
+  reflectedToInventory
+) {
+  lastCompletedStocktaking =
+    completedStocktaking;
+
+  const counts =
+    getCompletedStocktakingCounts(
+      completedStocktaking
+    );
+
+  const setText =
+    function (selector, text) {
+      const element =
+        document.querySelector(
+          selector
+        );
+
+      if (element) {
+        element.textContent =
+          text;
+      }
+    };
+
+  setText(
+    "#stocktaking-complete-date",
+    completedStocktaking
+      .stocktakingDate || "-"
+  );
+
+  setText(
+    "#stocktaking-complete-person",
+    completedStocktaking
+      .person || "-"
+  );
+
+  setText(
+    "#stocktaking-complete-location",
+    completedStocktaking
+      .location || "-"
+  );
+
+  setText(
+    "#stocktaking-complete-target",
+    `${counts.target}件`
+  );
+
+  setText(
+    "#stocktaking-complete-match",
+    `${counts.match}件`
+  );
+
+  setText(
+    "#stocktaking-complete-shortage",
+    `${counts.shortage}件`
+  );
+
+  setText(
+    "#stocktaking-complete-surplus",
+    `${counts.surplus}件`
+  );
+
+  const successBox =
+    stocktakingCompleteScreen
+      ?.querySelector(
+        ".stocktaking-complete-success p"
+      );
+
+  if (successBox) {
+    successBox.textContent =
+      reflectedToInventory
+        ? "棚卸を確定し、実在庫を現在庫へ反映しました。棚卸結果をCSVで送信または保存できます。"
+        : "棚卸を確定しました。現在庫は変更していません。棚卸結果をCSVで送信または保存できます。";
+  }
+
+  const shareMessage =
+    document.querySelector(
+      "#stocktaking-share-message"
+    );
+
+  if (shareMessage) {
+    shareMessage.textContent =
+      "";
+  }
+
+  hideAllMainScreensForStocktaking();
+
+  stocktakingCompleteScreen.hidden =
+    false;
+
+  stocktakingCompleteScreen.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
+}
+
+function buildCompletedStocktakingCsvRows(
+  stocktaking
+) {
+  const rows = [
+    [
+      "棚卸日",
+      "社内コード",
+      "JANコード",
+      "商品コード",
+      "商品名",
+      "登録在庫",
+      "実在庫",
+      "差異",
+      "保管場所",
+      "担当者",
+      "結果",
+      "メモ"
+    ]
+  ];
+
+  const items =
+    stocktaking &&
+    Array.isArray(stocktaking.items)
+      ? stocktaking.items
+      : [];
+
+  items.forEach(
+    function (item) {
+      const actualStock =
+        item.actualStock === ""
+          ? ""
+          : getValidStocktakingNumber(
+              item.actualStock
+            );
+
+      const difference =
+        item.difference === null ||
+        item.difference === undefined
+          ? ""
+          : Number(item.difference);
+
+      const locationBreakdown =
+        formatStocktakingLocationBreakdown(
+          item
+        );
+
+      rows.push([
+        stocktaking.stocktakingDate || "",
+        item.internalCode || "",
+        item.janCode || "",
+        item.productCode || "",
+        item.productName || "",
+        getValidStocktakingNumber(
+          item.registeredStock
+        ),
+        actualStock,
+        difference,
+        locationBreakdown ||
+          item.location ||
+          stocktaking.location ||
+          "",
+        stocktaking.person || "",
+        item.result ||
+          getStocktakingResult(
+            difference === ""
+              ? null
+              : difference
+          ),
+        item.memo || ""
+      ]);
+    }
+  );
+
+  return rows;
+}
+
+function escapeCompletedStocktakingCsvValue(
+  value
+) {
+  const text =
+    String(value ?? "");
+
+  if (
+    /[",\r\n]/.test(text)
+  ) {
+    return (
+      '"' +
+      text.replaceAll(
+        '"',
+        '""'
+      ) +
+      '"'
+    );
+  }
+
+  return text;
+}
+
+function buildCompletedStocktakingCsvText(
+  stocktaking
+) {
+  return (
+    "\uFEFF" +
+    buildCompletedStocktakingCsvRows(
+      stocktaking
+    )
+      .map(
+        function (row) {
+          return row
+            .map(
+              escapeCompletedStocktakingCsvValue
+            )
+            .join(",");
+        }
+      )
+      .join("\r\n")
+  );
+}
+
+function sanitizeCompletedStocktakingFilePart(
+  value
+) {
+  return String(value || "")
+    .normalize("NFKC")
+    .trim()
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .replace(/\s+/g, "")
+    .slice(0, 30);
+}
+
+function getCompletedStocktakingCsvFileName(
+  stocktaking
+) {
+  const date =
+    sanitizeCompletedStocktakingFilePart(
+      stocktaking.stocktakingDate ||
+      new Date()
+        .toISOString()
+        .slice(0, 10)
+    );
+
+  const location =
+    sanitizeCompletedStocktakingFilePart(
+      stocktaking.location ||
+      "全保管場所"
+    );
+
+  return (
+    `棚卸結果_${date}_${location}.csv`
+  );
+}
+
+function createCompletedStocktakingCsvFile(
+  stocktaking
+) {
+  return new File(
+    [
+      buildCompletedStocktakingCsvText(
+        stocktaking
+      )
+    ],
+    getCompletedStocktakingCsvFileName(
+      stocktaking
+    ),
+    {
+      type:
+        "text/csv;charset=utf-8"
+    }
+  );
+}
+
+function downloadCompletedStocktakingCsv(
+  stocktaking
+) {
+  const csvText =
+    buildCompletedStocktakingCsvText(
+      stocktaking
+    );
+
+  const blob =
+    new Blob(
+      [csvText],
+      {
+        type:
+          "text/csv;charset=utf-8"
+      }
+    );
+
+  const url =
+    URL.createObjectURL(blob);
+
+  const link =
+    document.createElement("a");
+
+  link.href = url;
+  link.download =
+    getCompletedStocktakingCsvFileName(
+      stocktaking
+    );
+
+  document.body.appendChild(
+    link
+  );
+
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
+
+  const message =
+    document.querySelector(
+      "#stocktaking-share-message"
+    );
+
+  if (message) {
+    message.textContent =
+      "棚卸結果CSVを保存しました。";
+  }
+}
+
+async function handleShareCompletedStocktaking() {
+  if (!lastCompletedStocktaking) {
+    return;
+  }
+
+  const message =
+    document.querySelector(
+      "#stocktaking-share-message"
+    );
+
+  const file =
+    createCompletedStocktakingCsvFile(
+      lastCompletedStocktaking
+    );
+
+  const shareData = {
+    title:
+      "棚卸結果",
+    text:
+      `棚卸日：${lastCompletedStocktaking.stocktakingDate || ""}\n` +
+      `担当者：${lastCompletedStocktaking.person || ""}\n` +
+      `棚卸場所：${lastCompletedStocktaking.location || ""}`,
+    files: [file]
+  };
+
+  const fileShareSupported =
+    typeof navigator.share ===
+      "function" &&
+    (
+      typeof navigator.canShare !==
+        "function" ||
+      navigator.canShare({
+        files: [file]
+      })
+    );
+
+  if (!fileShareSupported) {
+    downloadCompletedStocktakingCsv(
+      lastCompletedStocktaking
+    );
+
+    await showStocktakingConfirm(
+      "この端末ではCSVファイルを直接共有できないため、棚卸結果CSVを保存しました。\n\nメールなどを開き、保存したCSVを添付して送信してください。",
+      {
+        title:
+          "CSVを保存しました",
+        type: "info",
+        icon: "📤",
+        confirmText: "閉じる",
+        cancelText: "閉じる"
+      }
+    );
+
+    return;
+  }
+
+  try {
+    await navigator.share(
+      shareData
+    );
+
+    if (message) {
+      message.textContent =
+        "棚卸結果の共有画面を開きました。送信先を選んでください。";
+    }
+  } catch (error) {
+    if (
+      error &&
+      error.name === "AbortError"
+    ) {
+      if (message) {
+        message.textContent =
+          "送信をキャンセルしました。棚卸結果は端末内に残っています。";
+      }
+
+      return;
+    }
+
+    console.error(error);
+
+    downloadCompletedStocktakingCsv(
+      lastCompletedStocktaking
+    );
+
+    await showStocktakingConfirm(
+      "共有画面を開けなかったため、棚卸結果CSVを保存しました。\n\nメールなどを開き、保存したCSVを添付して送信してください。",
+      {
+        title:
+          "送信できませんでした",
+        type: "warning",
+        icon: "📤",
+        confirmText: "閉じる",
+        cancelText: "閉じる"
+      }
     );
   }
 }

@@ -7793,11 +7793,11 @@ function buildCompletedStocktakingMailBody(
     `在庫不足：${counts.shortage}件`,
     `在庫過剰：${counts.surplus}件`,
     "",
-    "棚卸結果CSVを添付して送信してください。",
+    "保存された棚卸結果CSVを添付して送信してください。",
     `ファイル名：${getCompletedStocktakingCsvFileName(stocktaking)}`
   ];
 
-  return lines.join("\\n");
+  return lines.join("\n");
 }
 
 async function handleEmailCompletedStocktaking() {

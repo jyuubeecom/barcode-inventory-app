@@ -647,17 +647,36 @@ function createStocktakingScreens() {
     </div>
 
     <div class="stocktaking-send-area">
-      <h3>棚卸結果を送る</h3>
+      <h3>棚卸結果を管理者へ送る</h3>
 
       <p>
-        「棚卸結果を送信する」を押すと、端末の共有画面からメール・AirDrop・Quick Shareなど利用できる送信方法を選べます。
+        iPhone・Androidともに、管理者への送信方法をメールに統一します。
+      </p>
+
+      <label
+        for="stocktaking-manager-email"
+        class="stocktaking-manager-email-label"
+      >
+        管理者メールアドレス
+      </label>
+
+      <input
+        id="stocktaking-manager-email"
+        type="email"
+        inputmode="email"
+        autocomplete="email"
+        placeholder="例：zaiko@example.co.jp"
+      >
+
+      <p class="stocktaking-manager-email-help">
+        一度入力したメールアドレスは、この端末に保存します。
       </p>
 
       <button
-        id="stocktaking-share-result-button"
+        id="stocktaking-email-result-button"
         type="button"
       >
-        棚卸結果を送信する
+        管理者へメールで送る
       </button>
 
       <button
@@ -691,11 +710,24 @@ function createStocktakingScreens() {
 
   document
     .querySelector(
-      "#stocktaking-share-result-button"
+      "#stocktaking-email-result-button"
     )
     ?.addEventListener(
       "click",
-      handleShareCompletedStocktaking
+      handleEmailCompletedStocktaking
+    );
+
+  document
+    .querySelector(
+      "#stocktaking-manager-email"
+    )
+    ?.addEventListener(
+      "change",
+      function (event) {
+        saveStocktakingManagerEmail(
+          event.target.value
+        );
+      }
     );
 
   document
@@ -3881,7 +3913,7 @@ function createStocktakingMobileFocusStyle() {
     }
 
     #stocktaking-complete
-      #stocktaking-share-result-button,
+      #stocktaking-email-result-button,
     #stocktaking-complete
       #stocktaking-download-result-button,
     #stocktaking-complete
@@ -3895,8 +3927,36 @@ function createStocktakingMobileFocusStyle() {
     }
 
     #stocktaking-complete
-      #stocktaking-share-result-button {
+      #stocktaking-email-result-button {
       background: #2e7d32;
+    }
+
+    #stocktaking-complete
+      .stocktaking-manager-email-label {
+      display: block;
+      margin: 12px 0 6px;
+      color: #0d47a1;
+      font-weight: 800;
+    }
+
+    #stocktaking-complete
+      #stocktaking-manager-email {
+      width: 100%;
+      min-height: 52px;
+      box-sizing: border-box;
+      margin: 0;
+      padding: 10px 12px;
+      border: 1px solid #90a4ae;
+      border-radius: 10px;
+      background: #ffffff;
+      font-size: 17px;
+    }
+
+    #stocktaking-complete
+      .stocktaking-manager-email-help {
+      margin: 6px 0 10px;
+      color: #607d8b;
+      font-size: 13px;
     }
 
     #stocktaking-complete
@@ -3941,7 +4001,7 @@ function createStocktakingMobileFocusStyle() {
       }
 
       #stocktaking-complete
-        #stocktaking-share-result-button,
+        #stocktaking-email-result-button,
       #stocktaking-complete
         #stocktaking-download-result-button,
       #stocktaking-complete
@@ -7402,6 +7462,16 @@ function showCompletedStocktakingScreen(
       "";
   }
 
+  const managerEmailInput =
+    document.querySelector(
+      "#stocktaking-manager-email"
+    );
+
+  if (managerEmailInput) {
+    managerEmailInput.value =
+      getStocktakingManagerEmail();
+  }
+
   hideAllMainScreensForStocktaking();
 
   stocktakingCompleteScreen.hidden =
@@ -7634,6 +7704,196 @@ function downloadCompletedStocktakingCsv(
     message.textContent =
       "棚卸結果CSVを保存しました。";
   }
+}
+
+const STOCKTAKING_MANAGER_EMAIL_KEY =
+  "stocktakingManagerEmail";
+
+function getStocktakingManagerEmail() {
+  try {
+    return (
+      localStorage.getItem(
+        STOCKTAKING_MANAGER_EMAIL_KEY
+      ) || ""
+    );
+  } catch (error) {
+    console.warn(
+      "管理者メールアドレスを読み込めませんでした。",
+      error
+    );
+
+    return "";
+  }
+}
+
+function saveStocktakingManagerEmail(
+  value
+) {
+  const email =
+    String(value || "")
+      .trim();
+
+  try {
+    if (email) {
+      localStorage.setItem(
+        STOCKTAKING_MANAGER_EMAIL_KEY,
+        email
+      );
+    } else {
+      localStorage.removeItem(
+        STOCKTAKING_MANAGER_EMAIL_KEY
+      );
+    }
+  } catch (error) {
+    console.warn(
+      "管理者メールアドレスを保存できませんでした。",
+      error
+    );
+  }
+}
+
+function isValidStocktakingEmail(
+  value
+) {
+  const email =
+    String(value || "")
+      .trim();
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    email
+  );
+}
+
+function buildCompletedStocktakingMailSubject(
+  stocktaking
+) {
+  return (
+    `棚卸結果 ` +
+    `${stocktaking.stocktakingDate || ""} ` +
+    `${stocktaking.location || ""}`
+  ).trim();
+}
+
+function buildCompletedStocktakingMailBody(
+  stocktaking
+) {
+  const counts =
+    getCompletedStocktakingCounts(
+      stocktaking
+    );
+
+  const lines = [
+    "棚卸結果を送付します。",
+    "",
+    `棚卸日：${stocktaking.stocktakingDate || ""}`,
+    `担当者：${stocktaking.person || ""}`,
+    `棚卸場所：${stocktaking.location || ""}`,
+    `対象商品：${counts.target}件`,
+    `差異なし：${counts.match}件`,
+    `在庫不足：${counts.shortage}件`,
+    `在庫過剰：${counts.surplus}件`,
+    "",
+    "棚卸結果CSVを添付して送信してください。",
+    `ファイル名：${getCompletedStocktakingCsvFileName(stocktaking)}`
+  ];
+
+  return lines.join("\\n");
+}
+
+async function handleEmailCompletedStocktaking() {
+  if (!lastCompletedStocktaking) {
+    return;
+  }
+
+  const emailInput =
+    document.querySelector(
+      "#stocktaking-manager-email"
+    );
+
+  const managerEmail =
+    emailInput
+      ? emailInput.value.trim()
+      : "";
+
+  const message =
+    document.querySelector(
+      "#stocktaking-share-message"
+    );
+
+  if (!managerEmail) {
+    await showStocktakingNotice(
+      "管理者メールアドレスを入力してください。",
+      {
+        title:
+          "メールアドレスが未入力です",
+        type: "warning",
+        icon: "✉️",
+        confirmText: "閉じる"
+      }
+    );
+
+    emailInput?.focus();
+    return;
+  }
+
+  if (
+    !isValidStocktakingEmail(
+      managerEmail
+    )
+  ) {
+    await showStocktakingNotice(
+      "管理者メールアドレスの形式を確認してください。",
+      {
+        title:
+          "メールアドレスを確認してください",
+        type: "warning",
+        icon: "✉️",
+        confirmText: "閉じる"
+      }
+    );
+
+    emailInput?.focus();
+    return;
+  }
+
+  saveStocktakingManagerEmail(
+    managerEmail
+  );
+
+  // mailto ではCSVを自動添付できないため、
+  // 先にCSVを端末へ保存してからメール作成画面を開く。
+  downloadCompletedStocktakingCsv(
+    lastCompletedStocktaking
+  );
+
+  const subject =
+    buildCompletedStocktakingMailSubject(
+      lastCompletedStocktaking
+    );
+
+  const body =
+    buildCompletedStocktakingMailBody(
+      lastCompletedStocktaking
+    );
+
+  const mailto =
+    `mailto:${encodeURIComponent(
+      managerEmail
+    )}` +
+    `?subject=${encodeURIComponent(
+      subject
+    )}` +
+    `&body=${encodeURIComponent(
+      body
+    )}`;
+
+  if (message) {
+    message.textContent =
+      "棚卸結果CSVを保存しました。メール作成画面でCSVを添付して送信してください。";
+  }
+
+  window.location.href =
+    mailto;
 }
 
 async function handleShareCompletedStocktaking() {

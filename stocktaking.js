@@ -182,6 +182,15 @@ function initializeStocktaking() {
   createStocktakingStartButton();
   createStocktakingScreens();
   createStocktakingStyle();
+  createStocktakingMobileFocusStyle();
+
+  window.addEventListener(
+    "inventory-display-mode-change",
+    function () {
+      updateStocktakingMobileFocusMode();
+      filterStocktakingItems();
+    }
+  );
 }
 
 function createStocktakingStartButton() {
@@ -3165,6 +3174,9 @@ async function showActiveStocktaking(
 
   stocktakingActiveScreen.hidden = false;
 
+  updateStocktakingMobileFocusMode();
+  filterStocktakingItems();
+
   scrollStocktakingScreenIntoView(
     stocktakingActiveScreen
   );
@@ -3391,6 +3403,526 @@ function isSingleLocationStocktakingMode() {
       1 &&
     currentStocktaking.location !==
       "すべての保管場所"
+  );
+}
+
+function isMobileStocktakingFocusMode() {
+  const resolvedMode =
+    document.body.dataset
+      .resolvedDisplayMode;
+
+  if (resolvedMode === "mobile") {
+    return true;
+  }
+
+  if (resolvedMode === "pc") {
+    return false;
+  }
+
+  return window.matchMedia(
+    "(max-width: 900px)"
+  ).matches;
+}
+
+function updateStocktakingMobileFocusMode() {
+  if (!stocktakingActiveScreen) {
+    return;
+  }
+
+  const mobileMode =
+    isMobileStocktakingFocusMode();
+
+  const fixedLocationMode =
+    Boolean(
+      mobileMode &&
+      currentStocktaking &&
+      isSingleLocationStocktakingMode()
+    );
+
+  stocktakingActiveScreen.classList.toggle(
+    "stocktaking-mobile-focus-mode",
+    mobileMode
+  );
+
+  stocktakingActiveScreen.classList.toggle(
+    "stocktaking-fixed-location-mode",
+    fixedLocationMode
+  );
+
+  updateStocktakingMobileContext(
+    mobileMode,
+    fixedLocationMode
+  );
+
+  if (
+    stocktakingInfoDetails &&
+    mobileMode
+  ) {
+    stocktakingInfoDetails.open = true;
+  }
+
+  if (
+    stocktakingItemsDetails &&
+    mobileMode
+  ) {
+    stocktakingItemsDetails.open = true;
+  }
+
+  if (stocktakingActionsDetails) {
+    const summary =
+      stocktakingActionsDetails.querySelector(
+        ":scope > summary"
+      );
+
+    if (mobileMode) {
+      stocktakingActionsDetails.open =
+        false;
+
+      if (summary) {
+        summary.textContent =
+          "棚卸を終了・確定";
+      }
+    } else if (summary) {
+      summary.textContent =
+        "3. 保存・確定";
+    }
+  }
+
+  if (stocktakingProductSearchInput) {
+    if (mobileMode) {
+      stocktakingProductSearchInput.placeholder =
+        "商品名・社内コード・商品コード・JANコード";
+    } else {
+      stocktakingProductSearchInput.placeholder =
+        "商品名・社内コード・商品コード・JANコード";
+    }
+  }
+}
+
+function updateStocktakingMobileContext(
+  mobileMode,
+  fixedLocationMode
+) {
+  if (!stocktakingActiveScreen) {
+    return;
+  }
+
+  let context =
+    stocktakingActiveScreen.querySelector(
+      ".stocktaking-mobile-context"
+    );
+
+  if (!mobileMode) {
+    if (context) {
+      context.hidden = true;
+    }
+
+    return;
+  }
+
+  if (!context) {
+    context =
+      document.createElement("div");
+
+    context.className =
+      "stocktaking-mobile-context";
+
+    const title =
+      stocktakingActiveScreen.querySelector(
+        "h2"
+      );
+
+    if (title) {
+      title.insertAdjacentElement(
+        "afterend",
+        context
+      );
+    } else {
+      stocktakingActiveScreen.prepend(
+        context
+      );
+    }
+  }
+
+  context.hidden = false;
+
+  const locationText =
+    currentStocktaking
+      ? (
+          currentStocktaking.location ||
+          "すべての保管場所"
+        )
+      : "未設定";
+
+  const personText =
+    currentStocktaking
+      ? (
+          currentStocktaking.person ||
+          "未入力"
+        )
+      : "未入力";
+
+  const dateText =
+    currentStocktaking
+      ? (
+          currentStocktaking.stocktakingDate ||
+          ""
+        )
+      : "";
+
+  context.innerHTML = `
+    <strong>
+      ${
+        fixedLocationMode
+          ? "棚卸場所は確定済み"
+          : "棚卸中"
+      }
+    </strong>
+
+    <span>
+      場所：
+      <b>${escapeStocktakingMobileText(
+        locationText
+      )}</b>
+    </span>
+
+    <span>
+      担当：
+      <b>${escapeStocktakingMobileText(
+        personText
+      )}</b>
+    </span>
+
+    ${
+      dateText
+        ? `<span>日付：<b>${escapeStocktakingMobileText(
+            dateText
+          )}</b></span>`
+        : ""
+    }
+  `;
+}
+
+function escapeStocktakingMobileText(
+  value
+) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function createStocktakingMobileFocusStyle() {
+  if (
+    document.querySelector(
+      "#stocktaking-mobile-focus-style"
+    )
+  ) {
+    return;
+  }
+
+  const style =
+    document.createElement("style");
+
+  style.id =
+    "stocktaking-mobile-focus-style";
+
+  style.textContent = `
+    #stocktaking-active .stocktaking-mobile-context {
+      display: none;
+    }
+
+    @media (max-width: 900px) {
+      #stocktaking-active.stocktaking-mobile-focus-mode {
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        > h2 {
+        margin: 10px 12px 6px;
+        font-size: 24px;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-mobile-context {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 12px;
+        margin: 0 12px 10px;
+        padding: 10px 12px;
+        border: 2px solid #b39ddb;
+        border-radius: 12px;
+        background: #faf5fc;
+        color: #37474f;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-mobile-context
+        > strong {
+        width: 100%;
+        color: #6a1b9a;
+        font-size: 15px;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-sticky-navigation {
+        display: none !important;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-info-details {
+        margin: 8px 12px 10px;
+        width: calc(100% - 24px);
+        border: 0;
+        background: transparent;
+        overflow: visible;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-info-details
+        > summary {
+        display: none;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-info-details
+        > .stocktaking-notice,
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-info-details
+        > .stocktaking-info-table,
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-info-details
+        > .stocktaking-summary,
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-info-details
+        > .stocktaking-bulk-zero-area,
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-info-details
+        > .stocktaking-page-size-area {
+        display: none !important;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-search-area {
+        margin: 0 0 8px !important;
+        padding: 12px;
+        border: 2px solid #90caf9;
+        border-radius: 12px;
+        background: #f4f9ff;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-search-area
+        label[for="stocktaking-product-search"] {
+        display: block;
+        margin-bottom: 7px;
+        color: #0d47a1;
+        font-size: 16px;
+        font-weight: 800;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-product-search {
+        min-height: 54px;
+        margin: 0;
+        padding: 10px 12px;
+        font-size: 18px;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-search-area
+        label[for="stocktaking-display-filter"],
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-display-filter {
+        display: none !important;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-search-message {
+        margin: 8px 0 0;
+        padding: 9px 10px;
+        font-size: 13px;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-camera-scan-button {
+        width: 100% !important;
+        min-height: 58px;
+        margin: 0 !important;
+        border-radius: 12px;
+        background: #1565c0;
+        font-size: 17px;
+        font-weight: 800;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-items-details {
+        margin: 8px 0 12px;
+        width: 100%;
+        border: 0;
+        background: transparent;
+        overflow: visible;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-items-details
+        > summary,
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-items-details
+        > .stocktaking-list-pager {
+        display: none !important;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-items-details
+        .stocktaking-table-area {
+        padding: 0 12px;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-product-card-row {
+        padding: 12px;
+        border-radius: 14px;
+        box-shadow:
+          0 3px 10px
+          rgba(38, 50, 56, 0.10);
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-cell-product-name {
+        padding-top: 2px !important;
+        padding-bottom: 8px !important;
+        font-size: 21px;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-cell-internal-code,
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-cell-product-code,
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-cell-registered-location {
+        grid-template-columns:
+          92px minmax(0, 1fr);
+        padding: 4px 0 !important;
+        font-size: 14px;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-cell-registered-stock,
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-cell-difference {
+        margin-top: 8px;
+        padding: 9px 6px !important;
+        font-size: 22px;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-cell-actual-stock {
+        margin-top: 8px;
+        padding: 10px !important;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-cell-memo {
+        padding-top: 8px !important;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-cell-mobile-actions {
+        gap: 7px;
+        padding-top: 8px !important;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-cell-mobile-actions
+        button {
+        min-height: 52px;
+        padding: 10px 8px;
+        font-size: 15px;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-sticky-action-bar {
+        display: none !important;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-actions-details {
+        margin: 12px;
+        width: calc(100% - 24px);
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        #stocktaking-actions-details
+        > summary {
+        padding: 12px 14px;
+        font-size: 16px;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-items-table
+        tbody
+        > tr:not([data-internal-code])
+        td {
+        padding: 14px 12px;
+        font-size: 14px;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode
+        .stocktaking-location-entry
+        input[type="number"] {
+        min-height: 58px;
+        font-size: 22px;
+        font-weight: 800;
+        text-align: center;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode.stocktaking-fixed-location-mode
+        .stocktaking-cell-registered-location,
+      #stocktaking-active.stocktaking-mobile-focus-mode.stocktaking-fixed-location-mode
+        .stocktaking-mobile-location-heading,
+      #stocktaking-active.stocktaking-mobile-focus-mode.stocktaking-fixed-location-mode
+        .stocktaking-location-name-input,
+      #stocktaking-active.stocktaking-mobile-focus-mode.stocktaking-fixed-location-mode
+        .stocktaking-remove-location-button,
+      #stocktaking-active.stocktaking-mobile-focus-mode.stocktaking-fixed-location-mode
+        .stocktaking-add-location-button {
+        display: none !important;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode.stocktaking-fixed-location-mode
+        .stocktaking-location-entry {
+        grid-template-columns: 1fr;
+        gap: 0;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode.stocktaking-fixed-location-mode
+        .stocktaking-location-entry
+        input[type="number"] {
+        min-height: 78px;
+        padding: 10px;
+        border: 3px solid #7e57c2;
+        border-radius: 12px;
+        font-size: 32px;
+        font-weight: 900;
+      }
+
+      #stocktaking-active.stocktaking-mobile-focus-mode.stocktaking-fixed-location-mode
+        .stocktaking-location-total {
+        margin-top: 8px;
+        padding: 9px 10px;
+        font-size: 17px;
+      }
+    }
+  `;
+
+  document.head.appendChild(
+    style
   );
 }
 
@@ -7026,6 +7558,7 @@ function createStocktakingUsabilityControls() {
   );
 
   createStocktakingUsabilityStyle();
+  updateStocktakingMobileFocusMode();
   filterStocktakingItems();
 }
 
@@ -7425,44 +7958,54 @@ function filterStocktakingItems() {
     )
   );
 
-  const matchedRows = rows.filter(
-    function (row) {
-      const keywordMatches =
-        keyword === "" ||
-        row.dataset.searchText.includes(
-          keyword
-        );
+  const mobileFocusMode =
+    isMobileStocktakingFocusMode();
 
-      const item =
-        currentStocktaking.items.find(
-          function (currentItem) {
+  const waitForProduct =
+    mobileFocusMode &&
+    keyword === "";
+
+  const matchedRows =
+    waitForProduct
+      ? []
+      : rows.filter(
+          function (row) {
+            const keywordMatches =
+              keyword === "" ||
+              row.dataset.searchText.includes(
+                keyword
+              );
+
+            const item =
+              currentStocktaking.items.find(
+                function (currentItem) {
+                  return (
+                    currentItem.internalCode ===
+                    row.dataset.internalCode
+                  );
+                }
+              );
+
+            let filterMatches = true;
+
+            if (filterType === "unchecked") {
+              filterMatches =
+                Boolean(item) &&
+                item.actualStock === "";
+            } else if (
+              filterType === "bulk-zero"
+            ) {
+              filterMatches =
+                Boolean(item) &&
+                item.bulkZeroApplied === true;
+            }
+
             return (
-              currentItem.internalCode ===
-              row.dataset.internalCode
+              keywordMatches &&
+              filterMatches
             );
           }
         );
-
-      let filterMatches = true;
-
-      if (filterType === "unchecked") {
-        filterMatches =
-          Boolean(item) &&
-          item.actualStock === "";
-      } else if (
-        filterType === "bulk-zero"
-      ) {
-        filterMatches =
-          Boolean(item) &&
-          item.bulkZeroApplied === true;
-      }
-
-      return (
-        keywordMatches &&
-        filterMatches
-      );
-    }
-  );
 
   stocktakingListLastFilteredCount =
     matchedRows.length;
@@ -7526,7 +8069,10 @@ function filterStocktakingItems() {
       ? "0件"
       : `${startIndex + 1}～${startIndex + pageCount}件を表示`;
 
-  if (keyword === "") {
+  if (waitForProduct) {
+    stocktakingSearchMessage.textContent =
+      "バーコードを読み取るか、商品名・社内コード・商品コード・JANコードを入力してください。";
+  } else if (keyword === "") {
     stocktakingSearchMessage.textContent =
       `${filterLabel}：${matchedRows.length}件（${rangeText}）`;
   } else {

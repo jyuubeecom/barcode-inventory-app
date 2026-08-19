@@ -241,20 +241,84 @@ function watchHomeDashboardButtons(
 function createMobileHomeControls(
   homeScreen
 ) {
-  if (
+  const quickSection =
     homeScreen.querySelector(
-      ".mobile-home-more-control"
-    )
-  ) {
-    return;
-  }
+      ".home-quick-section"
+    );
 
   const functionGrid =
     homeScreen.querySelector(
       ".home-function-grid"
     );
 
-  if (!functionGrid) {
+  if (
+    quickSection &&
+    !quickSection.querySelector(
+      ".mobile-home-primary-actions"
+    )
+  ) {
+    const primaryActions =
+      document.createElement("div");
+
+    primaryActions.className =
+      "mobile-home-primary-actions";
+
+    const listButton =
+      document.createElement("button");
+
+    listButton.type = "button";
+    listButton.className =
+      "mobile-home-primary-button mobile-home-list-button";
+    listButton.textContent =
+      "商品一覧を見る";
+
+    listButton.addEventListener(
+      "click",
+      function () {
+        triggerMobileHomeAction(
+          "show-list-button"
+        );
+      }
+    );
+
+    const stocktakingButton =
+      document.createElement("button");
+
+    stocktakingButton.type =
+      "button";
+    stocktakingButton.className =
+      "mobile-home-primary-button mobile-home-stocktaking-button";
+    stocktakingButton.textContent =
+      "棚卸を開始する";
+
+    stocktakingButton.addEventListener(
+      "click",
+      function () {
+        triggerMobileHomeAction(
+          "show-stocktaking-button"
+        );
+      }
+    );
+
+    primaryActions.appendChild(
+      listButton
+    );
+
+    primaryActions.appendChild(
+      stocktakingButton
+    );
+
+    quickSection.appendChild(
+      primaryActions
+    );
+  }
+
+  if (
+    !functionGrid ||
+    homeScreen.querySelector(
+      ".mobile-home-more-control"
+    )
+  ) {
     return;
   }
 
@@ -299,6 +363,47 @@ function createMobileHomeControls(
   functionGrid.parentElement.insertBefore(
     control,
     functionGrid
+  );
+}
+
+function triggerMobileHomeAction(
+  actionId
+) {
+  const target =
+    document.querySelector(
+      `#${actionId}`
+    );
+
+  if (
+    target &&
+    typeof target.click ===
+      "function"
+  ) {
+    target.click();
+    return;
+  }
+
+  window.setTimeout(
+    function () {
+      const retryTarget =
+        document.querySelector(
+          `#${actionId}`
+        );
+
+      if (
+        retryTarget &&
+        typeof retryTarget.click ===
+          "function"
+      ) {
+        retryTarget.click();
+        return;
+      }
+
+      window.alert(
+        "画面の準備が完了していません。ページを更新して、もう一度お試しください。"
+      );
+    },
+    150
   );
 }
 
@@ -890,6 +995,7 @@ function createHomeDashboardStyle() {
       text-align: center;
     }
 
+    #home .mobile-home-primary-actions,
     #home .mobile-home-more-control {
       display: none;
     }
@@ -977,41 +1083,48 @@ function createHomeDashboardStyle() {
 
     body[data-resolved-display-mode="mobile"]
       #home.mobile-primary-mode
-      #home-quick-action-buttons
-      > button {
+      #home-quick-action-buttons {
       display: none !important;
     }
 
     body[data-resolved-display-mode="mobile"]
       #home.mobile-primary-mode
-      #show-list-button,
+      .mobile-home-primary-actions {
+      display: grid;
+      grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
     body[data-resolved-display-mode="mobile"]
       #home.mobile-primary-mode
-      #show-stocktaking-button {
-      display: flex !important;
+      .mobile-home-primary-button {
+      display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 92px !important;
-      padding: 18px 16px !important;
-      border-radius: 16px !important;
-      font-size: 21px !important;
-      font-weight: 900 !important;
-      line-height: 1.35 !important;
+      min-height: 92px;
+      margin: 0;
+      padding: 18px 16px;
+      border-radius: 16px;
+      font-size: 21px;
+      font-weight: 900;
+      line-height: 1.35;
       box-shadow:
         0 5px 12px
-        rgba(31, 54, 77, 0.14) !important;
+        rgba(31, 54, 77, 0.14);
     }
 
     body[data-resolved-display-mode="mobile"]
       #home.mobile-primary-mode
-      #show-list-button {
-      background: #00796b !important;
+      .mobile-home-list-button {
+      background: #00796b;
     }
 
     body[data-resolved-display-mode="mobile"]
       #home.mobile-primary-mode
-      #show-stocktaking-button {
-      background: #6a1b9a !important;
+      .mobile-home-stocktaking-button {
+      background: #6a1b9a;
     }
 
     body[data-resolved-display-mode="mobile"]
@@ -1130,12 +1243,16 @@ function createHomeDashboardStyle() {
 
       body[data-resolved-display-mode="mobile"]
         #home.mobile-primary-mode
-        #show-list-button,
+        .mobile-home-primary-actions {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
       body[data-resolved-display-mode="mobile"]
         #home.mobile-primary-mode
-        #show-stocktaking-button {
-        min-height: 96px !important;
-        font-size: 21px !important;
+        .mobile-home-primary-button {
+        min-height: 88px;
+        font-size: 21px;
       }
 
       #home .home-section-heading {

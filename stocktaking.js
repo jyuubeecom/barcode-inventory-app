@@ -650,7 +650,7 @@ function createStocktakingScreens() {
       <h3>棚卸結果を管理者へ送る</h3>
 
       <p>
-        iPhone・Androidともに、管理者への送信方法をメールに統一します。
+        iPhone・Androidともに、管理者への送信方法をメールに統一します。CSVを端末へ保存してからメール作成画面を開きます。
       </p>
 
       <label
@@ -7693,7 +7693,14 @@ function downloadCompletedStocktakingCsv(
   link.click();
   link.remove();
 
-  URL.revokeObjectURL(url);
+  // スマホでは、ダウンロード開始直後にURLを破棄すると
+  // 保存処理が完了する前に無効になる場合があるため、少し待ってから破棄する。
+  window.setTimeout(
+    function () {
+      URL.revokeObjectURL(url);
+    },
+    10000
+  );
 
   const message =
     document.querySelector(
@@ -7889,8 +7896,19 @@ async function handleEmailCompletedStocktaking() {
 
   if (message) {
     message.textContent =
-      "棚卸結果CSVを保存しました。メール作成画面でCSVを添付して送信してください。";
+      "棚卸結果CSVを保存しました。次にメール作成画面を開きます。";
   }
+
+  await showStocktakingNotice(
+    "棚卸結果CSVを端末へ保存しました。\n\n次の画面で「メールを開く」を押すと、宛先・件名・本文を入力したメール作成画面を開きます。\n\nメール画面で、保存したCSVを添付して送信してください。",
+    {
+      title:
+        "CSVを保存しました",
+      type: "success",
+      icon: "💾",
+      confirmText: "メールを開く"
+    }
+  );
 
   window.location.href =
     mailto;

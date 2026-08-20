@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v131
+            画面版 v132
           </span>
         </div>
       </div>
@@ -182,6 +182,14 @@
               type="button"
             >
               社内コード・JANコードで探す
+            </button>
+
+            <button
+              id="show-natural-stock-search-button"
+              type="button"
+              class="home-dashboard-action home-action-search"
+            >
+              自然文で在庫を検索する
             </button>
 
             <button
@@ -349,6 +357,78 @@
       <p class="home-storage-note">
         この画面の在庫データは、現在開いている端末内に保存されています。
       </p>
+    </section>
+
+
+    <!-- 自然文での在庫検索 -->
+    <section
+      id="natural-stock-search-screen"
+      class="natural-stock-search-screen"
+      hidden
+    >
+      <div class="natural-stock-search-heading">
+        <div>
+          <span class="natural-stock-search-kicker">
+            文章でかんたん検索
+          </span>
+
+          <h2>自然文で在庫を検索</h2>
+
+          <p>
+            社内コード・商品コード・JANコード・商品名を文章の中に入れて検索できます。
+          </p>
+        </div>
+      </div>
+
+      <form id="natural-stock-search-form">
+        <label for="natural-stock-search-input">
+          在庫について質問する
+        </label>
+
+        <div class="natural-stock-search-input-row">
+          <input
+            id="natural-stock-search-input"
+            type="search"
+            autocomplete="off"
+            placeholder="例：商品コードABC-123の在庫数は？"
+          >
+
+          <button
+            id="natural-stock-search-submit"
+            type="submit"
+          >
+            検索する
+          </button>
+        </div>
+      </form>
+
+      <div class="natural-stock-search-help">
+        <strong>入力例</strong>
+        <span>「ABC-123の在庫数は？」</span>
+        <span>「10001はどこに何個ある？」</span>
+        <span>「商品名○○の在庫を教えて」</span>
+      </div>
+
+      <div
+        id="natural-stock-search-status"
+        class="natural-stock-search-status"
+        aria-live="polite"
+      >
+        質問を入力して「検索する」を押してください。
+      </div>
+
+      <div
+        id="natural-stock-search-result"
+        class="natural-stock-search-result"
+      ></div>
+
+      <button
+        id="natural-stock-search-back-button"
+        type="button"
+        class="natural-stock-search-back-button"
+      >
+        ホームへ戻る
+      </button>
     </section>
 
 
@@ -2881,6 +2961,7 @@
 
 <script src="storage.js?v=118"></script>
 <script src="app.js?v=111"></script>
+<script src="natural-stock-search.js?v=132"></script>
 <script src="product-history.js?v=107"></script>
 <script src="inventory.js?v=97"></script>
 <script src="transfer-list.js?v=81"></script>

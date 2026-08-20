@@ -13,6 +13,42 @@ document.addEventListener(
 );
 
 function initializeNaturalStockSearch() {
+  createNaturalStockSearchStyle();
+
+  const homeRoot =
+    document.querySelector(
+      "#home-natural-stock-search"
+    );
+
+  const homeForm =
+    document.querySelector(
+      "#home-natural-stock-search-form"
+    );
+
+  const homeInput =
+    document.querySelector(
+      "#home-natural-stock-search-input"
+    );
+
+  if (
+    homeRoot &&
+    homeForm &&
+    homeInput
+  ) {
+    homeForm.addEventListener(
+      "submit",
+      function (event) {
+        event.preventDefault();
+
+        void searchStockByNaturalText(
+          homeInput.value,
+          homeRoot
+        );
+      }
+    );
+  }
+
+  // v132の専用画面も残しておき、将来再利用できるようにします。
   const showButton =
     document.querySelector(
       "#show-natural-stock-search-button"
@@ -39,47 +75,43 @@ function initializeNaturalStockSearch() {
     );
 
   if (
-    !showButton ||
-    !screen ||
-    !form ||
-    !input ||
-    !backButton
+    showButton &&
+    screen &&
+    form &&
+    input &&
+    backButton
   ) {
-    return;
+    showButton.addEventListener(
+      "click",
+      function () {
+        openNaturalStockSearchScreen(
+          screen,
+          input
+        );
+      }
+    );
+
+    backButton.addEventListener(
+      "click",
+      function () {
+        closeNaturalStockSearchScreen(
+          screen
+        );
+      }
+    );
+
+    form.addEventListener(
+      "submit",
+      function (event) {
+        event.preventDefault();
+
+        void searchStockByNaturalText(
+          input.value,
+          screen
+        );
+      }
+    );
   }
-
-  createNaturalStockSearchStyle();
-
-  showButton.addEventListener(
-    "click",
-    function () {
-      openNaturalStockSearchScreen(
-        screen,
-        input
-      );
-    }
-  );
-
-  backButton.addEventListener(
-    "click",
-    function () {
-      closeNaturalStockSearchScreen(
-        screen
-      );
-    }
-  );
-
-  form.addEventListener(
-    "submit",
-    function (event) {
-      event.preventDefault();
-
-      void searchStockByNaturalText(
-        input.value,
-        screen
-      );
-    }
-  );
 }
 
 function openNaturalStockSearchScreen(
@@ -152,13 +184,19 @@ async function searchStockByNaturalText(
 ) {
   const status =
     screen.querySelector(
-      "#natural-stock-search-status"
+      "#natural-stock-search-status, #home-natural-stock-search-status"
     );
 
   const result =
     screen.querySelector(
-      "#natural-stock-search-result"
+      "#natural-stock-search-result, #home-natural-stock-search-result"
     );
+
+  if (!status || !result) {
+    return;
+  }
+
+  status.hidden = false;
 
   const query =
     String(rawQuery || "").trim();
@@ -232,7 +270,8 @@ async function searchStockByNaturalText(
 
     renderNaturalStockCandidates(
       result,
-      matches
+      matches,
+      status
     );
   } catch (error) {
     console.error(error);
@@ -986,7 +1025,8 @@ function createNaturalStockDetailButton(
 
 function renderNaturalStockCandidates(
   container,
-  products
+  products,
+  statusElement
 ) {
   const intro =
     document.createElement("div");
@@ -1079,15 +1119,12 @@ function renderNaturalStockCandidates(
               product
             );
 
-            const status =
-              document.querySelector(
-                "#natural-stock-search-status"
-              );
-
-            if (status) {
-              status.textContent =
+            if (statusElement) {
+              statusElement.hidden =
+                false;
+              statusElement.textContent =
                 "商品を選択しました。";
-              status.className =
+              statusElement.className =
                 "natural-stock-search-status natural-stock-search-success";
             }
 
@@ -1156,6 +1193,87 @@ function createNaturalStockSearchStyle() {
     "natural-stock-search-style";
 
   style.textContent = `
+    .home-natural-stock-search {
+      margin: 16px 0 18px;
+      padding: 16px 18px;
+      border: 2px solid #64b5f6;
+      border-radius: 14px;
+      background: #f7fbff;
+      box-shadow: 0 5px 16px rgba(25, 118, 210, 0.08);
+    }
+
+    .home-natural-stock-search-heading {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 12px;
+    }
+
+    .home-natural-stock-search-heading h3 {
+      margin: 2px 0 0;
+      color: #0d47a1;
+      font-size: 20px;
+    }
+
+    .home-natural-stock-search-heading p {
+      margin: 0;
+      color: #607d8b;
+      text-align: right;
+    }
+
+    .home-natural-stock-search-kicker {
+      display: block;
+      color: #1976d2;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .home-natural-stock-search-input-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 150px;
+      gap: 10px;
+    }
+
+    #home-natural-stock-search-input {
+      width: 100%;
+      min-height: 54px;
+      box-sizing: border-box;
+      margin: 0;
+      padding: 10px 14px;
+      border: 2px solid #90a4ae;
+      border-radius: 10px;
+      background: #ffffff;
+      font-size: 18px;
+    }
+
+    #home-natural-stock-search-input:focus {
+      border-color: #1976d2;
+      outline: 3px solid rgba(25, 118, 210, 0.14);
+    }
+
+    #home-natural-stock-search-submit {
+      min-height: 54px;
+      margin: 0;
+      padding: 10px 16px;
+      border: 0;
+      border-radius: 10px;
+      background: #1976d2;
+      color: #ffffff;
+      font-size: 17px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .home-natural-stock-search-status {
+      margin-top: 12px;
+      margin-bottom: 10px;
+    }
+
+    .home-natural-stock-search-result:empty {
+      display: none;
+    }
+
     #natural-stock-search-screen {
       max-width: 980px;
       margin: 22px auto;
@@ -1455,6 +1573,40 @@ function createNaturalStockSearchStyle() {
     }
 
     @media (max-width: 700px) {
+      .home-natural-stock-search {
+        margin: 14px 0 16px;
+        padding: 15px;
+      }
+
+      .home-natural-stock-search-heading {
+        display: block;
+      }
+
+      .home-natural-stock-search-heading h3 {
+        font-size: 22px;
+      }
+
+      .home-natural-stock-search-heading p {
+        margin-top: 7px;
+        text-align: left;
+        font-size: 14px;
+      }
+
+      .home-natural-stock-search-input-row {
+        grid-template-columns: 1fr;
+      }
+
+      #home-natural-stock-search-input {
+        min-height: 60px;
+        font-size: 19px;
+      }
+
+      #home-natural-stock-search-submit {
+        width: 100%;
+        min-height: 58px;
+        font-size: 19px;
+      }
+
       #natural-stock-search-screen {
         margin: 12px;
         padding: 16px;

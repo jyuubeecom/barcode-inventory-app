@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v132
+            画面版 v133
           </span>
         </div>
       </div>
@@ -67,6 +67,59 @@
       <p id="home-role-notice" hidden>
         🔒 作業者モード中です。日常作業に必要なメニューだけを表示しています。
       </p>
+
+      <section
+        id="home-natural-stock-search"
+        class="home-natural-stock-search"
+        aria-labelledby="home-natural-stock-search-title"
+      >
+        <div class="home-natural-stock-search-heading">
+          <div>
+            <span class="home-natural-stock-search-kicker">
+              すぐ検索
+            </span>
+
+            <h3 id="home-natural-stock-search-title">
+              在庫を文章で検索
+            </h3>
+          </div>
+
+          <p>
+            商品コード・社内コード・JAN・商品名をそのまま文章で入力できます。
+          </p>
+        </div>
+
+        <form id="home-natural-stock-search-form">
+          <div class="home-natural-stock-search-input-row">
+            <input
+              id="home-natural-stock-search-input"
+              type="search"
+              autocomplete="off"
+              enterkeyhint="search"
+              placeholder="例：KW-251BKの在庫数は？"
+            >
+
+            <button
+              id="home-natural-stock-search-submit"
+              type="submit"
+            >
+              在庫を検索
+            </button>
+          </div>
+        </form>
+
+        <div
+          id="home-natural-stock-search-status"
+          class="natural-stock-search-status home-natural-stock-search-status"
+          aria-live="polite"
+          hidden
+        ></div>
+
+        <div
+          id="home-natural-stock-search-result"
+          class="natural-stock-search-result home-natural-stock-search-result"
+        ></div>
+      </section>
 
       <div
         class="home-summary-grid"
@@ -182,14 +235,6 @@
               type="button"
             >
               社内コード・JANコードで探す
-            </button>
-
-            <button
-              id="show-natural-stock-search-button"
-              type="button"
-              class="home-dashboard-action home-action-search"
-            >
-              自然文で在庫を検索する
             </button>
 
             <button
@@ -2961,7 +3006,7 @@
 
 <script src="storage.js?v=118"></script>
 <script src="app.js?v=111"></script>
-<script src="natural-stock-search.js?v=132"></script>
+<script src="natural-stock-search.js?v=133"></script>
 <script src="product-history.js?v=107"></script>
 <script src="inventory.js?v=97"></script>
 <script src="transfer-list.js?v=81"></script>

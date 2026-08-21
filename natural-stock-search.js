@@ -1,7 +1,7 @@
 "use strict";
 
 /* =========================================================
-   v132 自然文での在庫検索
+   v136 自然文検索（在庫・販売予定）
    ・端末内の商品データだけを使用
    ・社内コード / 商品コード / JAN / 商品名に対応
    ・JANなどが重複した場合は候補を一覧表示
@@ -208,6 +208,19 @@ async function searchStockByNaturalText(
       "質問を入力してください。";
     status.className =
       "natural-stock-search-status natural-stock-search-warning";
+    return;
+  }
+
+  if (
+    isNaturalSalesPlanQuery(
+      query
+    )
+  ) {
+    await searchSalesPlanByNaturalText(
+      query,
+      status,
+      result
+    );
     return;
   }
 
@@ -544,7 +557,7 @@ function extractNaturalStockKeyword(
     normalizedQuery || ""
   )
     .replace(
-      /(現在庫数|現在庫|合計在庫数|合計在庫|在庫数|場所別在庫|在庫|保管場所|どこに|どこ|何個|何本|何箱|何枚|何台|何袋|何セット|いくつ|ありますか|あるの|ある|教えてください|教えて|知りたい|確認したい|検索して|検索|商品コード|社内コード|JANコード|JAN)/gi,
+      /(販売予定|出荷予定|出荷時期|出荷日|出荷|販売|予定|現在庫数|現在庫|合計在庫数|合計在庫|在庫数|場所別在庫|在庫|保管場所|どこに|どこ|いつ|何個|何本|何箱|何枚|何台|何袋|何セット|いくつ|ありますか|あるの|ある|教えてください|教えて|知りたい|確認したい|検索して|検索|商品コード|社内コード|JANコード|JAN)/gi,
       " "
     )
     .replace(
@@ -579,6 +592,863 @@ function sortNaturalStockProducts(
         );
       }
     );
+}
+
+
+function isNaturalSalesPlanQuery(
+  query
+) {
+  const normalized =
+    normalizeNaturalStockText(
+      query
+    );
+
+  return (
+    normalized.includes(
+      "販売予定"
+    ) ||
+    normalized.includes(
+      "出荷予定"
+    ) ||
+    normalized.includes(
+      "出荷日"
+    ) ||
+    normalized.includes(
+      "出荷時期"
+    ) ||
+    normalized.includes(
+      "出荷"
+    )
+  );
+}
+
+async function searchSalesPlanByNaturalText(
+  query,
+  status,
+  result
+) {
+  if (
+    typeof getAllProducts !==
+      "function" ||
+    typeof getAllSalesPlans !==
+      "function"
+  ) {
+    status.textContent =
+      "販売予定データを読み込む準備ができていません。画面を更新して、もう一度お試しください。";
+    status.className =
+      "natural-stock-search-status natural-stock-search-error";
+    return;
+  }
+
+  status.textContent =
+    "販売予定を検索しています…";
+  status.className =
+    "natural-stock-search-status";
+
+  try {
+    const data =
+      await Promise.all([
+        getAllProducts(),
+        getAllSalesPlans()
+      ]);
+
+    const products =
+      Array.isArray(data[0])
+        ? data[0]
+        : [];
+
+    const plans =
+      Array.isArray(data[1])
+        ? data[1]
+        : [];
+
+    const productMatches =
+      findNaturalStockMatches(
+        products,
+        query
+      );
+
+    if (
+      productMatches.length === 0
+    ) {
+      status.textContent =
+        "販売予定を調べる商品を特定できませんでした。";
+      status.className =
+        "natural-stock-search-status natural-stock-search-warning";
+
+      renderNaturalSalesPlanNoProduct(
+        result,
+        query
+      );
+      return;
+    }
+
+    const internalCodes =
+      new Set(
+        productMatches
+          .map(
+            function (product) {
+              return String(
+                product &&
+                  product.internalCode ||
+                  ""
+              ).trim();
+            }
+          )
+          .filter(Boolean)
+      );
+
+    const matchingPlans =
+      plans.filter(
+        function (plan) {
+          return internalCodes.has(
+            String(
+              plan &&
+                plan.internalCode ||
+                ""
+            ).trim()
+          );
+        }
+      );
+
+    const today =
+      getNaturalTodayIso();
+
+    const upcomingPlans =
+      matchingPlans
+        .filter(
+          function (plan) {
+            return isNaturalSalesPlanUpcoming(
+              plan,
+              today
+            );
+          }
+        )
+        .sort(
+          compareNaturalSalesPlans
+        );
+
+    if (
+      upcomingPlans.length === 0
+    ) {
+      status.textContent =
+        "今後の販売予定はありません。";
+      status.className =
+        "natural-stock-search-status natural-stock-search-success";
+
+      renderNaturalSalesPlanEmpty(
+        result,
+        productMatches,
+        matchingPlans.length
+      );
+      return;
+    }
+
+    status.textContent =
+      `${upcomingPlans.length}件の販売予定が見つかりました。`;
+    status.className =
+      "natural-stock-search-status natural-stock-search-success";
+
+    renderNaturalSalesPlanAnswer(
+      result,
+      productMatches,
+      upcomingPlans
+    );
+  } catch (error) {
+    console.error(
+      "自然文販売予定検索エラー",
+      error
+    );
+
+    status.textContent =
+      "販売予定データを読み込めませんでした。画面を更新して、もう一度お試しください。";
+    status.className =
+      "natural-stock-search-status natural-stock-search-error";
+  }
+}
+
+function getNaturalTodayIso() {
+  const now =
+    new Date();
+
+  const year =
+    now.getFullYear();
+
+  const month =
+    String(
+      now.getMonth() + 1
+    ).padStart(2, "0");
+
+  const day =
+    String(
+      now.getDate()
+    ).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function isNaturalSalesPlanUpcoming(
+  plan,
+  today
+) {
+  const type =
+    getNaturalSalesPlanType(
+      plan
+    );
+
+  if (type === "date") {
+    return (
+      String(
+        plan.shippingDate || ""
+      ) >= today
+    );
+  }
+
+  if (type === "period") {
+    return (
+      String(
+        plan.shippingEndDate ||
+        plan.shippingStartDate ||
+        ""
+      ) >= today
+    );
+  }
+
+  if (type === "month") {
+    const end =
+      getNaturalMonthEnd(
+        plan.shippingMonth
+      );
+
+    return end >= today;
+  }
+
+  return true;
+}
+
+function getNaturalSalesPlanType(
+  plan
+) {
+  if (
+    plan &&
+    plan.shippingType ===
+      "date" &&
+    isNaturalIsoDate(
+      plan.shippingDate
+    )
+  ) {
+    return "date";
+  }
+
+  if (
+    plan &&
+    plan.shippingType ===
+      "period" &&
+    isNaturalIsoDate(
+      plan.shippingStartDate
+    ) &&
+    isNaturalIsoDate(
+      plan.shippingEndDate
+    )
+  ) {
+    return "period";
+  }
+
+  if (
+    plan &&
+    isNaturalIsoDate(
+      plan.shippingDate
+    )
+  ) {
+    return "date";
+  }
+
+  if (
+    plan &&
+    isNaturalIsoDate(
+      plan.shippingStartDate
+    ) &&
+    isNaturalIsoDate(
+      plan.shippingEndDate
+    )
+  ) {
+    return "period";
+  }
+
+  if (
+    plan &&
+    /^\d{4}-\d{2}$/.test(
+      String(
+        plan.shippingMonth || ""
+      )
+    )
+  ) {
+    return "month";
+  }
+
+  return "unknown";
+}
+
+function isNaturalIsoDate(
+  value
+) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(
+    String(value || "")
+  );
+}
+
+function getNaturalMonthEnd(
+  month
+) {
+  const match =
+    /^(\d{4})-(\d{2})$/.exec(
+      String(month || "")
+    );
+
+  if (!match) {
+    return "";
+  }
+
+  const year =
+    Number(match[1]);
+
+  const monthNumber =
+    Number(match[2]);
+
+  const lastDay =
+    new Date(
+      year,
+      monthNumber,
+      0
+    ).getDate();
+
+  return (
+    `${match[1]}-${match[2]}-` +
+    String(lastDay).padStart(
+      2,
+      "0"
+    )
+  );
+}
+
+function getNaturalSalesPlanSortDate(
+  plan
+) {
+  const type =
+    getNaturalSalesPlanType(
+      plan
+    );
+
+  if (type === "date") {
+    return String(
+      plan.shippingDate || ""
+    );
+  }
+
+  if (type === "period") {
+    return String(
+      plan.shippingStartDate || ""
+    );
+  }
+
+  if (type === "month") {
+    return (
+      String(
+        plan.shippingMonth || ""
+      ) + "-01"
+    );
+  }
+
+  return "9999-12-31";
+}
+
+function compareNaturalSalesPlans(
+  left,
+  right
+) {
+  const dateCompare =
+    getNaturalSalesPlanSortDate(
+      left
+    ).localeCompare(
+      getNaturalSalesPlanSortDate(
+        right
+      )
+    );
+
+  if (dateCompare !== 0) {
+    return dateCompare;
+  }
+
+  return String(
+    left &&
+      left.customerName ||
+      ""
+  ).localeCompare(
+    String(
+      right &&
+        right.customerName ||
+        ""
+    ),
+    "ja"
+  );
+}
+
+function formatNaturalSalesPlanDate(
+  value
+) {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})$/.exec(
+      String(value || "")
+    );
+
+  if (!match) {
+    return String(value || "未設定");
+  }
+
+  return (
+    `${Number(match[1])}年` +
+    `${Number(match[2])}月` +
+    `${Number(match[3])}日`
+  );
+}
+
+function formatNaturalSalesPlanShipping(
+  plan
+) {
+  const type =
+    getNaturalSalesPlanType(
+      plan
+    );
+
+  if (type === "date") {
+    return formatNaturalSalesPlanDate(
+      plan.shippingDate
+    );
+  }
+
+  if (type === "period") {
+    return (
+      formatNaturalSalesPlanDate(
+        plan.shippingStartDate
+      ) +
+      " ～ " +
+      formatNaturalSalesPlanDate(
+        plan.shippingEndDate
+      )
+    );
+  }
+
+  if (type === "month") {
+    const match =
+      /^(\d{4})-(\d{2})$/.exec(
+        String(
+          plan.shippingMonth || ""
+        )
+      );
+
+    if (match) {
+      return (
+        `${Number(match[1])}年` +
+        `${Number(match[2])}月`
+      );
+    }
+  }
+
+  return "日程未設定";
+}
+
+function renderNaturalSalesPlanAnswer(
+  container,
+  products,
+  plans
+) {
+  const productMap =
+    new Map();
+
+  products.forEach(
+    function (product) {
+      const code =
+        String(
+          product &&
+            product.internalCode ||
+            ""
+        ).trim();
+
+      if (code) {
+        productMap.set(
+          code,
+          product
+        );
+      }
+    }
+  );
+
+  const totalQuantity =
+    plans.reduce(
+      function (sum, plan) {
+        const quantity =
+          Number(
+            plan &&
+              plan.quantity ||
+              0
+          );
+
+        return (
+          sum +
+          (
+            Number.isFinite(
+              quantity
+            )
+              ? quantity
+              : 0
+          )
+        );
+      },
+      0
+    );
+
+  const firstPlan =
+    plans[0];
+
+  const firstProduct =
+    productMap.get(
+      String(
+        firstPlan.internalCode ||
+        ""
+      ).trim()
+    ) ||
+    products[0] ||
+    {};
+
+  const article =
+    document.createElement(
+      "article"
+    );
+
+  article.className =
+    "natural-sales-plan-answer-card";
+
+  const heading =
+    document.createElement(
+      "h3"
+    );
+
+  heading.textContent =
+    products.length === 1
+      ? (
+          firstProduct.productName ||
+          firstPlan.productName ||
+          "販売予定"
+        )
+      : "販売予定";
+
+  const answer =
+    document.createElement(
+      "p"
+    );
+
+  answer.className =
+    "natural-sales-plan-answer-text";
+
+  const productLabel =
+    products.length === 1
+      ? (
+          firstProduct.productName ||
+          firstPlan.productName ||
+          firstPlan.internalCode ||
+          "この商品"
+        )
+      : `${products.length}商品`;
+
+  const nearest =
+    plans[0];
+
+  answer.textContent =
+    `${productLabel}の今後の販売予定は${plans.length}件、合計${Number(totalQuantity).toLocaleString("ja-JP")}個です。` +
+    `最も近い予定は${formatNaturalSalesPlanShipping(nearest)}、` +
+    `${nearest.customerName || "取引先未登録"}へ${Number(nearest.quantity || 0).toLocaleString("ja-JP")}個です。`;
+
+  const summary =
+    document.createElement(
+      "div"
+    );
+
+  summary.className =
+    "natural-sales-plan-summary-grid";
+
+  [
+    [
+      "販売予定",
+      `${plans.length}件`
+    ],
+    [
+      "予定数量合計",
+      `${Number(totalQuantity).toLocaleString("ja-JP")}個`
+    ],
+    [
+      "一番近い日程",
+      formatNaturalSalesPlanShipping(
+        nearest
+      )
+    ]
+  ].forEach(
+    function (entry) {
+      const box =
+        document.createElement(
+          "div"
+        );
+
+      const label =
+        document.createElement(
+          "span"
+        );
+
+      label.textContent =
+        entry[0];
+
+      const value =
+        document.createElement(
+          "strong"
+        );
+
+      value.textContent =
+        entry[1];
+
+      box.appendChild(
+        label
+      );
+
+      box.appendChild(
+        value
+      );
+
+      summary.appendChild(
+        box
+      );
+    }
+  );
+
+  const list =
+    document.createElement(
+      "div"
+    );
+
+  list.className =
+    "natural-sales-plan-list";
+
+  plans.forEach(
+    function (plan) {
+      const product =
+        productMap.get(
+          String(
+            plan.internalCode ||
+            ""
+          ).trim()
+        ) || {};
+
+      const row =
+        document.createElement(
+          "div"
+        );
+
+      row.className =
+        "natural-sales-plan-row";
+
+      const top =
+        document.createElement(
+          "div"
+        );
+
+      top.className =
+        "natural-sales-plan-row-top";
+
+      const date =
+        document.createElement(
+          "strong"
+        );
+
+      date.textContent =
+        formatNaturalSalesPlanShipping(
+          plan
+        );
+
+      const quantity =
+        document.createElement(
+          "b"
+        );
+
+      quantity.textContent =
+        `${Number(plan.quantity || 0).toLocaleString("ja-JP")}個`;
+
+      top.appendChild(
+        date
+      );
+
+      top.appendChild(
+        quantity
+      );
+
+      const customer =
+        document.createElement(
+          "p"
+        );
+
+      customer.textContent =
+        `取引先：${plan.customerName || "未登録"}`;
+
+      const productLine =
+        document.createElement(
+          "p"
+        );
+
+      productLine.textContent =
+        `商品：${product.productName || plan.productName || "未登録"}（${plan.productCode || plan.internalCode || "コード未登録"}）`;
+
+      row.appendChild(
+        top
+      );
+
+      row.appendChild(
+        customer
+      );
+
+      row.appendChild(
+        productLine
+      );
+
+      list.appendChild(
+        row
+      );
+    }
+  );
+
+  article.appendChild(
+    heading
+  );
+
+  article.appendChild(
+    answer
+  );
+
+  article.appendChild(
+    summary
+  );
+
+  article.appendChild(
+    list
+  );
+
+  container.appendChild(
+    article
+  );
+}
+
+function renderNaturalSalesPlanEmpty(
+  container,
+  products,
+  pastCount
+) {
+  const box =
+    document.createElement(
+      "article"
+    );
+
+  box.className =
+    "natural-sales-plan-answer-card";
+
+  const title =
+    document.createElement(
+      "h3"
+    );
+
+  title.textContent =
+    products.length === 1
+      ? (
+          products[0].productName ||
+          "販売予定"
+        )
+      : "販売予定";
+
+  const text =
+    document.createElement(
+      "p"
+    );
+
+  text.className =
+    "natural-sales-plan-answer-text";
+
+  text.textContent =
+    "本日以降の販売予定は登録されていません。";
+
+  box.appendChild(
+    title
+  );
+
+  box.appendChild(
+    text
+  );
+
+  if (pastCount > 0) {
+    const note =
+      document.createElement(
+        "p"
+      );
+
+    note.className =
+      "natural-sales-plan-past-note";
+
+    note.textContent =
+      `過去の日程を含む販売予定データは${pastCount}件あります。`;
+
+    box.appendChild(
+      note
+    );
+  }
+
+  container.appendChild(
+    box
+  );
+}
+
+function renderNaturalSalesPlanNoProduct(
+  container,
+  query
+) {
+  const box =
+    document.createElement(
+      "div"
+    );
+
+  box.className =
+    "natural-stock-no-match";
+
+  const title =
+    document.createElement(
+      "strong"
+    );
+
+  title.textContent =
+    "販売予定を検索するには";
+
+  const text =
+    document.createElement(
+      "p"
+    );
+
+  text.textContent =
+    `「${query}」では商品を特定できませんでした。商品コード・社内コード・JANコード・商品名のどれかを文章に入れてください。`;
+
+  box.appendChild(
+    title
+  );
+
+  box.appendChild(
+    text
+  );
+
+  container.appendChild(
+    box
+  );
 }
 
 function renderNaturalStockAnswer(
@@ -1405,6 +2275,103 @@ function createNaturalStockSearchStyle() {
       color: #b71c1c;
     }
 
+    .natural-sales-plan-answer-card {
+      padding: 20px;
+      border: 2px solid #ffb74d;
+      border-radius: 16px;
+      background: #ffffff;
+    }
+
+    .natural-sales-plan-answer-card h3 {
+      margin: 0 0 12px;
+      color: #6d4c41;
+      font-size: 24px;
+    }
+
+    .natural-sales-plan-answer-text {
+      margin: 0 0 16px;
+      padding: 16px;
+      border-left: 5px solid #ef6c00;
+      border-radius: 8px;
+      background: #fff8e1;
+      color: #e65100;
+      font-size: 19px;
+      font-weight: 800;
+      line-height: 1.7;
+    }
+
+    .natural-sales-plan-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .natural-sales-plan-summary-grid > div {
+      padding: 12px;
+      border: 1px solid #ffe0b2;
+      border-radius: 10px;
+      background: #fffaf3;
+    }
+
+    .natural-sales-plan-summary-grid span,
+    .natural-sales-plan-summary-grid strong {
+      display: block;
+    }
+
+    .natural-sales-plan-summary-grid span {
+      margin-bottom: 5px;
+      color: #8d6e63;
+      font-size: 13px;
+    }
+
+    .natural-sales-plan-summary-grid strong {
+      color: #6d4c41;
+      font-size: 17px;
+      overflow-wrap: anywhere;
+    }
+
+    .natural-sales-plan-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .natural-sales-plan-row {
+      padding: 14px;
+      border: 1px solid #ffcc80;
+      border-radius: 10px;
+      background: #fffdf9;
+    }
+
+    .natural-sales-plan-row-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .natural-sales-plan-row-top strong {
+      color: #6d4c41;
+      font-size: 17px;
+    }
+
+    .natural-sales-plan-row-top b {
+      color: #e65100;
+      font-size: 19px;
+    }
+
+    .natural-sales-plan-row p {
+      margin: 4px 0 0;
+      color: #455a64;
+    }
+
+    .natural-sales-plan-past-note {
+      margin: 12px 0 0;
+      color: #607d8b;
+      font-weight: 700;
+    }
+
     .natural-stock-answer-card {
       padding: 20px;
       border: 2px solid #64b5f6;
@@ -1632,6 +2599,22 @@ function createNaturalStockSearchStyle() {
 
       .natural-stock-search-help span:not(:last-child)::after {
         content: "";
+      }
+
+      .natural-sales-plan-answer-card h3 {
+        font-size: 22px;
+      }
+
+      .natural-sales-plan-answer-text {
+        font-size: 18px;
+      }
+
+      .natural-sales-plan-summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .natural-sales-plan-row-top {
+        align-items: flex-start;
       }
 
       .natural-stock-answer-card h3 {

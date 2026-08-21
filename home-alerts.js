@@ -831,7 +831,8 @@ function createHomeAlertPanelStyle() {
         top: 108px;
         right: 22px;
         display: grid;
-        width: 300px;
+        width: min(420px, calc(100vw - 32px));
+        min-width: 380px;
         max-height: calc(100vh - 132px);
         box-sizing: border-box;
         gap: 12px;

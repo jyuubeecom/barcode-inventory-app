@@ -656,6 +656,7 @@ async function saveSalesPlanFromForm(event) {
   event.preventDefault();
 
   const customerName = document.querySelector("#sales-plan-customer").value.trim();
+  const subtitle = document.querySelector("#sales-plan-subtitle").value.trim();
   const codeInput = document.querySelector("#sales-plan-internal-code");
   const enteredCode = codeInput.value.trim();
   const quantity = Number(document.querySelector("#sales-plan-quantity").value);
@@ -730,6 +731,7 @@ async function saveSalesPlanFromForm(event) {
   const record = {
     id: salesPlanEditingId || createSalesPlanId(),
     customerName: customerName,
+    subtitle: subtitle,
     shippingType: shipping.shippingType,
     shippingDate: shipping.shippingDate,
     shippingStartDate: shipping.shippingStartDate,
@@ -761,6 +763,9 @@ async function saveSalesPlanFromForm(event) {
       title: message,
       details: [
         { label: "取引先", value: customerName },
+        ...(subtitle
+          ? [{ label: "副題", value: subtitle }]
+          : []),
         { label: "商品", value: product.productName || product.internalCode },
         { label: "出荷時期", value: formatSalesPlanShipping(record) },
         { label: "数量", value: `${quantity}個` }
@@ -786,6 +791,7 @@ async function editSalesPlan(id) {
 
   salesPlanEditingId = id;
   document.querySelector("#sales-plan-customer").value = record.customerName || "";
+  document.querySelector("#sales-plan-subtitle").value = record.subtitle || "";
   document.querySelector("#sales-plan-internal-code").value = record.internalCode || "";
   document.querySelector("#sales-plan-product-code").value = record.productCode || "";
   document.querySelector("#sales-plan-product-name").value = record.productName || "";
@@ -839,6 +845,9 @@ async function removeSalesPlan(id) {
     message: "次の販売予定を削除しようとしています。内容を確認してください。",
     details: [
       { label: "取引先", value: record.customerName || "未登録" },
+      ...(record.subtitle
+        ? [{ label: "副題", value: record.subtitle }]
+        : []),
       { label: "商品", value: record.productName || record.internalCode },
       { label: "社内コード", value: record.internalCode || "未登録" },
       { label: "出荷時期", value: formatSalesPlanShipping(record) },
@@ -906,6 +915,7 @@ function getFilteredSalesPlans() {
 
     return [
       record.customerName,
+      record.subtitle,
       record.internalCode,
       record.productCode,
       record.productName
@@ -932,6 +942,7 @@ function renderSalesPlanTable() {
     row.innerHTML = `
       <td>${escapeSalesPlanHtml(formatSalesPlanShipping(record))}</td>
       <td>${escapeSalesPlanHtml(record.customerName)}</td>
+      <td>${escapeSalesPlanHtml(record.subtitle || "－")}</td>
       <td>${escapeSalesPlanHtml(record.internalCode)}</td>
       <td>${escapeSalesPlanHtml(record.productCode || "未登録")}</td>
       <td>${escapeSalesPlanHtml(record.productName)}</td>
@@ -956,7 +967,7 @@ function renderSalesPlanTable() {
   if (pageItems.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 7;
+    cell.colSpan = 8;
     cell.textContent = "条件に一致する販売予定はありません。";
     row.appendChild(cell);
     tbody.appendChild(row);
@@ -1136,7 +1147,7 @@ function createSalesPlanStyle() {
     .sales-plan-form-actions, .sales-plan-filter-row, .sales-plan-pager { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .sales-plan-filter-row > * { flex: 1 1 230px; }
     .sales-plan-table-wrap { overflow-x: auto; margin-top: 12px; }
-    #sales-plan table { min-width: 900px; width: 100%; border-collapse: collapse; }
+    #sales-plan table { min-width: 1020px; width: 100%; border-collapse: collapse; }
     #sales-plan th, #sales-plan td { border: 1px solid #c8d7e1; padding: 10px; vertical-align: middle; }
     #sales-plan th { background: #00695c; color: white; white-space: nowrap; }
     .sales-plan-number { text-align: right; }

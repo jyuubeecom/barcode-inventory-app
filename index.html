@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v149
+            画面版 v150
           </span>
         </div>
       </div>
@@ -595,7 +595,16 @@
           <div class="sales-plan-form-grid">
             <div>
               <label for="sales-plan-customer">取引先名（必須）</label>
-              <input id="sales-plan-customer" type="text" required placeholder="例：テスト商事">
+              <input id="sales-plan-customer" type="text" required placeholder="例：清水産業">
+            </div>
+
+            <div>
+              <label for="sales-plan-subtitle">副題・補足名（任意）</label>
+              <input
+                id="sales-plan-subtitle"
+                type="text"
+                placeholder="例：キャロット2633号"
+              >
             </div>
 
             <div class="sales-plan-full">
@@ -680,7 +689,7 @@
         <div class="sales-plan-filter-row">
           <div>
             <label for="sales-plan-search">検索</label>
-            <input id="sales-plan-search" type="search" placeholder="取引先名・社内コード・商品コード・商品名">
+            <input id="sales-plan-search" type="search" placeholder="取引先名・副題・社内コード・商品コード・商品名">
           </div>
           <div>
             <label for="sales-plan-month-filter">出荷月で絞り込み</label>
@@ -698,6 +707,7 @@
               <tr>
                 <th>出荷時期</th>
                 <th>取引先名</th>
+                <th>副題</th>
                 <th>社内コード</th>
                 <th>商品コード</th>
                 <th>商品名</th>
@@ -3051,7 +3061,7 @@
 <script src="csv-import.js?v=146"></script>
 <script src="csv-update.js?v=74"></script>
 <script src="pwa.js?v=31"></script>
-<script src="sales-plan.js?v=95"></script>
+<script src="sales-plan.js?v=150"></script>
 <script src="sales-actual.js?v=149"></script>
 <script src="purchase-required.js?v=140"></script>
 <script src="order-remaining.js?v=119"></script>

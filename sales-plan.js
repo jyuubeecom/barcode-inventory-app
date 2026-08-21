@@ -5,6 +5,7 @@ let salesPlanRecords = [];
 let salesPlanProducts = [];
 let salesPlanEditingId = "";
 let salesPlanCurrentPage = 1;
+let salesPlanPendingItems = [];
 
 window.addEventListener("DOMContentLoaded", initializeSalesPlanFeature);
 
@@ -51,6 +52,7 @@ async function initializeSalesPlanFeature() {
   const backButton = document.querySelector("#back-home-from-sales-plan");
   const form = document.querySelector("#sales-plan-form");
   const lookupButton = document.querySelector("#sales-plan-product-lookup-button");
+  const addItemButton = document.querySelector("#add-sales-plan-item-button");
   const productSearchInput = document.querySelector("#sales-plan-internal-code");
   const cancelEditButton = document.querySelector("#cancel-sales-plan-edit-button");
   const searchInput = document.querySelector("#sales-plan-search");
@@ -68,6 +70,12 @@ async function initializeSalesPlanFeature() {
   if (jumpListButton) jumpListButton.addEventListener("click", scrollSalesPlanTableIntoView);
   backButton.addEventListener("click", closeSalesPlanScreen);
   lookupButton.addEventListener("click", loadSalesPlanProduct);
+  if (addItemButton) {
+    addItemButton.addEventListener(
+      "click",
+      addSalesPlanPendingItem
+    );
+  }
   productSearchInput.addEventListener("input", function () {
     clearSalesPlanProductFields();
     renderSalesPlanProductSuggestions(productSearchInput.value);
@@ -114,6 +122,7 @@ async function initializeSalesPlanFeature() {
   });
 
   updateSalesPlanShippingFields();
+  renderSalesPlanPendingItems();
 }
 
 async function openSalesPlanScreen() {
@@ -652,137 +661,830 @@ async function readSalesPlanShippingFromForm() {
   return null;
 }
 
-async function saveSalesPlanFromForm(event) {
-  event.preventDefault();
-
-  const customerName = document.querySelector("#sales-plan-customer").value.trim();
-  const subtitle = document.querySelector("#sales-plan-subtitle").value.trim();
-  const codeInput = document.querySelector("#sales-plan-internal-code");
-  const enteredCode = codeInput.value.trim();
-  const quantity = Number(document.querySelector("#sales-plan-quantity").value);
-
-  if (!customerName) {
-    await showSalesPlanDialog({
-      type: "warning",
-      icon: "🏢",
-      title: "取引先名を入力してください",
-      message: "販売予定を登録するには、取引先名の入力が必要です。",
-      confirmText: "入力に戻る"
-    });
-    document.querySelector("#sales-plan-customer").focus();
+async function addSalesPlanPendingItem() {
+  if (salesPlanEditingId) {
     return;
   }
 
-  const shipping = await readSalesPlanShippingFromForm();
-  if (!shipping) return;
+  const codeInput =
+    document.querySelector(
+      "#sales-plan-internal-code"
+    );
 
-  const product = await resolveSalesPlanProduct(enteredCode);
+  const enteredCode =
+    codeInput.value.trim();
+
+  const quantityInput =
+    document.querySelector(
+      "#sales-plan-quantity"
+    );
+
+  const quantity =
+    Number(quantityInput.value);
+
+  const product =
+    await resolveSalesPlanProduct(
+      enteredCode
+    );
 
   if (!product) {
     if (!enteredCode) {
       await showSalesPlanDialog({
         type: "warning",
         icon: "✏️",
-        title: "社内コードまたは商品コードを入力してください",
-        message: "販売予定を登録する商品を指定してください。",
-        notice: "社内コード・商品コードのどちらでも検索できます。",
+        title: "商品を選択してください",
+        message:
+          "まとめて登録する商品を検索して選択してください。",
+        notice:
+          "社内コード・商品コード・商品名から検索できます。",
         confirmText: "入力に戻る"
       });
-    } else if (!findSalesPlanProductMatches(enteredCode).length) {
+    } else if (
+      !findSalesPlanProductMatches(
+        enteredCode
+      ).length
+    ) {
       await showSalesPlanDialog({
         type: "danger",
         icon: "🔎",
-        title: "登録済みの商品を選択してください",
-        message: "入力した社内コード・商品コードの商品が見つかりません。",
+        title: "商品が見つかりません",
+        message:
+          "入力したコードの商品が見つかりません。",
         details: [
-          { label: "入力したコード", value: enteredCode }
+          {
+            label: "入力したコード",
+            value: enteredCode
+          }
         ],
-        notice: "商品を検索して、登録済みの商品を選んでください。",
         confirmText: "入力に戻る"
       });
     }
+
     codeInput.focus();
     codeInput.select();
     return;
   }
 
-  applySalesPlanProductToForm(product);
-  if (!Number.isInteger(quantity) || quantity <= 0) {
+  applySalesPlanProductToForm(
+    product
+  );
+
+  if (
+    !Number.isInteger(quantity) ||
+    quantity <= 0
+  ) {
     await showSalesPlanDialog({
       type: "warning",
       icon: "🔢",
       title: "数量を確認してください",
-      message: "数量は1以上の整数で入力してください。",
+      message:
+        "数量は1以上の整数で入力してください。",
       details: [
-        { label: "入力値", value: document.querySelector("#sales-plan-quantity").value || "未入力" },
-        { label: "入力できる値", value: "1以上の整数" }
+        {
+          label: "入力値",
+          value:
+            quantityInput.value ||
+            "未入力"
+        }
       ],
       confirmText: "入力に戻る"
     });
-    document.querySelector("#sales-plan-quantity").focus();
+
+    quantityInput.focus();
     return;
   }
 
-  const now = new Date().toISOString();
-  const existing = salesPlanEditingId
-    ? salesPlanRecords.find(function (record) { return record.id === salesPlanEditingId; })
-    : null;
+  const internalCode =
+    String(
+      product.internalCode || ""
+    ).trim();
 
-  const record = {
-    id: salesPlanEditingId || createSalesPlanId(),
-    customerName: customerName,
-    subtitle: subtitle,
-    shippingType: shipping.shippingType,
-    shippingDate: shipping.shippingDate,
-    shippingStartDate: shipping.shippingStartDate,
-    shippingEndDate: shipping.shippingEndDate,
-    shippingMonth: shipping.shippingMonth,
-    internalCode: product.internalCode,
-    productCode: product.productCode || "",
-    productName: product.productName || "",
-    quantity: quantity,
-    createdAt: existing && existing.createdAt ? existing.createdAt : now,
-    updatedAt: now
-  };
+  const existing =
+    salesPlanPendingItems.find(
+      function (item) {
+        return (
+          String(
+            item.internalCode || ""
+          ).trim() ===
+          internalCode
+        );
+      }
+    );
 
-  try {
-    if (salesPlanEditingId) {
-      await updateSalesPlan(record);
-    } else {
-      await saveSalesPlan(record);
+  if (existing) {
+    existing.quantity +=
+      quantity;
+  } else {
+    salesPlanPendingItems.push({
+      internalCode:
+        product.internalCode || "",
+      productCode:
+        product.productCode || "",
+      productName:
+        product.productName || "",
+      quantity:
+        quantity
+    });
+  }
+
+  renderSalesPlanPendingItems();
+  clearSalesPlanProductEntry();
+
+  const pendingNote =
+    document.querySelector(
+      "#sales-plan-pending-summary"
+    );
+
+  if (pendingNote) {
+    pendingNote.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest"
+    });
+  }
+
+  codeInput.focus();
+}
+
+function removeSalesPlanPendingItem(
+  internalCode
+) {
+  salesPlanPendingItems =
+    salesPlanPendingItems.filter(
+      function (item) {
+        return (
+          String(
+            item.internalCode || ""
+          ) !==
+          String(
+            internalCode || ""
+          )
+        );
+      }
+    );
+
+  renderSalesPlanPendingItems();
+}
+
+function renderSalesPlanPendingItems() {
+  const area =
+    document.querySelector(
+      "#sales-plan-pending-area"
+    );
+
+  const list =
+    document.querySelector(
+      "#sales-plan-pending-list"
+    );
+
+  const summary =
+    document.querySelector(
+      "#sales-plan-pending-summary"
+    );
+
+  const saveButton =
+    document.querySelector(
+      "#save-sales-plan-button"
+    );
+
+  const addButton =
+    document.querySelector(
+      "#add-sales-plan-item-button"
+    );
+
+  if (
+    !area ||
+    !list ||
+    !summary ||
+    !saveButton
+  ) {
+    return;
+  }
+
+  const isEditing =
+    Boolean(
+      salesPlanEditingId
+    );
+
+  area.hidden =
+    isEditing;
+
+  if (addButton) {
+    addButton.hidden =
+      isEditing;
+  }
+
+  if (isEditing) {
+    saveButton.disabled =
+      false;
+
+    saveButton.textContent =
+      "変更を保存する";
+
+    return;
+  }
+
+  const totalQuantity =
+    salesPlanPendingItems.reduce(
+      function (sum, item) {
+        return (
+          sum +
+          Number(
+            item.quantity || 0
+          )
+        );
+      },
+      0
+    );
+
+  summary.textContent =
+    `${salesPlanPendingItems.length}商品 / ` +
+    `合計${totalQuantity.toLocaleString("ja-JP")}個`;
+
+  saveButton.disabled =
+    salesPlanPendingItems.length ===
+    0;
+
+  saveButton.textContent =
+    salesPlanPendingItems.length >
+    0
+      ? `追加した${salesPlanPendingItems.length}商品をまとめて登録する`
+      : "追加した商品をまとめて登録する";
+
+  list.innerHTML = "";
+
+  if (
+    salesPlanPendingItems.length ===
+    0
+  ) {
+    const empty =
+      document.createElement("p");
+
+    empty.className =
+      "sales-plan-pending-empty";
+
+    empty.textContent =
+      "まだ商品が追加されていません。";
+
+    list.appendChild(
+      empty
+    );
+
+    return;
+  }
+
+  salesPlanPendingItems.forEach(
+    function (item) {
+      const card =
+        document.createElement("div");
+
+      card.className =
+        "sales-plan-pending-item";
+
+      const info =
+        document.createElement("div");
+
+      info.className =
+        "sales-plan-pending-item-info";
+
+      const name =
+        document.createElement("strong");
+
+      name.textContent =
+        item.productName ||
+        "商品名未登録";
+
+      const codes =
+        document.createElement("span");
+
+      codes.textContent =
+        `社内コード：${item.internalCode || "未登録"} / ` +
+        `商品コード：${item.productCode || "未登録"}`;
+
+      info.append(
+        name,
+        codes
+      );
+
+      const quantity =
+        document.createElement("strong");
+
+      quantity.className =
+        "sales-plan-pending-quantity";
+
+      quantity.textContent =
+        `${Number(item.quantity || 0).toLocaleString("ja-JP")}個`;
+
+      const removeButton =
+        document.createElement("button");
+
+      removeButton.type =
+        "button";
+
+      removeButton.className =
+        "sales-plan-pending-remove";
+
+      removeButton.textContent =
+        "削除";
+
+      removeButton.addEventListener(
+        "click",
+        function () {
+          removeSalesPlanPendingItem(
+            item.internalCode
+          );
+        }
+      );
+
+      card.append(
+        info,
+        quantity,
+        removeButton
+      );
+
+      list.appendChild(
+        card
+      );
+    }
+  );
+}
+
+function clearSalesPlanProductEntry() {
+  const internalCode =
+    document.querySelector(
+      "#sales-plan-internal-code"
+    );
+
+  const quantity =
+    document.querySelector(
+      "#sales-plan-quantity"
+    );
+
+  if (internalCode) {
+    internalCode.value =
+      "";
+  }
+
+  if (quantity) {
+    quantity.value =
+      "1";
+  }
+
+  clearSalesPlanProductFields();
+  closeSalesPlanProductSuggestions();
+}
+
+async function saveSalesPlanFromForm(event) {
+  event.preventDefault();
+
+  const customerName =
+    document.querySelector(
+      "#sales-plan-customer"
+    ).value.trim();
+
+  const subtitle =
+    document.querySelector(
+      "#sales-plan-subtitle"
+    ).value.trim();
+
+  if (!customerName) {
+    await showSalesPlanDialog({
+      type: "warning",
+      icon: "🏢",
+      title: "取引先名を入力してください",
+      message:
+        "販売予定を登録するには、取引先名の入力が必要です。",
+      confirmText: "入力に戻る"
+    });
+
+    document.querySelector(
+      "#sales-plan-customer"
+    ).focus();
+
+    return;
+  }
+
+  const shipping =
+    await readSalesPlanShippingFromForm();
+
+  if (!shipping) {
+    return;
+  }
+
+  if (salesPlanEditingId) {
+    const codeInput =
+      document.querySelector(
+        "#sales-plan-internal-code"
+      );
+
+    const enteredCode =
+      codeInput.value.trim();
+
+    const quantity =
+      Number(
+        document.querySelector(
+          "#sales-plan-quantity"
+        ).value
+      );
+
+    const product =
+      await resolveSalesPlanProduct(
+        enteredCode
+      );
+
+    if (!product) {
+      await showSalesPlanDialog({
+        type: "warning",
+        icon: "🔎",
+        title: "商品を確認してください",
+        message:
+          "変更する商品を選択してください。",
+        confirmText: "入力に戻る"
+      });
+
+      codeInput.focus();
+      return;
     }
 
-    const message = salesPlanEditingId
-      ? "販売予定を変更しました。"
-      : "販売予定を登録しました。";
-    resetSalesPlanForm();
+    applySalesPlanProductToForm(
+      product
+    );
+
+    if (
+      !Number.isInteger(quantity) ||
+      quantity <= 0
+    ) {
+      await showSalesPlanDialog({
+        type: "warning",
+        icon: "🔢",
+        title: "数量を確認してください",
+        message:
+          "数量は1以上の整数で入力してください。",
+        confirmText: "入力に戻る"
+      });
+
+      document.querySelector(
+        "#sales-plan-quantity"
+      ).focus();
+
+      return;
+    }
+
+    const now =
+      new Date().toISOString();
+
+    const existing =
+      salesPlanRecords.find(
+        function (record) {
+          return (
+            record.id ===
+            salesPlanEditingId
+          );
+        }
+      );
+
+    const record = {
+      id:
+        salesPlanEditingId,
+      customerName:
+        customerName,
+      subtitle:
+        subtitle,
+      shippingType:
+        shipping.shippingType,
+      shippingDate:
+        shipping.shippingDate,
+      shippingStartDate:
+        shipping.shippingStartDate,
+      shippingEndDate:
+        shipping.shippingEndDate,
+      shippingMonth:
+        shipping.shippingMonth,
+      internalCode:
+        product.internalCode,
+      productCode:
+        product.productCode || "",
+      productName:
+        product.productName || "",
+      quantity:
+        quantity,
+      createdAt:
+        existing &&
+        existing.createdAt
+          ? existing.createdAt
+          : now,
+      updatedAt:
+        now
+    };
+
+    try {
+      await updateSalesPlan(
+        record
+      );
+
+      resetSalesPlanForm();
+      await refreshSalesPlanData();
+
+      await showSalesPlanDialog({
+        type: "success",
+        icon: "✅",
+        title: "販売予定を変更しました",
+        details: [
+          {
+            label: "取引先",
+            value: customerName
+          },
+          ...(subtitle
+            ? [
+                {
+                  label: "副題",
+                  value: subtitle
+                }
+              ]
+            : []),
+          {
+            label: "商品",
+            value:
+              product.productName ||
+              product.internalCode
+          },
+          {
+            label: "出荷時期",
+            value:
+              formatSalesPlanShipping(
+                record
+              )
+          },
+          {
+            label: "数量",
+            value:
+              `${quantity.toLocaleString("ja-JP")}個`
+          }
+        ],
+        confirmText: "閉じる"
+      });
+    } catch (error) {
+      console.error(
+        "販売予定更新エラー",
+        error
+      );
+
+      await showSalesPlanDialog({
+        type: "danger",
+        icon: "⚠️",
+        title: "販売予定を変更できませんでした",
+        message:
+          "販売予定の変更中にエラーが発生しました。",
+        confirmText: "閉じる"
+      });
+    }
+
+    return;
+  }
+
+  if (
+    salesPlanPendingItems.length ===
+    0
+  ) {
+    await showSalesPlanDialog({
+      type: "warning",
+      icon: "📦",
+      title: "商品を追加してください",
+      message:
+        "登録する商品がまだ追加されていません。",
+      notice:
+        "商品を検索して数量を入力し、「この商品を追加する」を押してください。",
+      confirmText: "入力に戻る"
+    });
+
+    document.querySelector(
+      "#sales-plan-internal-code"
+    ).focus();
+
+    return;
+  }
+
+  const totalQuantity =
+    salesPlanPendingItems.reduce(
+      function (sum, item) {
+        return (
+          sum +
+          Number(
+            item.quantity || 0
+          )
+        );
+      },
+      0
+    );
+
+  const shippingPreview = {
+    shippingType:
+      shipping.shippingType,
+    shippingDate:
+      shipping.shippingDate,
+    shippingStartDate:
+      shipping.shippingStartDate,
+    shippingEndDate:
+      shipping.shippingEndDate,
+    shippingMonth:
+      shipping.shippingMonth
+  };
+
+  const confirmed =
+    await showSalesPlanDialog({
+      type: "warning",
+      icon: "📦",
+      title: "販売予定をまとめて登録しますか？",
+      message:
+        "同じ取引先・同じ出荷時期で、追加した商品をまとめて登録します。",
+      details: [
+        {
+          label: "取引先",
+          value: customerName
+        },
+        ...(subtitle
+          ? [
+              {
+                label: "副題",
+                value: subtitle
+              }
+            ]
+          : []),
+        {
+          label: "出荷時期",
+          value:
+            formatSalesPlanShipping(
+              shippingPreview
+            )
+        },
+        {
+          label: "商品数",
+          value:
+            `${salesPlanPendingItems.length}商品`
+        },
+        {
+          label: "数量合計",
+          value:
+            `${totalQuantity.toLocaleString("ja-JP")}個`
+        }
+      ],
+      notice:
+        "商品ごとに1件ずつ販売予定として保存します。取引先名・副題・出荷時期はすべて同じ内容になります。",
+      isConfirm: true,
+      cancelText: "戻る",
+      confirmText: "まとめて登録する"
+    });
+
+  if (!confirmed) {
+    return;
+  }
+
+  const now =
+    new Date().toISOString();
+
+  const succeeded = [];
+  const failed = [];
+
+  for (
+    const item of
+    salesPlanPendingItems
+  ) {
+    const record = {
+      id:
+        createSalesPlanId(),
+      customerName:
+        customerName,
+      subtitle:
+        subtitle,
+      shippingType:
+        shipping.shippingType,
+      shippingDate:
+        shipping.shippingDate,
+      shippingStartDate:
+        shipping.shippingStartDate,
+      shippingEndDate:
+        shipping.shippingEndDate,
+      shippingMonth:
+        shipping.shippingMonth,
+      internalCode:
+        item.internalCode,
+      productCode:
+        item.productCode || "",
+      productName:
+        item.productName || "",
+      quantity:
+        Number(
+          item.quantity || 0
+        ),
+      createdAt:
+        now,
+      updatedAt:
+        now
+    };
+
+    try {
+      await saveSalesPlan(
+        record
+      );
+
+      succeeded.push(
+        item
+      );
+    } catch (error) {
+      console.error(
+        "販売予定まとめ登録エラー",
+        item.internalCode,
+        error
+      );
+
+      failed.push(
+        item
+      );
+    }
+  }
+
+  salesPlanPendingItems =
+    failed.slice();
+
+  renderSalesPlanPendingItems();
+
+  if (
+    succeeded.length > 0
+  ) {
     await refreshSalesPlanData();
+  }
+
+  if (
+    failed.length === 0
+  ) {
+    const registeredCount =
+      succeeded.length;
+
+    const registeredQuantity =
+      succeeded.reduce(
+        function (sum, item) {
+          return (
+            sum +
+            Number(
+              item.quantity || 0
+            )
+          );
+        },
+        0
+      );
+
+    resetSalesPlanForm();
+
     await showSalesPlanDialog({
       type: "success",
       icon: "✅",
-      title: message,
+      title: "販売予定をまとめて登録しました",
       details: [
-        { label: "取引先", value: customerName },
+        {
+          label: "取引先",
+          value: customerName
+        },
         ...(subtitle
-          ? [{ label: "副題", value: subtitle }]
+          ? [
+              {
+                label: "副題",
+                value: subtitle
+              }
+            ]
           : []),
-        { label: "商品", value: product.productName || product.internalCode },
-        { label: "出荷時期", value: formatSalesPlanShipping(record) },
-        { label: "数量", value: `${quantity}個` }
+        {
+          label: "登録商品数",
+          value:
+            `${registeredCount}商品`
+        },
+        {
+          label: "数量合計",
+          value:
+            `${registeredQuantity.toLocaleString("ja-JP")}個`
+        },
+        {
+          label: "出荷時期",
+          value:
+            formatSalesPlanShipping(
+              shippingPreview
+            )
+        }
       ],
       confirmText: "閉じる"
     });
-  } catch (error) {
-    console.error("販売予定保存エラー", error);
-    await showSalesPlanDialog({
-      type: "danger",
-      icon: "⚠️",
-      title: "販売予定を保存できませんでした",
-      message: "販売予定の保存中にエラーが発生しました。",
-      notice: "入力内容を確認し、画面を開き直してもう一度お試しください。",
-      confirmText: "閉じる"
-    });
+
+    return;
   }
+
+  await showSalesPlanDialog({
+    type: "danger",
+    icon: "⚠️",
+    title: "一部の商品を登録できませんでした",
+    message:
+      `${succeeded.length}商品は登録できました。${failed.length}商品は登録できなかったため、入力欄に残しています。`,
+    notice:
+      "残っている商品を確認して、もう一度まとめて登録してください。",
+    confirmText: "確認して閉じる"
+  });
 }
 
 async function editSalesPlan(id) {
@@ -830,7 +1532,9 @@ async function editSalesPlan(id) {
 
   updateSalesPlanShippingFields();
   document.querySelector("#save-sales-plan-button").textContent = "変更を保存する";
+  document.querySelector("#save-sales-plan-button").disabled = false;
   document.querySelector("#cancel-sales-plan-edit-button").hidden = false;
+  renderSalesPlanPendingItems();
   document.querySelector("#sales-plan-form-area").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -894,9 +1598,9 @@ function resetSalesPlanForm() {
   form.reset();
   document.querySelector("#sales-plan-shipping-type").value = "date";
   updateSalesPlanShippingFields();
-  clearSalesPlanProductFields();
-  document.querySelector("#save-sales-plan-button").textContent = "販売予定を登録する";
+  clearSalesPlanProductEntry();
   document.querySelector("#cancel-sales-plan-edit-button").hidden = true;
+  renderSalesPlanPendingItems();
 }
 
 function clearSalesPlanProductFields() {
@@ -1144,6 +1848,103 @@ function createSalesPlanStyle() {
     .sales-plan-screen-shortcuts { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; }
     .sales-plan-screen-shortcuts button { flex: 1 1 220px; margin: 0; }
     #jump-sales-plan-list-button { background: #00695c; }
+    .sales-plan-add-item-area {
+      display: grid;
+      gap: 8px;
+      margin-top: 2px;
+      padding: 14px;
+      border: 2px solid #90caf9;
+      border-radius: 10px;
+      background: #f4fbff;
+    }
+    #add-sales-plan-item-button {
+      width: 100%;
+      margin: 0;
+      min-height: 52px;
+      background: #1976d2;
+      font-size: 1rem;
+      font-weight: 800;
+    }
+    .sales-plan-add-item-note {
+      margin: 0;
+      color: #455a64;
+      line-height: 1.5;
+    }
+    .sales-plan-pending-area {
+      padding: 16px;
+      border: 2px solid #a5d6a7;
+      border-radius: 12px;
+      background: #f5fff6;
+    }
+    .sales-plan-pending-area[hidden] {
+      display: none !important;
+    }
+    .sales-plan-pending-heading {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .sales-plan-pending-heading h4 {
+      margin: 0;
+      font-size: 1.05rem;
+    }
+    #sales-plan-pending-summary {
+      color: #1b5e20;
+      font-size: 1rem;
+    }
+    .sales-plan-pending-list {
+      display: grid;
+      gap: 8px;
+    }
+    .sales-plan-pending-empty {
+      margin: 0;
+      padding: 12px;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #607d8b;
+      text-align: center;
+    }
+    .sales-plan-pending-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid #c8e6c9;
+      border-radius: 9px;
+      background: #ffffff;
+    }
+    .sales-plan-pending-item-info {
+      min-width: 0;
+      display: grid;
+      gap: 4px;
+    }
+    .sales-plan-pending-item-info strong {
+      font-size: 1rem;
+    }
+    .sales-plan-pending-item-info span {
+      color: #546e7a;
+      font-size: .9rem;
+      line-height: 1.4;
+    }
+    .sales-plan-pending-quantity {
+      min-width: 82px;
+      text-align: right;
+      color: #1b5e20;
+      font-size: 1.05rem;
+    }
+    .sales-plan-pending-remove {
+      margin: 0 !important;
+      padding: 9px 14px !important;
+      background: #c62828 !important;
+    }
+    #save-sales-plan-button:disabled {
+      background: #b0bec5 !important;
+      cursor: not-allowed;
+    }
     .sales-plan-form-actions, .sales-plan-filter-row, .sales-plan-pager { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .sales-plan-filter-row > * { flex: 1 1 230px; }
     .sales-plan-table-wrap { overflow-x: auto; margin-top: 12px; }
@@ -1168,6 +1969,15 @@ function createSalesPlanStyle() {
       .sales-plan-form-grid { grid-template-columns: 1fr; }
       .sales-plan-form-grid .sales-plan-full { grid-column: auto; }
       .sales-plan-product-row { grid-template-columns: 1fr; }
+      .sales-plan-pending-item {
+        grid-template-columns: 1fr auto;
+      }
+      .sales-plan-pending-item-info {
+        grid-column: 1 / -1;
+      }
+      .sales-plan-pending-quantity {
+        text-align: left;
+      }
       .sales-plan-card { padding: 16px; }
     }
   `;

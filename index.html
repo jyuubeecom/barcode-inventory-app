@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v150
+            画面版 v151
           </span>
         </div>
       </div>
@@ -674,10 +674,34 @@
               <label for="sales-plan-quantity">数量（必須）</label>
               <input id="sales-plan-quantity" type="number" min="1" step="1" value="1" required>
             </div>
+
+            <div class="sales-plan-full sales-plan-add-item-area">
+              <button id="add-sales-plan-item-button" type="button">
+                この商品を追加する
+              </button>
+              <p class="sales-plan-add-item-note">
+                商品を追加しても、取引先名・副題・出荷日はそのまま残ります。続けて別の商品を追加できます。
+              </p>
+            </div>
+
+            <div id="sales-plan-pending-area" class="sales-plan-full sales-plan-pending-area">
+              <div class="sales-plan-pending-heading">
+                <h4>今回まとめて登録する商品</h4>
+                <strong id="sales-plan-pending-summary">0商品 / 合計0個</strong>
+              </div>
+
+              <div id="sales-plan-pending-list" class="sales-plan-pending-list">
+                <p class="sales-plan-pending-empty">
+                  まだ商品が追加されていません。
+                </p>
+              </div>
+            </div>
           </div>
 
           <div class="sales-plan-form-actions">
-            <button id="save-sales-plan-button" type="submit">販売予定を登録する</button>
+            <button id="save-sales-plan-button" type="submit" disabled>
+              追加した商品をまとめて登録する
+            </button>
             <button id="cancel-sales-plan-edit-button" type="button" hidden>編集をやめる</button>
           </div>
         </form>
@@ -3061,7 +3085,7 @@
 <script src="csv-import.js?v=146"></script>
 <script src="csv-update.js?v=74"></script>
 <script src="pwa.js?v=31"></script>
-<script src="sales-plan.js?v=150"></script>
+<script src="sales-plan.js?v=151"></script>
 <script src="sales-actual.js?v=149"></script>
 <script src="purchase-required.js?v=140"></script>
 <script src="order-remaining.js?v=119"></script>

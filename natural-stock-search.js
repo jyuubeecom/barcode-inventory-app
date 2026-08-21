@@ -1,7 +1,7 @@
 "use strict";
 
 /* =========================================================
-   v137 自然文検索（在庫・販売予定・船便情報）
+   v138 自然文検索（船便カード表示対応）
    ・端末内の商品データだけを使用
    ・社内コード / 商品コード / JAN / 商品名に対応
    ・JANなどが重複した場合は候補を一覧表示
@@ -769,9 +769,9 @@ async function collectNaturalShippingAllocations(
       "#shipping-allocation-search"
     );
 
-  const tableBody =
+  const cardList =
     document.querySelector(
-      "#shipping-allocation-table-body"
+      "#shipping-allocation-card-list"
     );
 
   const openButton =
@@ -782,7 +782,7 @@ async function collectNaturalShippingAllocations(
   if (
     !scheduleSelect ||
     !searchInput ||
-    !tableBody
+    !cardList
   ) {
     return {
       available: false,
@@ -911,40 +911,42 @@ async function collectNaturalShippingAllocations(
           80
         );
 
-        const rows =
+        const cards =
           Array.from(
-            tableBody.querySelectorAll(
-              "tr"
-            )
+            cardList.children
+          ).filter(
+            function (card) {
+              if (!card) {
+                return false;
+              }
+
+              if (
+                card.hidden ||
+                card.getAttribute(
+                  "aria-hidden"
+                ) === "true"
+              ) {
+                return false;
+              }
+
+              const text =
+                normalizeNaturalStockText(
+                  card.textContent || ""
+                );
+
+              return text.includes(
+                normalizeNaturalStockText(
+                  internalCode
+                )
+              );
+            }
           );
 
-        rows.forEach(
-          function (row) {
-            const firstCell =
-              row.querySelector(
-                "td"
-              );
-
-            if (!firstCell) {
-              return;
-            }
-
-            const rowInternalCode =
-              String(
-                firstCell.textContent ||
-                ""
-              ).trim();
-
-            if (
-              rowInternalCode !==
-              internalCode
-            ) {
-              return;
-            }
-
+        cards.forEach(
+          function (card) {
             const quantity =
-              getNaturalShippingRowQuantity(
-                row
+              getNaturalShippingCardQuantity(
+                card
               );
 
             allocations.push({
@@ -1021,21 +1023,21 @@ async function collectNaturalShippingAllocations(
   }
 }
 
-function getNaturalShippingRowQuantity(
-  row
+function getNaturalShippingCardQuantity(
+  card
 ) {
   const dataCandidates = [
-    row.dataset
-      ? row.dataset.savedQuantity
+    card.dataset
+      ? card.dataset.savedQuantity
       : "",
-    row.dataset
-      ? row.dataset.shippingQuantity
+    card.dataset
+      ? card.dataset.shippingQuantity
       : "",
-    row.dataset
-      ? row.dataset.allocationQuantity
+    card.dataset
+      ? card.dataset.allocationQuantity
       : "",
-    row.dataset
-      ? row.dataset.quantity
+    card.dataset
+      ? card.dataset.quantity
       : ""
   ];
 
@@ -1055,15 +1057,28 @@ function getNaturalShippingRowQuantity(
 
   const inputs =
     Array.from(
-      row.querySelectorAll(
+      card.querySelectorAll(
         'input[type="number"]'
       )
+    ).filter(
+      function (input) {
+        return !input.disabled;
+      }
     );
 
   if (inputs.length > 0) {
     const preferred =
       inputs.find(
         function (input) {
+          const parentText =
+            normalizeNaturalStockText(
+              (
+                input.parentElement &&
+                input.parentElement
+                  .textContent
+              ) || ""
+            );
+
           const key =
             (
               String(
@@ -1080,6 +1095,9 @@ function getNaturalShippingRowQuantity(
             ).toLowerCase();
 
           return (
+            parentText.includes(
+              "今回の船便"
+            ) ||
             key.includes(
               "allocation"
             ) ||
@@ -1095,13 +1113,16 @@ function getNaturalShippingRowQuantity(
           );
         }
       ) ||
-      inputs[
-        inputs.length - 1
-      ];
+      inputs[0];
 
     const value =
       Number(
-        preferred.value
+        String(
+          preferred.value || "0"
+        ).replace(
+          /,/g,
+          ""
+        )
       );
 
     if (
@@ -1114,12 +1135,12 @@ function getNaturalShippingRowQuantity(
 
   const text =
     String(
-      row.textContent || ""
+      card.textContent || ""
     );
 
   const savedMatch =
     text.match(
-      /(?:振分数量|振り分け数量|船積数量|保存済数量)\s*[:：]?\s*([0-9,]+)/
+      /(?:今回の船便|保存済み数量|振分数量|振り分け数量|船積数量)\s*[:：]?\s*([0-9,]+)\s*個?/
     );
 
   if (savedMatch) {
@@ -1526,7 +1547,7 @@ function renderNaturalShippingUnavailable(
     );
 
   text.textContent =
-    "「船便別に商品を振り分ける」画面を一度開いてホームへ戻り、もう一度検索してください。";
+    "船便振り分け画面の読み込み状態を確認できませんでした。画面を更新して、もう一度検索してください。";
 
   box.appendChild(
     title

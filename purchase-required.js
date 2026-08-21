@@ -808,3 +808,93 @@ function createPurchaseRequiredStyle() {
   `;
   document.head.appendChild(style);
 }
+
+/* =========================================================
+   v140 ホーム警告パネル用
+   発注必要商品の読み取り専用API
+   ========================================================= */
+window.purchaseRequiredApp =
+  window.purchaseRequiredApp || {};
+
+window.purchaseRequiredApp.getHomeAlertData =
+  async function () {
+    await refreshPurchaseRequiredData();
+
+    const requiredRows =
+      purchaseRequiredRows
+        .filter(
+          function (row) {
+            return (
+              row &&
+              row.judgment ===
+                "required" &&
+              Number(
+                row.shortage || 0
+              ) > 0
+            );
+          }
+        )
+        .map(
+          function (row) {
+            return {
+              internalCode:
+                row.internalCode || "",
+              productCode:
+                row.productCode || "",
+              productName:
+                row.productName || "",
+              shortage:
+                Number(
+                  row.shortage || 0
+                ),
+              currentStock:
+                Number(
+                  row.currentStock || 0
+                ),
+              orderRemaining:
+                Number(
+                  row.orderRemaining || 0
+                ),
+              requiredStock:
+                Number(
+                  row.requiredStock || 0
+                )
+            };
+          }
+        );
+
+    const totalShortage =
+      requiredRows.reduce(
+        function (sum, row) {
+          return (
+            sum +
+            Number(
+              row.shortage || 0
+            )
+          );
+        },
+        0
+      );
+
+    return {
+      count:
+        requiredRows.length,
+      totalShortage:
+        totalShortage,
+      rows:
+        requiredRows
+    };
+  };
+
+window.purchaseRequiredApp.open =
+  function () {
+    const button =
+      document.querySelector(
+        "#show-purchase-required-button"
+      );
+
+    if (button) {
+      button.click();
+    }
+  };
+

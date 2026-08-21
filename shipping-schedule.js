@@ -2321,3 +2321,217 @@ function createShippingScheduleStyle() {
 window.shippingScheduleFeature = {
   refresh: refreshShippingScheduleData
 };
+
+/* =========================================================
+   v140 ホーム警告パネル用
+   次の未確定船便の船積必要商品を返す読み取り専用API
+   ========================================================= */
+window.shippingScheduleApp =
+  window.shippingScheduleApp || {};
+
+window.shippingScheduleApp.getHomeAlertData =
+  async function () {
+    await refreshShippingScheduleData();
+
+    const today =
+      getShippingTodayKeyForConfirmation();
+
+    const actionableSchedules =
+      shippingScheduleRecords
+        .filter(
+          function (schedule) {
+            if (!schedule) {
+              return false;
+            }
+
+            if (
+              isShippingScheduleReceived(
+                schedule.id
+              )
+            ) {
+              return false;
+            }
+
+            if (
+              isShippingScheduleConfirmed(
+                schedule
+              )
+            ) {
+              return false;
+            }
+
+            const warehouseDate =
+              String(
+                schedule
+                  .warehouseArrivalDate ||
+                  ""
+              );
+
+            if (
+              warehouseDate &&
+              isShippingIsoDate(
+                warehouseDate
+              ) &&
+              warehouseDate < today
+            ) {
+              return false;
+            }
+
+            return true;
+          }
+        )
+        .sort(
+          compareShippingSchedules
+        );
+
+    if (
+      actionableSchedules.length === 0
+    ) {
+      return {
+        hasSchedule: false,
+        schedule: null,
+        count: 0,
+        totalRemaining: 0,
+        rows: []
+      };
+    }
+
+    const schedule =
+      actionableSchedules[0];
+
+    const rows =
+      getShippingAllocationRows(
+        schedule
+      )
+        .map(
+          function (row) {
+            const recommended =
+              Math.max(
+                0,
+                Number(
+                  row
+                    .recommendedQuantity ||
+                    0
+                )
+              );
+
+            const allocated =
+              Math.max(
+                0,
+                Number(
+                  row
+                    .currentAllocation ||
+                    0
+                )
+              );
+
+            const remaining =
+              Math.max(
+                0,
+                recommended -
+                allocated
+              );
+
+            return {
+              internalCode:
+                row.internalCode || "",
+              productCode:
+                row.productCode || "",
+              productName:
+                row.productName || "",
+              recommendedQuantity:
+                recommended,
+              currentAllocation:
+                allocated,
+              remainingQuantity:
+                remaining
+            };
+          }
+        )
+        .filter(
+          function (row) {
+            return (
+              row.remainingQuantity >
+              0
+            );
+          }
+        )
+        .sort(
+          function (a, b) {
+            if (
+              b.remainingQuantity !==
+              a.remainingQuantity
+            ) {
+              return (
+                b.remainingQuantity -
+                a.remainingQuantity
+              );
+            }
+
+            return String(
+              a.internalCode || ""
+            ).localeCompare(
+              String(
+                b.internalCode || ""
+              ),
+              "ja",
+              {
+                numeric: true
+              }
+            );
+          }
+        );
+
+    const totalRemaining =
+      rows.reduce(
+        function (sum, row) {
+          return (
+            sum +
+            Number(
+              row.remainingQuantity ||
+              0
+            )
+          );
+        },
+        0
+      );
+
+    return {
+      hasSchedule: true,
+      schedule: {
+        id:
+          schedule.id || "",
+        name:
+          schedule.name || "",
+        departureDate:
+          schedule.departureDate ||
+          "",
+        arrivalDate:
+          schedule.arrivalDate ||
+          "",
+        warehouseArrivalDate:
+          schedule
+            .warehouseArrivalDate ||
+          ""
+      },
+      count:
+        rows.length,
+      totalRemaining:
+        totalRemaining,
+      rows:
+        rows
+    };
+  };
+
+window.shippingScheduleApp.openAllocation =
+  function () {
+    const button =
+      document.querySelector(
+        "#show-shipping-allocation-button"
+      );
+
+    if (button) {
+      button.click();
+    }
+  };
+

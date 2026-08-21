@@ -348,6 +348,9 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
           2,
         internalCode:
           internalCode,
+        productCode:
+          matchedProduct.productCode ||
+          "",
         productName:
           matchedProduct.productName ||
           `${normalizeSalesActualText(row[1])} ${normalizeSalesActualText(row[2])}`.trim(),
@@ -537,7 +540,11 @@ function renderSalesActualPreview(preview) {
     row.innerHTML = `
       <td>${escapeSalesActualHtml(formatSalesActualDate(record.saleDate))}</td>
       <td>${escapeSalesActualHtml(record.internalCode)}</td>
-      <td>${escapeSalesActualHtml(product ? (product.productName || "") : `${record.sourceProductName1} ${record.sourceProductName2}`.trim())}</td>
+      <td>${escapeSalesActualHtml(
+        product
+          ? (product.productCode || "未登録")
+          : "商品マスタ未登録"
+      )}</td>
       <td>${escapeSalesActualHtml(record.customerName)}</td>
       <td>${formatSalesActualNumber(record.quantity)}</td>
       <td>${product ? '<span class="sales-actual-ok">登録済み</span>' : '<span class="sales-actual-warning">商品未登録</span>'}</td>
@@ -563,7 +570,7 @@ function renderSalesActualPreview(preview) {
         row.innerHTML = `
           <td>${escapeSalesActualHtml(formatSalesActualDate(record.saleDate))}</td>
           <td>${escapeSalesActualHtml(record.internalCode)}</td>
-          <td>${escapeSalesActualHtml(record.productName || "")}</td>
+          <td>${escapeSalesActualHtml(record.productCode || "未登録")}</td>
           <td>${escapeSalesActualHtml(record.customerName || "")}</td>
           <td>${formatSalesActualNumber(record.quantity)}</td>
           <td><span class="sales-actual-error">廃盤商品エラー</span></td>

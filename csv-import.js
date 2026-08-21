@@ -74,7 +74,7 @@ function createCsvImportScreen() {
       E列：商品の色<br>
       F列：JANコード<br>
       I列：カテゴリー<br>
-      AK列：廃盤区分（9＝廃盤 / 9以外＝通常商品）<br>
+      AK列：廃番区分／廃盤区分（9＝廃盤 / 9以外＝通常商品）<br>
       AQ列：仕入れ先名
     </p>
 
@@ -820,10 +820,11 @@ function validateCompanyMasterHeaders(
       index:
         COMPANY_MASTER_COLUMNS.discontinuedFlag,
       acceptedNames: [
-        "廃盤区分"
+        "廃盤区分",
+        "廃番区分"
       ],
       expectedName:
-        "廃盤区分"
+        "廃盤区分 または 廃番区分"
     },
     {
       columnName: "AQ列",

@@ -316,8 +316,12 @@ function createCsvImportStyle() {
       background-color: #e8f5e9;
     }
 
-    .csv-import-row-existing {
-      background-color: #fff8e1;
+    .csv-import-row-update {
+      background-color: #e3f2fd;
+    }
+
+    .csv-import-row-unchanged {
+      background-color: #f5f5f5;
     }
 
     .csv-import-row-error {
@@ -339,9 +343,14 @@ function createCsvImportStyle() {
       color: #1b5e20;
     }
 
-    .csv-import-badge-existing {
-      background-color: #ffe0b2;
-      color: #e65100;
+    .csv-import-badge-update {
+      background-color: #bbdefb;
+      color: #0d47a1;
+    }
+
+    .csv-import-badge-unchanged {
+      background-color: #e0e0e0;
+      color: #424242;
     }
 
     .csv-import-badge-error {
@@ -644,8 +653,8 @@ async function createCompanyMasterPreview(
   const existingProducts =
     await getAllProducts();
 
-  const existingInternalCodes =
-    new Set();
+  const existingProductMap =
+    new Map();
 
   existingProducts.forEach(
     function (product) {
@@ -655,8 +664,9 @@ async function createCompanyMasterPreview(
         );
 
       if (internalCode !== "") {
-        existingInternalCodes.add(
-          internalCode
+        existingProductMap.set(
+          internalCode,
+          product
         );
       }
     }
@@ -699,7 +709,7 @@ async function createCompanyMasterPreview(
       validateCompanyMasterItem(
         item,
         internalCodeCounts,
-        existingInternalCodes
+        existingProductMap
       );
     }
   );
@@ -708,7 +718,15 @@ async function createCompanyMasterPreview(
     previewRows;
 
   result.warnings.push(
-    "既存商品とエラー行は登録されません。"
+    "既存商品は、E列「商品の色」とAK列「廃番区分／廃盤区分」だけを更新します。"
+  );
+
+  result.warnings.push(
+    "既存商品の商品名・商品コード・JANコード・カテゴリー・仕入れ先名・在庫数・保管場所は変更しません。"
+  );
+
+  result.warnings.push(
+    "エラー行は登録・更新されません。"
   );
 
   result.warnings.push(
@@ -736,7 +754,7 @@ async function createCompanyMasterPreview(
   );
 
   result.warnings.push(
-    "AK列「廃盤区分」が9なら廃盤、9以外は通常商品として登録します。"
+    "AK列「廃番区分／廃盤区分」が9なら廃盤、9以外は通常商品として登録・更新します。"
   );
 
   return result;
@@ -971,7 +989,7 @@ function isEmptyMasterItem(item) {
 function validateCompanyMasterItem(
   item,
   internalCodeCounts,
-  existingInternalCodes
+  existingProductMap
 ) {
   if (item.internalCode === "") {
     item.messages.push(
@@ -1015,15 +1033,61 @@ function validateCompanyMasterItem(
   }
 
   if (
-    existingInternalCodes.has(
+    existingProductMap.has(
       internalKey
     )
   ) {
+    const existingProduct =
+      existingProductMap.get(
+        internalKey
+      );
+
+    const existingColor =
+      getImportText(
+        existingProduct &&
+        existingProduct.productColor
+      );
+
+    const existingStatus =
+      getCsvExistingProductStatus(
+        existingProduct
+      );
+
+    const changes = [];
+
+    if (
+      existingColor !==
+      item.productColor
+    ) {
+      changes.push(
+        `商品の色：${existingColor || "未登録"} → ${item.productColor || "未登録"}`
+      );
+    }
+
+    if (
+      existingStatus !==
+      item.productStatus
+    ) {
+      changes.push(
+        `商品状態：${existingStatus} → ${item.productStatus}`
+      );
+    }
+
+    if (changes.length > 0) {
+      item.status =
+        "更新";
+
+      item.messages =
+        changes;
+
+      return;
+    }
+
     item.status =
-      "既存";
+      "変更なし";
 
     item.messages = [
-      "社内コードが登録済みです。"
+      "商品の色・商品状態はCSVと同じです。"
     ];
 
     return;
@@ -1041,6 +1105,47 @@ function validateCompanyMasterItem(
       "新しい商品として登録できます。"
     ];
   }
+}
+
+function getCsvExistingProductStatus(
+  product
+) {
+  const savedStatus =
+    String(
+      product &&
+      product.productStatus
+        ? product.productStatus
+        : ""
+    )
+      .normalize("NFKC")
+      .trim()
+      .toLowerCase();
+
+  if (
+    savedStatus === "廃盤" ||
+    savedStatus === "discontinued" ||
+    savedStatus === "inactive" ||
+    (
+      product &&
+      product.discontinued === true
+    )
+  ) {
+    return "廃盤";
+  }
+
+  if (
+    savedStatus === "廃盤予定"
+  ) {
+    return "廃盤予定";
+  }
+
+  if (
+    savedStatus === "専用商品"
+  ) {
+    return "専用商品";
+  }
+
+  return "通常商品";
 }
 
 function countInternalCodeValues(
@@ -1188,12 +1293,22 @@ function displayCsvPreview(result) {
       }
     ).length;
 
-  const existingCount =
+  const updateCount =
     result.rows.filter(
       function (item) {
         return (
           item.status ===
-          "既存"
+          "更新"
+        );
+      }
+    ).length;
+
+  const unchangedCount =
+    result.rows.filter(
+      function (item) {
+        return (
+          item.status ===
+          "変更なし"
         );
       }
     ).length;
@@ -1211,18 +1326,32 @@ function displayCsvPreview(result) {
   csvImportMessage.textContent =
     `全${result.rows.length}件 / ` +
     `新規${newCount}件 / ` +
-    `既存${existingCount}件 / ` +
+    `更新${updateCount}件 / ` +
+    `変更なし${unchangedCount}件 / ` +
     `エラー${errorRows.length}件`;
 
-  csvImportRegisterButton.disabled =
-    newCount === 0;
+  const applyCount =
+    newCount +
+    updateCount;
 
-  if (newCount > 0) {
+  csvImportRegisterButton.disabled =
+    applyCount === 0;
+
+  if (
+    newCount > 0 &&
+    updateCount > 0
+  ) {
+    csvImportRegisterButton.textContent =
+      `新規${newCount}件を登録・既存${updateCount}件を更新する`;
+  } else if (newCount > 0) {
     csvImportRegisterButton.textContent =
       `新規商品${newCount}件を登録する`;
+  } else if (updateCount > 0) {
+    csvImportRegisterButton.textContent =
+      `既存商品${updateCount}件を更新する`;
   } else {
     csvImportRegisterButton.textContent =
-      "登録できる新規商品はありません";
+      "登録・更新する商品はありません";
   }
 
   const messages = [
@@ -1390,8 +1519,12 @@ function getPreviewRowClass(status) {
     return "csv-import-row-new";
   }
 
-  if (status === "既存") {
-    return "csv-import-row-existing";
+  if (status === "更新") {
+    return "csv-import-row-update";
+  }
+
+  if (status === "変更なし") {
+    return "csv-import-row-unchanged";
   }
 
   return "csv-import-row-error";
@@ -1402,8 +1535,12 @@ function getPreviewBadgeClass(status) {
     return "csv-import-badge-new";
   }
 
-  if (status === "既存") {
-    return "csv-import-badge-existing";
+  if (status === "更新") {
+    return "csv-import-badge-update";
+  }
+
+  if (status === "変更なし") {
+    return "csv-import-badge-unchanged";
   }
 
   return "csv-import-badge-error";
@@ -1424,13 +1561,26 @@ async function registerNewCsvProducts() {
       }
     );
 
-  if (newRows.length === 0) {
+  const updateRows =
+    currentCsvImportRows.filter(
+      function (item) {
+        return (
+          item.status ===
+          "更新"
+        );
+      }
+    );
+
+  if (
+    newRows.length === 0 &&
+    updateRows.length === 0
+  ) {
     await showAppDialog({
       type: "warning",
       icon: "📦",
-      title: "登録できる新規商品がありません",
+      title: "登録・更新する商品がありません",
       message:
-        "CSV内に新しく登録できる商品がありません。既存商品またはエラー行のみです。",
+        "CSVの内容は、現在の商品データと同じです。",
       confirmText: "確認して閉じる"
     });
 
@@ -1441,32 +1591,32 @@ async function registerNewCsvProducts() {
     await showAppDialog({
       type: "warning",
       icon: "📥",
-      title: "新規商品を登録しますか？",
+      title: "CSVの内容を反映しますか？",
       message:
-        "CSVから新規商品を一括登録します。登録件数と在庫の扱いを確認してください。",
+        "新規商品を登録し、既存商品は商品の色と商品状態だけを更新します。",
       details: [
         {
           label: "新規登録",
           value: `${newRows.length}件`
         },
         {
-          label: "初期在庫",
-          value: "すべて0個"
+          label: "既存商品を更新",
+          value: `${updateRows.length}件`
         },
         {
-          label: "既存商品",
-          value: "登録しません"
+          label: "既存商品の更新項目",
+          value: "商品の色・商品状態のみ"
         },
         {
-          label: "エラー行",
-          value: "登録しません"
+          label: "在庫数・保管場所",
+          value: "変更しません"
         }
       ],
       notice:
-        "商品マスタへ一括登録します。登録後は商品一覧で内容を確認してください。",
+        "既存商品の商品名・商品コード・JANコード・カテゴリー・仕入れ先名・在庫数・保管場所は変更しません。",
       isConfirm: true,
       cancelText: "戻る",
-      confirmText: "新規商品を登録する"
+      confirmText: "登録・更新する"
     });
 
   if (!confirmed) {
@@ -1482,12 +1632,13 @@ async function registerNewCsvProducts() {
     true;
 
   csvImportRegisterButton.textContent =
-    "登録しています...";
+    "反映しています...";
 
   csvImportMessage.textContent =
-    `新規商品${newRows.length}件を登録しています。`;
+    `新規${newRows.length}件、既存更新${updateRows.length}件を反映しています。`;
 
-  let successCount = 0;
+  let newSuccessCount = 0;
+  let updateSuccessCount = 0;
   let skippedCount = 0;
 
   const failedMessages = [];
@@ -1496,16 +1647,87 @@ async function registerNewCsvProducts() {
     const latestProducts =
       await getAllProducts();
 
-    const latestInternalCodes =
-      new Set(
-        latestProducts.map(
-          function (product) {
-            return normalizeCompareText(
-              product.internalCode
-            );
-          }
-        )
-      );
+    const latestProductMap =
+      new Map();
+
+    latestProducts.forEach(
+      function (product) {
+        const key =
+          normalizeCompareText(
+            product.internalCode
+          );
+
+        if (key !== "") {
+          latestProductMap.set(
+            key,
+            product
+          );
+        }
+      }
+    );
+
+    for (const item of updateRows) {
+      const internalKey =
+        normalizeCompareText(
+          item.internalCode
+        );
+
+      const currentProduct =
+        latestProductMap.get(
+          internalKey
+        );
+
+      if (!currentProduct) {
+        skippedCount += 1;
+
+        failedMessages.push(
+          `${item.lineNumber}行目「${item.productName}」は、反映直前に既存商品を確認できなかったため更新していません。`
+        );
+
+        continue;
+      }
+
+      const dateTime =
+        new Date().toISOString();
+
+      const updatedProduct = {
+        ...currentProduct,
+        productColor:
+          item.productColor,
+        productStatus:
+          item.productStatus,
+        discontinuedFlag:
+          item.discontinuedFlag,
+        discontinued:
+          item.productStatus ===
+          "廃盤",
+        updatedAt:
+          dateTime
+      };
+
+      try {
+        await updateProduct(
+          updatedProduct
+        );
+
+        latestProductMap.set(
+          internalKey,
+          updatedProduct
+        );
+
+        updateSuccessCount += 1;
+      } catch (error) {
+        console.error(
+          "CSV既存商品更新エラー",
+          item.internalCode,
+          error
+        );
+
+        failedMessages.push(
+          `${item.lineNumber}行目「${item.productName}」の商品の色・商品状態を更新できませんでした。`
+        );
+      }
+    }
 
     for (const item of newRows) {
       const internalKey =
@@ -1514,7 +1736,7 @@ async function registerNewCsvProducts() {
         );
 
       if (
-        latestInternalCodes.has(
+        latestProductMap.has(
           internalKey
         )
       ) {
@@ -1543,11 +1765,12 @@ async function registerNewCsvProducts() {
           movement
         );
 
-        latestInternalCodes.add(
-          internalKey
+        latestProductMap.set(
+          internalKey,
+          product
         );
 
-        successCount += 1;
+        newSuccessCount += 1;
       } catch (error) {
         console.error(
           "CSV商品登録エラー",
@@ -1571,27 +1794,34 @@ async function registerNewCsvProducts() {
   csvImportBusy = false;
   csvImportFileInput.disabled = false;
 
-  if (successCount > 0) {
+  const successTotal =
+    newSuccessCount +
+    updateSuccessCount;
+
+  if (successTotal > 0) {
     let resultMessage =
-      `${successCount}件の商品を登録しました。`;
+      `新規登録：${newSuccessCount}件` +
+      `\n既存商品更新：${updateSuccessCount}件`;
 
     if (skippedCount > 0) {
       resultMessage +=
-        `\n登録直前に既存と確認された${skippedCount}件は登録していません。`;
+        `\n反映しなかった商品：${skippedCount}件`;
     }
 
     if (failedMessages.length > 0) {
       resultMessage +=
-        `\n登録できなかった商品：${failedMessages.length}件`;
+        `\nエラー：${failedMessages.length}件`;
     }
 
     resultMessage +=
+      "\n\n既存商品は「商品の色」と「商品状態」だけを更新しました。" +
+      "\n在庫数や保管場所などは変更していません。" +
       "\n\n商品一覧を更新します。";
 
     await showAppDialog({
       type: "success",
       icon: "✅",
-      title: "新規商品の登録が完了しました",
+      title: "CSVの反映が完了しました",
       message: resultMessage,
       confirmText: "商品一覧を更新する"
     });
@@ -1603,16 +1833,13 @@ async function registerNewCsvProducts() {
   csvImportRegisterButton.disabled =
     false;
 
-  csvImportRegisterButton.textContent =
-    `新規商品${newRows.length}件を登録する`;
-
   if (failedMessages.length > 0) {
     showCsvImportErrors(
       failedMessages
     );
 
     csvImportMessage.textContent =
-      "商品を登録できませんでした。";
+      "CSVの内容を反映できませんでした。";
 
     return;
   }
@@ -1620,14 +1847,14 @@ async function registerNewCsvProducts() {
   await showAppDialog({
     type: "warning",
     icon: "ℹ️",
-    title: "新しく登録された商品はありません",
+    title: "反映された商品はありません",
     message:
-      "登録対象の商品は、すでに商品マスタへ登録されています。",
+      "登録・更新対象の商品を反映できませんでした。",
     confirmText: "確認して閉じる"
   });
 
   csvImportMessage.textContent =
-    "新しく登録された商品はありません。";
+    "反映された商品はありません。";
 }
 
 function createProductFromCsvItem(
@@ -1665,6 +1892,10 @@ function createProductFromCsvItem(
 
     discontinuedFlag:
       item.discontinuedFlag,
+
+    discontinued:
+      item.productStatus ===
+      "廃盤",
 
     memo:
       "社内商品マスタCSVから登録",

@@ -567,8 +567,8 @@ function buildBarcodePrintLabel(product, barcodeMode) {
 
   return `
     <article class="barcode-label-card">
+      <div class="product-code">${escapeBarcodePrintHtml(product.productCode || "-")}</div>
       <div class="product-name">${escapeBarcodePrintHtml(product.productName || "商品名未登録")}</div>
-      <div class="product-sub">商品コード：${escapeBarcodePrintHtml(product.productCode || "-")}　保管場所：${escapeBarcodePrintHtml(product.location || "-")}</div>
       <div class="barcode-blocks">${internalBlock}${janBlock}</div>
     </article>`;
 }
@@ -618,14 +618,26 @@ function buildBarcodePrintDocument(pages, layout, barcodeMode) {
     break-inside: avoid;
     page-break-inside: avoid;
   }
+  .product-code {
+    font-size: 20pt;
+    font-weight: 800;
+    text-align: center;
+    line-height: 1.05;
+    margin-bottom: 1mm;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .product-name {
-    font-size: 16pt;
+    font-size: 13pt;
     font-weight: 700;
     text-align: center;
-    line-height: 1.2;
+    line-height: 1.15;
     margin-bottom: 1.5mm;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .product-sub { font-size: 8pt; text-align: center; margin-bottom: 1.5mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .barcode-blocks { display: flex; flex-direction: column; gap: 1.2mm; min-height: 0; flex: 1; }
   .barcode-block { text-align: center; min-height: 0; }
   .barcode-label-title { font-size: 8pt; font-weight: 700; margin-bottom: 0.5mm; }
@@ -633,13 +645,14 @@ function buildBarcodePrintDocument(pages, layout, barcodeMode) {
   .barcode-number { font-family: Consolas, monospace; font-size: 12pt; font-weight: 700; letter-spacing: 0.8mm; line-height: 1; }
   .barcode-missing { border: 0.25mm dashed #888; padding: 2mm; }
   .barcode-missing-text { font-size: 9pt; }
-  .layout-4 .product-name { font-size: 18pt; }
+  .layout-4 .product-code { font-size: 24pt; }
+  .layout-4 .product-name { font-size: 15pt; }
   .layout-4 .barcode-svg { height: 21mm; }
   .layout-4.mode-single .barcode-svg { height: 32mm; }
   .layout-4.mode-single .barcode-number { font-size: 15pt; }
   .layout-8 .barcode-label-card { padding: 2.2mm; }
-  .layout-8 .product-name { font-size: 12pt; }
-  .layout-8 .product-sub { font-size: 7pt; }
+  .layout-8 .product-code { font-size: 16pt; }
+  .layout-8 .product-name { font-size: 10pt; }
   .layout-8 .barcode-svg { height: 11mm; }
   .layout-8 .barcode-number { font-size: 9pt; }
   .layout-8.mode-single .barcode-svg { height: 20mm; }
@@ -657,18 +670,18 @@ function buildBarcodePrintDocument(pages, layout, barcodeMode) {
     padding: 1.2mm;
     border-radius: 1.5mm;
   }
+  .layout-12 .product-code {
+    font-size: 11pt;
+    line-height: 1.05;
+    margin-bottom: 0.4mm;
+  }
   .layout-12 .product-name {
-    font-size: 9pt;
+    font-size: 7pt;
     line-height: 1.05;
     margin-bottom: 0.7mm;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-  .layout-12 .product-sub {
-    font-size: 5.5pt;
-    line-height: 1.05;
-    margin-bottom: 0.7mm;
   }
   .layout-12 .barcode-blocks {
     gap: 0.5mm;

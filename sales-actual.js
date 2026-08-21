@@ -12,6 +12,7 @@ function initializeSalesActualFeature() {
   const backButton = document.querySelector("#back-home-from-sales-actual");
   const fileInput = document.querySelector("#sales-actual-file");
   const importButton = document.querySelector("#import-sales-actual-button");
+  const printErrorsButton = document.querySelector("#print-sales-actual-errors-button");
   const clearButton = document.querySelector("#clear-sales-actual-preview-button");
 
   if (!showButton || !fileInput || !importButton) return;
@@ -21,6 +22,12 @@ function initializeSalesActualFeature() {
   if (backButton) backButton.addEventListener("click", closeSalesActualScreen);
   fileInput.addEventListener("change", handleSalesActualFileSelection);
   importButton.addEventListener("click", importSelectedSalesActualFile);
+  if (printErrorsButton) {
+    printErrorsButton.addEventListener(
+      "click",
+      printSalesActualErrorList
+    );
+  }
   if (clearButton) clearButton.addEventListener("click", clearSalesActualPreview);
 }
 
@@ -322,11 +329,57 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
     if (quantity === null) errors.push("出荷数量が数字ではありません");
 
     if (errors.length > 0) {
+      const errorProduct =
+        productMap.get(
+          internalCode
+        );
+
       errorRecords.push({
-        rowNumber: parsed.headerIndex + index + 2,
-        internalCode: internalCode,
-        reason: errors.join(" / ")
+        rowNumber:
+          parsed.headerIndex +
+          index +
+          2,
+        internalCode:
+          internalCode,
+        productCode:
+          errorProduct
+            ? (
+                errorProduct.productCode ||
+                ""
+              )
+            : "",
+        productName:
+          errorProduct
+            ? (
+                errorProduct.productName ||
+                ""
+              )
+            : `${normalizeSalesActualText(row[1])} ${normalizeSalesActualText(row[2])}`.trim(),
+        customerName:
+          normalizeSalesActualText(
+            row[4]
+          ),
+        saleDate:
+          saleDate ||
+          normalizeSalesActualText(
+            row[5]
+          ),
+        quantity:
+          quantity === null
+            ? normalizeSalesActualText(
+                row[6]
+              )
+            : quantity,
+        detailType:
+          detailType,
+        errorType:
+          "入力エラー",
+        reason:
+          errors.join(
+            " / "
+          )
       });
+
       continue;
     }
 
@@ -364,6 +417,8 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
           quantity,
         detailType:
           detailType,
+        errorType:
+          "廃盤商品エラー",
         reason:
           "商品状態が「廃盤」のため取り込めません"
       };
@@ -506,12 +561,18 @@ function renderSalesActualDuplicateFileMessage(file, batch) {
   if (tableBody) tableBody.innerHTML = "";
   if (warnings) warnings.textContent = "同じCSVを二重に取り込まないよう停止しました。";
   setSalesActualImportButtonEnabled(false);
+  setSalesActualErrorPrintButtonEnabled(false);
 }
 
 function renderSalesActualPreview(preview) {
   const summary = document.querySelector("#sales-actual-preview-summary");
   const tableBody = document.querySelector("#sales-actual-preview-body");
   const warnings = document.querySelector("#sales-actual-preview-warnings");
+
+  setSalesActualErrorPrintButtonEnabled(
+    preview.errorRecords.length >
+    0
+  );
 
   const rangeText = preview.reportStartDate && preview.reportEndDate
     ? `${formatSalesActualDate(preview.reportStartDate)} ～ ${formatSalesActualDate(preview.reportEndDate)}`
@@ -773,6 +834,7 @@ function clearSalesActualPreview() {
   if (body) body.innerHTML = "";
   if (warnings) warnings.textContent = "";
   setSalesActualImportButtonEnabled(false);
+  setSalesActualErrorPrintButtonEnabled(false);
 }
 
 function setSalesActualPreviewMessage(message, isError) {
@@ -782,11 +844,389 @@ function setSalesActualPreviewMessage(message, isError) {
   if (summary) summary.textContent = message;
   if (body) body.innerHTML = "";
   if (warnings) warnings.textContent = isError ? "ファイルを確認して、もう一度選択してください。" : "";
+  setSalesActualErrorPrintButtonEnabled(false);
 }
 
 function setSalesActualImportButtonEnabled(enabled) {
   const button = document.querySelector("#import-sales-actual-button");
   if (button) button.disabled = !enabled;
+}
+
+
+function setSalesActualErrorPrintButtonEnabled(
+  enabled
+) {
+  const button =
+    document.querySelector(
+      "#print-sales-actual-errors-button"
+    );
+
+  if (!button) {
+    return;
+  }
+
+  button.disabled =
+    !enabled;
+
+  button.textContent =
+    enabled &&
+    salesActualSelectedPreview &&
+    Array.isArray(
+      salesActualSelectedPreview
+        .errorRecords
+    )
+      ? `エラー一覧を印刷する（${salesActualSelectedPreview.errorRecords.length}件）`
+      : "エラー一覧を印刷する";
+}
+
+function printSalesActualErrorList() {
+  const preview =
+    salesActualSelectedPreview;
+
+  if (
+    !preview ||
+    !Array.isArray(
+      preview.errorRecords
+    ) ||
+    preview.errorRecords.length ===
+    0
+  ) {
+    void showAppDialog({
+      type: "warning",
+      icon: "🖨️",
+      title: "印刷するエラーがありません",
+      message:
+        "エラーがある販売実績CSVを選択してから印刷してください。",
+      confirmText: "確認して閉じる"
+    });
+
+    return;
+  }
+
+  const printWindow =
+    window.open(
+      "",
+      "_blank"
+    );
+
+  if (!printWindow) {
+    void showAppDialog({
+      type: "warning",
+      icon: "🖨️",
+      title: "印刷画面を開けませんでした",
+      message:
+        "ブラウザでポップアップが禁止されている可能性があります。",
+      notice:
+        "このページのポップアップを許可して、もう一度「エラー一覧を印刷する」を押してください。",
+      confirmText: "確認して閉じる"
+    });
+
+    return;
+  }
+
+  const rangeText =
+    preview.reportStartDate &&
+    preview.reportEndDate
+      ? `${formatSalesActualDate(preview.reportStartDate)} ～ ${formatSalesActualDate(preview.reportEndDate)}`
+      : "CSV内の日付から判定";
+
+  const printedAt =
+    new Date().toLocaleString(
+      "ja-JP"
+    );
+
+  const rowsHtml =
+    preview.errorRecords
+      .map(
+        function (
+          record,
+          index
+        ) {
+          const saleDate =
+            formatSalesActualPrintDate(
+              record.saleDate
+            );
+
+          const quantity =
+            formatSalesActualPrintQuantity(
+              record.quantity
+            );
+
+          const errorType =
+            record.errorType ||
+            (
+              record.reason &&
+              String(
+                record.reason
+              ).includes(
+                "廃盤"
+              )
+                ? "廃盤商品エラー"
+                : "入力エラー"
+            );
+
+          return `
+            <tr>
+              <td class="center">${index + 1}</td>
+              <td class="center">${escapeSalesActualHtml(record.rowNumber || "")}</td>
+              <td>${escapeSalesActualHtml(saleDate)}</td>
+              <td>${escapeSalesActualHtml(record.internalCode || "未入力")}</td>
+              <td>${escapeSalesActualHtml(record.productCode || "未登録")}</td>
+              <td>${escapeSalesActualHtml(record.customerName || "未入力")}</td>
+              <td class="number">${escapeSalesActualHtml(quantity)}</td>
+              <td>${escapeSalesActualHtml(errorType)}</td>
+              <td>${escapeSalesActualHtml(record.reason || "内容を確認してください")}</td>
+              <td class="check">□</td>
+            </tr>
+          `;
+        }
+      )
+      .join(
+        ""
+      );
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>販売実績CSV エラー修正一覧</title>
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 9mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: #111;
+      font-family:
+        "Yu Gothic",
+        "Meiryo",
+        sans-serif;
+      font-size: 10pt;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 20pt;
+      text-align: center;
+    }
+
+    .subtitle {
+      margin: 0 0 12px;
+      text-align: center;
+      font-size: 11pt;
+      font-weight: 700;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns:
+        1.5fr 1fr 0.8fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .summary > div {
+      padding: 7px 9px;
+      border: 1px solid #777;
+      border-radius: 4px;
+    }
+
+    .notice {
+      margin-bottom: 10px;
+      padding: 8px 10px;
+      border: 2px solid #c62828;
+      background: #fff4f4;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      border: 1px solid #555;
+      padding: 5px 4px;
+      vertical-align: middle;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    th {
+      background: #e8eef5;
+      text-align: center;
+      font-weight: 800;
+    }
+
+    th:nth-child(1) { width: 4%; }
+    th:nth-child(2) { width: 5%; }
+    th:nth-child(3) { width: 9%; }
+    th:nth-child(4) { width: 9%; }
+    th:nth-child(5) { width: 11%; }
+    th:nth-child(6) { width: 14%; }
+    th:nth-child(7) { width: 6%; }
+    th:nth-child(8) { width: 12%; }
+    th:nth-child(9) { width: 16%; }
+    th:nth-child(10) { width: 4%; }
+
+    .center,
+    .check {
+      text-align: center;
+    }
+
+    .number {
+      text-align: right;
+    }
+
+    .check {
+      font-size: 15pt;
+      font-weight: 700;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      margin-top: 12px;
+      font-size: 9pt;
+    }
+
+    .sign {
+      min-width: 200px;
+      border-bottom: 1px solid #555;
+      padding-bottom: 3px;
+    }
+  </style>
+</head>
+<body>
+  <h1>販売実績CSV エラー修正一覧</h1>
+  <p class="subtitle">事務修正用</p>
+
+  <div class="summary">
+    <div><strong>ファイル：</strong>${escapeSalesActualHtml(preview.fileName || "販売実績CSV")}</div>
+    <div><strong>帳票期間：</strong>${escapeSalesActualHtml(rangeText)}</div>
+    <div><strong>エラー：</strong>${preview.errorRecords.length}件</div>
+  </div>
+
+  <div class="notice">
+    下記の販売実績はシステムに取り込まれていません。
+    元データを確認・修正し、修正後のCSVを再度出力してください。
+    修正した行は右端の「修正確認」にチェックしてください。
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>No.</th>
+        <th>CSV行</th>
+        <th>出荷日</th>
+        <th>社内コード</th>
+        <th>商品コード</th>
+        <th>取引先名</th>
+        <th>数量</th>
+        <th>エラー区分</th>
+        <th>エラー内容</th>
+        <th>修正確認</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <div>印刷日時：${escapeSalesActualHtml(printedAt)}</div>
+    <div class="sign">修正担当：</div>
+    <div class="sign">確認者：</div>
+  </div>
+</body>
+</html>
+  `;
+
+  printWindow.document.open();
+  printWindow.document.write(
+    html
+  );
+  printWindow.document.close();
+
+  printWindow.focus();
+
+  window.setTimeout(
+    function () {
+      printWindow.print();
+    },
+    250
+  );
+}
+
+function formatSalesActualPrintDate(
+  value
+) {
+  if (!value) {
+    return "未入力";
+  }
+
+  const text =
+    String(
+      value
+    ).trim();
+
+  if (
+    /^\d{4}-\d{2}-\d{2}$/.test(
+      text
+    )
+  ) {
+    return formatSalesActualDate(
+      text
+    );
+  }
+
+  return text;
+}
+
+function formatSalesActualPrintQuantity(
+  value
+) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return "未入力";
+  }
+
+  const number =
+    Number(
+      value
+    );
+
+  if (
+    Number.isFinite(
+      number
+    )
+  ) {
+    return number.toLocaleString(
+      "ja-JP"
+    );
+  }
+
+  return String(
+    value
+  );
 }
 
 function renderSalesActualImportHistory() {
@@ -1108,6 +1548,17 @@ function createSalesActualStyle() {
       font-size: 18px;
       font-weight: 800;
       border-radius: 9px;
+    }
+
+    #sales-actual-import .sales-actual-print-errors {
+      background: #c62828;
+      color: #ffffff;
+    }
+
+    #sales-actual-import .sales-actual-print-errors:disabled {
+      background: #b0bec5;
+      color: #ffffff;
+      cursor: not-allowed;
     }
 
     #sales-actual-import .sales-actual-delete-batch { background-color: #c62828; }

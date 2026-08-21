@@ -152,6 +152,9 @@ const productCodeInput =
 const productNameInput =
   document.querySelector("#product-name");
 
+const productColorInput =
+  document.querySelector("#product-color");
+
 const janCodeInput =
   document.querySelector("#jan-code");
 
@@ -198,6 +201,11 @@ const editProductCodeInput =
 const editProductNameInput =
   document.querySelector(
     "#edit-product-name"
+  );
+
+const editProductColorInput =
+  document.querySelector(
+    "#edit-product-color"
   );
 
 const editJanCodeInput =
@@ -256,6 +264,11 @@ const detailProductCode =
 const detailProductName =
   document.querySelector(
     "#detail-product-name"
+  );
+
+const detailProductColor =
+  document.querySelector(
+    "#detail-product-color"
   );
 
 const detailJanCode =
@@ -647,6 +660,11 @@ async function handleProductSubmit(event) {
   const productName =
     productNameInput.value.trim();
 
+  const productColor =
+    productColorInput
+      ? productColorInput.value.trim()
+      : "";
+
   const janCode =
     janCodeInput.value.trim();
 
@@ -881,6 +899,7 @@ async function handleProductSubmit(event) {
     internalCode: internalCode,
     productCode: productCode,
     productName: productName,
+    productColor: productColor,
     janCode: janCode,
     stock: stock,
     minStock: minStock,
@@ -894,6 +913,10 @@ async function handleProductSubmit(event) {
     orderRemaining: orderRemaining,
     backorderStatus: backorderStatus,
     productStatus: productStatus,
+    discontinuedFlag:
+      productStatus === "廃盤"
+        ? "9"
+        : "",
     createdAt: currentDateTime,
     updatedAt: currentDateTime
   };
@@ -904,6 +927,7 @@ async function handleProductSubmit(event) {
     internalCode: internalCode,
     productCode: productCode,
     productName: productName,
+    productColor: productColor,
     janCode: janCode,
     type: "初期登録",
     quantity: stock,
@@ -1238,6 +1262,12 @@ function openDetailScreen(internalCode) {
   detailProductName.textContent =
     selectedProduct.productName;
 
+  if (detailProductColor) {
+    detailProductColor.textContent =
+      selectedProduct.productColor ||
+      "未登録";
+  }
+
   detailJanCode.textContent =
     selectedProduct.janCode || "未登録";
 
@@ -1358,6 +1388,12 @@ function openEditScreen(internalCode) {
   editProductNameInput.value =
     selectedProduct.productName;
 
+  if (editProductColorInput) {
+    editProductColorInput.value =
+      selectedProduct.productColor ||
+      "";
+  }
+
   editJanCodeInput.value =
     selectedProduct.janCode || "";
 
@@ -1458,6 +1494,11 @@ async function handleEditProductSubmit(event) {
 
   const productName =
     editProductNameInput.value.trim();
+
+  const productColor =
+    editProductColorInput
+      ? editProductColorInput.value.trim()
+      : "";
 
   const janCode =
     editJanCodeInput.value.trim();
@@ -1616,6 +1657,10 @@ async function handleEditProductSubmit(event) {
     orderRemaining: orderRemaining,
     backorderStatus: backorderStatus,
     productStatus: productStatus,
+    discontinuedFlag:
+      productStatus === "廃盤"
+        ? "9"
+        : "",
     createdAt:
       currentProduct.createdAt ||
       new Date().toISOString(),
@@ -2049,6 +2094,16 @@ function normalizeProductData(product) {
 
   return {
     ...normalizedLocationProduct,
+    productColor:
+      String(
+        normalizedLocationProduct
+          .productColor || ""
+      ).trim(),
+    discontinuedFlag:
+      String(
+        normalizedLocationProduct
+          .discontinuedFlag || ""
+      ).trim(),
     stock: getValidStockNumber(
       normalizedLocationProduct.stock
     ),
@@ -2980,6 +3035,7 @@ function getFilteredProducts() {
         product.internalCode,
         product.productCode,
         product.productName,
+        product.productColor,
         product.janCode,
         product.category,
         product.location,
@@ -3044,7 +3100,7 @@ function displayProducts(displayedProducts) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
 
-    cell.colSpan = 12;
+    cell.colSpan = 13;
 
     if (products.length === 0) {
       cell.textContent =
@@ -3125,6 +3181,14 @@ function displayProducts(displayedProducts) {
     row.appendChild(
       createProductNameCell(
         product
+      )
+    );
+
+    row.appendChild(
+      createProductListTextCell(
+        product.productColor || "未登録",
+        "商品の色",
+        "product-list-cell-product-color"
       )
     );
 

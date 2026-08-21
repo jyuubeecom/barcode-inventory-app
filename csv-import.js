@@ -13,8 +13,10 @@ const COMPANY_MASTER_COLUMNS = {
   internalCode: 0,
   productCode: 1,
   productName: 2,
+  productColor: 4,
   janCode: 5,
   category: 8,
+  discontinuedFlag: 36,
   supplier: 42
 };
 
@@ -69,8 +71,10 @@ function createCsvImportScreen() {
       A列：社内コード<br>
       B列：商品コード<br>
       C列：商品名<br>
+      E列：商品の色<br>
       F列：JANコード<br>
       I列：カテゴリー<br>
+      AK列：廃盤区分（9＝廃盤 / 9以外＝通常商品）<br>
       AQ列：仕入れ先名
     </p>
 
@@ -122,9 +126,11 @@ function createCsvImportScreen() {
             <th>社内コード</th>
             <th>商品コード</th>
             <th>商品名</th>
+            <th>商品の色</th>
             <th>JANコード</th>
             <th>カテゴリー</th>
             <th>仕入れ先名</th>
+            <th>商品状態</th>
             <th>現在庫数</th>
             <th>最低在庫数</th>
             <th>保管場所</th>
@@ -134,7 +140,7 @@ function createCsvImportScreen() {
 
         <tbody id="csv-import-preview-body">
           <tr>
-            <td colspan="12">
+            <td colspan="14">
               CSVを選択すると、ここに内容が表示されます。
             </td>
           </tr>
@@ -288,7 +294,7 @@ function createCsvImportStyle() {
 
     .csv-import-table {
       width: 100%;
-      min-width: 1550px;
+      min-width: 1780px;
       border-collapse: collapse;
     }
 
@@ -404,7 +410,7 @@ function resetCsvImportScreen() {
 
   csvImportPreviewBody.innerHTML = `
     <tr>
-      <td colspan="12">
+      <td colspan="14">
         CSVを選択すると、ここに内容が表示されます。
       </td>
     </tr>
@@ -473,7 +479,7 @@ async function handleCsvFileSelection() {
 
     csvImportPreviewBody.innerHTML = `
       <tr>
-        <td colspan="12">
+        <td colspan="14">
           CSVファイルを読み込めませんでした。
         </td>
       </tr>
@@ -725,6 +731,14 @@ async function createCompanyMasterPreview(
     "保管場所は未設定として登録します。"
   );
 
+  result.warnings.push(
+    "E列「商品の色」を商品情報へ登録します。"
+  );
+
+  result.warnings.push(
+    "AK列「廃盤区分」が9なら廃盤、9以外は通常商品として登録します。"
+  );
+
   return result;
 }
 
@@ -766,6 +780,18 @@ function validateCompanyMasterHeaders(
         "商品名"
     },
     {
+      columnName: "E列",
+      index:
+        COMPANY_MASTER_COLUMNS.productColor,
+      acceptedNames: [
+        "商品の色",
+        "商品色",
+        "色"
+      ],
+      expectedName:
+        "商品の色"
+    },
+    {
       columnName: "F列",
       index:
         COMPANY_MASTER_COLUMNS.janCode,
@@ -788,6 +814,16 @@ function validateCompanyMasterHeaders(
       ],
       expectedName:
         "カテゴリー"
+    },
+    {
+      columnName: "AK列",
+      index:
+        COMPANY_MASTER_COLUMNS.discontinuedFlag,
+      acceptedNames: [
+        "廃盤区分"
+      ],
+      expectedName:
+        "廃盤区分"
     },
     {
       columnName: "AQ列",
@@ -868,6 +904,13 @@ function createCompanyMasterItem(
         ]
       ),
 
+    productColor:
+      getImportText(
+        row[
+          COMPANY_MASTER_COLUMNS.productColor
+        ]
+      ),
+
     janCode:
       getImportCode(
         row[
@@ -881,6 +924,22 @@ function createCompanyMasterItem(
           COMPANY_MASTER_COLUMNS.category
         ]
       ),
+
+    discontinuedFlag:
+      getImportCode(
+        row[
+          COMPANY_MASTER_COLUMNS.discontinuedFlag
+        ]
+      ),
+
+    productStatus:
+      getImportCode(
+        row[
+          COMPANY_MASTER_COLUMNS.discontinuedFlag
+        ]
+      ) === "9"
+        ? "廃盤"
+        : "通常商品",
 
     supplier:
       getImportText(
@@ -1089,7 +1148,7 @@ function displayCsvPreview(result) {
 
     csvImportPreviewBody.innerHTML = `
       <tr>
-        <td colspan="12">
+        <td colspan="14">
           項目名またはCSVの内容を確認してください。
         </td>
       </tr>
@@ -1231,6 +1290,11 @@ function createPreviewRow(item) {
 
   appendPreviewCell(
     row,
+    item.productColor || "未登録"
+  );
+
+  appendPreviewCell(
+    row,
     item.janCode
   );
 
@@ -1242,6 +1306,11 @@ function createPreviewRow(item) {
   appendPreviewCell(
     row,
     item.supplier
+  );
+
+  appendPreviewCell(
+    row,
+    item.productStatus
   );
 
   appendPreviewCell(
@@ -1574,6 +1643,9 @@ function createProductFromCsvItem(
     productName:
       item.productName,
 
+    productColor:
+      item.productColor,
+
     janCode:
       item.janCode,
 
@@ -1586,6 +1658,12 @@ function createProductFromCsvItem(
 
     supplier:
       item.supplier,
+
+    productStatus:
+      item.productStatus,
+
+    discontinuedFlag:
+      item.discontinuedFlag,
 
     memo:
       "社内商品マスタCSVから登録",

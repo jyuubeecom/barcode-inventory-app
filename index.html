@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v142
+            画面版 v143
           </span>
         </div>
       </div>
@@ -1586,6 +1586,19 @@
         </div>
 
         <div>
+          <label for="product-color">
+            商品の色
+          </label>
+
+          <input
+            id="product-color"
+            name="productColor"
+            type="text"
+            placeholder="例：ブラック"
+          >
+        </div>
+
+        <div>
           <label for="jan-code">
             JANコード（任意）
           </label>
@@ -1795,7 +1808,7 @@
         <input
           id="product-search"
           type="search"
-          placeholder="商品名・社内コード・JANコードなど"
+          placeholder="商品名・色・社内コード・JANコードなど"
         >
 
         <button
@@ -1825,6 +1838,7 @@
               <th>社内コード</th>
               <th>商品コード</th>
               <th>商品名</th>
+              <th>商品の色</th>
               <th>JANコード</th>
               <th>在庫数</th>
               <th>最低在庫数</th>
@@ -1838,7 +1852,7 @@
 
           <tbody id="product-table-body">
             <tr>
-              <td colspan="12">
+              <td colspan="13">
                 登録されている商品はありません。
               </td>
             </tr>
@@ -1914,6 +1928,11 @@
           <tr>
             <th>商品名</th>
             <td id="detail-product-name"></td>
+          </tr>
+
+          <tr>
+            <th>商品の色</th>
+            <td id="detail-product-color"></td>
           </tr>
 
           <tr>
@@ -2741,6 +2760,18 @@
         </div>
 
         <div>
+          <label for="edit-product-color">
+            商品の色
+          </label>
+
+          <input
+            id="edit-product-color"
+            type="text"
+            placeholder="例：ブラック"
+          >
+        </div>
+
+        <div>
           <label for="edit-jan-code">
             JANコード（任意）
           </label>
@@ -3005,7 +3036,7 @@
   </main>
 
 <script src="storage.js?v=118"></script>
-<script src="app.js?v=111"></script>
+<script src="app.js?v=143"></script>
 <script src="natural-stock-search.js?v=139"></script>
 <script src="product-history.js?v=107"></script>
 <script src="inventory.js?v=97"></script>
@@ -3016,7 +3047,7 @@
 <script src="stocktaking-history.js?v=33"></script>
 <script src="stocktaking-transfer.js?v=80"></script>
 <script src="csv.js?v=90"></script>
-<script src="csv-import.js?v=75"></script>
+<script src="csv-import.js?v=143"></script>
 <script src="csv-update.js?v=74"></script>
 <script src="pwa.js?v=31"></script>
 <script src="sales-plan.js?v=95"></script>

@@ -121,26 +121,19 @@ function createCsvImportScreen() {
       <table class="csv-import-table">
         <thead>
           <tr>
-            <th>CSV行</th>
-            <th>判定</th>
-            <th>社内コード</th>
-            <th>商品コード</th>
-            <th>商品名</th>
-            <th>商品の色</th>
-            <th>JANコード</th>
-            <th>カテゴリー</th>
-            <th>仕入れ先名</th>
-            <th>商品状態</th>
-            <th>現在庫数</th>
-            <th>最低在庫数</th>
-            <th>保管場所</th>
-            <th>確認内容</th>
+            <th class="csv-import-col-line">CSV行</th>
+            <th class="csv-import-col-status">判定</th>
+            <th class="csv-import-col-code">社内コード</th>
+            <th class="csv-import-col-code">商品コード</th>
+            <th class="csv-import-col-product">商品情報</th>
+            <th class="csv-import-col-import">取込情報</th>
+            <th class="csv-import-col-check">確認内容</th>
           </tr>
         </thead>
 
         <tbody id="csv-import-preview-body">
           <tr>
-            <td colspan="14">
+            <td colspan="7">
               CSVを選択すると、ここに内容が表示されます。
             </td>
           </tr>
@@ -288,14 +281,14 @@ function createCsvImportStyle() {
 
     .csv-import-table-area {
       width: 100%;
-      overflow-x: auto;
+      overflow-x: visible;
       margin: 18px 0;
     }
 
     .csv-import-table {
       width: 100%;
-      min-width: 1780px;
       border-collapse: collapse;
+      table-layout: fixed;
     }
 
     .csv-import-table th,
@@ -303,13 +296,105 @@ function createCsvImportStyle() {
       padding: 9px;
       border: 1px solid #cfd8dc;
       text-align: left;
-      vertical-align: middle;
+      vertical-align: top;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .csv-import-table th {
       background-color: #0277bd;
       color: #ffffff;
-      white-space: nowrap;
+      white-space: normal;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    .csv-import-col-line {
+      width: 6%;
+    }
+
+    .csv-import-col-status {
+      width: 9%;
+    }
+
+    .csv-import-col-code {
+      width: 11%;
+    }
+
+    .csv-import-col-product {
+      width: 24%;
+    }
+
+    .csv-import-col-import {
+      width: 16%;
+    }
+
+    .csv-import-col-check {
+      width: 23%;
+    }
+
+    .csv-import-cell-main {
+      display: block;
+      font-weight: 700;
+      color: #263238;
+      margin-bottom: 4px;
+    }
+
+    .csv-import-cell-sub {
+      display: block;
+      margin-top: 2px;
+      font-size: 0.88em;
+      line-height: 1.45;
+      color: #546e7a;
+    }
+
+    .csv-import-cell-import {
+      line-height: 1.55;
+    }
+
+    .csv-import-cell-check {
+      line-height: 1.5;
+    }
+
+    @media (max-width: 900px) {
+      .csv-import-table thead {
+        display: none;
+      }
+
+      .csv-import-table,
+      .csv-import-table tbody,
+      .csv-import-table tr,
+      .csv-import-table td {
+        display: block;
+        width: 100%;
+      }
+
+      .csv-import-table tr {
+        margin-bottom: 12px;
+        border: 1px solid #cfd8dc;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .csv-import-table td {
+        border: 0;
+        border-bottom: 1px solid #e0e0e0;
+        padding: 8px 10px;
+      }
+
+      .csv-import-table td:last-child {
+        border-bottom: 0;
+      }
+
+      .csv-import-table td::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 3px;
+        font-size: 0.82em;
+        font-weight: 700;
+        color: #455a64;
+      }
     }
 
     .csv-import-row-new {
@@ -1395,87 +1480,152 @@ function createPreviewRow(item) {
 
   appendPreviewCell(
     row,
-    item.lineNumber
+    item.lineNumber,
+    "CSV行"
   );
 
   appendCsvImportStatusCell(
     row,
-    item.status
+    item.status,
+    "判定"
   );
 
   appendPreviewCell(
     row,
-    item.internalCode
+    item.internalCode,
+    "社内コード"
   );
 
   appendPreviewCell(
     row,
-    item.productCode
+    item.productCode,
+    "商品コード"
   );
 
-  appendPreviewCell(
+  appendCsvImportProductInfoCell(
     row,
-    item.productName
+    item
   );
 
-  appendPreviewCell(
+  appendCsvImportImportInfoCell(
     row,
-    item.productColor || "未登録"
-  );
-
-  appendPreviewCell(
-    row,
-    item.janCode
-  );
-
-  appendPreviewCell(
-    row,
-    item.category
-  );
-
-  appendPreviewCell(
-    row,
-    item.supplier
-  );
-
-  appendPreviewCell(
-    row,
-    item.productStatus
-  );
-
-  appendPreviewCell(
-    row,
-    item.stock
-  );
-
-  appendPreviewCell(
-    row,
-    item.minStock
-  );
-
-  appendPreviewCell(
-    row,
-    item.location === ""
-      ? "未設定"
-      : item.location
+    item
   );
 
   appendPreviewCell(
     row,
     item.messages.join(
       " / "
-    )
+    ),
+    "確認内容",
+    "csv-import-cell-check"
   );
 
   return row;
 }
 
-function appendPreviewCell(
+function appendCsvImportProductInfoCell(
   row,
-  value
+  item
 ) {
   const cell =
     document.createElement("td");
+
+  cell.dataset.label =
+    "商品情報";
+
+  const name =
+    document.createElement("span");
+
+  name.className =
+    "csv-import-cell-main";
+
+  name.textContent =
+    item.productName ||
+    "未入力";
+
+  cell.appendChild(name);
+
+  const details = [
+    `JAN：${item.janCode || "未入力"}`,
+    `カテゴリー：${item.category || "未入力"}`,
+    `仕入れ先：${item.supplier || "未入力"}`
+  ];
+
+  details.forEach(
+    function (text) {
+      const detail =
+        document.createElement("span");
+
+      detail.className =
+        "csv-import-cell-sub";
+
+      detail.textContent =
+        text;
+
+      cell.appendChild(detail);
+    }
+  );
+
+  row.appendChild(cell);
+}
+
+function appendCsvImportImportInfoCell(
+  row,
+  item
+) {
+  const cell =
+    document.createElement("td");
+
+  cell.dataset.label =
+    "取込情報";
+
+  cell.className =
+    "csv-import-cell-import";
+
+  const color =
+    document.createElement("span");
+
+  color.className =
+    "csv-import-cell-main";
+
+  color.textContent =
+    `色：${item.productColor || "未登録"}`;
+
+  const status =
+    document.createElement("span");
+
+  status.className =
+    "csv-import-cell-sub";
+
+  status.textContent =
+    `商品状態：${item.productStatus || "通常商品"}`;
+
+  cell.appendChild(color);
+  cell.appendChild(status);
+
+  row.appendChild(cell);
+}
+
+function appendPreviewCell(
+  row,
+  value,
+  label = "",
+  className = ""
+) {
+  const cell =
+    document.createElement("td");
+
+  if (label !== "") {
+    cell.dataset.label =
+      label;
+  }
+
+  if (className !== "") {
+    cell.classList.add(
+      className
+    );
+  }
 
   cell.textContent =
     value === "" ||
@@ -1489,10 +1639,16 @@ function appendPreviewCell(
 
 function appendCsvImportStatusCell(
   row,
-  status
+  status,
+  label = ""
 ) {
   const cell =
     document.createElement("td");
+
+  if (label !== "") {
+    cell.dataset.label =
+      label;
+  }
 
   const badge =
     document.createElement("span");

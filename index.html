@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v146
+            画面版 v147
           </span>
         </div>
       </div>
@@ -732,7 +732,8 @@
         <strong style="font-size: 1.05em;">⚠ 販売実績CSVを取り込むと、販売数量を場所別在庫から自動出庫します。</strong><br>
         出庫の優先順：<strong>本社1階 → 本社2階 → 酒本倉庫1階 → 酒本倉庫2階</strong><br>
         本社1階・本社2階は、それぞれ <strong>A区 → B区 → C区 → D区 → E区 → F区</strong> の順に在庫を減らします。<br>
-        返品分は販売数から差し引いて処理します。取込前に、下のプレビューで内容を必ず確認してください。
+        返品分は販売数から差し引いて処理します。取込前に、下のプレビューで内容を必ず確認してください。<br>
+        <strong>商品状態が「廃盤」の商品が含まれている場合はエラーとして表示し、その行は取り込みません。</strong>
       </div>
 
       <div class="sales-actual-card">
@@ -3051,7 +3052,7 @@
 <script src="csv-update.js?v=74"></script>
 <script src="pwa.js?v=31"></script>
 <script src="sales-plan.js?v=95"></script>
-<script src="sales-actual.js?v=71"></script>
+<script src="sales-actual.js?v=147"></script>
 <script src="purchase-required.js?v=140"></script>
 <script src="order-remaining.js?v=119"></script>
 <script src="low-shipment.js?v=45"></script>

@@ -274,15 +274,28 @@ function parseSalesActualNumber(value) {
 async function buildSalesActualImportPreview(file, fingerprint, parsed) {
   const existingActuals = await getAllSalesActuals();
   const existingIds = new Set(existingActuals.map(function (record) { return record.id; }));
-  const productCodes = new Set(salesActualProducts.map(function (product) {
-    return normalizeSalesActualText(product.internalCode);
-  }));
+  const productMap = new Map();
+
+  salesActualProducts.forEach(function (product) {
+    const internalCode =
+      normalizeSalesActualText(
+        product.internalCode
+      );
+
+    if (internalCode !== "") {
+      productMap.set(
+        internalCode,
+        product
+      );
+    }
+  });
 
   const signatureCounts = new Map();
   const importRecords = [];
   const duplicateRecords = [];
   const ignoredRecords = [];
   const errorRecords = [];
+  const discontinuedErrorRecords = [];
   const unregisteredCodes = new Set();
   let saleRows = 0;
   let returnRows = 0;
@@ -314,6 +327,52 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
         internalCode: internalCode,
         reason: errors.join(" / ")
       });
+      continue;
+    }
+
+    const matchedProduct =
+      productMap.get(
+        internalCode
+      );
+
+    if (
+      matchedProduct &&
+      isSalesActualDiscontinuedProduct(
+        matchedProduct
+      )
+    ) {
+      const discontinuedError = {
+        rowNumber:
+          parsed.headerIndex +
+          index +
+          2,
+        internalCode:
+          internalCode,
+        productName:
+          matchedProduct.productName ||
+          `${normalizeSalesActualText(row[1])} ${normalizeSalesActualText(row[2])}`.trim(),
+        customerName:
+          normalizeSalesActualText(
+            row[4]
+          ),
+        saleDate:
+          saleDate,
+        quantity:
+          quantity,
+        detailType:
+          detailType,
+        reason:
+          "商品状態が「廃盤」のため取り込めません"
+      };
+
+      errorRecords.push(
+        discontinuedError
+      );
+
+      discontinuedErrorRecords.push(
+        discontinuedError
+      );
+
       continue;
     }
 
@@ -355,7 +414,7 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
       importedAt: ""
     };
 
-    if (!productCodes.has(internalCode)) {
+    if (!productMap.has(internalCode)) {
       unregisteredCodes.add(internalCode);
     }
 
@@ -386,10 +445,36 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
     duplicateRecords: duplicateRecords,
     ignoredRecords: ignoredRecords,
     errorRecords: errorRecords,
+    discontinuedErrorRecords: discontinuedErrorRecords,
     unregisteredCodes: Array.from(unregisteredCodes).sort(function (a, b) {
       return a.localeCompare(b, "ja", { numeric: true });
     })
   };
+}
+
+function isSalesActualDiscontinuedProduct(
+  product
+) {
+  if (!product) {
+    return false;
+  }
+
+  const status =
+    normalizeSalesActualText(
+      product.productStatus
+    )
+      .normalize("NFKC")
+      .toLowerCase();
+
+  return (
+    status === "廃盤" ||
+    status === "discontinued" ||
+    status === "inactive" ||
+    product.discontinued === true ||
+    normalizeSalesActualText(
+      product.discontinuedFlag
+    ) === "9"
+  );
 }
 
 async function createSalesActualHash(text) {
@@ -439,7 +524,8 @@ function renderSalesActualPreview(preview) {
     `<strong>新規取込：</strong>${preview.importRecords.length}件`,
     `<strong>重複スキップ：</strong>${preview.duplicateRecords.length}件`,
     `<strong>対象外（値引など）：</strong>${preview.ignoredRecords.length}件`,
-    `<strong>エラー：</strong>${preview.errorRecords.length}件`
+    `<strong>廃盤商品エラー：</strong>${preview.discontinuedErrorRecords.length}件`,
+    `<strong>エラー合計：</strong>${preview.errorRecords.length}件`
   ].join("<br>");
 
   tableBody.innerHTML = "";
@@ -460,6 +546,35 @@ function renderSalesActualPreview(preview) {
   });
 
   const messages = [];
+  preview.discontinuedErrorRecords
+    .slice(
+      0,
+      SALES_ACTUAL_PREVIEW_LIMIT
+    )
+    .forEach(
+      function (record) {
+        const row =
+          document.createElement("tr");
+
+        row.classList.add(
+          "sales-actual-discontinued-row"
+        );
+
+        row.innerHTML = `
+          <td>${escapeSalesActualHtml(formatSalesActualDate(record.saleDate))}</td>
+          <td>${escapeSalesActualHtml(record.internalCode)}</td>
+          <td>${escapeSalesActualHtml(record.productName || "")}</td>
+          <td>${escapeSalesActualHtml(record.customerName || "")}</td>
+          <td>${formatSalesActualNumber(record.quantity)}</td>
+          <td><span class="sales-actual-error">廃盤商品エラー</span></td>
+        `;
+
+        tableBody.appendChild(
+          row
+        );
+      }
+    );
+
   if (preview.importRecords.length > SALES_ACTUAL_PREVIEW_LIMIT) {
     messages.push(`プレビューは先頭${SALES_ACTUAL_PREVIEW_LIMIT}件を表示しています。`);
   }
@@ -467,8 +582,40 @@ function renderSalesActualPreview(preview) {
     messages.push(`商品マスタ未登録の社内コード：${preview.unregisteredCodes.slice(0, 20).join("、")}${preview.unregisteredCodes.length > 20 ? " ほか" : ""}`);
     messages.push("未登録商品の販売実績も保存しますが、商品が登録されるまで発注判定には使用しません。");
   }
+  if (
+    preview.discontinuedErrorRecords.length >
+    0
+  ) {
+    const codes =
+      Array.from(
+        new Set(
+          preview.discontinuedErrorRecords.map(
+            function (record) {
+              return (
+                record.internalCode
+              );
+            }
+          )
+        )
+      );
+
+    messages.push(
+      `⚠ 廃盤商品が販売実績に${preview.discontinuedErrorRecords.length}件含まれています。エラーとして取り込みません。`
+    );
+
+    messages.push(
+      `廃盤商品コード：${codes.slice(0, 20).join("、")}${codes.length > 20 ? " ほか" : ""}`
+    );
+
+    messages.push(
+      "売上入力の誤りがないか、元の販売実績を確認してください。"
+    );
+  }
+
   if (preview.errorRecords.length > 0) {
-    messages.push(`取込不可の行が${preview.errorRecords.length}件あります。社内コード0・日付不明・数量不明など、商品を特定できない行は保存しません。`);
+    messages.push(
+      `取込不可の行が合計${preview.errorRecords.length}件あります。エラー行は保存せず、正常な行だけを取り込みます。`
+    );
   }
   if (preview.returnRows > 0) {
     messages.push("返品はCSVのマイナス数量をそのまま保存し、月平均販売数から差し引きます。");
@@ -510,10 +657,12 @@ async function importSelectedSalesActualFile() {
       { label: "ファイル名", value: preview.fileName || "販売実績CSV" },
       { label: "新規販売実績", value: `${preview.importRecords.length}件` },
       { label: "重複スキップ", value: `${preview.duplicateRecords.length}件` },
+      { label: "廃盤商品エラー", value: `${preview.discontinuedErrorRecords.length}件` },
       { label: "商品未登録コード", value: `${preview.unregisteredCodes.length}件` }
     ],
     notice:
-      "登録済み商品の販売数量は場所別在庫から自動出庫します。" +
+      "廃盤商品エラーの行は取り込みません。正常な行だけを取り込みます。" +
+      " 登録済み商品の販売数量は場所別在庫から自動出庫します。" +
       " 出庫順は、本社1階 A～F区 → 本社2階 A～F区 → 酒本倉庫1階 → 酒本倉庫2階です。" +
       " 返品は本社1階 A区へ戻します。",
     isConfirm: true,
@@ -547,6 +696,8 @@ async function importSelectedSalesActualFile() {
       duplicateCount: preview.duplicateRecords.length,
       ignoredCount: preview.ignoredRecords.length,
       errorCount: preview.errorRecords.length,
+      discontinuedErrorCount:
+        preview.discontinuedErrorRecords.length,
       unregisteredCodes: preview.unregisteredCodes
     };
 
@@ -800,6 +951,9 @@ function createSalesActualStyle() {
     #sales-actual-import .sales-actual-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
     #sales-actual-import .sales-actual-ok { color: #2e7d32; font-weight: 700; }
     #sales-actual-import .sales-actual-warning { color: #ef6c00; font-weight: 700; }
+    #sales-actual-import .sales-actual-error { color: #c62828; font-weight: 800; }
+    #sales-actual-import .sales-actual-discontinued-row { background: #ffebee; }
+    #sales-actual-import .sales-actual-discontinued-row td { border-color: #ef9a9a; }
     #sales-actual-import .sales-actual-delete-batch { background-color: #c62828; }
     #sales-actual-import button:disabled { background-color: #b0bec5 !important; cursor: not-allowed; }
     @media (max-width: 700px) {

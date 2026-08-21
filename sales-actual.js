@@ -1006,6 +1006,103 @@ function createSalesActualStyle() {
       font-size: 1rem;
       font-weight: 700;
     }
+    /* v149 販売実績CSV確認画面を大きく表示 */
+    #sales-actual-import .sales-actual-preview-summary {
+      font-size: 18px;
+      line-height: 1.85;
+      padding: 20px 22px;
+      border-radius: 12px;
+    }
+
+    #sales-actual-import .sales-actual-warnings {
+      font-size: 17px;
+      line-height: 1.75;
+      padding: 14px 16px;
+      margin-top: 14px;
+      background: #fff8f0;
+      border-left: 6px solid #e65100;
+      border-radius: 8px;
+    }
+
+    #sales-actual-import .sales-actual-table-wrap {
+      overflow-x: visible;
+      margin-top: 16px;
+    }
+
+    #sales-actual-import .sales-actual-preview-table {
+      width: 100%;
+      min-width: 0;
+      table-layout: fixed;
+      border-collapse: collapse;
+      font-size: 17px;
+    }
+
+    #sales-actual-import .sales-actual-preview-table th,
+    #sales-actual-import .sales-actual-preview-table td {
+      padding: 13px 12px;
+      line-height: 1.45;
+      vertical-align: middle;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    #sales-actual-import .sales-actual-preview-table th {
+      font-size: 17px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    #sales-actual-import .sales-actual-preview-table th:nth-child(1),
+    #sales-actual-import .sales-actual-preview-table td:nth-child(1) {
+      width: 14%;
+    }
+
+    #sales-actual-import .sales-actual-preview-table th:nth-child(2),
+    #sales-actual-import .sales-actual-preview-table td:nth-child(2) {
+      width: 13%;
+    }
+
+    #sales-actual-import .sales-actual-preview-table th:nth-child(3),
+    #sales-actual-import .sales-actual-preview-table td:nth-child(3) {
+      width: 25%;
+    }
+
+    #sales-actual-import .sales-actual-preview-table th:nth-child(4),
+    #sales-actual-import .sales-actual-preview-table td:nth-child(4) {
+      width: 20%;
+    }
+
+    #sales-actual-import .sales-actual-preview-table th:nth-child(5),
+    #sales-actual-import .sales-actual-preview-table td:nth-child(5) {
+      width: 9%;
+      text-align: center;
+    }
+
+    #sales-actual-import .sales-actual-preview-table th:nth-child(6),
+    #sales-actual-import .sales-actual-preview-table td:nth-child(6) {
+      width: 19%;
+      text-align: center;
+    }
+
+    #sales-actual-import .sales-actual-preview-table .sales-actual-error {
+      font-size: 17px;
+      font-weight: 900;
+    }
+
+    #sales-actual-import .sales-actual-actions {
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    #sales-actual-import .sales-actual-actions button {
+      min-height: 58px;
+      padding: 14px 26px;
+      font-size: 18px;
+      font-weight: 800;
+      border-radius: 9px;
+    }
+
     #sales-actual-import .sales-actual-delete-batch { background-color: #c62828; }
     #sales-actual-import button:disabled { background-color: #b0bec5 !important; cursor: not-allowed; }
     @media (max-width: 700px) {

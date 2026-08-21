@@ -1,7 +1,7 @@
 "use strict";
 
 /* =========================================================
-   v136 自然文検索（在庫・販売予定）
+   v137 自然文検索（在庫・販売予定・船便情報）
    ・端末内の商品データだけを使用
    ・社内コード / 商品コード / JAN / 商品名に対応
    ・JANなどが重複した場合は候補を一覧表示
@@ -208,6 +208,19 @@ async function searchStockByNaturalText(
       "質問を入力してください。";
     status.className =
       "natural-stock-search-status natural-stock-search-warning";
+    return;
+  }
+
+  if (
+    isNaturalShippingQuery(
+      query
+    )
+  ) {
+    await searchShippingByNaturalText(
+      query,
+      status,
+      result
+    );
     return;
   }
 
@@ -557,7 +570,7 @@ function extractNaturalStockKeyword(
     normalizedQuery || ""
   )
     .replace(
-      /(販売予定|出荷予定|出荷時期|出荷日|出荷|販売|予定|現在庫数|現在庫|合計在庫数|合計在庫|在庫数|場所別在庫|在庫|保管場所|どこに|どこ|いつ|何個|何本|何箱|何枚|何台|何袋|何セット|いくつ|ありますか|あるの|ある|教えてください|教えて|知りたい|確認したい|検索して|検索|商品コード|社内コード|JANコード|JAN)/gi,
+      /(次の船便|次便|船便|船積み数量|船積数量|船積み|船積|積載数量|積載|振り分け数量|振分数量|振り分け|振分|載っている|載ってる|載る|積んでいる|積んでる|積む|販売予定|出荷予定|出荷時期|出荷日|出荷|販売|予定|現在庫数|現在庫|合計在庫数|合計在庫|在庫数|場所別在庫|在庫|保管場所|どこに|どこ|いつ|何個|何本|何箱|何枚|何台|何袋|何セット|いくつ|ありますか|あるの|ある|教えてください|教えて|知りたい|確認したい|検索して|検索|商品コード|社内コード|JANコード|JAN)/gi,
       " "
     )
     .replace(
@@ -594,6 +607,980 @@ function sortNaturalStockProducts(
     );
 }
 
+
+
+function isNaturalShippingQuery(
+  query
+) {
+  const normalized =
+    normalizeNaturalStockText(
+      query
+    );
+
+  return (
+    normalized.includes(
+      "船便"
+    ) ||
+    normalized.includes(
+      "船積"
+    ) ||
+    normalized.includes(
+      "積載"
+    ) ||
+    normalized.includes(
+      "振り分け"
+    ) ||
+    normalized.includes(
+      "振分"
+    ) ||
+    normalized.includes(
+      "載って"
+    ) ||
+    normalized.includes(
+      "積んで"
+    )
+  );
+}
+
+async function searchShippingByNaturalText(
+  query,
+  status,
+  result
+) {
+  if (
+    typeof getAllProducts !==
+    "function"
+  ) {
+    status.textContent =
+      "商品データを読み込む準備ができていません。画面を更新して、もう一度お試しください。";
+    status.className =
+      "natural-stock-search-status natural-stock-search-error";
+    return;
+  }
+
+  status.textContent =
+    "船便情報を検索しています…";
+  status.className =
+    "natural-stock-search-status";
+
+  try {
+    const products =
+      await getAllProducts();
+
+    const matches =
+      findNaturalStockMatches(
+        products,
+        query
+      );
+
+    if (matches.length === 0) {
+      status.textContent =
+        "船便情報を調べる商品を特定できませんでした。";
+      status.className =
+        "natural-stock-search-status natural-stock-search-warning";
+
+      renderNaturalShippingNoProduct(
+        result,
+        query
+      );
+      return;
+    }
+
+    const shippingResult =
+      await collectNaturalShippingAllocations(
+        matches
+      );
+
+    if (
+      !shippingResult.available
+    ) {
+      status.textContent =
+        "船便情報を読み取れませんでした。";
+      status.className =
+        "natural-stock-search-status natural-stock-search-warning";
+
+      renderNaturalShippingUnavailable(
+        result
+      );
+      return;
+    }
+
+    const positive =
+      shippingResult.allocations
+        .filter(
+          function (item) {
+            return (
+              Number(
+                item.quantity
+              ) > 0
+            );
+          }
+        )
+        .sort(
+          compareNaturalShippingRows
+        );
+
+    if (positive.length === 0) {
+      status.textContent =
+        "保存済みの船積数量はありません。";
+      status.className =
+        "natural-stock-search-status natural-stock-search-success";
+
+      renderNaturalShippingEmpty(
+        result,
+        matches
+      );
+      return;
+    }
+
+    status.textContent =
+      `${positive.length}件の船便情報が見つかりました。`;
+    status.className =
+      "natural-stock-search-status natural-stock-search-success";
+
+    renderNaturalShippingAnswer(
+      result,
+      matches,
+      positive
+    );
+  } catch (error) {
+    console.error(
+      "自然文船便検索エラー",
+      error
+    );
+
+    status.textContent =
+      "船便情報を検索できませんでした。画面を更新して、もう一度お試しください。";
+    status.className =
+      "natural-stock-search-status natural-stock-search-error";
+  }
+}
+
+async function collectNaturalShippingAllocations(
+  products
+) {
+  const scheduleSelect =
+    document.querySelector(
+      "#shipping-allocation-schedule"
+    );
+
+  const searchInput =
+    document.querySelector(
+      "#shipping-allocation-search"
+    );
+
+  const tableBody =
+    document.querySelector(
+      "#shipping-allocation-table-body"
+    );
+
+  const openButton =
+    document.querySelector(
+      "#show-shipping-allocation-button"
+    );
+
+  if (
+    !scheduleSelect ||
+    !searchInput ||
+    !tableBody
+  ) {
+    return {
+      available: false,
+      allocations: []
+    };
+  }
+
+  const screenStates =
+    rememberNaturalMainScreenStates();
+
+  const scrollX =
+    window.scrollX;
+
+  const scrollY =
+    window.scrollY;
+
+  const originalSchedule =
+    scheduleSelect.value;
+
+  const originalSearch =
+    searchInput.value;
+
+  let openedForSearch =
+    false;
+
+  try {
+    if (
+      scheduleSelect.options.length <= 1 &&
+      openButton
+    ) {
+      openButton.click();
+      openedForSearch = true;
+
+      await waitNaturalShippingRender(
+        160
+      );
+    }
+
+    const options =
+      Array.from(
+        scheduleSelect.options
+      ).filter(
+        function (option) {
+          return String(
+            option.value || ""
+          ).trim() !== "";
+        }
+      );
+
+    if (options.length === 0) {
+      return {
+        available: true,
+        allocations: []
+      };
+    }
+
+    const productMap =
+      new Map();
+
+    products.forEach(
+      function (product) {
+        const code =
+          String(
+            product &&
+              product.internalCode ||
+              ""
+          ).trim();
+
+        if (code) {
+          productMap.set(
+            code,
+            product
+          );
+        }
+      }
+    );
+
+    const allocations = [];
+
+    for (
+      const option of options
+    ) {
+      scheduleSelect.value =
+        option.value;
+
+      scheduleSelect.dispatchEvent(
+        new Event(
+          "change",
+          {
+            bubbles: true
+          }
+        )
+      );
+
+      await waitNaturalShippingRender(
+        120
+      );
+
+      for (
+        const product of products
+      ) {
+        const internalCode =
+          String(
+            product &&
+              product.internalCode ||
+              ""
+          ).trim();
+
+        if (!internalCode) {
+          continue;
+        }
+
+        searchInput.value =
+          internalCode;
+
+        searchInput.dispatchEvent(
+          new Event(
+            "input",
+            {
+              bubbles: true
+            }
+          )
+        );
+
+        await waitNaturalShippingRender(
+          80
+        );
+
+        const rows =
+          Array.from(
+            tableBody.querySelectorAll(
+              "tr"
+            )
+          );
+
+        rows.forEach(
+          function (row) {
+            const firstCell =
+              row.querySelector(
+                "td"
+              );
+
+            if (!firstCell) {
+              return;
+            }
+
+            const rowInternalCode =
+              String(
+                firstCell.textContent ||
+                ""
+              ).trim();
+
+            if (
+              rowInternalCode !==
+              internalCode
+            ) {
+              return;
+            }
+
+            const quantity =
+              getNaturalShippingRowQuantity(
+                row
+              );
+
+            allocations.push({
+              scheduleId:
+                String(
+                  option.value || ""
+                ),
+              scheduleLabel:
+                String(
+                  option.textContent || ""
+                ).trim(),
+              scheduleOrder:
+                option.index,
+              internalCode:
+                internalCode,
+              product:
+                productMap.get(
+                  internalCode
+                ) || product,
+              quantity:
+                quantity
+            });
+          }
+        );
+      }
+    }
+
+    return {
+      available: true,
+      allocations:
+        deduplicateNaturalShippingAllocations(
+          allocations
+        )
+    };
+  } finally {
+    scheduleSelect.value =
+      originalSchedule;
+
+    scheduleSelect.dispatchEvent(
+      new Event(
+        "change",
+        {
+          bubbles: true
+        }
+      )
+    );
+
+    await waitNaturalShippingRender(
+      80
+    );
+
+    searchInput.value =
+      originalSearch;
+
+    searchInput.dispatchEvent(
+      new Event(
+        "input",
+        {
+          bubbles: true
+        }
+      )
+    );
+
+    if (openedForSearch) {
+      restoreNaturalMainScreenStates(
+        screenStates
+      );
+    }
+
+    window.scrollTo(
+      scrollX,
+      scrollY
+    );
+  }
+}
+
+function getNaturalShippingRowQuantity(
+  row
+) {
+  const dataCandidates = [
+    row.dataset
+      ? row.dataset.savedQuantity
+      : "",
+    row.dataset
+      ? row.dataset.shippingQuantity
+      : "",
+    row.dataset
+      ? row.dataset.allocationQuantity
+      : "",
+    row.dataset
+      ? row.dataset.quantity
+      : ""
+  ];
+
+  for (
+    const value of dataCandidates
+  ) {
+    const number =
+      Number(value);
+
+    if (
+      Number.isFinite(number) &&
+      number >= 0
+    ) {
+      return Math.trunc(number);
+    }
+  }
+
+  const inputs =
+    Array.from(
+      row.querySelectorAll(
+        'input[type="number"]'
+      )
+    );
+
+  if (inputs.length > 0) {
+    const preferred =
+      inputs.find(
+        function (input) {
+          const key =
+            (
+              String(
+                input.id || ""
+              ) +
+              " " +
+              String(
+                input.name || ""
+              ) +
+              " " +
+              String(
+                input.className || ""
+              )
+            ).toLowerCase();
+
+          return (
+            key.includes(
+              "allocation"
+            ) ||
+            key.includes(
+              "shipping"
+            ) ||
+            key.includes(
+              "quantity"
+            ) ||
+            key.includes(
+              "qty"
+            )
+          );
+        }
+      ) ||
+      inputs[
+        inputs.length - 1
+      ];
+
+    const value =
+      Number(
+        preferred.value
+      );
+
+    if (
+      Number.isFinite(value) &&
+      value >= 0
+    ) {
+      return Math.trunc(value);
+    }
+  }
+
+  const text =
+    String(
+      row.textContent || ""
+    );
+
+  const savedMatch =
+    text.match(
+      /(?:振分数量|振り分け数量|船積数量|保存済数量)\s*[:：]?\s*([0-9,]+)/
+    );
+
+  if (savedMatch) {
+    return Number(
+      savedMatch[1].replace(
+        /,/g,
+        ""
+      )
+    ) || 0;
+  }
+
+  return 0;
+}
+
+function deduplicateNaturalShippingAllocations(
+  allocations
+) {
+  const map =
+    new Map();
+
+  allocations.forEach(
+    function (item) {
+      const key =
+        `${item.scheduleId}::${item.internalCode}`;
+
+      map.set(
+        key,
+        item
+      );
+    }
+  );
+
+  return Array.from(
+    map.values()
+  );
+}
+
+function rememberNaturalMainScreenStates() {
+  return Array.from(
+    document.querySelectorAll(
+      "main > section"
+    )
+  ).map(
+    function (section) {
+      return {
+        section: section,
+        hidden: section.hidden
+      };
+    }
+  );
+}
+
+function restoreNaturalMainScreenStates(
+  states
+) {
+  states.forEach(
+    function (state) {
+      if (
+        state &&
+        state.section
+      ) {
+        state.section.hidden =
+          state.hidden;
+      }
+    }
+  );
+}
+
+function waitNaturalShippingRender(
+  milliseconds
+) {
+  return new Promise(
+    function (resolve) {
+      window.setTimeout(
+        resolve,
+        milliseconds
+      );
+    }
+  );
+}
+
+function compareNaturalShippingRows(
+  left,
+  right
+) {
+  const leftDate =
+    extractNaturalShippingDate(
+      left.scheduleLabel
+    );
+
+  const rightDate =
+    extractNaturalShippingDate(
+      right.scheduleLabel
+    );
+
+  if (
+    leftDate &&
+    rightDate &&
+    leftDate !== rightDate
+  ) {
+    return leftDate.localeCompare(
+      rightDate
+    );
+  }
+
+  return (
+    Number(
+      left.scheduleOrder || 0
+    ) -
+    Number(
+      right.scheduleOrder || 0
+    )
+  );
+}
+
+function extractNaturalShippingDate(
+  label
+) {
+  const text =
+    String(label || "");
+
+  const match =
+    text.match(
+      /(\d{4})[\/\-年](\d{1,2})[\/\-月](\d{1,2})/
+    );
+
+  if (!match) {
+    return "";
+  }
+
+  return (
+    `${match[1]}-` +
+    String(
+      match[2]
+    ).padStart(
+      2,
+      "0"
+    ) +
+    "-" +
+    String(
+      match[3]
+    ).padStart(
+      2,
+      "0"
+    )
+  );
+}
+
+function renderNaturalShippingAnswer(
+  container,
+  products,
+  allocations
+) {
+  const total =
+    allocations.reduce(
+      function (sum, item) {
+        return (
+          sum +
+          Number(
+            item.quantity || 0
+          )
+        );
+      },
+      0
+    );
+
+  const first =
+    allocations[0];
+
+  const mainProduct =
+    first.product ||
+    products[0] ||
+    {};
+
+  const article =
+    document.createElement(
+      "article"
+    );
+
+  article.className =
+    "natural-shipping-answer-card";
+
+  const heading =
+    document.createElement(
+      "h3"
+    );
+
+  heading.textContent =
+    mainProduct.productName ||
+    "船便情報";
+
+  const answer =
+    document.createElement(
+      "p"
+    );
+
+  answer.className =
+    "natural-shipping-answer-text";
+
+  answer.textContent =
+    `${mainProduct.productName || mainProduct.productCode || "この商品"}は、` +
+    `${allocations.length}件の船便に合計${Number(total).toLocaleString("ja-JP")}個振り分けられています。` +
+    `次の船便は「${first.scheduleLabel || "船便名未設定"}」で${Number(first.quantity).toLocaleString("ja-JP")}個です。`;
+
+  const summary =
+    document.createElement(
+      "div"
+    );
+
+  summary.className =
+    "natural-shipping-summary-grid";
+
+  [
+    [
+      "船便数",
+      `${allocations.length}件`
+    ],
+    [
+      "船積数量合計",
+      `${Number(total).toLocaleString("ja-JP")}個`
+    ],
+    [
+      "次の船便",
+      first.scheduleLabel ||
+      "未設定"
+    ]
+  ].forEach(
+    function (entry) {
+      const box =
+        document.createElement(
+          "div"
+        );
+
+      const label =
+        document.createElement(
+          "span"
+        );
+
+      label.textContent =
+        entry[0];
+
+      const value =
+        document.createElement(
+          "strong"
+        );
+
+      value.textContent =
+        entry[1];
+
+      box.appendChild(
+        label
+      );
+
+      box.appendChild(
+        value
+      );
+
+      summary.appendChild(
+        box
+      );
+    }
+  );
+
+  const list =
+    document.createElement(
+      "div"
+    );
+
+  list.className =
+    "natural-shipping-list";
+
+  allocations.forEach(
+    function (item) {
+      const row =
+        document.createElement(
+          "div"
+        );
+
+      row.className =
+        "natural-shipping-row";
+
+      const schedule =
+        document.createElement(
+          "strong"
+        );
+
+      schedule.textContent =
+        item.scheduleLabel ||
+        "船便名未設定";
+
+      const quantity =
+        document.createElement(
+          "b"
+        );
+
+      quantity.textContent =
+        `${Number(item.quantity || 0).toLocaleString("ja-JP")}個`;
+
+      row.appendChild(
+        schedule
+      );
+
+      row.appendChild(
+        quantity
+      );
+
+      list.appendChild(
+        row
+      );
+    }
+  );
+
+  article.appendChild(
+    heading
+  );
+
+  article.appendChild(
+    answer
+  );
+
+  article.appendChild(
+    summary
+  );
+
+  article.appendChild(
+    list
+  );
+
+  container.appendChild(
+    article
+  );
+}
+
+function renderNaturalShippingEmpty(
+  container,
+  products
+) {
+  const product =
+    products[0] || {};
+
+  const article =
+    document.createElement(
+      "article"
+    );
+
+  article.className =
+    "natural-shipping-answer-card";
+
+  const heading =
+    document.createElement(
+      "h3"
+    );
+
+  heading.textContent =
+    product.productName ||
+    "船便情報";
+
+  const text =
+    document.createElement(
+      "p"
+    );
+
+  text.className =
+    "natural-shipping-answer-text";
+
+  text.textContent =
+    `${product.productName || product.productCode || "この商品"}は、現在の船便に保存済みの船積数量がありません。`;
+
+  article.appendChild(
+    heading
+  );
+
+  article.appendChild(
+    text
+  );
+
+  container.appendChild(
+    article
+  );
+}
+
+function renderNaturalShippingUnavailable(
+  container
+) {
+  const box =
+    document.createElement(
+      "div"
+    );
+
+  box.className =
+    "natural-stock-no-match";
+
+  const title =
+    document.createElement(
+      "strong"
+    );
+
+  title.textContent =
+    "船便情報を確認できませんでした";
+
+  const text =
+    document.createElement(
+      "p"
+    );
+
+  text.textContent =
+    "「船便別に商品を振り分ける」画面を一度開いてホームへ戻り、もう一度検索してください。";
+
+  box.appendChild(
+    title
+  );
+
+  box.appendChild(
+    text
+  );
+
+  container.appendChild(
+    box
+  );
+}
+
+function renderNaturalShippingNoProduct(
+  container,
+  query
+) {
+  const box =
+    document.createElement(
+      "div"
+    );
+
+  box.className =
+    "natural-stock-no-match";
+
+  const title =
+    document.createElement(
+      "strong"
+    );
+
+  title.textContent =
+    "船便を検索するには";
+
+  const text =
+    document.createElement(
+      "p"
+    );
+
+  text.textContent =
+    `「${query}」では商品を特定できませんでした。商品コード・社内コード・JANコード・商品名のどれかを文章に入れてください。`;
+
+  box.appendChild(
+    title
+  );
+
+  box.appendChild(
+    text
+  );
+
+  container.appendChild(
+    box
+  );
+}
 
 function isNaturalSalesPlanQuery(
   query
@@ -2275,6 +3262,89 @@ function createNaturalStockSearchStyle() {
       color: #b71c1c;
     }
 
+    .natural-shipping-answer-card {
+      padding: 20px;
+      border: 2px solid #7e57c2;
+      border-radius: 16px;
+      background: #ffffff;
+    }
+
+    .natural-shipping-answer-card h3 {
+      margin: 0 0 12px;
+      color: #4527a0;
+      font-size: 24px;
+    }
+
+    .natural-shipping-answer-text {
+      margin: 0 0 16px;
+      padding: 16px;
+      border-left: 5px solid #6a1b9a;
+      border-radius: 8px;
+      background: #f3e5f5;
+      color: #4a148c;
+      font-size: 19px;
+      font-weight: 800;
+      line-height: 1.7;
+    }
+
+    .natural-shipping-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .natural-shipping-summary-grid > div {
+      padding: 12px;
+      border: 1px solid #d1c4e9;
+      border-radius: 10px;
+      background: #faf7ff;
+    }
+
+    .natural-shipping-summary-grid span,
+    .natural-shipping-summary-grid strong {
+      display: block;
+    }
+
+    .natural-shipping-summary-grid span {
+      margin-bottom: 5px;
+      color: #7e57c2;
+      font-size: 13px;
+    }
+
+    .natural-shipping-summary-grid strong {
+      color: #4527a0;
+      font-size: 17px;
+      overflow-wrap: anywhere;
+    }
+
+    .natural-shipping-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .natural-shipping-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 13px 14px;
+      border: 1px solid #d1c4e9;
+      border-radius: 10px;
+      background: #fcfaff;
+    }
+
+    .natural-shipping-row strong {
+      color: #4527a0;
+      overflow-wrap: anywhere;
+    }
+
+    .natural-shipping-row b {
+      flex: 0 0 auto;
+      color: #6a1b9a;
+      font-size: 19px;
+    }
+
     .natural-sales-plan-answer-card {
       padding: 20px;
       border: 2px solid #ffb74d;
@@ -2599,6 +3669,22 @@ function createNaturalStockSearchStyle() {
 
       .natural-stock-search-help span:not(:last-child)::after {
         content: "";
+      }
+
+      .natural-shipping-answer-card h3 {
+        font-size: 22px;
+      }
+
+      .natural-shipping-answer-text {
+        font-size: 18px;
+      }
+
+      .natural-shipping-summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .natural-shipping-row {
+        align-items: flex-start;
       }
 
       .natural-sales-plan-answer-card h3 {

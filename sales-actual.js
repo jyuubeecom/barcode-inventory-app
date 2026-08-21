@@ -954,6 +954,58 @@ function createSalesActualStyle() {
     #sales-actual-import .sales-actual-error { color: #c62828; font-weight: 800; }
     #sales-actual-import .sales-actual-discontinued-row { background: #ffebee; }
     #sales-actual-import .sales-actual-discontinued-row td { border-color: #ef9a9a; }
+
+    #sales-actual-import .sales-actual-summary {
+      font-size: 1.08rem;
+      line-height: 1.75;
+      padding: 18px 20px;
+      border-radius: 12px;
+    }
+
+    #sales-actual-import .sales-actual-message {
+      font-size: 1.05rem;
+      line-height: 1.7;
+      font-weight: 700;
+    }
+
+    #sales-actual-import .sales-actual-preview-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 1rem;
+      table-layout: fixed;
+    }
+
+    #sales-actual-import .sales-actual-preview-table th,
+    #sales-actual-import .sales-actual-preview-table td {
+      padding: 12px 10px;
+      vertical-align: middle;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    #sales-actual-import .sales-actual-preview-table th {
+      font-size: 1rem;
+      text-align: center;
+    }
+
+    #sales-actual-import .sales-actual-preview-table td:nth-child(1) { width: 14%; }
+    #sales-actual-import .sales-actual-preview-table td:nth-child(2) { width: 13%; }
+    #sales-actual-import .sales-actual-preview-table td:nth-child(3) { width: 26%; }
+    #sales-actual-import .sales-actual-preview-table td:nth-child(4) { width: 20%; }
+    #sales-actual-import .sales-actual-preview-table td:nth-child(5) { width: 10%; text-align: right; }
+    #sales-actual-import .sales-actual-preview-table td:nth-child(6) { width: 17%; text-align: center; }
+
+    #sales-actual-import .sales-actual-error {
+      font-size: 1.02rem;
+      font-weight: 800;
+    }
+
+    #sales-actual-import .button-row button {
+      min-height: 50px;
+      padding: 12px 22px;
+      font-size: 1rem;
+      font-weight: 700;
+    }
     #sales-actual-import .sales-actual-delete-batch { background-color: #c62828; }
     #sales-actual-import button:disabled { background-color: #b0bec5 !important; cursor: not-allowed; }
     @media (max-width: 700px) {

@@ -14,6 +14,7 @@ document.addEventListener(
 
 function initializeNaturalStockSearch() {
   createNaturalStockSearchStyle();
+  createNaturalRelationSearchStyle();
 
   const homeRoot =
     document.querySelector(
@@ -1442,8 +1443,20 @@ async function searchShippingByNaturalText(
       );
 
     if (matches.length === 0) {
+      const scheduleHandled =
+        await searchNaturalShippingScheduleRelation(
+          query,
+          status,
+          result,
+          products
+        );
+
+      if (scheduleHandled) {
+        return;
+      }
+
       status.textContent =
-        "船便情報を調べる商品を特定できませんでした。";
+        "船便情報を調べる商品・船便を特定できませんでした。";
       status.className =
         "natural-stock-search-status natural-stock-search-warning";
 
@@ -1522,6 +1535,1684 @@ async function searchShippingByNaturalText(
     status.className =
       "natural-stock-search-status natural-stock-search-error";
   }
+}
+
+async function searchNaturalShippingScheduleRelation(
+  query,
+  status,
+  result,
+  products
+) {
+  let relationData = null;
+
+  try {
+    if (
+      window.shippingScheduleApp &&
+      typeof window.shippingScheduleApp
+        .getSearchRelationData ===
+        "function"
+    ) {
+      relationData =
+        await window
+          .shippingScheduleApp
+          .getSearchRelationData();
+    } else if (
+      typeof getAllShippingSchedules ===
+        "function" &&
+      typeof getAllShippingAllocations ===
+        "function" &&
+      typeof getAllSalesPlans ===
+        "function"
+    ) {
+      const values =
+        await Promise.all([
+          getAllShippingSchedules(),
+          getAllShippingAllocations(),
+          getAllSalesPlans()
+        ]);
+
+      relationData = {
+        schedules:
+          values[0] || [],
+        allocations:
+          values[1] || [],
+        products:
+          products || [],
+        salesPlans:
+          values[2] || []
+      };
+    }
+  } catch (error) {
+    console.error(
+      "船便関連情報の読込エラー",
+      error
+    );
+
+    return false;
+  }
+
+  if (
+    !relationData ||
+    !Array.isArray(
+      relationData.schedules
+    )
+  ) {
+    return false;
+  }
+
+  const schedules =
+    relationData.schedules
+      .slice()
+      .sort(
+        compareNaturalRelationSchedules
+      );
+
+  if (
+    schedules.length === 0
+  ) {
+    return false;
+  }
+
+  const matches =
+    findNaturalShippingScheduleMatches(
+      schedules,
+      query
+    );
+
+  if (
+    matches.length === 0
+  ) {
+    return false;
+  }
+
+  if (
+    matches.length > 1
+  ) {
+    status.textContent =
+      `${matches.length}件の船便が候補に見つかりました。確認したい船便を選んでください。`;
+
+    status.className =
+      "natural-stock-search-status natural-stock-search-warning";
+
+    renderNaturalShippingScheduleCandidates(
+      result,
+      matches,
+      relationData,
+      status
+    );
+
+    return true;
+  }
+
+  status.textContent =
+    "船便と関連情報が見つかりました。";
+
+  status.className =
+    "natural-stock-search-status natural-stock-search-success";
+
+  renderNaturalShippingScheduleRelation(
+    result,
+    matches[0],
+    relationData
+  );
+
+  return true;
+}
+
+function findNaturalShippingScheduleMatches(
+  schedules,
+  rawQuery
+) {
+  const list =
+    Array.isArray(schedules)
+      ? schedules
+      : [];
+
+  const normalizedQuery =
+    normalizeNaturalStockText(
+      rawQuery
+    );
+
+  const compactQuery =
+    compactNaturalStockText(
+      rawQuery
+    );
+
+  if (
+    !normalizedQuery ||
+    list.length === 0
+  ) {
+    return [];
+  }
+
+  const nextShipOnly =
+    (
+      normalizedQuery.includes(
+        "次の船便"
+      ) ||
+      normalizedQuery.includes(
+        "次便"
+      )
+    ) &&
+    !/[A-Z]{1,6}[- ]?[A-Z0-9()]{1,}/i.test(
+      normalizedQuery
+    ) &&
+    !/\d{4,}/.test(
+      normalizedQuery.replace(
+        /[\/年月日.-]/g,
+        ""
+      )
+    );
+
+  if (nextShipOnly) {
+    const next =
+      getNaturalNextShippingSchedule(
+        list
+      );
+
+    return next
+      ? [next]
+      : [];
+  }
+
+  const keyword =
+    extractNaturalShippingScheduleKeyword(
+      rawQuery
+    );
+
+  const compactKeyword =
+    compactNaturalStockText(
+      keyword
+    );
+
+  const scored =
+    list.map(
+      function (schedule) {
+        let score = 0;
+
+        const name =
+          String(
+            schedule &&
+              schedule.name ||
+              ""
+          ).trim();
+
+        const compactName =
+          compactNaturalStockText(
+            name
+          );
+
+        if (
+          compactName.length >= 2 &&
+          compactQuery.includes(
+            compactName
+          )
+        ) {
+          score += 120;
+        }
+
+        if (
+          compactKeyword.length >= 2 &&
+          compactName.length >= 2 &&
+          (
+            compactName.includes(
+              compactKeyword
+            ) ||
+            compactKeyword.includes(
+              compactName
+            )
+          )
+        ) {
+          score += 80;
+        }
+
+        const dateFields = [
+          {
+            value:
+              schedule.departureDate,
+            score:
+              100
+          },
+          {
+            value:
+              schedule.warehouseArrivalDate,
+            score:
+              85
+          },
+          {
+            value:
+              schedule.arrivalDate,
+            score:
+              70
+          }
+        ];
+
+        dateFields.forEach(
+          function (entry) {
+            if (
+              naturalShippingQueryContainsDate(
+                normalizedQuery,
+                entry.value
+              )
+            ) {
+              score +=
+                entry.score;
+            }
+          }
+        );
+
+        return {
+          schedule:
+            schedule,
+          score:
+            score
+        };
+      }
+    )
+    .filter(
+      function (entry) {
+        return (
+          entry.score > 0
+        );
+      }
+    )
+    .sort(
+      function (left, right) {
+        if (
+          right.score !==
+          left.score
+        ) {
+          return (
+            right.score -
+            left.score
+          );
+        }
+
+        return compareNaturalRelationSchedules(
+          left.schedule,
+          right.schedule
+        );
+      }
+    );
+
+  if (
+    scored.length === 0
+  ) {
+    return [];
+  }
+
+  const topScore =
+    scored[0].score;
+
+  return scored
+    .filter(
+      function (entry) {
+        return (
+          entry.score ===
+          topScore
+        );
+      }
+    )
+    .map(
+      function (entry) {
+        return (
+          entry.schedule
+        );
+      }
+    );
+}
+
+function extractNaturalShippingScheduleKeyword(
+  rawQuery
+) {
+  return normalizeNaturalStockText(
+    rawQuery
+  )
+    .replace(
+      /(船便|船積み|船積|積載|振り分け|振分|について|の情報|情報|詳細|教えてください|教えて|確認したい|確認|見たい|検索して|検索|どんな|どの|いつ|次の|次便)/gi,
+      " "
+    )
+    .replace(
+      /[はがをのにでと？?！!。、「」『』]/g,
+      " "
+    )
+    .replace(
+      /\s+/g,
+      " "
+    )
+    .trim();
+}
+
+function naturalShippingQueryContainsDate(
+  normalizedQuery,
+  isoDate
+) {
+  if (
+    !isNaturalIsoDate(
+      isoDate
+    )
+  ) {
+    return false;
+  }
+
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})$/.exec(
+      String(
+        isoDate
+      )
+    );
+
+  if (!match) {
+    return false;
+  }
+
+  const year =
+    Number(
+      match[1]
+    );
+
+  const month =
+    Number(
+      match[2]
+    );
+
+  const day =
+    Number(
+      match[3]
+    );
+
+  const aliases = [
+    `${match[1]}-${match[2]}-${match[3]}`,
+    `${match[1]}/${match[2]}/${match[3]}`,
+    `${year}/${month}/${day}`,
+    `${year}年${month}月${day}日`,
+    `${match[2]}/${match[3]}`,
+    `${month}/${day}`,
+    `${month}月${day}日`
+  ];
+
+  return aliases.some(
+    function (alias) {
+      return normalizeNaturalStockText(
+        normalizedQuery
+      ).includes(
+        normalizeNaturalStockText(
+          alias
+        )
+      );
+    }
+  );
+}
+
+function getNaturalNextShippingSchedule(
+  schedules
+) {
+  const today =
+    getNaturalTodayIso();
+
+  return schedules
+    .filter(
+      function (schedule) {
+        const warehouse =
+          String(
+            schedule &&
+              schedule
+                .warehouseArrivalDate ||
+              ""
+          );
+
+        const departure =
+          String(
+            schedule &&
+              schedule.departureDate ||
+              ""
+          );
+
+        return (
+          (
+            isNaturalIsoDate(
+              warehouse
+            ) &&
+            warehouse >= today
+          ) ||
+          (
+            isNaturalIsoDate(
+              departure
+            ) &&
+            departure >= today
+          )
+        );
+      }
+    )
+    .sort(
+      compareNaturalRelationSchedules
+    )[0] ||
+    null;
+}
+
+function compareNaturalRelationSchedules(
+  left,
+  right
+) {
+  const leftDate =
+    String(
+      left &&
+        (
+          left.departureDate ||
+          left.warehouseArrivalDate ||
+          ""
+        )
+    );
+
+  const rightDate =
+    String(
+      right &&
+        (
+          right.departureDate ||
+          right.warehouseArrivalDate ||
+          ""
+        )
+    );
+
+  const compared =
+    leftDate.localeCompare(
+      rightDate
+    );
+
+  if (
+    compared !== 0
+  ) {
+    return compared;
+  }
+
+  return String(
+    left &&
+      left.name ||
+      ""
+  ).localeCompare(
+    String(
+      right &&
+        right.name ||
+        ""
+    ),
+    "ja",
+    {
+      numeric: true
+    }
+  );
+}
+
+function renderNaturalShippingScheduleCandidates(
+  container,
+  schedules,
+  relationData,
+  status
+) {
+  container.innerHTML =
+    "";
+
+  const box =
+    document.createElement(
+      "section"
+    );
+
+  box.className =
+    "natural-relation-candidates";
+
+  const title =
+    document.createElement(
+      "h3"
+    );
+
+  title.textContent =
+    "船便の候補";
+
+  box.appendChild(
+    title
+  );
+
+  schedules.forEach(
+    function (schedule) {
+      const card =
+        document.createElement(
+          "article"
+        );
+
+      card.className =
+        "natural-relation-candidate-card";
+
+      const info =
+        document.createElement(
+          "div"
+        );
+
+      const heading =
+        document.createElement(
+          "strong"
+        );
+
+      heading.textContent =
+        schedule.name ||
+        "船便名未設定";
+
+      const dates =
+        document.createElement(
+          "span"
+        );
+
+      dates.textContent =
+        `出港 ${formatNaturalRelationDate(schedule.departureDate)} / ` +
+        `倉庫到着 ${formatNaturalRelationDate(schedule.warehouseArrivalDate)}`;
+
+      info.appendChild(
+        heading
+      );
+
+      info.appendChild(
+        dates
+      );
+
+      const button =
+        document.createElement(
+          "button"
+        );
+
+      button.type =
+        "button";
+
+      button.textContent =
+        "関連情報を見る";
+
+      button.addEventListener(
+        "click",
+        function () {
+          status.textContent =
+            "船便と関連情報が見つかりました。";
+
+          status.className =
+            "natural-stock-search-status natural-stock-search-success";
+
+          renderNaturalShippingScheduleRelation(
+            container,
+            schedule,
+            relationData
+          );
+        }
+      );
+
+      card.appendChild(
+        info
+      );
+
+      card.appendChild(
+        button
+      );
+
+      box.appendChild(
+        card
+      );
+    }
+  );
+
+  container.appendChild(
+    box
+  );
+}
+
+function renderNaturalShippingScheduleRelation(
+  container,
+  schedule,
+  relationData
+) {
+  container.innerHTML =
+    "";
+
+  const relation =
+    buildNaturalShippingScheduleRelation(
+      schedule,
+      relationData
+    );
+
+  const article =
+    document.createElement(
+      "article"
+    );
+
+  article.className =
+    "natural-shipping-relation-card";
+
+  const headingArea =
+    document.createElement(
+      "div"
+    );
+
+  headingArea.className =
+    "natural-relation-heading";
+
+  const heading =
+    document.createElement(
+      "h3"
+    );
+
+  heading.textContent =
+    schedule.name ||
+    "船便情報";
+
+  const description =
+    document.createElement(
+      "p"
+    );
+
+  description.textContent =
+    relation.products.length > 0
+      ? `この船便には${relation.products.length.toLocaleString("ja-JP")}商品、合計${relation.totalQuantity.toLocaleString("ja-JP")}個が登録されています。`
+      : "この船便には、まだ船積み商品が登録されていません。";
+
+  headingArea.appendChild(
+    heading
+  );
+
+  headingArea.appendChild(
+    description
+  );
+
+  article.appendChild(
+    headingArea
+  );
+
+  const summary =
+    document.createElement(
+      "div"
+    );
+
+  summary.className =
+    "natural-relation-summary-grid";
+
+  [
+    [
+      "出港日",
+      formatNaturalRelationDate(
+        schedule.departureDate
+      )
+    ],
+    [
+      "入港日",
+      formatNaturalRelationDate(
+        schedule.arrivalDate
+      )
+    ],
+    [
+      "倉庫到着日",
+      formatNaturalRelationDate(
+        schedule.warehouseArrivalDate
+      )
+    ],
+    [
+      "船積数量",
+      `${relation.totalQuantity.toLocaleString("ja-JP")}個`
+    ]
+  ].forEach(
+    function (entry) {
+      const box =
+        document.createElement(
+          "div"
+        );
+
+      const label =
+        document.createElement(
+          "span"
+        );
+
+      label.textContent =
+        entry[0];
+
+      const value =
+        document.createElement(
+          "strong"
+        );
+
+      value.textContent =
+        entry[1];
+
+      box.appendChild(
+        label
+      );
+
+      box.appendChild(
+        value
+      );
+
+      summary.appendChild(
+        box
+      );
+    }
+  );
+
+  article.appendChild(
+    summary
+  );
+
+  const periodBox =
+    document.createElement(
+      "div"
+    );
+
+  periodBox.className =
+    "natural-relation-period";
+
+  if (
+    relation.targetPeriod.valid
+  ) {
+    periodBox.textContent =
+      `この船便の販売確認期間：${formatNaturalRelationDate(relation.targetPeriod.startDate)} ～ ${formatNaturalRelationDate(relation.targetPeriod.endDate)} / ` +
+      `期間内の販売予定 ${relation.salesPlans.length.toLocaleString("ja-JP")}件・合計${relation.salesPlanQuantity.toLocaleString("ja-JP")}個`;
+  } else {
+    periodBox.textContent =
+      "次の船便が未登録のため、この船便に対応する販売確認期間はまだ確定していません。";
+  }
+
+  article.appendChild(
+    periodBox
+  );
+
+  const actions =
+    document.createElement(
+      "div"
+    );
+
+  actions.className =
+    "natural-relation-main-actions";
+
+  const scheduleButton =
+    document.createElement(
+      "button"
+    );
+
+  scheduleButton.type =
+    "button";
+
+  scheduleButton.className =
+    "natural-relation-primary-button";
+
+  scheduleButton.textContent =
+    "この船便の詳細を見る";
+
+  scheduleButton.addEventListener(
+    "click",
+    function () {
+      if (
+        window.shippingScheduleApp &&
+        typeof window.shippingScheduleApp
+          .openScheduleDetails ===
+          "function"
+      ) {
+        void window
+          .shippingScheduleApp
+          .openScheduleDetails(
+            schedule.id
+          );
+      }
+    }
+  );
+
+  actions.appendChild(
+    scheduleButton
+  );
+
+  article.appendChild(
+    actions
+  );
+
+  const productsSection =
+    document.createElement(
+      "section"
+    );
+
+  productsSection.className =
+    "natural-relation-products";
+
+  const productsTitle =
+    document.createElement(
+      "h4"
+    );
+
+  productsTitle.textContent =
+    "この船便に紐づく商品";
+
+  productsSection.appendChild(
+    productsTitle
+  );
+
+  if (
+    relation.products.length ===
+    0
+  ) {
+    const empty =
+      document.createElement(
+        "p"
+      );
+
+    empty.className =
+      "natural-relation-empty";
+
+    empty.textContent =
+      "船積み商品はまだ登録されていません。";
+
+    productsSection.appendChild(
+      empty
+    );
+  } else {
+    const maxDisplay = 12;
+
+    relation.products
+      .slice(
+        0,
+        maxDisplay
+      )
+      .forEach(
+        function (item) {
+          productsSection.appendChild(
+            createNaturalRelationProductCard(
+              item
+            )
+          );
+        }
+      );
+
+    if (
+      relation.products.length >
+      maxDisplay
+    ) {
+      const rest =
+        document.createElement(
+          "p"
+        );
+
+      rest.className =
+        "natural-relation-more";
+
+      rest.textContent =
+        `ほか${(relation.products.length - maxDisplay).toLocaleString("ja-JP")}商品あります。「この船便の詳細を見る」で全商品を確認できます。`;
+
+      productsSection.appendChild(
+        rest
+      );
+    }
+  }
+
+  article.appendChild(
+    productsSection
+  );
+
+  container.appendChild(
+    article
+  );
+}
+
+function buildNaturalShippingScheduleRelation(
+  schedule,
+  relationData
+) {
+  const allocations =
+    Array.isArray(
+      relationData.allocations
+    )
+      ? relationData.allocations
+      : [];
+
+  const products =
+    Array.isArray(
+      relationData.products
+    )
+      ? relationData.products
+      : [];
+
+  const salesPlans =
+    Array.isArray(
+      relationData.salesPlans
+    )
+      ? relationData.salesPlans
+      : [];
+
+  const schedules =
+    Array.isArray(
+      relationData.schedules
+    )
+      ? relationData.schedules
+      : [];
+
+  const productMap =
+    new Map();
+
+  products.forEach(
+    function (product) {
+      const code =
+        String(
+          product &&
+            product.internalCode ||
+            ""
+        ).trim();
+
+      if (code) {
+        productMap.set(
+          code,
+          product
+        );
+      }
+    }
+  );
+
+  const allocationMap =
+    new Map();
+
+  allocations
+    .filter(
+      function (record) {
+        return (
+          String(
+            record &&
+              record.scheduleId ||
+              ""
+          ) ===
+          String(
+            schedule.id ||
+            ""
+          ) &&
+          Number(
+            record &&
+              record.quantity ||
+              0
+          ) > 0
+        );
+      }
+    )
+    .forEach(
+      function (record) {
+        const internalCode =
+          String(
+            record &&
+              record.internalCode ||
+              ""
+          ).trim();
+
+        if (!internalCode) {
+          return;
+        }
+
+        const current =
+          allocationMap.get(
+            internalCode
+          ) || {
+            internalCode:
+              internalCode,
+            productCode:
+              record.productCode || "",
+            productName:
+              record.productName || "",
+            quantity:
+              0
+          };
+
+        current.quantity +=
+          Math.max(
+            0,
+            Number(
+              record.quantity || 0
+            )
+          );
+
+        allocationMap.set(
+          internalCode,
+          current
+        );
+      }
+    );
+
+  const targetPeriod =
+    getNaturalShippingRelationTargetPeriod(
+      schedule,
+      schedules
+    );
+
+  const relatedPlans =
+    targetPeriod.valid
+      ? salesPlans.filter(
+          function (plan) {
+            const internalCode =
+              String(
+                plan &&
+                  plan.internalCode ||
+                  ""
+              ).trim();
+
+            return (
+              allocationMap.has(
+                internalCode
+              ) &&
+              naturalSalesPlanOverlapsPeriod(
+                plan,
+                targetPeriod.startDate,
+                targetPeriod.endDate
+              )
+            );
+          }
+        )
+        .sort(
+          compareNaturalSalesPlans
+        )
+      : [];
+
+  const plansByCode =
+    new Map();
+
+  relatedPlans.forEach(
+    function (plan) {
+      const code =
+        String(
+          plan &&
+            plan.internalCode ||
+            ""
+        ).trim();
+
+      if (
+        !plansByCode.has(
+          code
+        )
+      ) {
+        plansByCode.set(
+          code,
+          []
+        );
+      }
+
+      plansByCode.get(
+        code
+      ).push(
+        plan
+      );
+    }
+  );
+
+  const productRows =
+    Array.from(
+      allocationMap.values()
+    )
+      .map(
+        function (allocation) {
+          const product =
+            productMap.get(
+              allocation.internalCode
+            ) || {};
+
+          const plans =
+            plansByCode.get(
+              allocation.internalCode
+            ) || [];
+
+          const plannedQuantity =
+            plans.reduce(
+              function (sum, plan) {
+                return (
+                  sum +
+                  Math.max(
+                    0,
+                    Number(
+                      plan.quantity || 0
+                    )
+                  )
+                );
+              },
+              0
+            );
+
+          return {
+            internalCode:
+              allocation.internalCode,
+            productCode:
+              allocation.productCode ||
+              product.productCode ||
+              "",
+            productName:
+              allocation.productName ||
+              product.productName ||
+              "",
+            quantity:
+              Math.max(
+                0,
+                Number(
+                  allocation.quantity ||
+                  0
+                )
+              ),
+            product:
+              product,
+            salesPlans:
+              plans,
+            plannedQuantity:
+              plannedQuantity
+          };
+        }
+      )
+      .sort(
+        function (left, right) {
+          if (
+            right.quantity !==
+            left.quantity
+          ) {
+            return (
+              right.quantity -
+              left.quantity
+            );
+          }
+
+          return String(
+            left.internalCode ||
+            ""
+          ).localeCompare(
+            String(
+              right.internalCode ||
+              ""
+            ),
+            "ja",
+            {
+              numeric: true
+            }
+          );
+        }
+      );
+
+  const totalQuantity =
+    productRows.reduce(
+      function (sum, item) {
+        return (
+          sum +
+          Number(
+            item.quantity || 0
+          )
+        );
+      },
+      0
+    );
+
+  const salesPlanQuantity =
+    relatedPlans.reduce(
+      function (sum, plan) {
+        return (
+          sum +
+          Math.max(
+            0,
+            Number(
+              plan.quantity || 0
+            )
+          )
+        );
+      },
+      0
+    );
+
+  return {
+    products:
+      productRows,
+    totalQuantity:
+      totalQuantity,
+    targetPeriod:
+      targetPeriod,
+    salesPlans:
+      relatedPlans,
+    salesPlanQuantity:
+      salesPlanQuantity
+  };
+}
+
+function getNaturalShippingRelationTargetPeriod(
+  schedule,
+  schedules
+) {
+  const startDate =
+    String(
+      schedule &&
+        schedule
+          .warehouseArrivalDate ||
+        ""
+    );
+
+  if (
+    !isNaturalIsoDate(
+      startDate
+    )
+  ) {
+    return {
+      valid:
+        false,
+      startDate:
+        "",
+      endDate:
+        ""
+    };
+  }
+
+  const sorted =
+    schedules
+      .filter(
+        function (item) {
+          return (
+            item &&
+            item.id !==
+              schedule.id &&
+            isNaturalIsoDate(
+              item
+                .warehouseArrivalDate
+            ) &&
+            item
+              .warehouseArrivalDate >
+              startDate
+          );
+        }
+      )
+      .sort(
+        function (left, right) {
+          return String(
+            left
+              .warehouseArrivalDate
+          ).localeCompare(
+            String(
+              right
+                .warehouseArrivalDate
+            )
+          );
+        }
+      );
+
+  const next =
+    sorted[0];
+
+  if (!next) {
+    return {
+      valid:
+        false,
+      startDate:
+        startDate,
+      endDate:
+        ""
+    };
+  }
+
+  const endDate =
+    shiftNaturalIsoDate(
+      next.warehouseArrivalDate,
+      -1
+    );
+
+  return {
+    valid:
+      Boolean(
+        endDate
+      ),
+    startDate:
+      startDate,
+    endDate:
+      endDate,
+    nextScheduleId:
+      next.id || "",
+    nextScheduleName:
+      next.name || ""
+  };
+}
+
+function shiftNaturalIsoDate(
+  isoDate,
+  days
+) {
+  if (
+    !isNaturalIsoDate(
+      isoDate
+    )
+  ) {
+    return "";
+  }
+
+  const values =
+    String(
+      isoDate
+    )
+      .split("-")
+      .map(Number);
+
+  const date =
+    new Date(
+      values[0],
+      values[1] - 1,
+      values[2]
+    );
+
+  date.setDate(
+    date.getDate() +
+    Number(
+      days || 0
+    )
+  );
+
+  const year =
+    date.getFullYear();
+
+  const month =
+    String(
+      date.getMonth() + 1
+    ).padStart(
+      2,
+      "0"
+    );
+
+  const day =
+    String(
+      date.getDate()
+    ).padStart(
+      2,
+      "0"
+    );
+
+  return (
+    `${year}-${month}-${day}`
+  );
+}
+
+function naturalSalesPlanOverlapsPeriod(
+  plan,
+  periodStart,
+  periodEnd
+) {
+  const period =
+    getNaturalSalesPlanDateRange(
+      plan
+    );
+
+  if (
+    !period.valid
+  ) {
+    return false;
+  }
+
+  return (
+    period.endDate >=
+      periodStart &&
+    period.startDate <=
+      periodEnd
+  );
+}
+
+function getNaturalSalesPlanDateRange(
+  plan
+) {
+  const type =
+    getNaturalSalesPlanType(
+      plan
+    );
+
+  if (
+    type === "date"
+  ) {
+    const date =
+      String(
+        plan.shippingDate || ""
+      );
+
+    return {
+      valid:
+        Boolean(date),
+      startDate:
+        date,
+      endDate:
+        date
+    };
+  }
+
+  if (
+    type === "period"
+  ) {
+    return {
+      valid:
+        true,
+      startDate:
+        String(
+          plan
+            .shippingStartDate ||
+            ""
+        ),
+      endDate:
+        String(
+          plan
+            .shippingEndDate ||
+            ""
+        )
+    };
+  }
+
+  if (
+    type === "month"
+  ) {
+    const month =
+      String(
+        plan.shippingMonth || ""
+      );
+
+    return {
+      valid:
+        /^\d{4}-\d{2}$/.test(
+          month
+        ),
+      startDate:
+        `${month}-01`,
+      endDate:
+        getNaturalMonthEnd(
+          month
+        )
+    };
+  }
+
+  return {
+    valid:
+      false,
+    startDate:
+      "",
+    endDate:
+      ""
+  };
+}
+
+function createNaturalRelationProductCard(
+  item
+) {
+  const card =
+    document.createElement(
+      "article"
+    );
+
+  card.className =
+    "natural-relation-product-card";
+
+  const head =
+    document.createElement(
+      "div"
+    );
+
+  head.className =
+    "natural-relation-product-head";
+
+  const info =
+    document.createElement(
+      "div"
+    );
+
+  const name =
+    document.createElement(
+      "strong"
+    );
+
+  name.textContent =
+    item.productName ||
+    "商品名未登録";
+
+  const codes =
+    document.createElement(
+      "span"
+    );
+
+  codes.textContent =
+    `社内コード：${item.internalCode || "未登録"} / 商品コード：${item.productCode || "未登録"}`;
+
+  info.appendChild(
+    name
+  );
+
+  info.appendChild(
+    codes
+  );
+
+  const quantity =
+    document.createElement(
+      "strong"
+    );
+
+  quantity.className =
+    "natural-relation-ship-quantity";
+
+  quantity.textContent =
+    `船積 ${Number(item.quantity || 0).toLocaleString("ja-JP")}個`;
+
+  head.appendChild(
+    info
+  );
+
+  head.appendChild(
+    quantity
+  );
+
+  card.appendChild(
+    head
+  );
+
+  const planSummary =
+    document.createElement(
+      "div"
+    );
+
+  planSummary.className =
+    "natural-relation-plan-summary";
+
+  planSummary.textContent =
+    item.salesPlans.length > 0
+      ? `期間内の販売予定：${item.salesPlans.length}件 / 合計${item.plannedQuantity.toLocaleString("ja-JP")}個`
+      : "期間内の販売予定：なし";
+
+  card.appendChild(
+    planSummary
+  );
+
+  if (
+    item.salesPlans.length >
+    0
+  ) {
+    const planList =
+      document.createElement(
+        "div"
+      );
+
+    planList.className =
+      "natural-relation-plan-list";
+
+    item.salesPlans
+      .slice(
+        0,
+        3
+      )
+      .forEach(
+        function (plan) {
+          const row =
+            document.createElement(
+              "div"
+            );
+
+          const customer =
+            [
+              plan.customerName ||
+                "取引先未登録",
+              plan.subtitle || ""
+            ]
+              .filter(Boolean)
+              .join(
+                " / "
+              );
+
+          row.textContent =
+            `${formatNaturalSalesPlanShipping(plan)}｜${customer}｜${Math.max(0, Number(plan.quantity || 0)).toLocaleString("ja-JP")}個`;
+
+          planList.appendChild(
+            row
+          );
+        }
+      );
+
+    if (
+      item.salesPlans.length > 3
+    ) {
+      const more =
+        document.createElement(
+          "small"
+        );
+
+      more.textContent =
+        `ほか${item.salesPlans.length - 3}件`;
+
+      planList.appendChild(
+        more
+      );
+    }
+
+    card.appendChild(
+      planList
+    );
+  }
+
+  if (
+    item.product &&
+    item.product.internalCode
+  ) {
+    const button =
+      createNaturalStockDetailButton(
+        item.product
+      );
+
+    button.classList.add(
+      "natural-relation-product-detail-button"
+    );
+
+    card.appendChild(
+      button
+    );
+  }
+
+  return card;
+}
+
+function formatNaturalRelationDate(
+  value
+) {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})$/.exec(
+      String(value || "")
+    );
+
+  if (!match) {
+    return (
+      String(
+        value || "未設定"
+      )
+    );
+  }
+
+  return (
+    `${Number(match[1])}/${Number(match[2])}/${Number(match[3])}`
+  );
 }
 
 async function collectNaturalShippingAllocations(
@@ -2236,6 +3927,72 @@ function renderNaturalShippingAnswer(
   article.appendChild(
     list
   );
+
+  const actionArea =
+    document.createElement(
+      "div"
+    );
+
+  actionArea.className =
+    "natural-relation-main-actions";
+
+  if (
+    first &&
+    first.scheduleId &&
+    window.shippingScheduleApp &&
+    typeof window.shippingScheduleApp
+      .openScheduleDetails ===
+      "function"
+  ) {
+    const scheduleButton =
+      document.createElement(
+        "button"
+      );
+
+    scheduleButton.type =
+      "button";
+
+    scheduleButton.className =
+      "natural-relation-primary-button";
+
+    scheduleButton.textContent =
+      "次の船便の詳細を見る";
+
+    scheduleButton.addEventListener(
+      "click",
+      function () {
+        void window
+          .shippingScheduleApp
+          .openScheduleDetails(
+            first.scheduleId
+          );
+      }
+    );
+
+    actionArea.appendChild(
+      scheduleButton
+    );
+  }
+
+  if (
+    mainProduct &&
+    mainProduct.internalCode
+  ) {
+    actionArea.appendChild(
+      createNaturalStockDetailButton(
+        mainProduct
+      )
+    );
+  }
+
+  if (
+    actionArea.children.length >
+    0
+  ) {
+    article.appendChild(
+      actionArea
+    );
+  }
 
   container.appendChild(
     article
@@ -3821,6 +5578,246 @@ function renderNaturalStockNoMatch(
   box.appendChild(title);
   box.appendChild(text);
   container.appendChild(box);
+}
+
+function createNaturalRelationSearchStyle() {
+  if (
+    document.querySelector(
+      "#natural-relation-search-style"
+    )
+  ) {
+    return;
+  }
+
+  const style =
+    document.createElement(
+      "style"
+    );
+
+  style.id =
+    "natural-relation-search-style";
+
+  style.textContent = `
+    .natural-shipping-relation-card,
+    .natural-relation-candidates {
+      margin-top: 14px;
+      padding: 18px;
+      border: 2px solid #90caf9;
+      border-radius: 14px;
+      background: #ffffff;
+    }
+
+    .natural-relation-heading {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .natural-relation-heading h3,
+    .natural-relation-candidates h3 {
+      margin: 0;
+      color: #0d47a1;
+      font-size: 22px;
+    }
+
+    .natural-relation-heading p {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    .natural-relation-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .natural-relation-summary-grid > div {
+      display: grid;
+      gap: 5px;
+      padding: 12px;
+      border: 1px solid #bbdefb;
+      border-radius: 10px;
+      background: #f4faff;
+    }
+
+    .natural-relation-summary-grid span {
+      color: #546e7a;
+      font-size: 13px;
+    }
+
+    .natural-relation-summary-grid strong {
+      color: #0d47a1;
+      font-size: 17px;
+    }
+
+    .natural-relation-period {
+      margin: 12px 0 16px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: #fff8e1;
+      color: #5d4037;
+      font-weight: 700;
+      line-height: 1.6;
+    }
+
+    .natural-relation-main-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 12px 0 16px;
+    }
+
+    .natural-relation-main-actions button {
+      min-height: 46px;
+      margin: 0;
+      padding: 10px 16px;
+      font-weight: 800;
+    }
+
+    .natural-relation-primary-button {
+      background: #1565c0 !important;
+    }
+
+    .natural-relation-products {
+      display: grid;
+      gap: 10px;
+    }
+
+    .natural-relation-products h4 {
+      margin: 6px 0 2px;
+      font-size: 18px;
+      color: #263238;
+    }
+
+    .natural-relation-product-card {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid #cfd8dc;
+      border-radius: 11px;
+      background: #fafcfd;
+    }
+
+    .natural-relation-product-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .natural-relation-product-head > div {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .natural-relation-product-head strong {
+      font-size: 16px;
+    }
+
+    .natural-relation-product-head span {
+      color: #607d8b;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .natural-relation-ship-quantity {
+      color: #6a1b9a;
+      white-space: nowrap;
+      font-size: 17px !important;
+    }
+
+    .natural-relation-plan-summary {
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #e8f5e9;
+      color: #1b5e20;
+      font-weight: 700;
+    }
+
+    .natural-relation-plan-list {
+      display: grid;
+      gap: 5px;
+      padding: 8px 10px;
+      border-left: 4px solid #81c784;
+      background: #ffffff;
+      line-height: 1.5;
+    }
+
+    .natural-relation-product-detail-button {
+      justify-self: start;
+      min-height: 42px !important;
+      margin: 0 !important;
+    }
+
+    .natural-relation-empty,
+    .natural-relation-more {
+      margin: 0;
+      padding: 12px;
+      border-radius: 9px;
+      background: #f5f5f5;
+      line-height: 1.6;
+    }
+
+    .natural-relation-candidates {
+      display: grid;
+      gap: 10px;
+    }
+
+    .natural-relation-candidate-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 13px;
+      border: 1px solid #bbdefb;
+      border-radius: 10px;
+      background: #f8fcff;
+    }
+
+    .natural-relation-candidate-card > div {
+      display: grid;
+      gap: 5px;
+    }
+
+    .natural-relation-candidate-card span {
+      color: #607d8b;
+      line-height: 1.5;
+    }
+
+    .natural-relation-candidate-card button {
+      margin: 0;
+      min-height: 42px;
+      background: #1976d2;
+    }
+
+    @media (max-width: 760px) {
+      .natural-relation-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .natural-relation-product-head,
+      .natural-relation-candidate-card {
+        grid-template-columns: 1fr;
+      }
+
+      .natural-relation-ship-quantity {
+        white-space: normal;
+      }
+
+      .natural-relation-candidate-card button,
+      .natural-relation-product-detail-button,
+      .natural-relation-main-actions button {
+        width: 100%;
+      }
+    }
+  `;
+
+  document.head.appendChild(
+    style
+  );
 }
 
 function createNaturalStockSearchStyle() {

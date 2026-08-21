@@ -2535,3 +2535,92 @@ window.shippingScheduleApp.openAllocation =
     }
   };
 
+
+/* =========================================================
+   v152 文章検索の関連情報表示用
+   ========================================================= */
+window.shippingScheduleApp.getSearchRelationData =
+  async function () {
+    await refreshShippingScheduleData();
+
+    return {
+      schedules:
+        shippingScheduleRecords.map(
+          function (record) {
+            return {
+              ...record
+            };
+          }
+        ),
+      allocations:
+        shippingScheduleAllocations.map(
+          function (record) {
+            return {
+              ...record
+            };
+          }
+        ),
+      products:
+        shippingScheduleProducts.map(
+          function (record) {
+            return {
+              ...record
+            };
+          }
+        ),
+      salesPlans:
+        shippingScheduleSalesPlans.map(
+          function (record) {
+            return {
+              ...record
+            };
+          }
+        )
+    };
+  };
+
+window.shippingScheduleApp.openScheduleDetails =
+  async function (
+    scheduleId
+  ) {
+    await openShippingScheduleScreen(
+      "allocation"
+    );
+
+    const select =
+      document.querySelector(
+        "#shipping-allocation-schedule"
+      );
+
+    if (
+      select &&
+      scheduleId
+    ) {
+      select.value =
+        String(
+          scheduleId
+        );
+
+      select.dispatchEvent(
+        new Event(
+          "change",
+          {
+            bubbles: true
+          }
+        )
+      );
+    }
+
+    shippingAllocationCurrentPage =
+      1;
+
+    renderShippingAllocationTable();
+
+    window.setTimeout(
+      function () {
+        scrollShippingAllocationIntoView();
+      },
+      80
+    );
+  };
+

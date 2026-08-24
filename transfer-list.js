@@ -122,6 +122,7 @@
                 <th>商品コード</th>
                 <th>商品名</th>
                 <th>現在の保管場所</th>
+                <th>移動元在庫</th>
                 <th>移動個数</th>
                 <th>操作</th>
               </tr>
@@ -180,10 +181,15 @@
       .transfer-form-grid input, .transfer-form-grid select, .transfer-add-grid input { width: 100%; min-height: 46px; box-sizing: border-box; font-size: 16px; }
       .transfer-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
       .transfer-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-      .transfer-table { width: 100%; border-collapse: collapse; min-width: 820px; }
+      .transfer-table { width: 100%; border-collapse: collapse; min-width: 940px; }
       .transfer-table th, .transfer-table td { border-bottom: 1px solid #cfd8dc; padding: 10px 8px; text-align: left; vertical-align: middle; }
       .transfer-table th { background: #eef6ff; white-space: nowrap; }
+      .transfer-source-stock { font-size: 18px; font-weight: 800; color: #1565c0; white-space: nowrap; }
+      .transfer-source-stock-zero { color: #c62828; }
+      .transfer-source-stock-unselected { color: #78909c; font-size: 13px; font-weight: 700; white-space: normal; }
+      .transfer-stock-warning { display: block; margin-top: 4px; color: #c62828; font-size: 12px; font-weight: 700; }
       .transfer-quantity-input { width: 110px; min-height: 42px; font-size: 16px; }
+      .transfer-quantity-input:invalid { border-color: #c62828; background: #fff5f5; }
       .transfer-remove-button, .transfer-delete-button { background: #d32f2f; }
       .transfer-secondary { background: #607d8b; }
       .transfer-actions, .transfer-row-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
@@ -393,9 +399,35 @@
       return;
     }
 
+    const sourceLocation = String(document.querySelector("#transfer-source")?.value || "");
+    const sourceStock = getTransferSourceStock(internalCode, sourceLocation);
     const existing = state.items.find(function (item) {
       return item.internalCode === internalCode;
     });
+    const requestedTotal = Number(existing?.quantity || 0) + quantity;
+
+    if (sourceStock !== null && requestedTotal > sourceStock) {
+      await showAppDialog({
+        type: "warning",
+        icon: "📦",
+        title: "移動元在庫を超えています",
+        message: "入力した移動個数は、選択した移動元の在庫数を超えています。",
+        details: [
+          { label: "社内コード", value: internalCode },
+          { label: "商品コード", value: String(product.productCode || "-").trim() || "-" },
+          { label: "移動元", value: sourceLocation || "-" },
+          { label: "移動元在庫", value: `${formatNumber(sourceStock)}個` },
+          { label: "追加後の移動個数", value: `${formatNumber(requestedTotal)}個` }
+        ],
+        notice: sourceStock === 0
+          ? "この移動元には在庫がありません。移動元を確認してください。"
+          : `移動個数は最大 ${formatNumber(sourceStock)}個 までです。`,
+        confirmText: "確認して閉じる"
+      });
+      quantityInput?.focus();
+      return;
+    }
+
     if (existing) {
       const add = await showAppDialog({
         type: "warning",
@@ -442,6 +474,43 @@
     return normalizeLocationForCompare(left) === normalizeLocationForCompare(right);
   }
 
+  function getTransferProductByInternalCode(internalCode) {
+    const code = String(internalCode || "").trim();
+    return state.products.find(function (product) {
+      return String(product.internalCode || "").trim() === code;
+    }) || null;
+  }
+
+  function getTransferSourceStock(internalCode, sourceLocation) {
+    const source = String(sourceLocation || "").trim();
+    if (!source) return null;
+
+    const product = getTransferProductByInternalCode(internalCode);
+    if (!product || typeof getProductLocationStocks !== "function") return 0;
+
+    const sourceKey = normalizeLocationForCompare(source);
+    const entries = getProductLocationStocks(product);
+    const matched = entries.find(function (entry) {
+      return normalizeLocationForCompare(entry && entry.location) === sourceKey;
+    });
+
+    const stock = matched ? Number(matched.stock || 0) : 0;
+    return Number.isFinite(stock) ? Math.max(0, Math.trunc(stock)) : 0;
+  }
+
+  function validateItemQuantityAgainstSourceStock(item, sourceLocation) {
+    const sourceStock = getTransferSourceStock(item.internalCode, sourceLocation);
+    if (sourceStock === null) return;
+
+    const quantity = Number(item.quantity || 0);
+    if (quantity > sourceStock) {
+      throw new Error(
+        `社内コード ${item.internalCode} の移動個数が移動元在庫を超えています。\n` +
+        `移動元：${sourceLocation} / 在庫：${sourceStock}個 / 移動：${quantity}個`
+      );
+    }
+  }
+
   function renderCurrentItems() {
     const body = document.querySelector("#transfer-current-body");
     const empty = document.querySelector("#transfer-empty-message");
@@ -457,6 +526,16 @@
       const locationWarning = sourceLocation && item.storageLocation && !isSameLocation(item.storageLocation, sourceLocation)
         ? `<span class="transfer-location-warning">登録保管場所は移動元と異なります</span>`
         : "";
+      const sourceStock = getTransferSourceStock(item.internalCode, sourceLocation);
+      const quantity = Number(item.quantity || 0);
+      const overStock = sourceStock !== null && quantity > sourceStock;
+      const stockHtml = sourceStock === null
+        ? `<span class="transfer-source-stock-unselected">移動元を選択してください</span>`
+        : `<span class="transfer-source-stock${sourceStock === 0 ? " transfer-source-stock-zero" : ""}">${formatNumber(sourceStock)}個</span>`;
+      const stockWarning = overStock
+        ? `<span class="transfer-stock-warning">移動元在庫を超えています</span>`
+        : "";
+      const maxAttribute = sourceStock === null ? "" : ` max="${sourceStock}"`;
       return `
         <tr>
           <td>${index + 1}</td>
@@ -464,16 +543,18 @@
           <td>${escapeHtml(item.productCode || "-")}</td>
           <td>${escapeHtml(item.productName)}</td>
           <td>${escapeHtml(item.storageLocation || "-")}${locationWarning}</td>
+          <td>${stockHtml}</td>
           <td>
             <input
               class="transfer-quantity-input"
               type="number"
-              min="1"
+              min="1"${maxAttribute}
               step="1"
               value="${Number(item.quantity || 0)}"
               data-transfer-quantity-index="${index}"
               aria-label="${escapeHtml(item.productName)}の移動個数"
             >
+            ${stockWarning}
           </td>
           <td><button class="transfer-remove-button" type="button" data-transfer-remove-index="${index}">削除</button></td>
         </tr>
@@ -486,6 +567,50 @@
         const value = Math.trunc(Number(input.value || 0));
         if (state.items[index]) state.items[index].quantity = value;
         updateCurrentSummaryOnly();
+      });
+      input.addEventListener("change", async function () {
+        const index = Number(input.dataset.transferQuantityIndex);
+        const item = state.items[index];
+        if (!item) return;
+
+        const source = String(document.querySelector("#transfer-source")?.value || "");
+        const sourceStock = getTransferSourceStock(item.internalCode, source);
+        let value = Math.trunc(Number(input.value || 0));
+
+        if (!Number.isFinite(value) || value <= 0) {
+          value = 1;
+          item.quantity = value;
+          input.value = String(value);
+          updateCurrentSummaryOnly();
+          return;
+        }
+
+        if (sourceStock !== null && value > sourceStock) {
+          item.quantity = sourceStock > 0 ? sourceStock : 1;
+          input.value = String(item.quantity);
+          renderCurrentItems();
+          await showAppDialog({
+            type: "warning",
+            icon: "📦",
+            title: "移動元在庫を超えています",
+            message: "移動個数は、移動元にある在庫数まで入力できます。",
+            details: [
+              { label: "社内コード", value: item.internalCode || "-" },
+              { label: "商品コード", value: item.productCode || "-" },
+              { label: "移動元", value: source || "-" },
+              { label: "移動元在庫", value: `${formatNumber(sourceStock)}個` },
+              { label: "入力した個数", value: `${formatNumber(value)}個` }
+            ],
+            notice: sourceStock > 0
+              ? `移動個数を ${formatNumber(sourceStock)}個 に戻しました。`
+              : "この移動元には在庫がありません。移動元を確認してください。",
+            confirmText: "確認して閉じる"
+          });
+          return;
+        }
+
+        item.quantity = value;
+        renderCurrentItems();
       });
     });
     body.querySelectorAll("[data-transfer-remove-index]").forEach(function (button) {
@@ -523,6 +648,10 @@
       return !Number.isInteger(quantity) || quantity <= 0;
     });
     if (invalidItem) throw new Error(`${invalidItem.productName} の移動個数を1以上で入力してください。`);
+
+    state.items.forEach(function (item) {
+      validateItemQuantityAgainstSourceStock(item, sourceLocation);
+    });
 
     return {
       transferDate: transferDate,

@@ -2308,11 +2308,11 @@ function printSalesPlanCalendar(paperSize) {
     isA4
       ? (
           calendar.weekCount <= 4
-            ? 37
+            ? 41
             : (
                 calendar.weekCount === 5
-                  ? 29
-                  : 24
+                  ? 33
+                  : 27.5
               )
         )
       : (
@@ -2327,93 +2327,93 @@ function printSalesPlanCalendar(paperSize) {
 
   const bodyFontPt =
     isA4
-      ? (compactCalendar ? 7.8 : 8.4)
+      ? (compactCalendar ? 8.3 : 8.8)
       : (compactCalendar ? 10 : 11);
 
   const titleFontPt =
     isA4
-      ? (compactCalendar ? 14 : 15)
+      ? (compactCalendar ? 15 : 16)
       : (compactCalendar ? 19 : 21);
 
   const summaryFontPt =
     isA4
-      ? (compactCalendar ? 7.2 : 8)
+      ? (compactCalendar ? 7.8 : 8.4)
       : (compactCalendar ? 9.4 : 10.8);
 
   const summaryMarginTopMm =
     isA4
-      ? (compactCalendar ? 2 : 3)
+      ? (compactCalendar ? 2.2 : 2.8)
       : (compactCalendar ? 4 : 6);
 
   const summaryMarginBottomMm =
     isA4
-      ? (compactCalendar ? 2.5 : 4)
+      ? (compactCalendar ? 3 : 3.5)
       : (compactCalendar ? 5 : 8);
 
   const summaryPaddingMm =
     isA4
-      ? (compactCalendar ? 2 : 3)
+      ? (compactCalendar ? 2.3 : 2.6)
       : (compactCalendar ? 4 : 6);
 
   const weekdayHeaderHeightMm =
     isA4
-      ? (compactCalendar ? 5.8 : 6.5)
+      ? (compactCalendar ? 6.4 : 6.8)
       : (compactCalendar ? 8 : 9);
 
   const weekdayHeaderFontPt =
     isA4
-      ? (compactCalendar ? 7.2 : 8)
+      ? (compactCalendar ? 8 : 8.5)
       : (compactCalendar ? 10 : 11);
 
   const cellPaddingTopMm =
     isA4
-      ? (compactCalendar ? 4 : 4.4)
+      ? (compactCalendar ? 4.7 : 5)
       : (compactCalendar ? 5.6 : 6.2);
 
   const dayFontPt =
     isA4
-      ? (compactCalendar ? 8.2 : 8.8)
+      ? (compactCalendar ? 9 : 9.4)
       : 11;
 
   const holidayFontPt =
     isA4
-      ? (compactCalendar ? 5.4 : 6)
+      ? (compactCalendar ? 6 : 6.4)
       : (compactCalendar ? 7.2 : 8.2);
 
   const bandHeightMm =
     isA4
-      ? (compactCalendar ? 3.2 : 3.5)
+      ? (compactCalendar ? 3.8 : 4)
       : (compactCalendar ? 4.6 : 5.4);
 
   const bandFontPt =
     isA4
-      ? (compactCalendar ? 4.9 : 5.4)
+      ? (compactCalendar ? 5.6 : 5.9)
       : (compactCalendar ? 6.8 : 8);
 
   const noPlanFontPt =
     isA4
-      ? (compactCalendar ? 5 : 5.6)
+      ? (compactCalendar ? 5.5 : 5.9)
       : (compactCalendar ? 7.1 : 8.2);
 
   const footerFontPt =
     isA4
-      ? (compactCalendar ? 5.3 : 5.8)
+      ? (compactCalendar ? 5.6 : 6)
       : (compactCalendar ? 7 : 8.4);
 
   const dayTopMm =
-    isA4 ? 1.1 : 1.6;
+    isA4 ? 1.2 : 1.6;
 
   const dayLeftMm =
     isA4 ? 1.2 : 1.8;
 
   const holidayTopMm =
-    isA4 ? 0.9 : 1.1;
+    isA4 ? 1.1 : 1.1;
 
   const holidayLeftMm =
     isA4 ? 6.2 : 8;
 
   const noPlanMarginTopMm =
-    isA4 ? 4 : 6;
+    isA4 ? 5 : 6;
 
   const html = `
 <!DOCTYPE html>
@@ -2740,12 +2740,12 @@ function getSalesPlanCalendarBandTopMm(
 
   const start =
     isA4
-      ? (compact ? 5.1 : 5.4)
+      ? (compact ? 5.7 : 6)
       : (compact ? 7.4 : 8.2);
 
   const gap =
     isA4
-      ? (compact ? 3.6 : 3.8)
+      ? (compact ? 4.1 : 4.4)
       : (compact ? 5.0 : 5.7);
 
   return start + lane * gap;

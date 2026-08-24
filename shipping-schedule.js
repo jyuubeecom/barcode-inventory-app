@@ -29,6 +29,7 @@ let shippingWarehouseEditingInternalCode = "";
 let shippingScheduleEditingId = "";
 let shippingScheduleCurrentPage = 1;
 let shippingAllocationCurrentPage = 1;
+let shippingManualAdditionDrafts = new Map();
 
 window.addEventListener("DOMContentLoaded", initializeShippingScheduleFeature);
 
@@ -44,6 +45,8 @@ function initializeShippingScheduleFeature() {
   const jumpWarehouseButton = document.querySelector("#jump-shipping-warehouse-button");
   const scheduleSelect = document.querySelector("#shipping-allocation-schedule");
   const allocationSearch = document.querySelector("#shipping-allocation-search");
+  const manualSearch = document.querySelector("#shipping-manual-addition-search");
+  const saveManualButton = document.querySelector("#save-shipping-manual-additions");
   const saveVisibleButton = document.querySelector("#save-visible-shipping-allocations");
   const printButton = document.querySelector("#print-shipping-allocation-list");
   const prevSchedule = document.querySelector("#shipping-schedule-prev-page");
@@ -85,6 +88,7 @@ function initializeShippingScheduleFeature() {
   if (scheduleSelect) {
     scheduleSelect.addEventListener("change", function () {
       shippingAllocationCurrentPage = 1;
+      if (manualSearch) manualSearch.value = "";
       renderShippingAllocationTable();
     });
   }
@@ -93,6 +97,12 @@ function initializeShippingScheduleFeature() {
       shippingAllocationCurrentPage = 1;
       renderShippingAllocationTable();
     });
+  }
+  if (manualSearch) {
+    manualSearch.addEventListener("input", renderShippingManualAdditionSearchResults);
+  }
+  if (saveManualButton) {
+    saveManualButton.addEventListener("click", saveShippingManualAdditions);
   }
   if (saveVisibleButton) saveVisibleButton.addEventListener("click", saveVisibleShippingAllocations);
   if (printButton) printButton.addEventListener("click", printShippingAllocationList);
@@ -676,6 +686,7 @@ function getShippingAllocationRows(schedule) {
       const priorAllocated = getAllocatedQuantityForProductInSchedules(internalCode, priorScheduleIds);
       const recommendedQuantity = Math.max(0, requiredQuantity - currentStock - priorAllocated);
       const currentAllocation = getCurrentScheduleAllocationQuantity(schedule.id, internalCode);
+      const manualAdded = isShippingManualAddedProduct(schedule.id, internalCode);
 
       return {
         internalCode: internalCode,
@@ -690,6 +701,7 @@ function getShippingAllocationRows(schedule) {
         priorAllocated: priorAllocated,
         recommendedQuantity: recommendedQuantity,
         currentAllocation: currentAllocation,
+        manualAdded: manualAdded,
         location: product.location || "",
         isBackorder: isShippingBackorderProduct(product),
         averageStartMonth: averageContext.startMonth,
@@ -711,9 +723,16 @@ function getShippingAllocationRows(schedule) {
     });
 }
 
+function getShippingCandidateAllocationRows(schedule) {
+  return getShippingAllocationRows(schedule)
+    .filter(function (row) {
+      return !row.manualAdded;
+    });
+}
+
 function getFilteredShippingAllocationRows(schedule) {
   const search = String(document.querySelector("#shipping-allocation-search")?.value || "").trim().toLowerCase();
-  const rows = getShippingAllocationRows(schedule);
+  const rows = getShippingCandidateAllocationRows(schedule);
   if (!search) return rows;
 
   return rows.filter(function (row) {
@@ -749,6 +768,7 @@ function renderShippingAllocationTable() {
     if (saveButton) { saveButton.disabled = true; saveButton.hidden = false; }
     if (readOnlyMessage) readOnlyMessage.hidden = true;
     if (printButton) printButton.disabled = true;
+    renderShippingManualAdditionArea(null, false);
     pageStatus.textContent = "1 / 1ページ";
     if (prev) prev.disabled = true;
     if (next) next.disabled = true;
@@ -769,6 +789,8 @@ function renderShippingAllocationTable() {
       ? "🔒 入荷反映済みのため閲覧専用です。船積数量は変更できません。"
       : "🔒 船積内容を確定済みのため閲覧専用です。変更する場合は、船便一覧で「確定を解除」してください。";
   }
+
+  renderShippingManualAdditionArea(schedule, scheduleLocked);
 
   const targetPeriod = getShippingTargetPeriod(schedule);
   const monthKey = schedule.warehouseArrivalDate.slice(0, 7);
@@ -813,7 +835,7 @@ function renderShippingAllocationTable() {
           : `<br><span class="shipping-unconfirmed-note">船積数量を確認したら、船便一覧の「船積内容を確定」を押してください。未確定の船便は自動入荷されません。</span>`));
   }
 
-  const allRows = getShippingAllocationRows(schedule);
+  const allRows = getShippingCandidateAllocationRows(schedule);
   const filtered = getFilteredShippingAllocationRows(schedule);
   const totalPages = Math.max(1, Math.ceil(filtered.length / SHIPPING_ALLOCATION_PAGE_SIZE));
   if (shippingAllocationCurrentPage > totalPages) shippingAllocationCurrentPage = totalPages;
@@ -915,6 +937,704 @@ function renderShippingAllocationTable() {
   pageStatus.textContent = `${shippingAllocationCurrentPage} / ${totalPages}ページ`;
   if (prev) prev.disabled = shippingAllocationCurrentPage <= 1;
   if (next) next.disabled = shippingAllocationCurrentPage >= totalPages;
+}
+
+function getShippingManualDraftSet(scheduleId) {
+  const key = String(scheduleId || "");
+  if (!key) return new Set();
+
+  if (!shippingManualAdditionDrafts.has(key)) {
+    shippingManualAdditionDrafts.set(key, new Set());
+  }
+
+  return shippingManualAdditionDrafts.get(key);
+}
+
+function isShippingManualAddedProduct(scheduleId, internalCode) {
+  return getAllocationRecordsForScheduleProduct(scheduleId, internalCode)
+    .some(function (allocation) {
+      return (
+        String(allocation.source || "") === "manual-add" &&
+        Number(allocation.quantity) > 0
+      );
+    });
+}
+
+function getShippingManualAdditionRows(schedule) {
+  if (!schedule) return [];
+
+  const draftSet = getShippingManualDraftSet(schedule.id);
+  const codes = new Set();
+
+  shippingScheduleAllocations
+    .filter(function (allocation) {
+      return (
+        allocation.scheduleId === schedule.id &&
+        String(allocation.source || "") === "manual-add" &&
+        Number(allocation.quantity) > 0
+      );
+    })
+    .forEach(function (allocation) {
+      const code = String(allocation.internalCode || "").trim();
+      if (code) codes.add(code);
+    });
+
+  draftSet.forEach(function (code) {
+    if (code) codes.add(code);
+  });
+
+  return Array.from(codes)
+    .map(function (internalCode) {
+      const product = shippingScheduleProducts.find(function (item) {
+        return String(item.internalCode || "").trim() === internalCode;
+      });
+
+      if (!product || !isShippingAllocationTargetProduct(product)) {
+        return null;
+      }
+
+      return {
+        internalCode: internalCode,
+        productCode: product.productCode || "",
+        productName: product.productName || "",
+        location: product.location || "",
+        stock: getShippingNumber(product.stock),
+        quantity: getCurrentScheduleAllocationQuantity(
+          schedule.id,
+          internalCode
+        ),
+        saved: isShippingManualAddedProduct(
+          schedule.id,
+          internalCode
+        )
+      };
+    })
+    .filter(Boolean)
+    .sort(function (a, b) {
+      return a.internalCode.localeCompare(
+        b.internalCode,
+        "ja",
+        { numeric: true }
+      );
+    });
+}
+
+function renderShippingManualAdditionArea(
+  schedule,
+  scheduleLocked
+) {
+  const area = document.querySelector(
+    "#shipping-manual-addition-area"
+  );
+  const search = document.querySelector(
+    "#shipping-manual-addition-search"
+  );
+  const list = document.querySelector(
+    "#shipping-manual-addition-list"
+  );
+  const summary = document.querySelector(
+    "#shipping-manual-addition-summary"
+  );
+  const saveButton = document.querySelector(
+    "#save-shipping-manual-additions"
+  );
+
+  if (!area || !list || !summary) return;
+
+  area.classList.toggle(
+    "shipping-manual-addition-locked",
+    Boolean(scheduleLocked)
+  );
+
+  if (!schedule) {
+    if (search) {
+      search.value = "";
+      search.disabled = true;
+      search.placeholder =
+        "先に船便を選択してください";
+    }
+
+    list.innerHTML =
+      '<div class="shipping-manual-addition-empty">船便を選択すると、候補外の商品を追加できます。</div>';
+
+    summary.textContent =
+      "追加商品：0商品 / 保存済み数量：0個";
+
+    if (saveButton) {
+      saveButton.disabled = true;
+    }
+
+    renderShippingManualAdditionSearchResults();
+    return;
+  }
+
+  if (search) {
+    search.disabled = Boolean(scheduleLocked);
+    search.placeholder = scheduleLocked
+      ? "確定済み・入荷済みの船便は追加できません"
+      : "社内コード・商品コード・商品名で検索";
+  }
+
+  const rows =
+    getShippingManualAdditionRows(schedule);
+
+  const totalQuantity =
+    rows.reduce(function (sum, row) {
+      return sum + Number(row.quantity || 0);
+    }, 0);
+
+  summary.textContent =
+    `追加商品：${rows.length.toLocaleString("ja-JP")}商品 / ` +
+    `保存済み数量：${totalQuantity.toLocaleString("ja-JP")}個`;
+
+  list.innerHTML = "";
+
+  if (rows.length === 0) {
+    list.innerHTML =
+      '<div class="shipping-manual-addition-empty">まだ候補外の商品は追加されていません。上の検索欄から追加してください。</div>';
+  } else {
+    rows.forEach(function (row) {
+      const card =
+        document.createElement("article");
+
+      card.className =
+        "shipping-manual-addition-card";
+
+      card.dataset.internalCode =
+        row.internalCode;
+
+      const quantityControl =
+        scheduleLocked
+          ? `<strong class="shipping-manual-readonly-quantity">${row.quantity.toLocaleString("ja-JP")}個</strong>`
+          : `
+            <div class="shipping-manual-quantity-row">
+              <input
+                type="number"
+                min="0"
+                step="1"
+                inputmode="numeric"
+                class="shipping-manual-addition-quantity"
+                data-internal-code="${escapeShippingHtml(row.internalCode)}"
+                value="${row.quantity > 0 ? row.quantity : 0}"
+              >
+              <strong>個</strong>
+              <button
+                type="button"
+                class="shipping-manual-addition-remove"
+              >
+                一覧から外す
+              </button>
+            </div>
+          `;
+
+      card.innerHTML = `
+        <div class="shipping-manual-addition-card-head">
+          <div>
+            <div class="shipping-manual-addition-badges">
+              <span class="shipping-manual-addition-badge">
+                候補外追加
+              </span>
+              ${
+                row.saved
+                  ? '<span class="shipping-allocation-saved-badge">保存済み</span>'
+                  : '<span class="shipping-manual-draft-badge">未保存</span>'
+              }
+            </div>
+
+            <strong class="shipping-manual-addition-name">
+              ${escapeShippingHtml(row.productName || "")}
+            </strong>
+
+            <div class="shipping-manual-addition-codes">
+              <span>
+                社内コード：
+                <strong>${escapeShippingHtml(row.internalCode)}</strong>
+              </span>
+              <span>
+                商品コード：
+                <strong>${escapeShippingHtml(row.productCode || "未登録")}</strong>
+              </span>
+            </div>
+          </div>
+
+          <div class="shipping-manual-addition-quantity-box">
+            <span>今回の船便</span>
+            ${quantityControl}
+          </div>
+        </div>
+
+        <div class="shipping-manual-addition-meta">
+          <span>
+            現在庫：
+            <strong>${row.stock.toLocaleString("ja-JP")}個</strong>
+          </span>
+          <span>
+            保管場所：
+            <strong>${escapeShippingHtml(row.location || "未設定")}</strong>
+          </span>
+        </div>
+      `;
+
+      const removeButton =
+        card.querySelector(
+          ".shipping-manual-addition-remove"
+        );
+
+      if (removeButton) {
+        removeButton.addEventListener(
+          "click",
+          function () {
+            removeShippingManualAddition(
+              schedule.id,
+              row.internalCode,
+              row.saved
+            );
+          }
+        );
+      }
+
+      list.appendChild(card);
+    });
+  }
+
+  if (saveButton) {
+    saveButton.disabled =
+      Boolean(scheduleLocked) ||
+      rows.length === 0;
+  }
+
+  renderShippingManualAdditionSearchResults();
+}
+
+function renderShippingManualAdditionSearchResults() {
+  const results = document.querySelector(
+    "#shipping-manual-addition-search-results"
+  );
+
+  const search = document.querySelector(
+    "#shipping-manual-addition-search"
+  );
+
+  if (!results || !search) return;
+
+  const schedule =
+    getSelectedShippingSchedule();
+
+  const query =
+    String(search.value || "")
+      .normalize("NFKC")
+      .trim()
+      .toLowerCase();
+
+  results.innerHTML = "";
+
+  if (
+    !schedule ||
+    search.disabled ||
+    !query
+  ) {
+    return;
+  }
+
+  const manualCodes =
+    new Set(
+      getShippingManualAdditionRows(schedule)
+        .map(function (row) {
+          return row.internalCode;
+        })
+    );
+
+  const candidateCodes =
+    new Set(
+      getShippingCandidateAllocationRows(schedule)
+        .map(function (row) {
+          return row.internalCode;
+        })
+    );
+
+  const matches =
+    shippingScheduleProducts
+      .filter(function (product) {
+        if (!isShippingAllocationTargetProduct(product)) {
+          return false;
+        }
+
+        const code =
+          String(product.internalCode || "").trim();
+
+        if (
+          !code ||
+          manualCodes.has(code) ||
+          candidateCodes.has(code)
+        ) {
+          return false;
+        }
+
+        return [
+          product.internalCode,
+          product.productCode,
+          product.productName
+        ]
+          .map(function (value) {
+            return String(value || "")
+              .normalize("NFKC")
+              .toLowerCase();
+          })
+          .some(function (value) {
+            return value.includes(query);
+          });
+      })
+      .slice(0, 8);
+
+  if (matches.length === 0) {
+    const empty =
+      document.createElement("div");
+
+    empty.className =
+      "shipping-manual-search-empty";
+
+    empty.textContent =
+      "追加できる候補外商品が見つかりません。候補一覧に表示中の商品、廃盤商品、専用商品、対象仕入先外の商品は除外しています。";
+
+    results.appendChild(empty);
+    return;
+  }
+
+  matches.forEach(function (product) {
+    const row =
+      document.createElement("div");
+
+    row.className =
+      "shipping-manual-search-result";
+
+    row.innerHTML = `
+      <div>
+        <strong>
+          ${escapeShippingHtml(product.productName || "")}
+        </strong>
+        <span>
+          社内コード：${escapeShippingHtml(product.internalCode || "")}
+          / 商品コード：${escapeShippingHtml(product.productCode || "未登録")}
+        </span>
+      </div>
+
+      <button type="button">
+        追加する
+      </button>
+    `;
+
+    row
+      .querySelector("button")
+      .addEventListener(
+        "click",
+        function () {
+          addShippingManualAdditionDraft(
+            schedule.id,
+            String(product.internalCode || "").trim()
+          );
+
+          search.value = "";
+
+          renderShippingManualAdditionArea(
+            schedule,
+            false
+          );
+        }
+      );
+
+    results.appendChild(row);
+  });
+}
+
+function addShippingManualAdditionDraft(
+  scheduleId,
+  internalCode
+) {
+  const code =
+    String(internalCode || "").trim();
+
+  if (!scheduleId || !code) return;
+
+  getShippingManualDraftSet(scheduleId)
+    .add(code);
+}
+
+async function removeShippingManualAddition(
+  scheduleId,
+  internalCode,
+  saved
+) {
+  const code =
+    String(internalCode || "").trim();
+
+  if (!scheduleId || !code) return;
+
+  if (saved) {
+    const warehouseAllocated =
+      getShippingWarehouseAllocatedQuantity(
+        scheduleId,
+        code
+      );
+
+    if (warehouseAllocated > 0) {
+      alert(
+        `この商品は倉庫へ ${warehouseAllocated.toLocaleString("ja-JP")}個 振分け済みです。\n\n` +
+        `先に「倉庫別に振り分ける」で倉庫数量を0個へ戻してください。`
+      );
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        "保存済みの候補外追加商品を、この船便から削除しますか？"
+      );
+
+    if (!confirmed) return;
+
+    try {
+      const existingRecords =
+        getAllocationRecordsForScheduleProduct(
+          scheduleId,
+          code
+        );
+
+      for (const record of existingRecords) {
+        await deleteShippingAllocation(
+          record.id
+        );
+      }
+
+      getShippingManualDraftSet(scheduleId)
+        .delete(code);
+
+      await refreshShippingScheduleData();
+      return;
+    } catch (error) {
+      console.error(
+        "候補外追加商品の削除エラー",
+        error
+      );
+
+      alert(
+        "候補外追加商品を削除できませんでした。"
+      );
+      return;
+    }
+  }
+
+  getShippingManualDraftSet(scheduleId)
+    .delete(code);
+
+  renderShippingManualAdditionArea(
+    getSelectedShippingSchedule(),
+    false
+  );
+}
+
+async function saveShippingManualAdditions() {
+  const schedule =
+    getSelectedShippingSchedule();
+
+  if (!schedule) {
+    alert(
+      "振り分ける船便を選択してください。"
+    );
+    return;
+  }
+
+  if (isShippingScheduleReceived(schedule.id)) {
+    alert(
+      "この船便はすでに在庫へ入荷反映済みのため、商品を追加できません。"
+    );
+    return;
+  }
+
+  if (isShippingScheduleConfirmed(schedule)) {
+    alert(
+      "この船便は船積内容を確定済みです。追加する場合は、先に船便一覧で「確定を解除」してください。"
+    );
+    return;
+  }
+
+  const inputs =
+    Array.from(
+      document.querySelectorAll(
+        "#shipping-manual-addition-list .shipping-manual-addition-quantity"
+      )
+    );
+
+  if (inputs.length === 0) return;
+
+  const changes = [];
+
+  for (const input of inputs) {
+    const internalCode =
+      String(
+        input.dataset.internalCode || ""
+      ).trim();
+
+    const product =
+      shippingScheduleProducts.find(
+        function (item) {
+          return (
+            String(
+              item.internalCode || ""
+            ).trim() === internalCode
+          );
+        }
+      );
+
+    if (!product) continue;
+
+    const quantity =
+      Number(input.value);
+
+    if (
+      !Number.isInteger(quantity) ||
+      quantity < 0
+    ) {
+      alert(
+        `${product.productName || internalCode} の振分数量は0以上の整数で入力してください。`
+      );
+      input.focus();
+      return;
+    }
+
+    const warehouseAllocated =
+      getShippingWarehouseAllocatedQuantity(
+        schedule.id,
+        internalCode
+      );
+
+    if (quantity < warehouseAllocated) {
+      alert(
+        `${product.productName || internalCode} は倉庫へ ` +
+        `${warehouseAllocated.toLocaleString("ja-JP")}個 振分け済みです。\n\n` +
+        "先に倉庫振分け数量を減らしてください。"
+      );
+      input.focus();
+      return;
+    }
+
+    const currentQuantity =
+      getCurrentScheduleAllocationQuantity(
+        schedule.id,
+        internalCode
+      );
+
+    if (
+      quantity !== currentQuantity ||
+      !isShippingManualAddedProduct(
+        schedule.id,
+        internalCode
+      )
+    ) {
+      changes.push({
+        product: product,
+        internalCode: internalCode,
+        quantity: quantity
+      });
+    }
+  }
+
+  if (changes.length === 0) {
+    alert(
+      "変更された追加商品の数量はありません。"
+    );
+    return;
+  }
+
+  const positiveCount =
+    changes.filter(function (item) {
+      return item.quantity > 0;
+    }).length;
+
+  const confirmed =
+    window.confirm(
+      `${schedule.name} に候補外の商品を保存します。\n\n` +
+      `変更：${changes.length}商品\n` +
+      `1個以上で保存：${positiveCount}商品\n\n` +
+      "よろしいですか？"
+    );
+
+  if (!confirmed) return;
+
+  try {
+    for (const change of changes) {
+      const existingRecords =
+        getAllocationRecordsForScheduleProduct(
+          schedule.id,
+          change.internalCode
+        );
+
+      for (const existing of existingRecords) {
+        await deleteShippingAllocation(
+          existing.id
+        );
+      }
+
+      if (change.quantity > 0) {
+        await saveShippingAllocation({
+          id:
+            createShippingProductAllocationId(
+              schedule.id,
+              change.internalCode
+            ),
+          scheduleId:
+            schedule.id,
+          shippingWishId:
+            "",
+          internalCode:
+            change.internalCode,
+          productCode:
+            change.product.productCode || "",
+          productName:
+            change.product.productName || "",
+          quantity:
+            change.quantity,
+          source:
+            "manual-add",
+          updatedAt:
+            new Date().toISOString()
+        });
+      }
+
+      getShippingManualDraftSet(
+        schedule.id
+      ).delete(
+        change.internalCode
+      );
+    }
+
+    await refreshShippingScheduleData();
+
+    alert(
+      "候補外の商品を船便へ追加・保存しました。"
+    );
+
+    if (
+      window.shippingArrivalApp &&
+      typeof window.shippingArrivalApp.checkNow === "function"
+    ) {
+      window.setTimeout(
+        function () {
+          window.shippingArrivalApp.checkNow({
+            showMessageWhenNone: false
+          });
+        },
+        100
+      );
+    }
+  } catch (error) {
+    console.error(
+      "候補外商品保存エラー",
+      error
+    );
+
+    alert(
+      "候補外の商品を保存できませんでした。"
+    );
+  }
 }
 
 async function saveVisibleShippingAllocations() {
@@ -2195,6 +2915,170 @@ function createShippingScheduleStyle() {
     #shipping-schedule .shipping-allocation-metric-recommended { border-color: #90caf9; background: #edf6ff; }
     #shipping-schedule .shipping-allocation-metric span { display: block; margin-bottom: 4px; color: #607d8b; font-size: 12px; font-weight: 700; }
     #shipping-schedule .shipping-allocation-metric strong { display: block; color: #263238; font-size: 17px; line-height: 1.25; overflow-wrap: anywhere; }
+    #shipping-schedule .shipping-manual-addition-box {
+      margin: 16px 0;
+      padding: 16px;
+      border: 2px solid #1976d2;
+      border-radius: 14px;
+      background: #f7fbff;
+    }
+    #shipping-schedule .shipping-manual-addition-box h4 {
+      margin: 0 0 7px;
+      color: #0d47a1;
+      font-size: 18px;
+    }
+    #shipping-schedule .shipping-manual-addition-description {
+      margin: 0 0 12px;
+      line-height: 1.6;
+    }
+    #shipping-schedule .shipping-manual-addition-search-wrap {
+      display: grid;
+      gap: 7px;
+    }
+    #shipping-schedule .shipping-manual-addition-search-wrap input {
+      min-height: 48px;
+      font-size: 16px;
+    }
+    #shipping-schedule .shipping-manual-addition-search-results {
+      display: grid;
+      gap: 7px;
+      margin-top: 8px;
+    }
+    #shipping-schedule .shipping-manual-search-result {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 12px;
+      border: 1px solid #bbdefb;
+      border-radius: 10px;
+      background: #fff;
+    }
+    #shipping-schedule .shipping-manual-search-result strong,
+    #shipping-schedule .shipping-manual-search-result span {
+      display: block;
+    }
+    #shipping-schedule .shipping-manual-search-result span {
+      margin-top: 3px;
+      color: #546e7a;
+      font-size: 14px;
+    }
+    #shipping-schedule .shipping-manual-search-result button {
+      flex: 0 0 auto;
+      background: #1976d2;
+    }
+    #shipping-schedule .shipping-manual-search-empty,
+    #shipping-schedule .shipping-manual-addition-empty {
+      padding: 12px;
+      border-radius: 9px;
+      background: #eceff1;
+      color: #546e7a;
+      font-weight: 700;
+    }
+    #shipping-schedule .shipping-manual-addition-summary {
+      margin: 12px 0 8px;
+      padding: 10px 12px;
+      border-radius: 9px;
+      background: #e3f2fd;
+      font-weight: 800;
+    }
+    #shipping-schedule .shipping-manual-addition-list {
+      display: grid;
+      gap: 10px;
+    }
+    #shipping-schedule .shipping-manual-addition-card {
+      padding: 14px;
+      border: 1px solid #90caf9;
+      border-left: 6px solid #1976d2;
+      border-radius: 12px;
+      background: #fff;
+    }
+    #shipping-schedule .shipping-manual-addition-card-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 330px);
+      gap: 14px;
+      align-items: center;
+    }
+    #shipping-schedule .shipping-manual-addition-badges {
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+    #shipping-schedule .shipping-manual-addition-name {
+      display: block;
+      margin: 7px 0 4px;
+      color: #263238;
+      font-size: 18px;
+    }
+    #shipping-schedule .shipping-manual-addition-codes,
+    #shipping-schedule .shipping-manual-addition-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      color: #455a64;
+    }
+    #shipping-schedule .shipping-manual-addition-badge,
+    #shipping-schedule .shipping-manual-draft-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    #shipping-schedule .shipping-manual-addition-badge {
+      background: #1565c0;
+      color: #fff;
+    }
+    #shipping-schedule .shipping-manual-draft-badge {
+      background: #fff3e0;
+      color: #e65100;
+    }
+    #shipping-schedule .shipping-manual-addition-quantity-box {
+      padding: 10px;
+      border: 2px solid #90caf9;
+      border-radius: 10px;
+      background: #f5fbff;
+    }
+    #shipping-schedule .shipping-manual-addition-quantity-box > span {
+      display: block;
+      margin-bottom: 6px;
+      color: #1565c0;
+      font-weight: 800;
+    }
+    #shipping-schedule .shipping-manual-quantity-row {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+    }
+    #shipping-schedule .shipping-manual-quantity-row input {
+      width: 120px;
+      min-height: 46px;
+      font-size: 20px;
+      font-weight: 800;
+      text-align: right;
+    }
+    #shipping-schedule .shipping-manual-addition-remove {
+      background: #c62828;
+    }
+    #shipping-schedule .shipping-manual-addition-meta {
+      margin-top: 10px;
+      padding-top: 9px;
+      border-top: 1px solid #e0e0e0;
+    }
+    #shipping-schedule .shipping-manual-readonly-quantity {
+      font-size: 20px;
+    }
+    #shipping-schedule .shipping-manual-addition-locked {
+      opacity: .82;
+    }
+    @media (max-width: 760px) {
+      #shipping-schedule .shipping-manual-addition-card-head {
+        grid-template-columns: 1fr;
+      }
+      #shipping-schedule .shipping-manual-quantity-row {
+        flex-wrap: wrap;
+      }
+    }
     #shipping-schedule #print-shipping-allocation-list { background: #455a64; }
     #shipping-schedule #print-shipping-warehouse-list { background: #455a64; }
     #shipping-schedule .shipping-warehouse-editor {

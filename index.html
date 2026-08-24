@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v169
+            画面版 v170
           </span>
         </div>
       </div>
@@ -1400,6 +1400,59 @@
           推奨数量 ＝ 「期間販売見込 ＋ 対象期間の販売予定数」－ 現在庫 － 前の船便への振分数量です。<br>
           <strong>未保存の商品は「今回の船便」を0個で表示します。実際に積む商品だけ数量を入力して保存してください。</strong><br>
           推奨数量をそのまま使う場合は、各商品の「推奨を入れる」ボタンを押せます。
+        </div>
+
+        <div
+          id="shipping-manual-addition-area"
+          class="shipping-manual-addition-box"
+        >
+          <h4>候補外の商品を追加</h4>
+
+          <p class="shipping-manual-addition-description">
+            不足候補に表示されていない商品でも、
+            必要な商品を手動でこの船便へ追加できます。<br>
+            廃盤商品・専用商品・船積対象外の仕入先の商品は追加できません。
+          </p>
+
+          <div class="shipping-manual-addition-search-wrap">
+            <label for="shipping-manual-addition-search">
+              追加する商品を検索
+            </label>
+
+            <input
+              id="shipping-manual-addition-search"
+              type="search"
+              placeholder="社内コード・商品コード・商品名で検索"
+              disabled
+            >
+          </div>
+
+          <div
+            id="shipping-manual-addition-search-results"
+            class="shipping-manual-addition-search-results"
+          ></div>
+
+          <div
+            id="shipping-manual-addition-summary"
+            class="shipping-manual-addition-summary"
+          >
+            追加商品：0商品 / 保存済み数量：0個
+          </div>
+
+          <div
+            id="shipping-manual-addition-list"
+            class="shipping-manual-addition-list"
+          ></div>
+
+          <div class="shipping-schedule-actions">
+            <button
+              id="save-shipping-manual-additions"
+              type="button"
+              disabled
+            >
+              候補外の追加商品を保存する
+            </button>
+          </div>
         </div>
 
         <div
@@ -3124,7 +3177,7 @@
 <script src="purchase-required.js?v=140"></script>
 <script src="order-remaining.js?v=119"></script>
 <script src="low-shipment.js?v=45"></script>
-<script src="shipping-schedule.js?v=152"></script>
+<script src="shipping-schedule.js?v=170"></script>
 <script src="dedicated-product.js?v=108"></script>
 <script src="shipping-arrival.js?v=118"></script>
 <script src="barcode-print.js?v=142"></script>

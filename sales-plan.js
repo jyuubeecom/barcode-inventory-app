@@ -3531,9 +3531,27 @@ function getSalesPlanTotalPages() {
 function compareSalesPlans(a, b) {
   const dateCompare = getSalesPlanSortDate(a).localeCompare(getSalesPlanSortDate(b));
   if (dateCompare !== 0) return dateCompare;
-  const customerCompare = String(a.customerName || "").localeCompare(String(b.customerName || ""), "ja");
+
+  const customerCompare = String(a.customerName || "").localeCompare(
+    String(b.customerName || ""),
+    "ja"
+  );
   if (customerCompare !== 0) return customerCompare;
-  return String(a.internalCode || "").localeCompare(String(b.internalCode || ""), "ja", { numeric: true });
+
+  // 同じ取引先の販売予定は、副題ごとにまとめて表示します。
+  // これにより、同じ案件・便名の商品が社内コード順で離れてしまうのを防ぎます。
+  const subtitleCompare = String(a.subtitle || "").localeCompare(
+    String(b.subtitle || ""),
+    "ja",
+    { numeric: true }
+  );
+  if (subtitleCompare !== 0) return subtitleCompare;
+
+  return String(a.internalCode || "").localeCompare(
+    String(b.internalCode || ""),
+    "ja",
+    { numeric: true }
+  );
 }
 
 function getSalesPlanShippingType(record) {

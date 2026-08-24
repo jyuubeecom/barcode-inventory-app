@@ -1831,8 +1831,15 @@ function printSalesPlanCalendar() {
                       ? `<span>${escapeSalesPlanHtml(band.label)}</span>`
                       : "";
 
+                  const bandStyle =
+                    `top:${getSalesPlanCalendarBandTopMm(
+                      band.lane
+                    )}mm; background:${getSalesPlanCalendarBandColor(
+                      band.lane
+                    )};`;
+
                   return `
-                    <div class="${classes.join(" ")}">
+                    <div class="${classes.join(" ")}" style="${bandStyle}">
                       ${label}
                     </div>
                   `;
@@ -1880,11 +1887,11 @@ function printSalesPlanCalendar() {
 
   const rowHeightMm =
     calendar.weekCount <= 4
-      ? 58
+      ? 62
       : (
           calendar.weekCount === 5
-            ? 47
-            : 39
+            ? 56
+            : 45
         );
 
   const html = `
@@ -1913,14 +1920,14 @@ function printSalesPlanCalendar() {
         "Yu Gothic",
         "Meiryo",
         sans-serif;
-      font-size: 10.5pt;
+      font-size: 11pt;
       font-weight: 500;
     }
 
     h1 {
       margin: 0;
       text-align: center;
-      font-size: 20pt;
+      font-size: 21pt;
       font-weight: 800;
       line-height: 1.2;
     }
@@ -1933,7 +1940,7 @@ function printSalesPlanCalendar() {
       padding: 6px 10px;
       border: 1.2px solid #333;
       color: #000;
-      font-size: 10pt;
+      font-size: 10.8pt;
       font-weight: 800;
     }
 
@@ -1964,19 +1971,19 @@ function printSalesPlanCalendar() {
     }
 
     th {
-      height: 8.5mm;
+      height: 9mm;
       padding: 2px;
       text-align: center;
       background: #f3f6fa;
       color: #000;
-      font-size: 10.5pt;
+      font-size: 11pt;
       font-weight: 800;
     }
 
     td {
       position: relative;
       height: ${rowHeightMm}mm;
-      padding: 5.8mm 0 0;
+      padding: 6.2mm 0 0;
       vertical-align: top;
       color: #000;
       overflow: hidden;
@@ -1987,7 +1994,7 @@ function printSalesPlanCalendar() {
       top: 1.6mm;
       left: 1.8mm;
       z-index: 5;
-      font-size: 10.5pt;
+      font-size: 11pt;
       font-weight: 800;
       line-height: 1;
     }
@@ -2019,7 +2026,7 @@ function printSalesPlanCalendar() {
       right: 1mm;
       z-index: 5;
       color: #b00020;
-      font-size: 7.8pt;
+      font-size: 8.2pt;
       font-weight: 800;
       line-height: 1.05;
       white-space: nowrap;
@@ -2035,13 +2042,13 @@ function printSalesPlanCalendar() {
       position: absolute;
       left: -0.5mm;
       right: -0.5mm;
-      height: 5.2mm;
-      padding: 0 .8mm;
+      height: 5.4mm;
+      padding: 0 1mm;
       background: #1565c0;
       color: #fff;
-      font-size: 7.4pt;
+      font-size: 8pt;
       font-weight: 800;
-      line-height: 5.2mm;
+      line-height: 5.4mm;
       white-space: nowrap;
       overflow: hidden;
       z-index: 3;
@@ -2093,7 +2100,7 @@ function printSalesPlanCalendar() {
       right: 1.5mm;
       bottom: 1.8mm;
       color: #b00020;
-      font-size: 7.2pt;
+      font-size: 7.8pt;
       font-weight: 800;
       text-align: right;
     }
@@ -2102,7 +2109,7 @@ function printSalesPlanCalendar() {
       margin-top: 6mm;
       text-align: center;
       color: #666;
-      font-size: 7.8pt;
+      font-size: 8.2pt;
       font-weight: 600;
     }
 
@@ -2110,7 +2117,7 @@ function printSalesPlanCalendar() {
       margin-top: 2px;
       text-align: right;
       color: #333;
-      font-size: 7.2pt;
+      font-size: 8.4pt;
       font-weight: 600;
     }
   </style>
@@ -2163,6 +2170,44 @@ function printSalesPlanCalendar() {
     },
     500
   );
+}
+
+function getSalesPlanCalendarVisibleLaneLimit(
+  weekCount
+) {
+  if (weekCount <= 4) {
+    return 7;
+  }
+
+  if (weekCount === 5) {
+    return 6;
+  }
+
+  return 5;
+}
+
+function getSalesPlanCalendarBandTopMm(
+  lane
+) {
+  return 8.2 + lane * 5.7;
+}
+
+function getSalesPlanCalendarBandColor(
+  lane
+) {
+  const colors = [
+    "#1565c0",
+    "#2e7d32",
+    "#6a1b9a",
+    "#ef6c00",
+    "#00838f",
+    "#ad1457",
+    "#5d4037"
+  ];
+
+  return colors[
+    lane % colors.length
+  ];
 }
 
 function buildSalesPlanCalendarPrintData(
@@ -2270,6 +2315,11 @@ function buildSalesPlanCalendarPrintData(
 
   const weekCount =
     cells.length / 7;
+
+  const visibleLaneLimit =
+    getSalesPlanCalendarVisibleLaneLimit(
+      weekCount
+    );
 
   for (
     let weekIndex = 0;
@@ -2400,7 +2450,7 @@ function buildSalesPlanCalendarPrintData(
           }
 
           if (
-            lane >= 4
+            lane >= visibleLaneLimit
           ) {
             cell.hiddenBandCount +=
               1;

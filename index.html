@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v170
+            画面版 v171
           </span>
         </div>
       </div>
@@ -1406,8 +1406,20 @@
           id="shipping-manual-addition-area"
           class="shipping-manual-addition-box"
         >
-          <h4>候補外の商品を追加</h4>
+          <button
+            id="toggle-shipping-manual-addition"
+            class="shipping-manual-addition-toggle"
+            type="button"
+            aria-expanded="false"
+          >
+            ＋ 候補外の商品を追加する
+          </button>
 
+          <div
+            id="shipping-manual-addition-content"
+            class="shipping-manual-addition-content"
+            hidden
+          >
           <p class="shipping-manual-addition-description">
             不足候補に表示されていない商品でも、
             必要な商品を手動でこの船便へ追加できます。<br>
@@ -1452,6 +1464,7 @@
             >
               候補外の追加商品を保存する
             </button>
+          </div>
           </div>
         </div>
 
@@ -3177,7 +3190,7 @@
 <script src="purchase-required.js?v=140"></script>
 <script src="order-remaining.js?v=119"></script>
 <script src="low-shipment.js?v=45"></script>
-<script src="shipping-schedule.js?v=170"></script>
+<script src="shipping-schedule.js?v=171"></script>
 <script src="dedicated-product.js?v=108"></script>
 <script src="shipping-arrival.js?v=118"></script>
 <script src="barcode-print.js?v=142"></script>

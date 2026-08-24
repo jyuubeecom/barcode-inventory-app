@@ -46,6 +46,8 @@ function initializeShippingScheduleFeature() {
   const scheduleSelect = document.querySelector("#shipping-allocation-schedule");
   const allocationSearch = document.querySelector("#shipping-allocation-search");
   const manualSearch = document.querySelector("#shipping-manual-addition-search");
+  const manualToggleButton = document.querySelector("#toggle-shipping-manual-addition");
+  const manualContent = document.querySelector("#shipping-manual-addition-content");
   const saveManualButton = document.querySelector("#save-shipping-manual-additions");
   const saveVisibleButton = document.querySelector("#save-visible-shipping-allocations");
   const printButton = document.querySelector("#print-shipping-allocation-list");
@@ -98,6 +100,27 @@ function initializeShippingScheduleFeature() {
       renderShippingAllocationTable();
     });
   }
+  if (manualToggleButton && manualContent) {
+    manualToggleButton.addEventListener("click", function () {
+      const willOpen = manualContent.hidden;
+
+      manualContent.hidden = !willOpen;
+
+      manualToggleButton.setAttribute(
+        "aria-expanded",
+        String(willOpen)
+      );
+
+      updateShippingManualAdditionToggleLabel();
+
+      if (willOpen && manualSearch && !manualSearch.disabled) {
+        window.setTimeout(function () {
+          manualSearch.focus();
+        }, 50);
+      }
+    });
+  }
+
   if (manualSearch) {
     manualSearch.addEventListener("input", renderShippingManualAdditionSearchResults);
   }
@@ -1019,6 +1042,43 @@ function getShippingManualAdditionRows(schedule) {
     });
 }
 
+function updateShippingManualAdditionToggleLabel() {
+  const toggleButton =
+    document.querySelector(
+      "#toggle-shipping-manual-addition"
+    );
+
+  const content =
+    document.querySelector(
+      "#shipping-manual-addition-content"
+    );
+
+  if (!toggleButton || !content) return;
+
+  const schedule =
+    getSelectedShippingSchedule();
+
+  const rows =
+    schedule
+      ? getShippingManualAdditionRows(schedule)
+      : [];
+
+  const totalQuantity =
+    rows.reduce(function (sum, row) {
+      return sum + Number(row.quantity || 0);
+    }, 0);
+
+  const statusText =
+    rows.length > 0
+      ? `（${rows.length.toLocaleString("ja-JP")}商品 / ${totalQuantity.toLocaleString("ja-JP")}個）`
+      : "";
+
+  toggleButton.textContent =
+    content.hidden
+      ? `＋ 候補外の商品を追加する${statusText}`
+      : `－ 候補外の商品追加を閉じる${statusText}`;
+}
+
 function renderShippingManualAdditionArea(
   schedule,
   scheduleLocked
@@ -1064,6 +1124,7 @@ function renderShippingManualAdditionArea(
       saveButton.disabled = true;
     }
 
+    updateShippingManualAdditionToggleLabel();
     renderShippingManualAdditionSearchResults();
     return;
   }
@@ -1086,6 +1147,8 @@ function renderShippingManualAdditionArea(
   summary.textContent =
     `追加商品：${rows.length.toLocaleString("ja-JP")}商品 / ` +
     `保存済み数量：${totalQuantity.toLocaleString("ja-JP")}個`;
+
+  updateShippingManualAdditionToggleLabel();
 
   list.innerHTML = "";
 
@@ -2916,16 +2979,30 @@ function createShippingScheduleStyle() {
     #shipping-schedule .shipping-allocation-metric span { display: block; margin-bottom: 4px; color: #607d8b; font-size: 12px; font-weight: 700; }
     #shipping-schedule .shipping-allocation-metric strong { display: block; color: #263238; font-size: 17px; line-height: 1.25; overflow-wrap: anywhere; }
     #shipping-schedule .shipping-manual-addition-box {
-      margin: 16px 0;
-      padding: 16px;
+      margin: 10px 0 12px;
+      padding: 8px;
       border: 2px solid #1976d2;
-      border-radius: 14px;
+      border-radius: 12px;
       background: #f7fbff;
     }
-    #shipping-schedule .shipping-manual-addition-box h4 {
-      margin: 0 0 7px;
-      color: #0d47a1;
-      font-size: 18px;
+
+    #shipping-schedule .shipping-manual-addition-toggle {
+      width: 100%;
+      min-height: 46px;
+      margin: 0;
+      background: #1565c0;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    #shipping-schedule .shipping-manual-addition-content[hidden] {
+      display: none !important;
+    }
+
+    #shipping-schedule .shipping-manual-addition-content {
+      margin-top: 10px;
+      padding: 6px;
     }
     #shipping-schedule .shipping-manual-addition-description {
       margin: 0 0 12px;

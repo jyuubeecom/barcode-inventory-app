@@ -1782,54 +1782,6 @@ function printSalesPlanCalendar() {
             );
           }
 
-          const entries =
-            cell.entries
-              .slice(
-                0,
-                4
-              )
-              .map(
-                function (entry) {
-                  const subtitle =
-                    entry.subtitle
-                      ? ` / ${entry.subtitle}`
-                      : "";
-
-                  const productText =
-                    entry.productCount ===
-                    1
-                      ? (
-                          entry.singleProductCode ||
-                          "商品コード未登録"
-                        )
-                      : `${entry.productCount}商品`;
-
-                  return `
-                    <div class="calendar-entry">
-                      <strong>${escapeSalesPlanHtml(entry.customerName || "取引先未登録")}${escapeSalesPlanHtml(subtitle)}</strong>
-                      <span>${escapeSalesPlanHtml(productText)} / ${entry.totalQuantity.toLocaleString("ja-JP")}個</span>
-                      ${
-                        entry.shippingLabel
-                          ? `<small>${escapeSalesPlanHtml(entry.shippingLabel)}</small>`
-                          : ""
-                      }
-                    </div>
-                  `;
-                }
-              )
-              .join("");
-
-          const hiddenCount =
-            Math.max(
-              0,
-              cell.entries.length - 4
-            );
-
-          const moreHtml =
-            hiddenCount > 0
-              ? `<div class="more">ほか${hiddenCount}件</div>`
-              : "";
-
           const holiday =
             getSalesPlanJapaneseHoliday(
               cell.date
@@ -1853,12 +1805,62 @@ function printSalesPlanCalendar() {
               ? `<div class="holiday-name">${escapeSalesPlanHtml(holiday)}</div>`
               : "";
 
+          const bandsHtml =
+            (cell.bands || [])
+              .map(
+                function (band) {
+                  const classes = [
+                    "period-band",
+                    `lane-${band.lane}`
+                  ];
+
+                  if (band.isStart) {
+                    classes.push(
+                      "band-start"
+                    );
+                  }
+
+                  if (band.isEnd) {
+                    classes.push(
+                      "band-end"
+                    );
+                  }
+
+                  const label =
+                    band.showLabel
+                      ? `<span>${escapeSalesPlanHtml(band.label)}</span>`
+                      : "";
+
+                  return `
+                    <div class="${classes.join(" ")}">
+                      ${label}
+                    </div>
+                  `;
+                }
+              )
+              .join("");
+
+          const hiddenHtml =
+            cell.hiddenBandCount > 0
+              ? `<div class="band-more">ほか${cell.hiddenBandCount}件</div>`
+              : "";
+
+          const emptyHtml =
+            (
+              (!cell.bands ||
+                cell.bands.length === 0) &&
+              cell.hiddenBandCount === 0
+            )
+              ? '<div class="no-plan">予定なし</div>'
+              : "";
+
           return `
             <td class="${dayClass}">
               <div class="day-number">${cell.day}</div>
               ${holidayHtml}
-              ${entries || '<div class="no-plan">予定なし</div>'}
-              ${moreHtml}
+              ${bandsHtml}
+              ${hiddenHtml}
+              ${emptyHtml}
             </td>
           `;
         }
@@ -1875,6 +1877,15 @@ function printSalesPlanCalendar() {
       `<tr>${cellsHtml.slice(index, index + 7).join("")}</tr>`
     );
   }
+
+  const rowHeightMm =
+    calendar.weekCount <= 4
+      ? 37
+      : (
+          calendar.weekCount === 5
+            ? 30
+            : 25
+        );
 
   const html = `
 <!DOCTYPE html>
@@ -1928,10 +1939,8 @@ function printSalesPlanCalendar() {
 
     table {
       width: 100%;
-      height: 164mm;
       border-collapse: collapse;
       table-layout: fixed;
-      page-break-inside: avoid;
     }
 
     thead {
@@ -1945,6 +1954,7 @@ function printSalesPlanCalendar() {
     tr,
     th,
     td {
+      break-inside: avoid;
       page-break-inside: avoid;
     }
 
@@ -1965,16 +1975,18 @@ function printSalesPlanCalendar() {
 
     td {
       position: relative;
-      height: 24.6mm;
-      padding: 4.2mm 1.6mm 1.4mm;
+      height: ${rowHeightMm}mm;
+      padding: 4.2mm 0 0;
       vertical-align: top;
       color: #000;
+      overflow: hidden;
     }
 
     .day-number {
       position: absolute;
       top: 1.2mm;
       left: 1.6mm;
+      z-index: 5;
       font-size: 9.4pt;
       font-weight: 800;
       line-height: 1;
@@ -2001,61 +2013,93 @@ function printSalesPlanCalendar() {
     }
 
     .holiday-name {
-      margin: 0 0 .7mm;
+      position: absolute;
+      top: 1.1mm;
+      left: 7mm;
+      right: 1mm;
+      z-index: 5;
       color: #b00020;
       font-size: 6.8pt;
       font-weight: 800;
-      line-height: 1.1;
+      line-height: 1.05;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .outside {
       background: #f7f7f7;
     }
 
-    .calendar-entry {
-      margin-bottom: .8mm;
-      padding: .9mm 1.1mm;
-      border-left: 3px solid #005bbb;
-      background: #ffffff;
-      line-height: 1.18;
-      color: #000;
+    .period-band {
+      position: absolute;
+      left: -0.5mm;
+      right: -0.5mm;
+      height: 3.7mm;
+      padding: 0 .8mm;
+      background: #1565c0;
+      color: #fff;
+      font-size: 6.2pt;
+      font-weight: 800;
+      line-height: 3.7mm;
+      white-space: nowrap;
+      overflow: hidden;
+      z-index: 3;
     }
 
-    .calendar-entry strong,
-    .calendar-entry span,
-    .calendar-entry small {
+    .period-band span {
       display: block;
-      overflow-wrap: anywhere;
-      color: #000;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    .calendar-entry strong {
-      font-size: 7.7pt;
-      font-weight: 800;
+    .period-band.band-start {
+      left: 1mm;
+      border-radius: 2mm 0 0 2mm;
     }
 
-    .calendar-entry span {
-      margin-top: .35mm;
-      font-size: 7.2pt;
-      font-weight: 700;
+    .period-band.band-end {
+      right: 1mm;
+      border-radius: 0 2mm 2mm 0;
     }
 
-    .calendar-entry small {
-      margin-top: .3mm;
-      color: #222;
-      font-size: 6.4pt;
-      font-weight: 600;
+    .period-band.band-start.band-end {
+      border-radius: 2mm;
     }
 
-    .more {
-      margin-top: .7mm;
-      font-weight: 800;
+    .period-band.lane-0 {
+      top: 7mm;
+    }
+
+    .period-band.lane-1 {
+      top: 11.4mm;
+      background: #2e7d32;
+    }
+
+    .period-band.lane-2 {
+      top: 15.8mm;
+      background: #6a1b9a;
+    }
+
+    .period-band.lane-3 {
+      top: 20.2mm;
+      background: #ef6c00;
+    }
+
+    .band-more {
+      position: absolute;
+      left: 1.5mm;
+      right: 1.5mm;
+      bottom: 1.2mm;
       color: #b00020;
-      font-size: 6.8pt;
+      font-size: 6.4pt;
+      font-weight: 800;
+      text-align: right;
     }
 
     .no-plan {
-      margin-top: 2.4mm;
+      margin-top: 4mm;
       text-align: center;
       color: #666;
       font-size: 6.8pt;
@@ -2092,7 +2136,7 @@ function printSalesPlanCalendar() {
   </table>
 
   <div class="footer">
-    ※ 1日5件以上の予定がある場合は「ほか○件」と表示します。詳細はリスト形式で確認してください。
+    ※ 出荷期間は色付きの帯で表示します。帯の先頭に取引先名・副題を表示し、詳細はリスト形式で確認してください。
   </div>
 </body>
 </html>
@@ -2134,7 +2178,8 @@ function buildSalesPlanCalendarPrintData(
 
   if (!match) {
     return {
-      cells: []
+      cells: [],
+      weekCount: 0
     };
   }
 
@@ -2171,89 +2216,308 @@ function buildSalesPlanCalendarPrintData(
   const monthEnd =
     `${match[1]}-${match[2]}-${String(lastDay).padStart(2, "0")}`;
 
-  const groupsByDay =
+  const groupedPeriods =
+    buildSalesPlanCalendarPeriodGroups(
+      plans,
+      monthStart,
+      monthEnd
+    );
+
+  const cells = [];
+
+  for (
+    let index = 0;
+    index < firstWeekday;
+    index += 1
+  ) {
+    cells.push({
+      inMonth: false
+    });
+  }
+
+  for (
+    let day = 1;
+    day <= lastDay;
+    day += 1
+  ) {
+    const date =
+      `${match[1]}-${match[2]}-${String(day).padStart(2, "0")}`;
+
+    const weekday =
+      new Date(
+        year,
+        monthNumber - 1,
+        day
+      ).getDay();
+
+    cells.push({
+      inMonth: true,
+      day: day,
+      weekday: weekday,
+      date: date,
+      bands: [],
+      hiddenBandCount: 0
+    });
+  }
+
+  while (
+    cells.length % 7 !== 0
+  ) {
+    cells.push({
+      inMonth: false
+    });
+  }
+
+  const weekCount =
+    cells.length / 7;
+
+  for (
+    let weekIndex = 0;
+    weekIndex < weekCount;
+    weekIndex += 1
+  ) {
+    const weekCells =
+      cells.slice(
+        weekIndex * 7,
+        weekIndex * 7 + 7
+      );
+
+    const inMonthCells =
+      weekCells.filter(
+        function (cell) {
+          return cell.inMonth;
+        }
+      );
+
+    if (
+      inMonthCells.length === 0
+    ) {
+      continue;
+    }
+
+    const weekStart =
+      inMonthCells[0].date;
+
+    const weekEnd =
+      inMonthCells[
+        inMonthCells.length - 1
+      ].date;
+
+    const weekPeriods =
+      groupedPeriods
+        .filter(
+          function (period) {
+            return (
+              period.endDate >=
+                weekStart &&
+              period.startDate <=
+                weekEnd
+            );
+          }
+        )
+        .sort(
+          function (left, right) {
+            const startCompare =
+              left.startDate.localeCompare(
+                right.startDate
+              );
+
+            if (
+              startCompare !== 0
+            ) {
+              return startCompare;
+            }
+
+            const endCompare =
+              right.endDate.localeCompare(
+                left.endDate
+              );
+
+            if (
+              endCompare !== 0
+            ) {
+              return endCompare;
+            }
+
+            return left.label.localeCompare(
+              right.label,
+              "ja"
+            );
+          }
+        );
+
+    const laneEnds = [];
+
+    weekPeriods.forEach(
+      function (period) {
+        const segmentStart =
+          period.startDate <
+          weekStart
+            ? weekStart
+            : period.startDate;
+
+        const segmentEnd =
+          period.endDate >
+          weekEnd
+            ? weekEnd
+            : period.endDate;
+
+        let lane = 0;
+
+        while (
+          lane <
+          laneEnds.length &&
+          laneEnds[lane] >=
+            segmentStart
+        ) {
+          lane += 1;
+        }
+
+        if (
+          lane ===
+          laneEnds.length
+        ) {
+          laneEnds.push(
+            segmentEnd
+          );
+        } else {
+          laneEnds[lane] =
+            segmentEnd;
+        }
+
+        for (
+          const cell of
+          weekCells
+        ) {
+          if (
+            !cell.inMonth ||
+            cell.date <
+              segmentStart ||
+            cell.date >
+              segmentEnd
+          ) {
+            continue;
+          }
+
+          if (
+            lane >= 4
+          ) {
+            cell.hiddenBandCount +=
+              1;
+
+            continue;
+          }
+
+          cell.bands.push({
+            lane: lane,
+            label:
+              period.label,
+            isStart:
+              cell.date ===
+              segmentStart,
+            isEnd:
+              cell.date ===
+              segmentEnd,
+            showLabel:
+              cell.date ===
+              segmentStart
+          });
+        }
+      }
+    );
+  }
+
+  return {
+    cells: cells,
+    weekCount: weekCount
+  };
+}
+
+function buildSalesPlanCalendarPeriodGroups(
+  plans,
+  monthStart,
+  monthEnd
+) {
+  const groups =
     new Map();
 
   plans.forEach(
     function (record) {
-      const anchorDate =
-        getSalesPlanCalendarAnchorDate(
-          record,
-          monthStart,
-          monthEnd
-        );
-
-      if (!anchorDate) {
-        return;
-      }
-
-      const day =
-        Number(
-          anchorDate.slice(
-            8,
-            10
-          )
+      const range =
+        getSalesPlanCalendarRange(
+          record
         );
 
       if (
-        !groupsByDay.has(
-          day
-        )
+        !range ||
+        !range.startDate ||
+        !range.endDate
       ) {
-        groupsByDay.set(
-          day,
-          new Map()
-        );
+        return;
       }
 
-      const dayGroups =
-        groupsByDay.get(
-          day
-        );
+      if (
+        range.endDate <
+          monthStart ||
+        range.startDate >
+          monthEnd
+      ) {
+        return;
+      }
+
+      const clippedStart =
+        range.startDate <
+        monthStart
+          ? monthStart
+          : range.startDate;
+
+      const clippedEnd =
+        range.endDate >
+        monthEnd
+          ? monthEnd
+          : range.endDate;
 
       const key =
         [
           record.customerName || "",
           record.subtitle || "",
-          formatSalesPlanShipping(
-            record
-          )
+          range.startDate,
+          range.endDate
         ].join(
           "||"
         );
 
       if (
-        !dayGroups.has(
+        !groups.has(
           key
         )
       ) {
-        dayGroups.set(
+        groups.set(
           key,
           {
+            startDate:
+              clippedStart,
+            endDate:
+              clippedEnd,
+            originalStartDate:
+              range.startDate,
+            originalEndDate:
+              range.endDate,
             customerName:
               record.customerName ||
-              "",
+              "取引先未登録",
             subtitle:
-              record.subtitle ||
-              "",
-            shippingLabel:
-              getSalesPlanShippingType(
-                record
-              ) === "period"
-                ? formatSalesPlanShipping(
-                    record
-                  )
-                : "",
-            totalQuantity:
-              0,
+              record.subtitle || "",
             productCodes:
-              new Set()
+              new Set(),
+            totalQuantity:
+              0
           }
         );
       }
 
       const group =
-        dayGroups.get(
+        groups.get(
           key
         );
 
@@ -2275,123 +2539,122 @@ function buildSalesPlanCalendarPrintData(
           productKey
         );
       }
-
-      if (
-        group.productCodes.size ===
-        1
-      ) {
-        group.singleProductCode =
-          record.productCode ||
-          record.internalCode ||
-          "";
-      }
     }
   );
 
-  const cells = [];
+  return Array.from(
+    groups.values()
+  )
+    .map(
+      function (group) {
+        const subtitleText =
+          group.subtitle
+            ? ` / ${group.subtitle}`
+            : "";
 
-  for (
-    let index = 0;
-    index < firstWeekday;
-    index += 1
+        return {
+          ...group,
+          label:
+            `${group.customerName}${subtitleText}`,
+          productCount:
+            group.productCodes.size
+        };
+      }
+    );
+}
+
+function getSalesPlanCalendarRange(
+  record
+) {
+  const type =
+    getSalesPlanShippingType(
+      record
+    );
+
+  if (
+    type === "date"
   ) {
-    cells.push({
-      inMonth: false
-    });
-  }
-
-  for (
-    let day = 1;
-    day <= lastDay;
-    day += 1
-  ) {
-    const weekday =
-      new Date(
-        year,
-        monthNumber - 1,
-        day
-      ).getDay();
-
-    const dayGroups =
-      groupsByDay.get(
-        day
+    const date =
+      String(
+        record.shippingDate || ""
       );
 
-    const entries =
-      dayGroups
-        ? Array.from(
-            dayGroups.values()
-          )
-            .map(
-              function (group) {
-                return {
-                  customerName:
-                    group.customerName,
-                  subtitle:
-                    group.subtitle,
-                  shippingLabel:
-                    group.shippingLabel,
-                  totalQuantity:
-                    group.totalQuantity,
-                  productCount:
-                    group.productCodes.size,
-                  singleProductCode:
-                    group.singleProductCode ||
-                    ""
-                };
-              }
-            )
-            .sort(
-              function (left, right) {
-                return String(
-                  left.customerName ||
-                  ""
-                ).localeCompare(
-                  String(
-                    right.customerName ||
-                    ""
-                  ),
-                  "ja"
-                );
-              }
-            )
-        : [];
+    if (!date) {
+      return null;
+    }
 
-    cells.push({
-      inMonth:
-        true,
-      day:
-        day,
-      weekday:
-        weekday,
-      date:
-        `${match[1]}-${match[2]}-${String(day).padStart(2, "0")}`,
-      entries:
-        entries
-    });
+    return {
+      startDate: date,
+      endDate: date
+    };
   }
 
-  while (
-    cells.length % 7 !==
-    0
+  if (
+    type === "period"
   ) {
-    cells.push({
-      inMonth: false
-    });
+    const startDate =
+      String(
+        record.shippingStartDate ||
+        ""
+      );
+
+    const endDate =
+      String(
+        record.shippingEndDate ||
+        ""
+      );
+
+    if (
+      !startDate ||
+      !endDate
+    ) {
+      return null;
+    }
+
+    return {
+      startDate: startDate,
+      endDate: endDate
+    };
   }
 
-  while (
-    cells.length < 42
+  if (
+    type === "month"
   ) {
-    cells.push({
-      inMonth: false
-    });
+    const shippingMonth =
+      String(
+        record.shippingMonth ||
+        ""
+      );
+
+    if (
+      !/^\d{4}-\d{2}$/.test(
+        shippingMonth
+      )
+    ) {
+      return null;
+    }
+
+    const parts =
+      shippingMonth
+        .split("-")
+        .map(Number);
+
+    const lastDay =
+      new Date(
+        parts[0],
+        parts[1],
+        0
+      ).getDate();
+
+    return {
+      startDate:
+        `${shippingMonth}-01`,
+      endDate:
+        `${shippingMonth}-${String(lastDay).padStart(2, "0")}`
+    };
   }
 
-  return {
-    cells:
-      cells
-  };
+  return null;
 }
 
 function getSalesPlanCalendarAnchorDate(

@@ -1,16 +1,21 @@
 "use strict";
 
 /* =========================================================
-   v140 PCホーム右側 要確認パネル
+   v177 PCホーム右側 要確認パネル + 印刷
    ・発注必要商品
    ・次の未確定船便で船積みが必要な商品
    ・PC表示のみ
+   ・要確認を「全部 / 発注のみ / 船積のみ」でA4印刷
    ========================================================= */
 
 document.addEventListener(
   "DOMContentLoaded",
   initializeHomeAlertPanel
 );
+
+let homeAlertLatestPurchaseData = null;
+let homeAlertLatestShippingData = null;
+
 
 function initializeHomeAlertPanel() {
   createHomeAlertPanelStyle();
@@ -108,14 +113,25 @@ function createHomeAlertPanel() {
         <h2>⚠ 要確認</h2>
       </div>
 
-      <button
-        id="home-alert-refresh-button"
-        type="button"
-        class="home-alert-refresh-button"
-        title="最新データで再確認"
-      >
-        更新
-      </button>
+      <div class="home-alert-panel-actions">
+        <button
+          id="home-alert-print-button"
+          type="button"
+          class="home-alert-print-button"
+          title="要確認の内容を印刷"
+        >
+          印刷
+        </button>
+
+        <button
+          id="home-alert-refresh-button"
+          type="button"
+          class="home-alert-refresh-button"
+          title="最新データで再確認"
+        >
+          更新
+        </button>
+      </div>
     </div>
 
     <div
@@ -153,6 +169,17 @@ function createHomeAlertPanel() {
       "click",
       function () {
         void refreshHomeAlertPanel();
+      }
+    );
+
+  panel
+    .querySelector(
+      "#home-alert-print-button"
+    )
+    ?.addEventListener(
+      "click",
+      function () {
+        void openHomeAlertPrintChoice();
       }
     );
 }
@@ -271,6 +298,22 @@ async function refreshHomeAlertPanel() {
 
   const shippingResult =
     results[1];
+
+  if (
+    purchaseResult.status ===
+    "fulfilled"
+  ) {
+    homeAlertLatestPurchaseData =
+      purchaseResult.value;
+  }
+
+  if (
+    shippingResult.status ===
+    "fulfilled"
+  ) {
+    homeAlertLatestShippingData =
+      shippingResult.value;
+  }
 
   if (purchaseBox) {
     if (
@@ -773,6 +816,826 @@ function bindHomeAlertButtons(
     );
 }
 
+
+async function openHomeAlertPrintChoice() {
+  const button =
+    document.querySelector(
+      "#home-alert-print-button"
+    );
+
+  if (button) {
+    button.disabled = true;
+    button.textContent =
+      "準備中…";
+  }
+
+  try {
+    const results =
+      await Promise.allSettled([
+        getHomePurchaseAlertData(),
+        getHomeShippingAlertData()
+      ]);
+
+    if (
+      results[0].status ===
+      "fulfilled"
+    ) {
+      homeAlertLatestPurchaseData =
+        results[0].value;
+    }
+
+    if (
+      results[1].status ===
+      "fulfilled"
+    ) {
+      homeAlertLatestShippingData =
+        results[1].value;
+    }
+
+    if (
+      !homeAlertLatestPurchaseData &&
+      !homeAlertLatestShippingData
+    ) {
+      await showHomeAlertPrintNotice(
+        "印刷データを確認できませんでした。更新してから、もう一度お試しください。"
+      );
+      return;
+    }
+
+    showHomeAlertPrintChoiceDialog();
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent =
+        "印刷";
+    }
+  }
+}
+
+function showHomeAlertPrintChoiceDialog() {
+  document
+    .querySelector(
+      "#home-alert-print-dialog"
+    )
+    ?.remove();
+
+  const purchaseCount =
+    Number(
+      homeAlertLatestPurchaseData &&
+      homeAlertLatestPurchaseData.count ||
+      0
+    );
+
+  const shippingCount =
+    Number(
+      homeAlertLatestShippingData &&
+      homeAlertLatestShippingData.count ||
+      0
+    );
+
+  const overlay =
+    document.createElement("div");
+
+  overlay.id =
+    "home-alert-print-dialog";
+
+  overlay.className =
+    "home-alert-print-overlay";
+
+  overlay.setAttribute(
+    "role",
+    "dialog"
+  );
+
+  overlay.setAttribute(
+    "aria-modal",
+    "true"
+  );
+
+  overlay.setAttribute(
+    "aria-labelledby",
+    "home-alert-print-dialog-title"
+  );
+
+  overlay.innerHTML = `
+    <div class="home-alert-print-modal">
+      <div class="home-alert-print-modal-head">
+        <div>
+          <span class="home-alert-print-modal-kicker">
+            A4横向き
+          </span>
+          <h3 id="home-alert-print-dialog-title">
+            要確認を印刷
+          </h3>
+        </div>
+        <button
+          type="button"
+          class="home-alert-print-close"
+          data-home-alert-print-close
+          aria-label="閉じる"
+        >
+          ×
+        </button>
+      </div>
+
+      <p class="home-alert-print-modal-message">
+        印刷したい内容を選んでください。画面に表示されている上位5件だけではなく、対象商品をすべて印刷します。
+      </p>
+
+      <div class="home-alert-print-choice-list">
+        <button
+          type="button"
+          class="home-alert-print-choice home-alert-print-choice-all"
+          data-home-alert-print-mode="all"
+        >
+          <strong>要確認を全部</strong>
+          <span>
+            発注 ${purchaseCount.toLocaleString("ja-JP")}商品 / 船積 ${shippingCount.toLocaleString("ja-JP")}商品
+          </span>
+        </button>
+
+        <button
+          type="button"
+          class="home-alert-print-choice home-alert-print-choice-purchase"
+          data-home-alert-print-mode="purchase"
+        >
+          <strong>発注のみ</strong>
+          <span>
+            ${purchaseCount.toLocaleString("ja-JP")}商品
+          </span>
+        </button>
+
+        <button
+          type="button"
+          class="home-alert-print-choice home-alert-print-choice-shipping"
+          data-home-alert-print-mode="shipping"
+        >
+          <strong>船積のみ</strong>
+          <span>
+            ${shippingCount.toLocaleString("ja-JP")}商品
+          </span>
+        </button>
+      </div>
+
+      <button
+        type="button"
+        class="home-alert-print-cancel"
+        data-home-alert-print-close
+      >
+        キャンセル
+      </button>
+    </div>
+  `;
+
+  function closeDialog() {
+    document.body.classList.remove(
+      "home-alert-print-dialog-open"
+    );
+
+    overlay.remove();
+  }
+
+  overlay
+    .querySelectorAll(
+      "[data-home-alert-print-close]"
+    )
+    .forEach(
+      function (button) {
+        button.addEventListener(
+          "click",
+          closeDialog
+        );
+      }
+    );
+
+  overlay
+    .querySelectorAll(
+      "[data-home-alert-print-mode]"
+    )
+    .forEach(
+      function (button) {
+        button.addEventListener(
+          "click",
+          function () {
+            const mode =
+              button.dataset
+                .homeAlertPrintMode ||
+              "all";
+
+            const opened =
+              printHomeAlertReport(
+                mode
+              );
+
+            if (opened) {
+              closeDialog();
+            }
+          }
+        );
+      }
+    );
+
+  overlay.addEventListener(
+    "click",
+    function (event) {
+      if (event.target === overlay) {
+        closeDialog();
+      }
+    }
+  );
+
+  function handleEscape(event) {
+    if (event.key !== "Escape") {
+      return;
+    }
+
+    document.removeEventListener(
+      "keydown",
+      handleEscape
+    );
+
+    closeDialog();
+  }
+
+  document.addEventListener(
+    "keydown",
+    handleEscape
+  );
+
+  document.body.classList.add(
+    "home-alert-print-dialog-open"
+  );
+
+  document.body.appendChild(
+    overlay
+  );
+
+  overlay
+    .querySelector(
+      '[data-home-alert-print-mode="all"]'
+    )
+    ?.focus();
+}
+
+function printHomeAlertReport(mode) {
+  const normalizedMode =
+    [
+      "all",
+      "purchase",
+      "shipping"
+    ].includes(mode)
+      ? mode
+      : "all";
+
+  const printWindow =
+    window.open(
+      "",
+      "_blank"
+    );
+
+  if (!printWindow) {
+    void showHomeAlertPrintNotice(
+      "印刷画面を開けませんでした。ブラウザのポップアップを許可してから、もう一度お試しください。"
+    );
+    return false;
+  }
+
+  try {
+    printWindow.opener = null;
+  } catch (error) {
+    // 印刷画面の作成自体は続行します。
+  }
+
+  const title =
+    normalizedMode === "purchase"
+      ? "発注が必要 一覧"
+      : normalizedMode === "shipping"
+        ? "船積みが必要 一覧"
+        : "要確認 一覧";
+
+  const sections = [];
+
+  if (
+    normalizedMode === "all" ||
+    normalizedMode === "purchase"
+  ) {
+    sections.push(
+      createHomePurchasePrintSection(
+        homeAlertLatestPurchaseData
+      )
+    );
+  }
+
+  if (
+    normalizedMode === "all" ||
+    normalizedMode === "shipping"
+  ) {
+    sections.push(
+      createHomeShippingPrintSection(
+        homeAlertLatestShippingData,
+        normalizedMode === "all"
+      )
+    );
+  }
+
+  const now = new Date();
+  const printedAt =
+    now.toLocaleString(
+      "ja-JP",
+      {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      }
+    );
+
+  printWindow.document.open();
+  printWindow.document.write(`<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHomeAlertHtml(title)}</title>
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 9mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: #263238;
+      background: #fff;
+      font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        "Yu Gothic",
+        "Meiryo",
+        sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.35;
+    }
+
+    .print-report-header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #455a64;
+    }
+
+    .print-report-header h1 {
+      margin: 0;
+      font-size: 18pt;
+    }
+
+    .print-report-header p {
+      margin: 0;
+      color: #546e7a;
+      font-size: 9pt;
+      white-space: nowrap;
+    }
+
+    .print-section {
+      margin-top: 8px;
+    }
+
+    .print-section.page-break {
+      break-before: page;
+      page-break-before: always;
+    }
+
+    .print-section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 6px;
+      padding: 7px 9px;
+      border-radius: 5px;
+      background: #fff3e0;
+      border-left: 5px solid #ef6c00;
+    }
+
+    .print-section-shipping .print-section-title {
+      background: #f3e5f5;
+      border-left-color: #7b1fa2;
+    }
+
+    .print-section-title h2 {
+      margin: 0;
+      font-size: 14pt;
+    }
+
+    .print-section-title strong {
+      font-size: 11pt;
+      white-space: nowrap;
+    }
+
+    .print-summary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      margin-bottom: 7px;
+    }
+
+    .print-summary-item {
+      padding: 6px 8px;
+      border: 1px solid #cfd8dc;
+      background: #fafafa;
+    }
+
+    .print-summary-item span {
+      color: #607d8b;
+      font-size: 8.5pt;
+      font-weight: 700;
+    }
+
+    .print-summary-item strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 12pt;
+    }
+
+    .print-schedule-info {
+      display: grid;
+      grid-template-columns: 1.4fr repeat(3, 1fr);
+      gap: 5px;
+      margin-bottom: 7px;
+      padding: 7px 8px;
+      border: 1px solid #d1c4e9;
+      background: #faf7ff;
+      font-size: 9pt;
+    }
+
+    .print-schedule-info strong {
+      display: block;
+      margin-top: 2px;
+      color: #4527a0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 8.6pt;
+    }
+
+    thead {
+      display: table-header-group;
+    }
+
+    tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    th,
+    td {
+      padding: 4px 5px;
+      border: 1px solid #90a4ae;
+      vertical-align: middle;
+      overflow-wrap: anywhere;
+    }
+
+    th {
+      background: #eceff1;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    td.number {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    td.center {
+      text-align: center;
+    }
+
+    .purchase-table th:nth-child(1),
+    .purchase-table td:nth-child(1) { width: 4%; }
+    .purchase-table th:nth-child(2),
+    .purchase-table td:nth-child(2) { width: 10%; }
+    .purchase-table th:nth-child(3),
+    .purchase-table td:nth-child(3) { width: 12%; }
+    .purchase-table th:nth-child(4),
+    .purchase-table td:nth-child(4) { width: 28%; }
+    .purchase-table th:nth-child(5),
+    .purchase-table td:nth-child(5) { width: 10%; }
+    .purchase-table th:nth-child(6),
+    .purchase-table td:nth-child(6) { width: 10%; }
+    .purchase-table th:nth-child(7),
+    .purchase-table td:nth-child(7) { width: 12%; }
+    .purchase-table th:nth-child(8),
+    .purchase-table td:nth-child(8) { width: 14%; }
+
+    .shipping-table th:nth-child(1),
+    .shipping-table td:nth-child(1) { width: 5%; }
+    .shipping-table th:nth-child(2),
+    .shipping-table td:nth-child(2) { width: 11%; }
+    .shipping-table th:nth-child(3),
+    .shipping-table td:nth-child(3) { width: 14%; }
+    .shipping-table th:nth-child(4),
+    .shipping-table td:nth-child(4) { width: 34%; }
+    .shipping-table th:nth-child(5),
+    .shipping-table td:nth-child(5) { width: 12%; }
+    .shipping-table th:nth-child(6),
+    .shipping-table td:nth-child(6) { width: 12%; }
+    .shipping-table th:nth-child(7),
+    .shipping-table td:nth-child(7) { width: 12%; }
+
+    .shortage {
+      color: #d84315;
+      font-weight: 800;
+    }
+
+    .remaining {
+      color: #6a1b9a;
+      font-weight: 800;
+    }
+
+    .print-empty {
+      padding: 16px;
+      border: 1px dashed #90a4ae;
+      color: #607d8b;
+      text-align: center;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <header class="print-report-header">
+    <h1>${escapeHomeAlertHtml(title)}</h1>
+    <p>印刷日時：${escapeHomeAlertHtml(printedAt)}</p>
+  </header>
+
+  ${sections.join("\n")}
+
+  <script>
+    window.addEventListener("load", function () {
+      window.setTimeout(function () {
+        window.focus();
+        window.print();
+      }, 250);
+    });
+  <\/script>
+</body>
+</html>`);
+  printWindow.document.close();
+
+  return true;
+}
+
+function createHomePurchasePrintSection(data) {
+  const safeData = data || {};
+  const rows =
+    Array.isArray(safeData.rows)
+      ? safeData.rows
+      : [];
+  const count =
+    Number(safeData.count || rows.length || 0);
+  const total =
+    Number(safeData.totalShortage || 0);
+
+  const body =
+    rows.length > 0
+      ? `
+        <table class="purchase-table">
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th>社内コード</th>
+              <th>商品コード</th>
+              <th>商品名</th>
+              <th>現在庫</th>
+              <th>発注残</th>
+              <th>必要在庫</th>
+              <th>不足数</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(
+              function (row, index) {
+                return `
+                  <tr>
+                    <td class="center">${index + 1}</td>
+                    <td>${escapeHomeAlertHtml(row.internalCode || "-")}</td>
+                    <td>${escapeHomeAlertHtml(row.productCode || "-")}</td>
+                    <td>${escapeHomeAlertHtml(row.productName || "商品名未登録")}</td>
+                    <td class="number">${formatHomeAlertPrintQuantity(row.currentStock)}個</td>
+                    <td class="number">${formatHomeAlertPrintQuantity(row.orderRemaining)}個</td>
+                    <td class="number">${formatHomeAlertPrintQuantity(row.requiredStock)}個</td>
+                    <td class="number shortage">${formatHomeAlertPrintQuantity(row.shortage)}個</td>
+                  </tr>
+                `;
+              }
+            ).join("")}
+          </tbody>
+        </table>
+      `
+      : `<div class="print-empty">現在、追加発注が必要な商品はありません。</div>`;
+
+  return `
+    <section class="print-section print-section-purchase">
+      <div class="print-section-title">
+        <h2>🛒 発注が必要</h2>
+        <strong>${count.toLocaleString("ja-JP")}商品</strong>
+      </div>
+
+      <div class="print-summary">
+        <div class="print-summary-item">
+          <span>対象商品数</span>
+          <strong>${count.toLocaleString("ja-JP")}商品</strong>
+        </div>
+        <div class="print-summary-item">
+          <span>不足合計</span>
+          <strong>${total.toLocaleString("ja-JP")}個</strong>
+        </div>
+      </div>
+
+      ${body}
+    </section>
+  `;
+}
+
+function createHomeShippingPrintSection(
+  data,
+  pageBreak
+) {
+  const safeData = data || {};
+  const rows =
+    Array.isArray(safeData.rows)
+      ? safeData.rows
+      : [];
+  const count =
+    Number(safeData.count || rows.length || 0);
+  const total =
+    Number(safeData.totalRemaining || 0);
+  const schedule =
+    safeData.schedule || {};
+  const hasSchedule =
+    Boolean(safeData.hasSchedule);
+
+  let body = "";
+
+  if (!hasSchedule) {
+    body = `
+      <div class="print-empty">
+        確認対象になる次の未確定船便がありません。
+      </div>
+    `;
+  } else if (rows.length <= 0) {
+    body = `
+      <div class="print-empty">
+        この船便で追加の船積入力が必要な商品はありません。
+      </div>
+    `;
+  } else {
+    body = `
+      <table class="shipping-table">
+        <thead>
+          <tr>
+            <th>No.</th>
+            <th>社内コード</th>
+            <th>商品コード</th>
+            <th>商品名</th>
+            <th>推奨数量</th>
+            <th>入力済</th>
+            <th>あと必要</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(
+            function (row, index) {
+              return `
+                <tr>
+                  <td class="center">${index + 1}</td>
+                  <td>${escapeHomeAlertHtml(row.internalCode || "-")}</td>
+                  <td>${escapeHomeAlertHtml(row.productCode || "-")}</td>
+                  <td>${escapeHomeAlertHtml(row.productName || "商品名未登録")}</td>
+                  <td class="number">${formatHomeAlertPrintQuantity(row.recommendedQuantity)}個</td>
+                  <td class="number">${formatHomeAlertPrintQuantity(row.currentAllocation)}個</td>
+                  <td class="number remaining">${formatHomeAlertPrintQuantity(row.remainingQuantity)}個</td>
+                </tr>
+              `;
+            }
+          ).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  const scheduleInfo =
+    hasSchedule
+      ? `
+        <div class="print-schedule-info">
+          <div>
+            船便
+            <strong>${escapeHomeAlertHtml(schedule.name || "船便名未設定")}</strong>
+          </div>
+          <div>
+            出港日
+            <strong>${escapeHomeAlertHtml(formatHomeAlertPrintDate(schedule.departureDate))}</strong>
+          </div>
+          <div>
+            入港日
+            <strong>${escapeHomeAlertHtml(formatHomeAlertPrintDate(schedule.arrivalDate))}</strong>
+          </div>
+          <div>
+            倉庫到着日
+            <strong>${escapeHomeAlertHtml(formatHomeAlertPrintDate(schedule.warehouseArrivalDate))}</strong>
+          </div>
+        </div>
+      `
+      : "";
+
+  return `
+    <section class="print-section print-section-shipping${pageBreak ? " page-break" : ""}">
+      <div class="print-section-title">
+        <h2>🚢 船積みが必要</h2>
+        <strong>${count.toLocaleString("ja-JP")}商品</strong>
+      </div>
+
+      ${scheduleInfo}
+
+      <div class="print-summary">
+        <div class="print-summary-item">
+          <span>対象商品数</span>
+          <strong>${count.toLocaleString("ja-JP")}商品</strong>
+        </div>
+        <div class="print-summary-item">
+          <span>未入力・不足合計</span>
+          <strong>${total.toLocaleString("ja-JP")}個</strong>
+        </div>
+      </div>
+
+      ${body}
+    </section>
+  `;
+}
+
+function formatHomeAlertPrintQuantity(value) {
+  const number = Number(value || 0);
+
+  if (!Number.isFinite(number)) {
+    return "0";
+  }
+
+  return number.toLocaleString(
+    "ja-JP",
+    {
+      maximumFractionDigits: 2
+    }
+  );
+}
+
+function formatHomeAlertPrintDate(value) {
+  const text = String(value || "");
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return text || "-";
+  }
+
+  const parts = text.split("-");
+
+  return (
+    Number(parts[0]) +
+    "/" +
+    Number(parts[1]) +
+    "/" +
+    Number(parts[2])
+  );
+}
+
+async function showHomeAlertPrintNotice(message) {
+  if (
+    window.inventoryApp &&
+    typeof window.inventoryApp.showAppDialog ===
+      "function"
+  ) {
+    await window.inventoryApp.showAppDialog({
+      type: "warning",
+      icon: "🖨",
+      title: "要確認の印刷",
+      message: message,
+      confirmText: "閉じる"
+    });
+    return;
+  }
+
+  window.alert(message);
+}
+
 function escapeHomeAlertHtml(
   value
 ) {
@@ -871,6 +1734,22 @@ function createHomeAlertPanelStyle() {
       color: #e65100;
       font-size: 22px;
       line-height: 1.25;
+    }
+
+    .home-alert-panel-actions {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    #home-alert-panel
+      .home-alert-print-button {
+      min-height: 36px;
+      margin: 0;
+      padding: 7px 11px;
+      border-radius: 9px;
+      background: #1565c0;
+      font-size: 13px;
     }
 
     #home-alert-panel
@@ -1073,6 +1952,140 @@ function createHomeAlertPanelStyle() {
       color: #90a4ae;
       font-size: 11px;
       text-align: right;
+    }
+
+
+    body.home-alert-print-dialog-open {
+      overflow: hidden;
+    }
+
+    .home-alert-print-overlay {
+      position: fixed;
+      z-index: 5000;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(20, 35, 45, 0.58);
+    }
+
+    .home-alert-print-modal {
+      width: min(520px, 100%);
+      max-height: min(760px, calc(100vh - 40px));
+      overflow-y: auto;
+      padding: 20px;
+      border-radius: 16px;
+      background: #ffffff;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+    }
+
+    .home-alert-print-modal-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+
+    .home-alert-print-modal-kicker {
+      display: block;
+      margin-bottom: 3px;
+      color: #607d8b;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .home-alert-print-modal h3 {
+      margin: 0;
+      color: #263238;
+      font-size: 24px;
+    }
+
+    .home-alert-print-close {
+      width: 40px;
+      min-width: 40px;
+      height: 40px;
+      min-height: 40px;
+      margin: 0;
+      padding: 0;
+      border-radius: 50%;
+      background: #eceff1;
+      color: #455a64;
+      font-size: 25px;
+      line-height: 1;
+    }
+
+    .home-alert-print-modal-message {
+      margin: 0 0 14px;
+      padding: 11px 12px;
+      border-radius: 9px;
+      background: #e3f2fd;
+      color: #37474f;
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .home-alert-print-choice-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .home-alert-print-choice {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      min-height: 62px;
+      margin: 0;
+      padding: 12px 14px;
+      border: 2px solid #90caf9;
+      border-radius: 11px;
+      background: #f7fbff;
+      color: #0d47a1;
+      text-align: left;
+    }
+
+    .home-alert-print-choice strong {
+      font-size: 17px;
+    }
+
+    .home-alert-print-choice span {
+      color: #546e7a;
+      font-size: 13px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .home-alert-print-choice-purchase {
+      border-color: #ffb74d;
+      background: #fffaf3;
+      color: #e65100;
+    }
+
+    .home-alert-print-choice-shipping {
+      border-color: #b39ddb;
+      background: #fbf8ff;
+      color: #6a1b9a;
+    }
+
+    .home-alert-print-cancel {
+      width: 100%;
+      min-height: 46px;
+      margin: 14px 0 0;
+      background: #607d8b;
+      font-size: 15px;
+    }
+
+    @media (max-width: 600px) {
+      .home-alert-print-choice {
+        grid-template-columns: 1fr;
+        gap: 4px;
+      }
+
+      .home-alert-print-choice span {
+        white-space: normal;
+      }
     }
   `;
 

@@ -1880,11 +1880,11 @@ function printSalesPlanCalendar() {
 
   const rowHeightMm =
     calendar.weekCount <= 4
-      ? 37
+      ? 58
       : (
           calendar.weekCount === 5
-            ? 30
-            : 25
+            ? 47
+            : 39
         );
 
   const html = `
@@ -1913,14 +1913,14 @@ function printSalesPlanCalendar() {
         "Yu Gothic",
         "Meiryo",
         sans-serif;
-      font-size: 9.5pt;
+      font-size: 10.5pt;
       font-weight: 500;
     }
 
     h1 {
       margin: 0;
       text-align: center;
-      font-size: 17pt;
+      font-size: 20pt;
       font-weight: 800;
       line-height: 1.2;
     }
@@ -1929,11 +1929,11 @@ function printSalesPlanCalendar() {
       display: flex;
       justify-content: space-between;
       gap: 10px;
-      margin: 5px 0 6px;
-      padding: 5px 8px;
+      margin: 6px 0 8px;
+      padding: 6px 10px;
       border: 1.2px solid #333;
       color: #000;
-      font-size: 8.8pt;
+      font-size: 10pt;
       font-weight: 800;
     }
 
@@ -1964,19 +1964,19 @@ function printSalesPlanCalendar() {
     }
 
     th {
-      height: 7mm;
+      height: 8.5mm;
       padding: 2px;
       text-align: center;
       background: #f3f6fa;
       color: #000;
-      font-size: 9.4pt;
+      font-size: 10.5pt;
       font-weight: 800;
     }
 
     td {
       position: relative;
       height: ${rowHeightMm}mm;
-      padding: 4.2mm 0 0;
+      padding: 5.8mm 0 0;
       vertical-align: top;
       color: #000;
       overflow: hidden;
@@ -1984,10 +1984,10 @@ function printSalesPlanCalendar() {
 
     .day-number {
       position: absolute;
-      top: 1.2mm;
-      left: 1.6mm;
+      top: 1.6mm;
+      left: 1.8mm;
       z-index: 5;
-      font-size: 9.4pt;
+      font-size: 10.5pt;
       font-weight: 800;
       line-height: 1;
     }
@@ -2015,11 +2015,11 @@ function printSalesPlanCalendar() {
     .holiday-name {
       position: absolute;
       top: 1.1mm;
-      left: 7mm;
+      left: 8mm;
       right: 1mm;
       z-index: 5;
       color: #b00020;
-      font-size: 6.8pt;
+      font-size: 7.8pt;
       font-weight: 800;
       line-height: 1.05;
       white-space: nowrap;
@@ -2035,13 +2035,13 @@ function printSalesPlanCalendar() {
       position: absolute;
       left: -0.5mm;
       right: -0.5mm;
-      height: 3.7mm;
+      height: 5.2mm;
       padding: 0 .8mm;
       background: #1565c0;
       color: #fff;
-      font-size: 6.2pt;
+      font-size: 7.4pt;
       font-weight: 800;
-      line-height: 3.7mm;
+      line-height: 5.2mm;
       white-space: nowrap;
       overflow: hidden;
       z-index: 3;
@@ -2068,22 +2068,22 @@ function printSalesPlanCalendar() {
       border-radius: 2mm;
     }
 
-    .period-band.lane-0 {
-      top: 7mm;
+.period-band.lane-0 {
+      top: 8.6mm;
     }
 
-    .period-band.lane-1 {
-      top: 11.4mm;
+.period-band.lane-1 {
+      top: 14.5mm;
       background: #2e7d32;
     }
 
-    .period-band.lane-2 {
-      top: 15.8mm;
+.period-band.lane-2 {
+      top: 20.4mm;
       background: #6a1b9a;
     }
 
-    .period-band.lane-3 {
-      top: 20.2mm;
+.period-band.lane-3 {
+      top: 26.3mm;
       background: #ef6c00;
     }
 
@@ -2091,18 +2091,18 @@ function printSalesPlanCalendar() {
       position: absolute;
       left: 1.5mm;
       right: 1.5mm;
-      bottom: 1.2mm;
+      bottom: 1.8mm;
       color: #b00020;
-      font-size: 6.4pt;
+      font-size: 7.2pt;
       font-weight: 800;
       text-align: right;
     }
 
     .no-plan {
-      margin-top: 4mm;
+      margin-top: 6mm;
       text-align: center;
       color: #666;
-      font-size: 6.8pt;
+      font-size: 7.8pt;
       font-weight: 600;
     }
 
@@ -2110,7 +2110,7 @@ function printSalesPlanCalendar() {
       margin-top: 2px;
       text-align: right;
       color: #333;
-      font-size: 6.4pt;
+      font-size: 7.2pt;
       font-weight: 600;
     }
   </style>

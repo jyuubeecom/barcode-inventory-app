@@ -1871,102 +1871,129 @@ function printSalesPlanCalendar() {
   <style>
     @page {
       size: A4 landscape;
-      margin: 7mm;
+      margin: 5mm;
     }
 
     * {
       box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
 
     body {
       margin: 0;
-      color: #111;
+      color: #000;
       font-family:
         "Yu Gothic",
         "Meiryo",
         sans-serif;
-      font-size: 9pt;
+      font-size: 9.5pt;
+      font-weight: 500;
     }
 
     h1 {
       margin: 0;
       text-align: center;
-      font-size: 19pt;
+      font-size: 17pt;
+      font-weight: 800;
+      line-height: 1.2;
     }
 
     .summary {
       display: flex;
       justify-content: space-between;
-      gap: 12px;
-      margin: 7px 0 8px;
-      padding: 6px 9px;
-      border: 1px solid #777;
-      font-weight: 700;
+      gap: 10px;
+      margin: 5px 0 6px;
+      padding: 5px 8px;
+      border: 1.2px solid #333;
+      color: #000;
+      font-size: 8.8pt;
+      font-weight: 800;
     }
 
     table {
       width: 100%;
-      height: 174mm;
+      height: 164mm;
       border-collapse: collapse;
       table-layout: fixed;
+      page-break-inside: avoid;
+    }
+
+    thead {
+      display: table-header-group;
+    }
+
+    tbody {
+      display: table-row-group;
+    }
+
+    tr,
+    th,
+    td {
+      page-break-inside: avoid;
     }
 
     th,
     td {
-      border: 1px solid #555;
+      border: 1.2px solid #333;
     }
 
     th {
-      height: 8mm;
-      padding: 3px;
+      height: 7mm;
+      padding: 2px;
       text-align: center;
-      background: #e8eef5;
-      font-size: 10pt;
+      background: #f3f6fa;
+      color: #000;
+      font-size: 9.4pt;
+      font-weight: 800;
     }
 
     td {
       position: relative;
-      height: 27mm;
-      padding: 5mm 2mm 2mm;
+      height: 24.6mm;
+      padding: 4.2mm 1.6mm 1.4mm;
       vertical-align: top;
+      color: #000;
     }
 
     .day-number {
       position: absolute;
-      top: 1.5mm;
-      left: 2mm;
-      font-size: 10pt;
+      top: 1.2mm;
+      left: 1.6mm;
+      font-size: 9.4pt;
       font-weight: 800;
+      line-height: 1;
     }
 
     .sun .day-number,
     th.sun {
-      color: #b71c1c;
+      color: #b00020;
     }
 
     .sat .day-number,
     th.sat {
-      color: #0d47a1;
+      color: #003ea8;
     }
 
     td.sun {
-      background: #fff8f8;
+      background: #fff9f9;
     }
 
     td.sat {
-      background: #f6f9ff;
+      background: #f8fbff;
     }
 
     .outside {
-      background: #f1f1f1;
+      background: #f7f7f7;
     }
 
     .calendar-entry {
-      margin-bottom: 1.2mm;
-      padding: 1.2mm 1.5mm;
-      border-left: 3px solid #1976d2;
-      background: #f7fbff;
-      line-height: 1.25;
+      margin-bottom: .8mm;
+      padding: .9mm 1.1mm;
+      border-left: 3px solid #005bbb;
+      background: #ffffff;
+      line-height: 1.18;
+      color: #000;
     }
 
     .calendar-entry strong,
@@ -1974,41 +2001,48 @@ function printSalesPlanCalendar() {
     .calendar-entry small {
       display: block;
       overflow-wrap: anywhere;
+      color: #000;
     }
 
     .calendar-entry strong {
-      font-size: 7.4pt;
+      font-size: 7.7pt;
+      font-weight: 800;
     }
 
     .calendar-entry span {
-      margin-top: .5mm;
-      font-size: 7pt;
+      margin-top: .35mm;
+      font-size: 7.2pt;
+      font-weight: 700;
     }
 
     .calendar-entry small {
-      margin-top: .4mm;
-      color: #555;
-      font-size: 6.3pt;
+      margin-top: .3mm;
+      color: #222;
+      font-size: 6.4pt;
+      font-weight: 600;
     }
 
     .more {
-      margin-top: 1mm;
+      margin-top: .7mm;
       font-weight: 800;
-      color: #b71c1c;
-      font-size: 7pt;
+      color: #b00020;
+      font-size: 6.8pt;
     }
 
     .no-plan {
       margin-top: 3mm;
       text-align: center;
-      color: #999;
-      font-size: 7pt;
+      color: #666;
+      font-size: 6.8pt;
+      font-weight: 600;
     }
 
     .footer {
-      margin-top: 4px;
+      margin-top: 2px;
       text-align: right;
-      font-size: 7pt;
+      color: #333;
+      font-size: 6.4pt;
+      font-weight: 600;
     }
   </style>
 </head>

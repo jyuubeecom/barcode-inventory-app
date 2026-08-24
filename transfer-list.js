@@ -319,7 +319,14 @@
     ["#transfer-source", "#transfer-destination"].forEach(function (selector) {
       const select = document.querySelector(selector);
       if (!select || select.options.length > 0) return;
-      select.innerHTML = '<option value="">選択してください</option>' + LOCATION_OPTIONS.map(function (location) {
+
+      // 「未確認」は、保管場所が未確定の在庫を正しい場所へ直すため、
+      // 移動元だけで選べるようにします。移動先には表示しません。
+      const locations = selector === "#transfer-source"
+        ? LOCATION_OPTIONS.concat("未確認")
+        : LOCATION_OPTIONS;
+
+      select.innerHTML = '<option value="">選択してください</option>' + locations.map(function (location) {
         return `<option value="${escapeHtml(location)}">${escapeHtml(location)}</option>`;
       }).join("");
     });

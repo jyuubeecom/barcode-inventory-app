@@ -1847,8 +1847,7 @@ function printSalesPlanCalendar() {
             </td>
           `;
         }
-      )
-      .join("");
+      );
 
   const weekRows = [];
 
@@ -2050,9 +2049,16 @@ function printSalesPlanCalendar() {
 
   window.setTimeout(
     function () {
-      printWindow.print();
+      try {
+        printWindow.print();
+      } catch (error) {
+        console.error(
+          "販売予定カレンダー印刷エラー",
+          error
+        );
+      }
     },
-    250
+    500
   );
 }
 

@@ -59,6 +59,7 @@ async function initializeSalesPlanFeature() {
   const monthFilter = document.querySelector("#sales-plan-month-filter");
   const printMonthInput = document.querySelector("#sales-plan-print-month");
   const printCalendarButton = document.querySelector("#print-sales-plan-calendar-button");
+  const printListButton = document.querySelector("#print-sales-plan-list-button");
   const shippingType = document.querySelector("#sales-plan-shipping-type");
   const prevButton = document.querySelector("#sales-plan-prev-page");
   const nextButton = document.querySelector("#sales-plan-next-page");
@@ -120,6 +121,13 @@ async function initializeSalesPlanFeature() {
     printCalendarButton.addEventListener(
       "click",
       printSalesPlanCalendar
+    );
+  }
+
+  if (printListButton) {
+    printListButton.addEventListener(
+      "click",
+      printSalesPlanList
     );
   }
 
@@ -1632,6 +1640,316 @@ function resetSalesPlanForm() {
 function clearSalesPlanProductFields() {
   document.querySelector("#sales-plan-product-code").value = "";
   document.querySelector("#sales-plan-product-name").value = "";
+}
+
+function printSalesPlanList() {
+  const monthInput =
+    document.querySelector(
+      "#sales-plan-print-month"
+    );
+
+  const month =
+    monthInput
+      ? monthInput.value
+      : "";
+
+  if (
+    !/^\d{4}-\d{2}$/.test(
+      month
+    )
+  ) {
+    void showSalesPlanDialog({
+      type: "warning",
+      icon: "📋",
+      title: "印刷する月を選んでください",
+      message:
+        "リスト形式で印刷する月を選択してください。",
+      confirmText: "入力に戻る"
+    });
+
+    if (monthInput) {
+      monthInput.focus();
+    }
+
+    return;
+  }
+
+  const plans =
+    salesPlanRecords
+      .filter(
+        function (record) {
+          return salesPlanMatchesMonth(
+            record,
+            month
+          );
+        }
+      )
+      .slice()
+      .sort(
+        compareSalesPlans
+      );
+
+  if (
+    plans.length === 0
+  ) {
+    void showSalesPlanDialog({
+      type: "warning",
+      icon: "📋",
+      title: "販売予定がありません",
+      message:
+        `${formatSalesPlanPrintMonth(month)}に該当する販売予定はありません。`,
+      confirmText: "確認して閉じる"
+    });
+
+    return;
+  }
+
+  const printWindow =
+    window.open(
+      "",
+      "_blank"
+    );
+
+  if (!printWindow) {
+    void showSalesPlanDialog({
+      type: "warning",
+      icon: "🖨️",
+      title: "印刷画面を開けませんでした",
+      message:
+        "ブラウザでポップアップが禁止されている可能性があります。",
+      notice:
+        "このページのポップアップを許可して、もう一度お試しください。",
+      confirmText: "確認して閉じる"
+    });
+
+    return;
+  }
+
+  const totalQuantity =
+    plans.reduce(
+      function (sum, record) {
+        return (
+          sum +
+          Number(
+            record.quantity || 0
+          )
+        );
+      },
+      0
+    );
+
+  const monthLabel =
+    formatSalesPlanPrintMonth(
+      month
+    );
+
+  const printedAt =
+    new Date().toLocaleString(
+      "ja-JP"
+    );
+
+  const rowsHtml =
+    plans
+      .map(
+        function (record, index) {
+          return `
+            <tr>
+              <td class="center">${index + 1}</td>
+              <td>${escapeSalesPlanHtml(formatSalesPlanShipping(record))}</td>
+              <td>${escapeSalesPlanHtml(record.customerName || "未登録")}</td>
+              <td>${escapeSalesPlanHtml(record.subtitle || "－")}</td>
+              <td>${escapeSalesPlanHtml(record.internalCode || "未登録")}</td>
+              <td>${escapeSalesPlanHtml(record.productCode || "未登録")}</td>
+              <td>${escapeSalesPlanHtml(record.productName || "未登録")}</td>
+              <td class="number">${Number(record.quantity || 0).toLocaleString("ja-JP")}個</td>
+            </tr>
+          `;
+        }
+      )
+      .join("");
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>販売予定一覧_${escapeSalesPlanHtml(month)}</title>
+
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 8mm;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      margin: 0;
+      color: #111;
+      font-family:
+        "Yu Gothic",
+        "Meiryo",
+        sans-serif;
+      font-size: 8.6pt;
+    }
+
+    h1 {
+      margin: 0 0 5px;
+      text-align: center;
+      font-size: 18pt;
+      font-weight: 800;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns:
+        1fr 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 7px;
+    }
+
+    .summary > div {
+      padding: 5px 7px;
+      border: 1px solid #555;
+      font-weight: 700;
+    }
+
+    .notice {
+      margin-bottom: 7px;
+      padding: 5px 7px;
+      border-left: 4px solid #1976d2;
+      background: #f5f9ff;
+      line-height: 1.45;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    thead {
+      display: table-header-group;
+    }
+
+    tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    th,
+    td {
+      border: 1px solid #555;
+      padding: 4px 5px;
+      vertical-align: middle;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      line-height: 1.35;
+    }
+
+    th {
+      background: #e8eef5;
+      text-align: center;
+      font-weight: 800;
+      font-size: 8.3pt;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+
+    .center {
+      text-align: center;
+    }
+
+    .number {
+      text-align: right;
+      white-space: nowrap;
+      font-weight: 700;
+    }
+
+    th:nth-child(1) { width: 4%; }
+    th:nth-child(2) { width: 17%; }
+    th:nth-child(3) { width: 13%; }
+    th:nth-child(4) { width: 14%; }
+    th:nth-child(5) { width: 9%; }
+    th:nth-child(6) { width: 11%; }
+    th:nth-child(7) { width: 24%; }
+    th:nth-child(8) { width: 8%; }
+
+    .footer {
+      margin-top: 5px;
+      text-align: right;
+      font-size: 7.5pt;
+      color: #444;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>${escapeSalesPlanHtml(monthLabel)} 販売予定一覧</h1>
+
+  <div class="summary">
+    <div>販売予定：${plans.length.toLocaleString("ja-JP")}件</div>
+    <div>予定数量合計：${totalQuantity.toLocaleString("ja-JP")}個</div>
+    <div>印刷日時：${escapeSalesPlanHtml(printedAt)}</div>
+  </div>
+
+  <div class="notice">
+    ※ 期間指定の販売予定は、選択した月と期間が重なる予定も一覧に含みます。
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>No.</th>
+        <th>出荷時期</th>
+        <th>取引先名</th>
+        <th>副題</th>
+        <th>社内コード</th>
+        <th>商品コード</th>
+        <th>商品名</th>
+        <th>数量</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      ${rowsHtml}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    販売予定一覧
+  </div>
+</body>
+</html>
+  `;
+
+  printWindow.document.open();
+  printWindow.document.write(
+    html
+  );
+  printWindow.document.close();
+
+  printWindow.focus();
+
+  window.setTimeout(
+    function () {
+      try {
+        printWindow.print();
+      } catch (error) {
+        console.error(
+          "販売予定リスト印刷エラー",
+          error
+        );
+      }
+    },
+    500
+  );
 }
 
 function getSalesPlanCurrentMonth() {
@@ -3284,7 +3602,7 @@ function createSalesPlanStyle() {
     .sales-plan-summary-box { background: #e8f5e9; border-radius: 10px; padding: 12px 14px; font-weight: 700; margin-top: 12px; }
     .sales-plan-print-area {
       display: grid;
-      grid-template-columns: minmax(220px, 320px) minmax(260px, 1fr);
+      grid-template-columns: minmax(220px, 300px) repeat(2, minmax(230px, 1fr));
       gap: 10px 14px;
       align-items: end;
       margin-top: 14px;

@@ -1777,7 +1777,7 @@ function printSalesPlanList() {
 
   <style>
     @page {
-      size: A4 landscape;
+      size: A3 landscape;
       margin: 8mm;
     }
 

@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v172
+            画面版 v173
           </span>
         </div>
       </div>
@@ -731,22 +731,44 @@
             <input id="sales-plan-print-month" type="month">
           </div>
 
-          <button
-            id="print-sales-plan-calendar-button"
-            type="button"
-          >
-            カレンダー形式をA3で印刷する
-          </button>
+          <div class="sales-plan-print-button-group">
+            <strong>カレンダー形式</strong>
+            <div class="sales-plan-print-button-row">
+              <button
+                id="print-sales-plan-calendar-button"
+                type="button"
+              >
+                A3で印刷
+              </button>
+              <button
+                id="print-sales-plan-calendar-a4-button"
+                type="button"
+              >
+                A4で印刷
+              </button>
+            </div>
+          </div>
 
-          <button
-            id="print-sales-plan-list-button"
-            type="button"
-          >
-            リスト形式をA3で印刷する
-          </button>
+          <div class="sales-plan-print-button-group">
+            <strong>リスト形式</strong>
+            <div class="sales-plan-print-button-row">
+              <button
+                id="print-sales-plan-list-button"
+                type="button"
+              >
+                A3で印刷
+              </button>
+              <button
+                id="print-sales-plan-list-a4-button"
+                type="button"
+              >
+                A4で印刷
+              </button>
+            </div>
+          </div>
 
           <p class="sales-plan-print-note">
-            カレンダー形式・リスト形式ともにA3横向きで印刷します。
+            カレンダー形式・リスト形式ともに、A3横向きまたはA4横向きを選べます。
             どちらも上の「印刷する月」で選んだ月の販売予定を対象にします。
           </p>
         </div>
@@ -3185,7 +3207,7 @@
 <script src="csv-import.js?v=146"></script>
 <script src="csv-update.js?v=74"></script>
 <script src="pwa.js?v=31"></script>
-<script src="sales-plan.js?v=169"></script>
+<script src="sales-plan.js?v=173"></script>
 <script src="sales-actual.js?v=154"></script>
 <script src="purchase-required.js?v=140"></script>
 <script src="order-remaining.js?v=119"></script>

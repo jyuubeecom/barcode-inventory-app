@@ -59,7 +59,9 @@ async function initializeSalesPlanFeature() {
   const monthFilter = document.querySelector("#sales-plan-month-filter");
   const printMonthInput = document.querySelector("#sales-plan-print-month");
   const printCalendarButton = document.querySelector("#print-sales-plan-calendar-button");
+  const printCalendarA4Button = document.querySelector("#print-sales-plan-calendar-a4-button");
   const printListButton = document.querySelector("#print-sales-plan-list-button");
+  const printListA4Button = document.querySelector("#print-sales-plan-list-a4-button");
   const shippingType = document.querySelector("#sales-plan-shipping-type");
   const prevButton = document.querySelector("#sales-plan-prev-page");
   const nextButton = document.querySelector("#sales-plan-next-page");
@@ -120,14 +122,36 @@ async function initializeSalesPlanFeature() {
   if (printCalendarButton) {
     printCalendarButton.addEventListener(
       "click",
-      printSalesPlanCalendar
+      function () {
+        printSalesPlanCalendar("A3");
+      }
+    );
+  }
+
+  if (printCalendarA4Button) {
+    printCalendarA4Button.addEventListener(
+      "click",
+      function () {
+        printSalesPlanCalendar("A4");
+      }
     );
   }
 
   if (printListButton) {
     printListButton.addEventListener(
       "click",
-      printSalesPlanList
+      function () {
+        printSalesPlanList("A3");
+      }
+    );
+  }
+
+  if (printListA4Button) {
+    printListA4Button.addEventListener(
+      "click",
+      function () {
+        printSalesPlanList("A4");
+      }
     );
   }
 
@@ -1642,7 +1666,21 @@ function clearSalesPlanProductFields() {
   document.querySelector("#sales-plan-product-name").value = "";
 }
 
-function printSalesPlanList() {
+function normalizeSalesPlanPrintPaperSize(paperSize) {
+  return String(paperSize || "").toUpperCase() === "A4"
+    ? "A4"
+    : "A3";
+}
+
+function printSalesPlanList(paperSize) {
+  const printPaperSize =
+    normalizeSalesPlanPrintPaperSize(
+      paperSize
+    );
+
+  const isA4 =
+    printPaperSize === "A4";
+
   const monthInput =
     document.querySelector(
       "#sales-plan-print-month"
@@ -1748,6 +1786,42 @@ function printSalesPlanList() {
       "ja-JP"
     );
 
+  const listPageMarginMm =
+    isA4 ? 5 : 8;
+
+  const listBodyFontPt =
+    isA4 ? 7.6 : 10.8;
+
+  const listTitleFontPt =
+    isA4 ? 16 : 22;
+
+  const listSummaryFontPt =
+    isA4 ? 8 : 11.2;
+
+  const listSummaryPadding =
+    isA4 ? "3px 5px" : "5px 8px";
+
+  const listNoticeFontPt =
+    isA4 ? 7.2 : 10;
+
+  const listCellPadding =
+    isA4 ? "3px 3px" : "5px 6px";
+
+  const listLineHeight =
+    isA4 ? 1.2 : 1.3;
+
+  const listHeaderFontPt =
+    isA4 ? 7.4 : 10.8;
+
+  const listNumberFontPt =
+    isA4 ? 7.8 : 11.2;
+
+  const listRemarksMinHeightMm =
+    isA4 ? 7 : 10;
+
+  const listFooterFontPt =
+    isA4 ? 6 : 7.5;
+
   const rowsHtml =
     plans
       .map(
@@ -1773,12 +1847,12 @@ function printSalesPlanList() {
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>販売予定一覧_${escapeSalesPlanHtml(month)}</title>
+  <title>販売予定一覧_${escapeSalesPlanHtml(month)}_${printPaperSize}</title>
 
   <style>
     @page {
-      size: A3 landscape;
-      margin: 8mm;
+      size: ${printPaperSize} landscape;
+      margin: ${listPageMarginMm}mm;
     }
 
     * {
@@ -1794,14 +1868,14 @@ function printSalesPlanList() {
         "Yu Gothic",
         "Meiryo",
         sans-serif;
-      font-size: 10.8pt;
+      font-size: ${listBodyFontPt}pt;
       font-weight: 700;
     }
 
     h1 {
       margin: 0 0 4px;
       text-align: center;
-      font-size: 22pt;
+      font-size: ${listTitleFontPt}pt;
       font-weight: 900;
     }
 
@@ -1814,9 +1888,9 @@ function printSalesPlanList() {
     }
 
     .summary > div {
-      padding: 5px 8px;
+      padding: ${listSummaryPadding};
       border: 1.2px solid #444;
-      font-size: 11.2pt;
+      font-size: ${listSummaryFontPt}pt;
       font-weight: 900;
     }
 
@@ -1825,7 +1899,7 @@ function printSalesPlanList() {
       padding: 5px 8px;
       border-left: 5px solid #1976d2;
       background: #f5f9ff;
-      font-size: 10pt;
+      font-size: ${listNoticeFontPt}pt;
       font-weight: 800;
       line-height: 1.5;
     }
@@ -1848,11 +1922,11 @@ function printSalesPlanList() {
     th,
     td {
       border: 1.2px solid #444;
-      padding: 5px 6px;
+      padding: ${listCellPadding};
       vertical-align: middle;
       overflow-wrap: anywhere;
       word-break: break-word;
-      line-height: 1.3;
+      line-height: ${listLineHeight};
       font-weight: 800;
     }
 
@@ -1860,7 +1934,7 @@ function printSalesPlanList() {
       background: #e8eef5;
       text-align: center;
       font-weight: 900;
-      font-size: 10.8pt;
+      font-size: ${listHeaderFontPt}pt;
     }
 
     tbody tr:nth-child(even) {
@@ -1875,11 +1949,11 @@ function printSalesPlanList() {
       text-align: right;
       white-space: nowrap;
       font-weight: 900;
-      font-size: 11.2pt;
+      font-size: ${listNumberFontPt}pt;
     }
 
     .remarks {
-      min-height: 10mm;
+      min-height: ${listRemarksMinHeightMm}mm;
     }
 
     th:nth-child(1) { width: 4%; }
@@ -1894,7 +1968,7 @@ function printSalesPlanList() {
     .footer {
       margin-top: 5px;
       text-align: right;
-      font-size: 7.5pt;
+      font-size: ${listFooterFontPt}pt;
       color: #444;
     }
   </style>
@@ -1980,7 +2054,15 @@ function getSalesPlanCurrentMonth() {
   return `${year}-${month}`;
 }
 
-function printSalesPlanCalendar() {
+function printSalesPlanCalendar(paperSize) {
+  const printPaperSize =
+    normalizeSalesPlanPrintPaperSize(
+      paperSize
+    );
+
+  const isA4 =
+    printPaperSize === "A4";
+
   const monthInput =
     document.querySelector(
       "#sales-plan-print-month"
@@ -2046,7 +2128,8 @@ function printSalesPlanCalendar() {
   const calendar =
     buildSalesPlanCalendarPrintData(
       plans,
-      month
+      month,
+      printPaperSize
     );
 
   const monthLabel =
@@ -2162,7 +2245,8 @@ function printSalesPlanCalendar() {
                   const bandStyle =
                     `top:${getSalesPlanCalendarBandTopMm(
                       band.lane,
-                      calendar.weekCount
+                      calendar.weekCount,
+                      printPaperSize
                     )}mm; background:${getSalesPlanCalendarBandColor(
                       band.lane
                     )};`;
@@ -2217,68 +2301,131 @@ function printSalesPlanCalendar() {
   const compactCalendar =
     calendar.weekCount >= 5;
 
+  const pageMarginMm =
+    isA4 ? 4 : 5;
+
   const rowHeightMm =
-    calendar.weekCount <= 4
-      ? 62
+    isA4
+      ? (
+          calendar.weekCount <= 4
+            ? 37
+            : (
+                calendar.weekCount === 5
+                  ? 29
+                  : 24
+              )
+        )
       : (
-          calendar.weekCount === 5
-            ? 47
-            : 40
+          calendar.weekCount <= 4
+            ? 62
+            : (
+                calendar.weekCount === 5
+                  ? 47
+                  : 40
+              )
         );
 
   const bodyFontPt =
-    compactCalendar ? 10 : 11;
+    isA4
+      ? (compactCalendar ? 7.8 : 8.4)
+      : (compactCalendar ? 10 : 11);
 
   const titleFontPt =
-    compactCalendar ? 19 : 21;
+    isA4
+      ? (compactCalendar ? 14 : 15)
+      : (compactCalendar ? 19 : 21);
 
   const summaryFontPt =
-    compactCalendar ? 9.4 : 10.8;
+    isA4
+      ? (compactCalendar ? 7.2 : 8)
+      : (compactCalendar ? 9.4 : 10.8);
 
   const summaryMarginTopMm =
-    compactCalendar ? 4 : 6;
+    isA4
+      ? (compactCalendar ? 2 : 3)
+      : (compactCalendar ? 4 : 6);
 
   const summaryMarginBottomMm =
-    compactCalendar ? 5 : 8;
+    isA4
+      ? (compactCalendar ? 2.5 : 4)
+      : (compactCalendar ? 5 : 8);
 
   const summaryPaddingMm =
-    compactCalendar ? 4 : 6;
+    isA4
+      ? (compactCalendar ? 2 : 3)
+      : (compactCalendar ? 4 : 6);
 
   const weekdayHeaderHeightMm =
-    compactCalendar ? 8 : 9;
+    isA4
+      ? (compactCalendar ? 5.8 : 6.5)
+      : (compactCalendar ? 8 : 9);
+
+  const weekdayHeaderFontPt =
+    isA4
+      ? (compactCalendar ? 7.2 : 8)
+      : (compactCalendar ? 10 : 11);
 
   const cellPaddingTopMm =
-    compactCalendar ? 5.6 : 6.2;
+    isA4
+      ? (compactCalendar ? 4 : 4.4)
+      : (compactCalendar ? 5.6 : 6.2);
 
   const dayFontPt =
-    compactCalendar ? 10 : 11.3;
+    isA4
+      ? (compactCalendar ? 8.2 : 8.8)
+      : 11;
 
   const holidayFontPt =
-    compactCalendar ? 7.2 : 8.2;
+    isA4
+      ? (compactCalendar ? 5.4 : 6)
+      : (compactCalendar ? 7.2 : 8.2);
 
   const bandHeightMm =
-    compactCalendar ? 4.6 : 5.4;
+    isA4
+      ? (compactCalendar ? 3.2 : 3.5)
+      : (compactCalendar ? 4.6 : 5.4);
 
   const bandFontPt =
-    compactCalendar ? 6.8 : 8;
+    isA4
+      ? (compactCalendar ? 4.9 : 5.4)
+      : (compactCalendar ? 6.8 : 8);
 
   const noPlanFontPt =
-    compactCalendar ? 7.1 : 8.2;
+    isA4
+      ? (compactCalendar ? 5 : 5.6)
+      : (compactCalendar ? 7.1 : 8.2);
 
   const footerFontPt =
-    compactCalendar ? 7 : 8.4;
+    isA4
+      ? (compactCalendar ? 5.3 : 5.8)
+      : (compactCalendar ? 7 : 8.4);
+
+  const dayTopMm =
+    isA4 ? 1.1 : 1.6;
+
+  const dayLeftMm =
+    isA4 ? 1.2 : 1.8;
+
+  const holidayTopMm =
+    isA4 ? 0.9 : 1.1;
+
+  const holidayLeftMm =
+    isA4 ? 6.2 : 8;
+
+  const noPlanMarginTopMm =
+    isA4 ? 4 : 6;
 
   const html = `
 <!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>販売予定カレンダー_${escapeSalesPlanHtml(month)}</title>
+  <title>販売予定カレンダー_${escapeSalesPlanHtml(month)}_${printPaperSize}</title>
 
   <style>
     @page {
-      size: A3 landscape;
-      margin: 5mm;
+      size: ${printPaperSize} landscape;
+      margin: ${pageMarginMm}mm;
     }
 
     * {
@@ -2350,7 +2497,7 @@ function printSalesPlanCalendar() {
       text-align: center;
       background: #f3f6fa;
       color: #000;
-      font-size: ${compactCalendar ? 10 : 11}pt;
+      font-size: ${weekdayHeaderFontPt}pt;
       font-weight: 800;
     }
 
@@ -2365,10 +2512,10 @@ function printSalesPlanCalendar() {
 
     .day-number {
       position: absolute;
-      top: 1.6mm;
-      left: 1.8mm;
+      top: ${dayTopMm}mm;
+      left: ${dayLeftMm}mm;
       z-index: 5;
-      font-size: 11pt;
+      font-size: ${dayFontPt}pt;
       font-weight: 800;
       line-height: 1;
     }
@@ -2395,8 +2542,8 @@ function printSalesPlanCalendar() {
 
     .holiday-name {
       position: absolute;
-      top: 1.1mm;
-      left: 8mm;
+      top: ${holidayTopMm}mm;
+      left: ${holidayLeftMm}mm;
       right: 1mm;
       z-index: 5;
       color: #b00020;
@@ -2480,7 +2627,7 @@ function printSalesPlanCalendar() {
     }
 
     .no-plan {
-      margin-top: 6mm;
+      margin-top: ${noPlanMarginTopMm}mm;
       text-align: center;
       color: #666;
       font-size: ${noPlanFontPt}pt;
@@ -2547,8 +2694,26 @@ function printSalesPlanCalendar() {
 }
 
 function getSalesPlanCalendarVisibleLaneLimit(
-  weekCount
+  weekCount,
+  paperSize
 ) {
+  const isA4 =
+    normalizeSalesPlanPrintPaperSize(
+      paperSize
+    ) === "A4";
+
+  if (isA4) {
+    if (weekCount <= 4) {
+      return 7;
+    }
+
+    if (weekCount === 5) {
+      return 5;
+    }
+
+    return 4;
+  }
+
   if (weekCount <= 4) {
     return 8;
   }
@@ -2562,16 +2727,26 @@ function getSalesPlanCalendarVisibleLaneLimit(
 
 function getSalesPlanCalendarBandTopMm(
   lane,
-  weekCount
+  weekCount,
+  paperSize
 ) {
   const compact =
     weekCount >= 5;
 
+  const isA4 =
+    normalizeSalesPlanPrintPaperSize(
+      paperSize
+    ) === "A4";
+
   const start =
-    compact ? 7.4 : 8.2;
+    isA4
+      ? (compact ? 5.1 : 5.4)
+      : (compact ? 7.4 : 8.2);
 
   const gap =
-    compact ? 5.0 : 5.7;
+    isA4
+      ? (compact ? 3.6 : 3.8)
+      : (compact ? 5.0 : 5.7);
 
   return start + lane * gap;
 }
@@ -2596,7 +2771,8 @@ function getSalesPlanCalendarBandColor(
 
 function buildSalesPlanCalendarPrintData(
   plans,
-  month
+  month,
+  paperSize
 ) {
   const match =
     /^(\d{4})-(\d{2})$/.exec(
@@ -2702,7 +2878,8 @@ function buildSalesPlanCalendarPrintData(
 
   const visibleLaneLimit =
     getSalesPlanCalendarVisibleLaneLimit(
-      weekCount
+      weekCount,
+      paperSize
     );
 
   for (
@@ -3621,7 +3798,21 @@ function createSalesPlanStyle() {
       border-radius: 12px;
       background: #f5fbff;
     }
+    .sales-plan-print-button-group {
+      display: grid;
+      gap: 6px;
+    }
+    .sales-plan-print-button-group > strong {
+      color: #16324a;
+      font-size: .95rem;
+    }
+    .sales-plan-print-button-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
     .sales-plan-print-area button {
+      width: 100%;
       min-height: 48px;
       margin: 0;
       background: #1565c0;
@@ -3657,6 +3848,9 @@ function createSalesPlanStyle() {
       }
       .sales-plan-print-area {
         grid-template-columns: 1fr;
+      }
+      .sales-plan-print-button-row {
+        grid-template-columns: 1fr 1fr;
       }
       .sales-plan-print-note {
         grid-column: auto;

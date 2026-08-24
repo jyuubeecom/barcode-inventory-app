@@ -29,6 +29,7 @@ let shippingWarehouseEditingInternalCode = "";
 let shippingScheduleEditingId = "";
 let shippingScheduleCurrentPage = 1;
 let shippingAllocationCurrentPage = 1;
+let shippingAllocationSearchTimer = 0;
 let shippingManualAdditionDrafts = new Map();
 
 window.addEventListener("DOMContentLoaded", initializeShippingScheduleFeature);
@@ -98,6 +99,24 @@ function initializeShippingScheduleFeature() {
     allocationSearch.addEventListener("input", function () {
       shippingAllocationCurrentPage = 1;
       renderShippingAllocationTable();
+
+      window.clearTimeout(shippingAllocationSearchTimer);
+
+      if (!String(allocationSearch.value || "").trim()) {
+        return;
+      }
+
+      shippingAllocationSearchTimer = window.setTimeout(function () {
+        moveToShippingAllocationSearchResult(false);
+      }, 500);
+    });
+
+    allocationSearch.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter") return;
+
+      event.preventDefault();
+      window.clearTimeout(shippingAllocationSearchTimer);
+      moveToShippingAllocationSearchResult(true);
     });
   }
   if (manualToggleButton && manualContent) {
@@ -770,6 +789,47 @@ function getShippingAllocationTotalPages() {
   return Math.max(1, Math.ceil(getFilteredShippingAllocationRows(schedule).length / SHIPPING_ALLOCATION_PAGE_SIZE));
 }
 
+function moveToShippingAllocationSearchResult(forceFirst) {
+  const searchInput = document.querySelector("#shipping-allocation-search");
+  const searchValue = String(searchInput?.value || "").trim();
+  if (!searchValue) return;
+
+  const schedule = getSelectedShippingSchedule();
+  if (!schedule) return;
+
+  const filteredRows = getFilteredShippingAllocationRows(schedule);
+  if (filteredRows.length === 0) return;
+  if (!forceFirst && filteredRows.length !== 1) return;
+
+  const targetInternalCode = String(filteredRows[0].internalCode || "").trim();
+  const targetCard = Array.from(
+    document.querySelectorAll("#shipping-allocation-card-list .shipping-allocation-item-card")
+  ).find(function (card) {
+    return String(card.dataset.internalCode || "").trim() === targetInternalCode;
+  });
+
+  if (!targetCard) return;
+
+  targetCard.classList.add("shipping-allocation-search-hit");
+  targetCard.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  window.setTimeout(function () {
+    const quantityInput = targetCard.querySelector(".shipping-allocation-quantity");
+    if (quantityInput && !quantityInput.disabled) {
+      try {
+        quantityInput.focus({ preventScroll: true });
+      } catch (error) {
+        quantityInput.focus();
+      }
+      quantityInput.select();
+    }
+  }, 420);
+
+  window.setTimeout(function () {
+    targetCard.classList.remove("shipping-allocation-search-hit");
+  }, 2200);
+}
+
 function renderShippingAllocationTable() {
   const list = document.querySelector("#shipping-allocation-card-list");
   const summary = document.querySelector("#shipping-allocation-summary");
@@ -868,7 +928,14 @@ function renderShippingAllocationTable() {
   const totalRecommended = allRows.reduce((sum, row) => sum + row.recommendedQuantity, 0);
   const currentAllocated = allRows.reduce((sum, row) => sum + row.currentAllocation, 0);
   const backorderCount = allRows.filter((row) => row.isBackorder).length;
+  const allocationSearchValue = String(
+    document.querySelector("#shipping-allocation-search")?.value || ""
+  ).trim();
+
   summary.textContent =
+    (allocationSearchValue
+      ? `検索結果：${filtered.length.toLocaleString("ja-JP")}商品 / `
+      : "") +
     `不足候補：${allRows.length.toLocaleString("ja-JP")}商品 / ` +
     `推奨数量合計：${totalRecommended.toLocaleString("ja-JP")}個 / ` +
     `注残：${backorderCount.toLocaleString("ja-JP")}商品 / ` +
@@ -877,7 +944,9 @@ function renderShippingAllocationTable() {
   if (visible.length === 0) {
     const message = document.createElement("div");
     message.className = "shipping-allocation-empty";
-    message.textContent = "この船便の対象期間で不足する商品はありません。";
+    message.textContent = allocationSearchValue
+      ? "検索条件に一致する不足商品はありません。"
+      : "この船便の対象期間で不足する商品はありません。";
     list.appendChild(message);
   } else {
     visible.forEach(function (item) {
@@ -2939,11 +3008,24 @@ function createShippingScheduleStyle() {
     }
     #shipping-schedule .shipping-schedule-actions { white-space: nowrap; }
     #shipping-schedule .shipping-schedule-delete { background: #d32f2f; }
-    #shipping-schedule .shipping-allocation-controls {
+    #shipping-schedule #shipping-allocation-area .shipping-allocation-controls {
+      position: sticky;
+      top: 8px;
+      z-index: 30;
       display: grid;
       grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
       gap: 14px;
       margin-bottom: 12px;
+      padding: 10px;
+      border: 1px solid #bbdefb;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .97);
+      box-shadow: 0 4px 14px rgba(38, 50, 56, .12);
+      backdrop-filter: blur(4px);
+    }
+    #shipping-schedule #shipping-allocation-search {
+      min-height: 44px;
+      font-size: 16px;
     }
     #shipping-schedule .shipping-allocation-quantity {
       width: 100%;
@@ -2954,7 +3036,8 @@ function createShippingScheduleStyle() {
     }
     #shipping-schedule .shipping-allocation-card-list { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 14px; }
     #shipping-schedule .shipping-allocation-empty { padding: 22px 14px; border: 1px dashed #b0bec5; border-radius: 12px; background: #fafafa; color: #546e7a; font-weight: 700; text-align: center; }
-    #shipping-schedule .shipping-allocation-item-card { padding: 14px; border: 2px solid #d7e0e8; border-left: 6px solid #1976d2; border-radius: 14px; background: #fff; box-shadow: 0 2px 7px rgba(0,0,0,.05); }
+    #shipping-schedule .shipping-allocation-item-card { padding: 14px; border: 2px solid #d7e0e8; border-left: 6px solid #1976d2; border-radius: 14px; background: #fff; box-shadow: 0 2px 7px rgba(0,0,0,.05); scroll-margin-top: 120px; transition: box-shadow .2s ease, outline-color .2s ease; }
+    #shipping-schedule .shipping-allocation-search-hit { outline: 4px solid #42a5f5; outline-offset: 2px; box-shadow: 0 0 0 7px rgba(66,165,245,.16), 0 4px 14px rgba(0,0,0,.12); }
     #shipping-schedule .shipping-allocation-item-saved { border-left-color: #2e7d32; background: #f7fcf7; }
     #shipping-schedule .shipping-allocation-item-backorder { box-shadow: inset 0 0 0 2px #f6c343, 0 2px 7px rgba(0,0,0,.05); }
     #shipping-schedule .shipping-allocation-item-head { display: grid; grid-template-columns: minmax(0,1fr) 230px; gap: 16px; align-items: start; margin-bottom: 12px; }
@@ -3249,8 +3332,9 @@ function createShippingScheduleStyle() {
     }
     @media (max-width: 760px) {
       #shipping-schedule .shipping-schedule-grid,
-      #shipping-schedule .shipping-allocation-controls,
+      #shipping-schedule #shipping-allocation-area .shipping-allocation-controls,
       #shipping-schedule .shipping-warehouse-location-grid { grid-template-columns: 1fr; }
+      #shipping-schedule #shipping-allocation-area .shipping-allocation-controls { top: 4px; gap: 8px; padding: 8px; }
       #shipping-schedule .shipping-warehouse-location-item { grid-template-columns: 1fr 110px; }
       #shipping-schedule .shipping-schedule-card { padding: 14px; }
       #shipping-schedule .shipping-allocation-item-head { grid-template-columns: 1fr; }

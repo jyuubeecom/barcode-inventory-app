@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v154
+            画面版 v155
           </span>
         </div>
       </div>
@@ -723,6 +723,24 @@
 
         <div id="sales-plan-summary" class="sales-plan-summary-box">
           登録：0件 / 予定数量合計：0個
+        </div>
+
+        <div class="sales-plan-print-area">
+          <div>
+            <label for="sales-plan-print-month">印刷する月</label>
+            <input id="sales-plan-print-month" type="month">
+          </div>
+
+          <button
+            id="print-sales-plan-calendar-button"
+            type="button"
+          >
+            カレンダー形式をA4で印刷する
+          </button>
+
+          <p class="sales-plan-print-note">
+            カレンダー形式は1か月の販売予定をA4横向きで見やすく印刷します。
+          </p>
         </div>
 
         <div class="sales-plan-table-wrap">
@@ -3093,7 +3111,7 @@
 <script src="csv-import.js?v=146"></script>
 <script src="csv-update.js?v=74"></script>
 <script src="pwa.js?v=31"></script>
-<script src="sales-plan.js?v=151"></script>
+<script src="sales-plan.js?v=155"></script>
 <script src="sales-actual.js?v=154"></script>
 <script src="purchase-required.js?v=140"></script>
 <script src="order-remaining.js?v=119"></script>

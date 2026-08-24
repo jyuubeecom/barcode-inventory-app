@@ -57,6 +57,8 @@ async function initializeSalesPlanFeature() {
   const cancelEditButton = document.querySelector("#cancel-sales-plan-edit-button");
   const searchInput = document.querySelector("#sales-plan-search");
   const monthFilter = document.querySelector("#sales-plan-month-filter");
+  const printMonthInput = document.querySelector("#sales-plan-print-month");
+  const printCalendarButton = document.querySelector("#print-sales-plan-calendar-button");
   const shippingType = document.querySelector("#sales-plan-shipping-type");
   const prevButton = document.querySelector("#sales-plan-prev-page");
   const nextButton = document.querySelector("#sales-plan-next-page");
@@ -104,7 +106,23 @@ async function initializeSalesPlanFeature() {
   monthFilter.addEventListener("change", function () {
     salesPlanCurrentPage = 1;
     renderSalesPlanTable();
+
+    if (
+      printMonthInput &&
+      monthFilter.value
+    ) {
+      printMonthInput.value =
+        monthFilter.value;
+    }
   });
+
+  if (printCalendarButton) {
+    printCalendarButton.addEventListener(
+      "click",
+      printSalesPlanCalendar
+    );
+  }
+
   prevButton.addEventListener("click", function () {
     if (salesPlanCurrentPage > 1) {
       salesPlanCurrentPage -= 1;
@@ -120,6 +138,14 @@ async function initializeSalesPlanFeature() {
       scrollSalesPlanTableIntoView();
     }
   });
+
+  if (
+    printMonthInput &&
+    !printMonthInput.value
+  ) {
+    printMonthInput.value =
+      getSalesPlanCurrentMonth();
+  }
 
   updateSalesPlanShippingFields();
   renderSalesPlanPendingItems();
@@ -1608,6 +1634,781 @@ function clearSalesPlanProductFields() {
   document.querySelector("#sales-plan-product-name").value = "";
 }
 
+function getSalesPlanCurrentMonth() {
+  const now =
+    new Date();
+
+  const year =
+    now.getFullYear();
+
+  const month =
+    String(
+      now.getMonth() + 1
+    ).padStart(
+      2,
+      "0"
+    );
+
+  return `${year}-${month}`;
+}
+
+function printSalesPlanCalendar() {
+  const monthInput =
+    document.querySelector(
+      "#sales-plan-print-month"
+    );
+
+  const month =
+    monthInput
+      ? monthInput.value
+      : "";
+
+  if (
+    !/^\d{4}-\d{2}$/.test(
+      month
+    )
+  ) {
+    void showSalesPlanDialog({
+      type: "warning",
+      icon: "📅",
+      title: "印刷する月を選んでください",
+      message:
+        "カレンダー形式で印刷する月を選択してください。",
+      confirmText: "入力に戻る"
+    });
+
+    if (monthInput) {
+      monthInput.focus();
+    }
+
+    return;
+  }
+
+  const plans =
+    salesPlanRecords.filter(
+      function (record) {
+        return salesPlanMatchesMonth(
+          record,
+          month
+        );
+      }
+    );
+
+  const printWindow =
+    window.open(
+      "",
+      "_blank"
+    );
+
+  if (!printWindow) {
+    void showSalesPlanDialog({
+      type: "warning",
+      icon: "🖨️",
+      title: "印刷画面を開けませんでした",
+      message:
+        "ブラウザでポップアップが禁止されている可能性があります。",
+      notice:
+        "このページのポップアップを許可して、もう一度お試しください。",
+      confirmText: "確認して閉じる"
+    });
+
+    return;
+  }
+
+  const calendar =
+    buildSalesPlanCalendarPrintData(
+      plans,
+      month
+    );
+
+  const monthLabel =
+    formatSalesPlanPrintMonth(
+      month
+    );
+
+  const totalQuantity =
+    plans.reduce(
+      function (sum, record) {
+        return (
+          sum +
+          Number(
+            record.quantity || 0
+          )
+        );
+      },
+      0
+    );
+
+  const printedAt =
+    new Date().toLocaleString(
+      "ja-JP"
+    );
+
+  const weekdayHeaders =
+    [
+      "日",
+      "月",
+      "火",
+      "水",
+      "木",
+      "金",
+      "土"
+    ]
+      .map(
+        function (label, index) {
+          const className =
+            index === 0
+              ? "sun"
+              : (
+                  index === 6
+                    ? "sat"
+                    : ""
+                );
+
+          return (
+            `<th class="${className}">${label}</th>`
+          );
+        }
+      )
+      .join("");
+
+  const cellsHtml =
+    calendar.cells
+      .map(
+        function (cell) {
+          if (!cell.inMonth) {
+            return (
+              '<td class="outside"></td>'
+            );
+          }
+
+          const entries =
+            cell.entries
+              .slice(
+                0,
+                4
+              )
+              .map(
+                function (entry) {
+                  const subtitle =
+                    entry.subtitle
+                      ? ` / ${entry.subtitle}`
+                      : "";
+
+                  const productText =
+                    entry.productCount ===
+                    1
+                      ? (
+                          entry.singleProductCode ||
+                          "商品コード未登録"
+                        )
+                      : `${entry.productCount}商品`;
+
+                  return `
+                    <div class="calendar-entry">
+                      <strong>${escapeSalesPlanHtml(entry.customerName || "取引先未登録")}${escapeSalesPlanHtml(subtitle)}</strong>
+                      <span>${escapeSalesPlanHtml(productText)} / ${entry.totalQuantity.toLocaleString("ja-JP")}個</span>
+                      ${
+                        entry.shippingLabel
+                          ? `<small>${escapeSalesPlanHtml(entry.shippingLabel)}</small>`
+                          : ""
+                      }
+                    </div>
+                  `;
+                }
+              )
+              .join("");
+
+          const hiddenCount =
+            Math.max(
+              0,
+              cell.entries.length - 4
+            );
+
+          const moreHtml =
+            hiddenCount > 0
+              ? `<div class="more">ほか${hiddenCount}件</div>`
+              : "";
+
+          const dayClass =
+            cell.weekday === 0
+              ? "sun"
+              : (
+                  cell.weekday === 6
+                    ? "sat"
+                    : ""
+                );
+
+          return `
+            <td class="${dayClass}">
+              <div class="day-number">${cell.day}</div>
+              ${entries || '<div class="no-plan">予定なし</div>'}
+              ${moreHtml}
+            </td>
+          `;
+        }
+      )
+      .join("");
+
+  const weekRows = [];
+
+  for (
+    let index = 0;
+    index < cellsHtml.length;
+    index += 7
+  ) {
+    weekRows.push(
+      `<tr>${cellsHtml.slice(index, index + 7).join("")}</tr>`
+    );
+  }
+
+  const html = `
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>販売予定カレンダー_${escapeSalesPlanHtml(month)}</title>
+
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 7mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: #111;
+      font-family:
+        "Yu Gothic",
+        "Meiryo",
+        sans-serif;
+      font-size: 9pt;
+    }
+
+    h1 {
+      margin: 0;
+      text-align: center;
+      font-size: 19pt;
+    }
+
+    .summary {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 7px 0 8px;
+      padding: 6px 9px;
+      border: 1px solid #777;
+      font-weight: 700;
+    }
+
+    table {
+      width: 100%;
+      height: 174mm;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      border: 1px solid #555;
+    }
+
+    th {
+      height: 8mm;
+      padding: 3px;
+      text-align: center;
+      background: #e8eef5;
+      font-size: 10pt;
+    }
+
+    td {
+      position: relative;
+      height: 27mm;
+      padding: 5mm 2mm 2mm;
+      vertical-align: top;
+    }
+
+    .day-number {
+      position: absolute;
+      top: 1.5mm;
+      left: 2mm;
+      font-size: 10pt;
+      font-weight: 800;
+    }
+
+    .sun .day-number,
+    th.sun {
+      color: #b71c1c;
+    }
+
+    .sat .day-number,
+    th.sat {
+      color: #0d47a1;
+    }
+
+    td.sun {
+      background: #fff8f8;
+    }
+
+    td.sat {
+      background: #f6f9ff;
+    }
+
+    .outside {
+      background: #f1f1f1;
+    }
+
+    .calendar-entry {
+      margin-bottom: 1.2mm;
+      padding: 1.2mm 1.5mm;
+      border-left: 3px solid #1976d2;
+      background: #f7fbff;
+      line-height: 1.25;
+    }
+
+    .calendar-entry strong,
+    .calendar-entry span,
+    .calendar-entry small {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+
+    .calendar-entry strong {
+      font-size: 7.4pt;
+    }
+
+    .calendar-entry span {
+      margin-top: .5mm;
+      font-size: 7pt;
+    }
+
+    .calendar-entry small {
+      margin-top: .4mm;
+      color: #555;
+      font-size: 6.3pt;
+    }
+
+    .more {
+      margin-top: 1mm;
+      font-weight: 800;
+      color: #b71c1c;
+      font-size: 7pt;
+    }
+
+    .no-plan {
+      margin-top: 3mm;
+      text-align: center;
+      color: #999;
+      font-size: 7pt;
+    }
+
+    .footer {
+      margin-top: 4px;
+      text-align: right;
+      font-size: 7pt;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>${escapeSalesPlanHtml(monthLabel)} 販売予定カレンダー</h1>
+
+  <div class="summary">
+    <span>販売予定：${plans.length.toLocaleString("ja-JP")}件</span>
+    <span>予定数量合計：${totalQuantity.toLocaleString("ja-JP")}個</span>
+    <span>印刷日時：${escapeSalesPlanHtml(printedAt)}</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr>${weekdayHeaders}</tr>
+    </thead>
+
+    <tbody>
+      ${weekRows.join("")}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    ※ 1日5件以上の予定がある場合は「ほか○件」と表示します。詳細はリスト形式で確認してください。
+  </div>
+</body>
+</html>
+  `;
+
+  printWindow.document.open();
+  printWindow.document.write(
+    html
+  );
+  printWindow.document.close();
+
+  printWindow.focus();
+
+  window.setTimeout(
+    function () {
+      printWindow.print();
+    },
+    250
+  );
+}
+
+function buildSalesPlanCalendarPrintData(
+  plans,
+  month
+) {
+  const match =
+    /^(\d{4})-(\d{2})$/.exec(
+      String(
+        month || ""
+      )
+    );
+
+  if (!match) {
+    return {
+      cells: []
+    };
+  }
+
+  const year =
+    Number(
+      match[1]
+    );
+
+  const monthNumber =
+    Number(
+      match[2]
+    );
+
+  const firstDate =
+    new Date(
+      year,
+      monthNumber - 1,
+      1
+    );
+
+  const lastDay =
+    new Date(
+      year,
+      monthNumber,
+      0
+    ).getDate();
+
+  const firstWeekday =
+    firstDate.getDay();
+
+  const monthStart =
+    `${match[1]}-${match[2]}-01`;
+
+  const monthEnd =
+    `${match[1]}-${match[2]}-${String(lastDay).padStart(2, "0")}`;
+
+  const groupsByDay =
+    new Map();
+
+  plans.forEach(
+    function (record) {
+      const anchorDate =
+        getSalesPlanCalendarAnchorDate(
+          record,
+          monthStart,
+          monthEnd
+        );
+
+      if (!anchorDate) {
+        return;
+      }
+
+      const day =
+        Number(
+          anchorDate.slice(
+            8,
+            10
+          )
+        );
+
+      if (
+        !groupsByDay.has(
+          day
+        )
+      ) {
+        groupsByDay.set(
+          day,
+          new Map()
+        );
+      }
+
+      const dayGroups =
+        groupsByDay.get(
+          day
+        );
+
+      const key =
+        [
+          record.customerName || "",
+          record.subtitle || "",
+          formatSalesPlanShipping(
+            record
+          )
+        ].join(
+          "||"
+        );
+
+      if (
+        !dayGroups.has(
+          key
+        )
+      ) {
+        dayGroups.set(
+          key,
+          {
+            customerName:
+              record.customerName ||
+              "",
+            subtitle:
+              record.subtitle ||
+              "",
+            shippingLabel:
+              getSalesPlanShippingType(
+                record
+              ) === "period"
+                ? formatSalesPlanShipping(
+                    record
+                  )
+                : "",
+            totalQuantity:
+              0,
+            productCodes:
+              new Set()
+          }
+        );
+      }
+
+      const group =
+        dayGroups.get(
+          key
+        );
+
+      group.totalQuantity +=
+        Number(
+          record.quantity || 0
+        );
+
+      const productKey =
+        String(
+          record.internalCode ||
+          record.productCode ||
+          record.productName ||
+          ""
+        );
+
+      if (productKey) {
+        group.productCodes.add(
+          productKey
+        );
+      }
+
+      if (
+        group.productCodes.size ===
+        1
+      ) {
+        group.singleProductCode =
+          record.productCode ||
+          record.internalCode ||
+          "";
+      }
+    }
+  );
+
+  const cells = [];
+
+  for (
+    let index = 0;
+    index < firstWeekday;
+    index += 1
+  ) {
+    cells.push({
+      inMonth: false
+    });
+  }
+
+  for (
+    let day = 1;
+    day <= lastDay;
+    day += 1
+  ) {
+    const weekday =
+      new Date(
+        year,
+        monthNumber - 1,
+        day
+      ).getDay();
+
+    const dayGroups =
+      groupsByDay.get(
+        day
+      );
+
+    const entries =
+      dayGroups
+        ? Array.from(
+            dayGroups.values()
+          )
+            .map(
+              function (group) {
+                return {
+                  customerName:
+                    group.customerName,
+                  subtitle:
+                    group.subtitle,
+                  shippingLabel:
+                    group.shippingLabel,
+                  totalQuantity:
+                    group.totalQuantity,
+                  productCount:
+                    group.productCodes.size,
+                  singleProductCode:
+                    group.singleProductCode ||
+                    ""
+                };
+              }
+            )
+            .sort(
+              function (left, right) {
+                return String(
+                  left.customerName ||
+                  ""
+                ).localeCompare(
+                  String(
+                    right.customerName ||
+                    ""
+                  ),
+                  "ja"
+                );
+              }
+            )
+        : [];
+
+    cells.push({
+      inMonth:
+        true,
+      day:
+        day,
+      weekday:
+        weekday,
+      entries:
+        entries
+    });
+  }
+
+  while (
+    cells.length % 7 !==
+    0
+  ) {
+    cells.push({
+      inMonth: false
+    });
+  }
+
+  while (
+    cells.length < 42
+  ) {
+    cells.push({
+      inMonth: false
+    });
+  }
+
+  return {
+    cells:
+      cells
+  };
+}
+
+function getSalesPlanCalendarAnchorDate(
+  record,
+  monthStart,
+  monthEnd
+) {
+  const type =
+    getSalesPlanShippingType(
+      record
+    );
+
+  if (
+    type === "date"
+  ) {
+    return (
+      record.shippingDate >=
+        monthStart &&
+      record.shippingDate <=
+        monthEnd
+        ? record.shippingDate
+        : ""
+    );
+  }
+
+  if (
+    type === "period"
+  ) {
+    if (
+      record.shippingStartDate >
+        monthEnd ||
+      record.shippingEndDate <
+        monthStart
+    ) {
+      return "";
+    }
+
+    return (
+      record.shippingStartDate <
+      monthStart
+        ? monthStart
+        : record.shippingStartDate
+    );
+  }
+
+  if (
+    type === "month"
+  ) {
+    return (
+      record.shippingMonth ===
+      monthStart.slice(
+        0,
+        7
+      )
+        ? monthStart
+        : ""
+    );
+  }
+
+  return "";
+}
+
+function formatSalesPlanPrintMonth(
+  month
+) {
+  const match =
+    /^(\d{4})-(\d{2})$/.exec(
+      String(
+        month || ""
+      )
+    );
+
+  if (!match) {
+    return (
+      month ||
+      "販売予定"
+    );
+  }
+
+  return (
+    `${match[1]}年${Number(match[2])}月`
+  );
+}
+
 function getFilteredSalesPlans() {
   const keyword = document.querySelector("#sales-plan-search").value.trim().toLowerCase();
   const month = document.querySelector("#sales-plan-month-filter").value;
@@ -1956,6 +2757,29 @@ function createSalesPlanStyle() {
     .sales-plan-actions button { margin-right: 6px; }
     .sales-plan-delete-button { background: #c62828 !important; }
     .sales-plan-summary-box { background: #e8f5e9; border-radius: 10px; padding: 12px 14px; font-weight: 700; margin-top: 12px; }
+    .sales-plan-print-area {
+      display: grid;
+      grid-template-columns: minmax(220px, 320px) minmax(260px, 1fr);
+      gap: 10px 14px;
+      align-items: end;
+      margin-top: 14px;
+      padding: 14px;
+      border: 2px solid #90caf9;
+      border-radius: 12px;
+      background: #f5fbff;
+    }
+    .sales-plan-print-area button {
+      min-height: 48px;
+      margin: 0;
+      background: #1565c0;
+      font-weight: 800;
+    }
+    .sales-plan-print-note {
+      grid-column: 1 / -1;
+      margin: 0;
+      color: #455a64;
+      line-height: 1.5;
+    }
     .sales-plan-product-choice-modal { width: min(760px, calc(100vw - 28px)); }
     .sales-plan-product-choice-list { display: grid; gap: 10px; max-height: 42vh; overflow-y: auto; margin: 14px 0; padding: 4px; }
     .sales-plan-product-choice-button { width: 100%; margin: 0; padding: 14px 16px; border: 2px solid #90caf9; border-radius: 10px; background: #fff; color: #16324a; text-align: left; display: grid; gap: 5px; }
@@ -1977,6 +2801,12 @@ function createSalesPlanStyle() {
       }
       .sales-plan-pending-quantity {
         text-align: left;
+      }
+      .sales-plan-print-area {
+        grid-template-columns: 1fr;
+      }
+      .sales-plan-print-note {
+        grid-column: auto;
       }
       .sales-plan-card { padding: 16px; }
     }

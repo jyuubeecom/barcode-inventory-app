@@ -1794,14 +1794,14 @@ function printSalesPlanList() {
         "Yu Gothic",
         "Meiryo",
         sans-serif;
-      font-size: 10.2pt;
-      font-weight: 600;
+      font-size: 10.8pt;
+      font-weight: 700;
     }
 
     h1 {
-      margin: 0 0 5px;
+      margin: 0 0 4px;
       text-align: center;
-      font-size: 21pt;
+      font-size: 22pt;
       font-weight: 900;
     }
 
@@ -1809,24 +1809,24 @@ function printSalesPlanList() {
       display: grid;
       grid-template-columns:
         1fr 1fr 1fr;
-      gap: 6px;
-      margin-bottom: 7px;
+      gap: 5px;
+      margin-bottom: 5px;
     }
 
     .summary > div {
-      padding: 7px 9px;
+      padding: 5px 8px;
       border: 1.2px solid #444;
-      font-size: 10.5pt;
-      font-weight: 800;
+      font-size: 11.2pt;
+      font-weight: 900;
     }
 
     .notice {
-      margin-bottom: 7px;
-      padding: 7px 9px;
+      margin-bottom: 5px;
+      padding: 5px 8px;
       border-left: 5px solid #1976d2;
       background: #f5f9ff;
-      font-size: 9.5pt;
-      font-weight: 700;
+      font-size: 10pt;
+      font-weight: 800;
       line-height: 1.5;
     }
 
@@ -1848,19 +1848,19 @@ function printSalesPlanList() {
     th,
     td {
       border: 1.2px solid #444;
-      padding: 6px 6px;
+      padding: 5px 6px;
       vertical-align: middle;
       overflow-wrap: anywhere;
       word-break: break-word;
-      line-height: 1.4;
-      font-weight: 700;
+      line-height: 1.3;
+      font-weight: 800;
     }
 
     th {
       background: #e8eef5;
       text-align: center;
       font-weight: 900;
-      font-size: 10pt;
+      font-size: 10.8pt;
     }
 
     tbody tr:nth-child(even) {
@@ -1875,6 +1875,7 @@ function printSalesPlanList() {
       text-align: right;
       white-space: nowrap;
       font-weight: 900;
+      font-size: 11.2pt;
     }
 
     .remarks {

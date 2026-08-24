@@ -1760,7 +1760,7 @@ function printSalesPlanList() {
               <td>${escapeSalesPlanHtml(record.subtitle || "－")}</td>
               <td>${escapeSalesPlanHtml(record.internalCode || "未登録")}</td>
               <td>${escapeSalesPlanHtml(record.productCode || "未登録")}</td>
-              <td>${escapeSalesPlanHtml(record.productName || "未登録")}</td>
+              <td class="remarks">&nbsp;</td>
               <td class="number">${Number(record.quantity || 0).toLocaleString("ja-JP")}個</td>
             </tr>
           `;
@@ -1794,14 +1794,15 @@ function printSalesPlanList() {
         "Yu Gothic",
         "Meiryo",
         sans-serif;
-      font-size: 8.6pt;
+      font-size: 10.2pt;
+      font-weight: 600;
     }
 
     h1 {
       margin: 0 0 5px;
       text-align: center;
-      font-size: 18pt;
-      font-weight: 800;
+      font-size: 21pt;
+      font-weight: 900;
     }
 
     .summary {
@@ -1813,17 +1814,20 @@ function printSalesPlanList() {
     }
 
     .summary > div {
-      padding: 5px 7px;
-      border: 1px solid #555;
-      font-weight: 700;
+      padding: 7px 9px;
+      border: 1.2px solid #444;
+      font-size: 10.5pt;
+      font-weight: 800;
     }
 
     .notice {
       margin-bottom: 7px;
-      padding: 5px 7px;
-      border-left: 4px solid #1976d2;
+      padding: 7px 9px;
+      border-left: 5px solid #1976d2;
       background: #f5f9ff;
-      line-height: 1.45;
+      font-size: 9.5pt;
+      font-weight: 700;
+      line-height: 1.5;
     }
 
     table {
@@ -1843,19 +1847,20 @@ function printSalesPlanList() {
 
     th,
     td {
-      border: 1px solid #555;
-      padding: 4px 5px;
+      border: 1.2px solid #444;
+      padding: 6px 6px;
       vertical-align: middle;
       overflow-wrap: anywhere;
       word-break: break-word;
-      line-height: 1.35;
+      line-height: 1.4;
+      font-weight: 700;
     }
 
     th {
       background: #e8eef5;
       text-align: center;
-      font-weight: 800;
-      font-size: 8.3pt;
+      font-weight: 900;
+      font-size: 10pt;
     }
 
     tbody tr:nth-child(even) {
@@ -1869,7 +1874,11 @@ function printSalesPlanList() {
     .number {
       text-align: right;
       white-space: nowrap;
-      font-weight: 700;
+      font-weight: 900;
+    }
+
+    .remarks {
+      min-height: 10mm;
     }
 
     th:nth-child(1) { width: 4%; }
@@ -1877,8 +1886,8 @@ function printSalesPlanList() {
     th:nth-child(3) { width: 13%; }
     th:nth-child(4) { width: 14%; }
     th:nth-child(5) { width: 9%; }
-    th:nth-child(6) { width: 11%; }
-    th:nth-child(7) { width: 24%; }
+    th:nth-child(6) { width: 13%; }
+    th:nth-child(7) { width: 22%; }
     th:nth-child(8) { width: 8%; }
 
     .footer {
@@ -1900,7 +1909,7 @@ function printSalesPlanList() {
   </div>
 
   <div class="notice">
-    ※ 期間指定の販売予定は、選択した月と期間が重なる予定も一覧に含みます。
+    ※ 期間指定の販売予定は、選択した月と期間が重なる予定も一覧に含みます。備考欄は印刷後の手書きメモに使用できます。
   </div>
 
   <table>
@@ -1912,7 +1921,7 @@ function printSalesPlanList() {
         <th>副題</th>
         <th>社内コード</th>
         <th>商品コード</th>
-        <th>商品名</th>
+        <th>備考</th>
         <th>数量</th>
       </tr>
     </thead>

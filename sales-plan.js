@@ -1790,37 +1790,40 @@ function printSalesPlanList(paperSize) {
     isA4 ? 5 : 8;
 
   const listBodyFontPt =
-    isA4 ? 7.6 : 10.8;
+    isA4 ? 8.8 : 10.8;
 
   const listTitleFontPt =
-    isA4 ? 16 : 22;
+    isA4 ? 17 : 22;
 
   const listSummaryFontPt =
-    isA4 ? 8 : 11.2;
+    isA4 ? 8.8 : 11.2;
 
   const listSummaryPadding =
     isA4 ? "3px 5px" : "5px 8px";
 
   const listNoticeFontPt =
-    isA4 ? 7.2 : 10;
+    isA4 ? 8 : 10;
 
   const listCellPadding =
-    isA4 ? "3px 3px" : "5px 6px";
+    isA4 ? "4px 4px" : "5px 6px";
 
   const listLineHeight =
-    isA4 ? 1.2 : 1.3;
+    isA4 ? 1.25 : 1.3;
 
   const listHeaderFontPt =
-    isA4 ? 7.4 : 10.8;
+    isA4 ? 8.6 : 10.8;
 
   const listNumberFontPt =
-    isA4 ? 7.8 : 11.2;
+    isA4 ? 9 : 11.2;
 
   const listRemarksMinHeightMm =
     isA4 ? 7 : 10;
 
   const listFooterFontPt =
-    isA4 ? 6 : 7.5;
+    isA4 ? 6.5 : 7.5;
+
+  const listRowHeightMm =
+    isA4 ? 6.2 : 0;
 
   const rowsHtml =
     plans
@@ -1940,6 +1943,8 @@ function printSalesPlanList(paperSize) {
     tbody tr:nth-child(even) {
       background: #fafafa;
     }
+
+    ${isA4 ? `tbody td { height: ${listRowHeightMm}mm; }` : ""}
 
     .center {
       text-align: center;

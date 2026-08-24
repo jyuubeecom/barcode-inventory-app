@@ -2433,6 +2433,25 @@ function buildSalesPlanCalendarPrintData(
   };
 }
 
+function formatSalesPlanCalendarShortDate(
+  dateString
+) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      String(dateString || "")
+    )
+  ) {
+    return "";
+  }
+
+  const parts =
+    String(dateString)
+      .split("-")
+      .map(Number);
+
+  return `${parts[1]}/${parts[2]}`;
+}
+
 function buildSalesPlanCalendarPeriodGroups(
   plans,
   monthStart,
@@ -2552,10 +2571,29 @@ function buildSalesPlanCalendarPeriodGroups(
             ? ` / ${group.subtitle}`
             : "";
 
+        const startLabel =
+          formatSalesPlanCalendarShortDate(
+            group.originalStartDate
+          );
+
+        const endLabel =
+          formatSalesPlanCalendarShortDate(
+            group.originalEndDate
+          );
+
+        const dateText =
+          startLabel && endLabel
+            ? (
+                startLabel === endLabel
+                  ? ` ${startLabel}`
+                  : ` ${startLabel}〜${endLabel}`
+              )
+            : "";
+
         return {
           ...group,
           label:
-            `${group.customerName}${subtitleText}`,
+            `${group.customerName}${subtitleText}${dateText}`,
           productCount:
             group.productCodes.size
         };

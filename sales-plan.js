@@ -1830,18 +1830,33 @@ function printSalesPlanCalendar() {
               ? `<div class="more">ほか${hiddenCount}件</div>`
               : "";
 
+          const holiday =
+            getSalesPlanJapaneseHoliday(
+              cell.date
+            );
+
           const dayClass =
-            cell.weekday === 0
-              ? "sun"
+            holiday
+              ? "holiday"
               : (
-                  cell.weekday === 6
-                    ? "sat"
-                    : ""
+                  cell.weekday === 0
+                    ? "sun"
+                    : (
+                        cell.weekday === 6
+                          ? "sat"
+                          : ""
+                      )
                 );
+
+          const holidayHtml =
+            holiday
+              ? `<div class="holiday-name">${escapeSalesPlanHtml(holiday)}</div>`
+              : "";
 
           return `
             <td class="${dayClass}">
               <div class="day-number">${cell.day}</div>
+              ${holidayHtml}
               ${entries || '<div class="no-plan">予定なし</div>'}
               ${moreHtml}
             </td>
@@ -1966,7 +1981,8 @@ function printSalesPlanCalendar() {
     }
 
     .sun .day-number,
-    th.sun {
+    th.sun,
+    .holiday .day-number {
       color: #b00020;
     }
 
@@ -1975,12 +1991,21 @@ function printSalesPlanCalendar() {
       color: #003ea8;
     }
 
-    td.sun {
-      background: #fff9f9;
+    td.sun,
+    td.holiday {
+      background: #fff4f4;
     }
 
     td.sat {
       background: #f8fbff;
+    }
+
+    .holiday-name {
+      margin: 0 0 .7mm;
+      color: #b00020;
+      font-size: 6.8pt;
+      font-weight: 800;
+      line-height: 1.1;
     }
 
     .outside {
@@ -2030,7 +2055,7 @@ function printSalesPlanCalendar() {
     }
 
     .no-plan {
-      margin-top: 3mm;
+      margin-top: 2.4mm;
       text-align: center;
       color: #666;
       font-size: 6.8pt;
@@ -2339,6 +2364,8 @@ function buildSalesPlanCalendarPrintData(
         day,
       weekday:
         weekday,
+      date:
+        `${match[1]}-${match[2]}-${String(day).padStart(2, "0")}`,
       entries:
         entries
     });
@@ -2425,6 +2452,57 @@ function getSalesPlanCalendarAnchorDate(
   }
 
   return "";
+}
+
+function getSalesPlanJapaneseHoliday(
+  isoDate
+) {
+  const holidays = {
+    "2026-01-01": "元日",
+    "2026-01-12": "成人の日",
+    "2026-02-11": "建国記念の日",
+    "2026-02-23": "天皇誕生日",
+    "2026-03-20": "春分の日",
+    "2026-04-29": "昭和の日",
+    "2026-05-03": "憲法記念日",
+    "2026-05-04": "みどりの日",
+    "2026-05-05": "こどもの日",
+    "2026-05-06": "休日",
+    "2026-07-20": "海の日",
+    "2026-08-11": "山の日",
+    "2026-09-21": "敬老の日",
+    "2026-09-22": "休日",
+    "2026-09-23": "秋分の日",
+    "2026-10-12": "スポーツの日",
+    "2026-11-03": "文化の日",
+    "2026-11-23": "勤労感謝の日",
+
+    "2027-01-01": "元日",
+    "2027-01-11": "成人の日",
+    "2027-02-11": "建国記念の日",
+    "2027-02-23": "天皇誕生日",
+    "2027-03-21": "春分の日",
+    "2027-03-22": "休日",
+    "2027-04-29": "昭和の日",
+    "2027-05-03": "憲法記念日",
+    "2027-05-04": "みどりの日",
+    "2027-05-05": "こどもの日",
+    "2027-07-19": "海の日",
+    "2027-08-11": "山の日",
+    "2027-09-20": "敬老の日",
+    "2027-09-23": "秋分の日",
+    "2027-10-11": "スポーツの日",
+    "2027-11-03": "文化の日",
+    "2027-11-23": "勤労感謝の日"
+  };
+
+  return (
+    holidays[
+      String(
+        isoDate || ""
+      )
+    ] || ""
+  );
 }
 
 function formatSalesPlanPrintMonth(

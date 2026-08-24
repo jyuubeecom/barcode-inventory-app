@@ -1760,8 +1760,8 @@ function printSalesPlanList() {
               <td>${escapeSalesPlanHtml(record.subtitle || "－")}</td>
               <td>${escapeSalesPlanHtml(record.internalCode || "未登録")}</td>
               <td>${escapeSalesPlanHtml(record.productCode || "未登録")}</td>
-              <td class="remarks">&nbsp;</td>
               <td class="number">${Number(record.quantity || 0).toLocaleString("ja-JP")}個</td>
+              <td class="remarks">&nbsp;</td>
             </tr>
           `;
         }
@@ -1887,8 +1887,8 @@ function printSalesPlanList() {
     th:nth-child(4) { width: 14%; }
     th:nth-child(5) { width: 9%; }
     th:nth-child(6) { width: 13%; }
-    th:nth-child(7) { width: 22%; }
-    th:nth-child(8) { width: 8%; }
+    th:nth-child(7) { width: 8%; }
+    th:nth-child(8) { width: 22%; }
 
     .footer {
       margin-top: 5px;
@@ -1921,8 +1921,8 @@ function printSalesPlanList() {
         <th>副題</th>
         <th>社内コード</th>
         <th>商品コード</th>
-        <th>備考</th>
         <th>数量</th>
+        <th>備考</th>
       </tr>
     </thead>
 

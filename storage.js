@@ -2441,7 +2441,8 @@ async function saveSalesActualImportBatch(batchRecord, salesRecords) {
         if (netSalesQuantity > 0) {
           if (beforeStock < netSalesQuantity) {
             abortWithMessage(
-              `${product.productName || internalCode}\n` +
+              `社内コード：${internalCode}\n` +
+              `商品コード：${product.productCode || "-"}\n\n` +
               `販売実績CSVの出庫数量が現在庫を上回っています。\n` +
               `現在庫：${beforeStock}個 / CSV出庫：${netSalesQuantity}個\n\n` +
               "在庫数を確認してから、もう一度CSVを取り込んでください。"
@@ -2471,7 +2472,8 @@ async function saveSalesActualImportBatch(batchRecord, salesRecords) {
           if (remaining > 0) {
             const eligibleStock = netSalesQuantity - remaining;
             abortWithMessage(
-              `${product.productName || internalCode}\n` +
+              `社内コード：${internalCode}\n` +
+              `商品コード：${product.productCode || "-"}\n\n` +
               "販売実績CSVを出庫する保管場所の在庫が不足しています。\n" +
               `自動出庫の対象在庫：${eligibleStock}個 / CSV出庫：${netSalesQuantity}個\n\n` +
               "自動出庫は「本社1階 → 本社2階 → 酒本倉庫1階 → 酒本倉庫2階」の順です。"

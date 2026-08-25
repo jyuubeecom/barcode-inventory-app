@@ -3385,6 +3385,47 @@ function createShippingScheduleStyle() {
       min-width: 1180px;
       border-collapse: collapse;
     }
+
+    /* v189: 倉庫別振分け一覧はPC幅で全項目が見えるように専用調整 */
+    #shipping-schedule #shipping-warehouse-area .shipping-allocation-table-wrap {
+      overflow-x: visible;
+    }
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table {
+      width: 100%;
+      min-width: 0;
+      table-layout: fixed;
+    }
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table th,
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table td {
+      padding: 9px 7px;
+      font-size: 14px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table th:nth-child(1),
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table td:nth-child(1) { width: 9%; }
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table th:nth-child(2),
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table td:nth-child(2) { width: 12%; }
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table th:nth-child(3),
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table td:nth-child(3) { width: 27%; }
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table th:nth-child(4),
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table td:nth-child(4) { width: 10%; text-align: right; }
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table th:nth-child(5),
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table td:nth-child(5) { width: 10%; text-align: right; }
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table th:nth-child(6),
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table td:nth-child(6) { width: 9%; text-align: right; }
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table th:nth-child(7),
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table td:nth-child(7) { width: 9%; text-align: center; }
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table th:nth-child(8),
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table td:nth-child(8) { width: 14%; text-align: center; }
+    #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table td:nth-child(8) button {
+      width: 100%;
+      min-width: 0;
+      padding: 9px 6px;
+      white-space: normal;
+      line-height: 1.25;
+    }
     #shipping-schedule th,
     #shipping-schedule td {
       padding: 10px;
@@ -3652,6 +3693,8 @@ function createShippingScheduleStyle() {
       opacity: .82;
     }
     @media (max-width: 760px) {
+      #shipping-schedule #shipping-warehouse-area .shipping-allocation-table-wrap { overflow-x: auto; }
+      #shipping-schedule #shipping-warehouse-area .shipping-warehouse-product-table { min-width: 880px; table-layout: auto; }
       #shipping-schedule .shipping-manual-addition-card-head {
         grid-template-columns: 1fr;
       }

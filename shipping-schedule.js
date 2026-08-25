@@ -1141,10 +1141,28 @@ function focusShippingManualAdditionSearch() {
   const search = document.querySelector("#shipping-manual-addition-search");
   if (!search || search.disabled) return;
 
-  search.scrollIntoView({
-    behavior: "smooth",
-    block: "center"
-  });
+  /*
+   * 検索パネルは position: sticky のため、検索欄そのものへ
+   * scrollIntoView() すると現在の貼り付き位置を基準にしてしまい、
+   * 入力欄まで戻り切らないことがあります。
+   * そこで、sticky ではない専用アンカーまで画面を戻してから
+   * 検索欄へフォーカスします。
+   */
+  const anchor = document.querySelector(
+    "#shipping-manual-addition-search-anchor"
+  );
+
+  if (anchor) {
+    anchor.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
+  } else {
+    search.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
+  }
 
   window.setTimeout(function () {
     try {
@@ -1153,7 +1171,7 @@ function focusShippingManualAdditionSearch() {
       search.focus();
     }
     search.select();
-  }, 280);
+  }, 420);
 }
 
 function showShippingManualSearchNotice(message) {
@@ -3459,6 +3477,11 @@ function createShippingScheduleStyle() {
       margin: 0 0 12px;
       line-height: 1.6;
     }
+    #shipping-schedule #shipping-manual-addition-search-anchor {
+      height: 1px;
+      scroll-margin-top: 78px;
+    }
+
     #shipping-schedule .shipping-manual-addition-search-panel {
       position: sticky;
       top: 8px;

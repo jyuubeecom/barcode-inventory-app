@@ -1,13 +1,13 @@
 "use strict";
 
 /*
-  v184 保管場所別在庫表 備考欄追加
+  v185 保管場所別在庫表 印刷の商品名削除・備考欄拡大
   ・保管場所ごとの在庫を画面で確認
   ・画面では社内コード / 商品コード / 商品名 / 色 / 在庫数 / 商品状態を表示
   ・選択中の保管場所、または全保管場所をA4縦向きで印刷
-  ・印刷表では「商品状態」を外し、手書き用の「確認」「備考」欄を追加
-  ・備考欄は一番右端に配置
-  ・商品名は長い場合に2行以上へ折り返して表示
+  ・印刷表では「商品状態」「商品名」を外し、手書き用の「確認」「備考」欄を表示
+  ・備考欄は一番右端に配置し、商品名を削除した分だけ広く確保
+  ・画面上の一覧は商品名を残して検索・確認しやすさを維持
   ・作業者モードでも閲覧・印刷可能
 */
 
@@ -1373,7 +1373,6 @@
                   <td class="print-no">${index + 1}</td>
                   <td>${escapeHtml(row.internalCode || "-")}</td>
                   <td>${escapeHtml(row.productCode || "-")}</td>
-                  <td class="print-product-name">${escapeHtml(row.productName || "-")}</td>
                   <td class="print-color">${escapeHtml(row.productColor || "-")}</td>
                   <td class="print-stock">${formatNumber(row.stock)}</td>
                   <td class="print-check"><span class="print-check-box" aria-hidden="true"></span></td>
@@ -1384,7 +1383,7 @@
           ).join("")
         : `
             <tr>
-              <td colspan="8" class="print-empty">在庫はありません。</td>
+              <td colspan="7" class="print-empty">在庫はありません。</td>
             </tr>
           `;
 
@@ -1407,7 +1406,6 @@
               <th>No</th>
               <th>社内コード</th>
               <th>商品コード</th>
-              <th>商品名</th>
               <th>色</th>
               <th>在庫数</th>
               <th>確認</th>
@@ -1558,22 +1556,15 @@
           }
 
           th:nth-child(1), td:nth-child(1) { width: 4%; }
-          th:nth-child(2), td:nth-child(2) { width: 12%; }
-          th:nth-child(3), td:nth-child(3) { width: 15%; }
-          th:nth-child(4), td:nth-child(4) { width: 29%; }
+          th:nth-child(2), td:nth-child(2) { width: 13%; }
+          th:nth-child(3), td:nth-child(3) { width: 17%; }
+          th:nth-child(4), td:nth-child(4) { width: 12%; }
           th:nth-child(5), td:nth-child(5) { width: 10%; }
-          th:nth-child(6), td:nth-child(6) { width: 9%; }
-          th:nth-child(7), td:nth-child(7) { width: 6%; }
-          th:nth-child(8), td:nth-child(8) { width: 15%; }
+          th:nth-child(6), td:nth-child(6) { width: 7%; }
+          th:nth-child(7), td:nth-child(7) { width: 37%; }
 
           .print-no {
             text-align: center;
-          }
-
-          .print-product-name {
-            white-space: normal;
-            overflow-wrap: anywhere;
-            line-height: 1.15;
           }
 
           .print-color {

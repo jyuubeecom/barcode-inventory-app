@@ -1,11 +1,12 @@
 "use strict";
 
 /*
-  v182 保管場所別在庫表 印刷改善
+  v183 保管場所別在庫表 色・確認欄追加
   ・保管場所ごとの在庫を画面で確認
-  ・社内コード / 商品コード / 商品名 / 在庫数 / 商品状態を表示
+  ・社内コード / 商品コード / 商品名 / 色 / 在庫数 / 商品状態を表示
   ・選択中の保管場所、または全保管場所をA4縦向きで印刷
-  ・在庫チェックで使いやすいよう、1ページの商品表示数を増加
+  ・印刷表に手書き用の「確認」欄を追加
+  ・商品名は長い場合に2行以上へ折り返して表示
   ・作業者モードでも閲覧・印刷可能
 */
 
@@ -304,7 +305,7 @@
 
       .location-stock-report-table {
         width: 100%;
-        min-width: 840px;
+        min-width: 960px;
         border-collapse: collapse;
       }
 
@@ -340,6 +341,11 @@
       .location-stock-report-location-cell {
         font-weight: 800;
         white-space: nowrap;
+      }
+
+      .location-stock-report-color {
+        min-width: 100px;
+        font-weight: 700;
       }
 
       .location-stock-report-status-badge {
@@ -690,6 +696,11 @@
               product.productName ||
               ""
             ).trim(),
+            productColor: String(
+              product &&
+              product.productColor ||
+              ""
+            ).trim(),
             stock: stock,
             status:
               getProductStatus(product)
@@ -900,6 +911,7 @@
           row.internalCode,
           row.productCode,
           row.productName,
+          row.productColor,
           row.status
         ]
           .join(" ")
@@ -964,6 +976,7 @@
         <th>社内コード</th>
         <th>商品コード</th>
         <th>商品名</th>
+        <th>色</th>
         <th>在庫数</th>
         <th>商品状態</th>
       </tr>
@@ -993,6 +1006,7 @@
             <td>${escapeHtml(row.internalCode || "-")}</td>
             <td>${escapeHtml(row.productCode || "-")}</td>
             <td>${escapeHtml(row.productName || "-")}</td>
+            <td class="location-stock-report-color">${escapeHtml(row.productColor || "-")}</td>
             <td class="location-stock-report-quantity">${formatNumber(row.stock)}個</td>
             <td>${createStatusBadge(row.status)}</td>
           </tr>
@@ -1358,16 +1372,18 @@
                   <td class="print-no">${index + 1}</td>
                   <td>${escapeHtml(row.internalCode || "-")}</td>
                   <td>${escapeHtml(row.productCode || "-")}</td>
-                  <td>${escapeHtml(row.productName || "-")}</td>
+                  <td class="print-product-name">${escapeHtml(row.productName || "-")}</td>
+                  <td class="print-color">${escapeHtml(row.productColor || "-")}</td>
                   <td class="print-stock">${formatNumber(row.stock)}</td>
                   <td>${escapeHtml(row.status)}</td>
+                  <td class="print-check"><span class="print-check-box" aria-hidden="true"></span></td>
                 </tr>
               `;
             }
           ).join("")
         : `
             <tr>
-              <td colspan="6" class="print-empty">在庫はありません。</td>
+              <td colspan="8" class="print-empty">在庫はありません。</td>
             </tr>
           `;
 
@@ -1391,8 +1407,10 @@
               <th>社内コード</th>
               <th>商品コード</th>
               <th>商品名</th>
+              <th>色</th>
               <th>在庫数</th>
               <th>商品状態</th>
+              <th>確認</th>
             </tr>
           </thead>
           <tbody>${body}</tbody>
@@ -1538,15 +1556,29 @@
             white-space: nowrap;
           }
 
-          th:nth-child(1), td:nth-child(1) { width: 5%; }
-          th:nth-child(2), td:nth-child(2) { width: 15%; }
-          th:nth-child(3), td:nth-child(3) { width: 18%; }
-          th:nth-child(4), td:nth-child(4) { width: 37%; }
-          th:nth-child(5), td:nth-child(5) { width: 11%; }
-          th:nth-child(6), td:nth-child(6) { width: 14%; }
+          th:nth-child(1), td:nth-child(1) { width: 4%; }
+          th:nth-child(2), td:nth-child(2) { width: 12%; }
+          th:nth-child(3), td:nth-child(3) { width: 15%; }
+          th:nth-child(4), td:nth-child(4) { width: 32%; }
+          th:nth-child(5), td:nth-child(5) { width: 10%; }
+          th:nth-child(6), td:nth-child(6) { width: 10%; }
+          th:nth-child(7), td:nth-child(7) { width: 11%; }
+          th:nth-child(8), td:nth-child(8) { width: 6%; }
 
           .print-no {
             text-align: center;
+          }
+
+          .print-product-name {
+            white-space: normal;
+            overflow-wrap: anywhere;
+            line-height: 1.15;
+          }
+
+          .print-color {
+            white-space: normal;
+            overflow-wrap: anywhere;
+            line-height: 1.15;
           }
 
           .print-stock {
@@ -1554,6 +1586,18 @@
             font-size: 9.2pt;
             font-weight: 800;
             white-space: nowrap;
+          }
+
+          .print-check {
+            text-align: center;
+          }
+
+          .print-check-box {
+            display: inline-block;
+            width: 3.6mm;
+            height: 3.6mm;
+            border: 1.2px solid #222;
+            vertical-align: middle;
           }
 
           .print-empty {

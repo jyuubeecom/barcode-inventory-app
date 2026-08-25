@@ -26,6 +26,7 @@
     "show-barcode-lookup-button",
     "show-history-button",
     "show-transfer-list-button",
+    "show-location-stock-report-button",
     "show-sales-plan-list-button",
     "show-purchase-required-button",
     "show-low-shipment-button",

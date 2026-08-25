@@ -1,10 +1,11 @@
 "use strict";
 
 /*
-  v181 保管場所別在庫表
+  v182 保管場所別在庫表 印刷改善
   ・保管場所ごとの在庫を画面で確認
   ・社内コード / 商品コード / 商品名 / 在庫数 / 商品状態を表示
-  ・選択中の保管場所、または全保管場所をA4横向きで印刷
+  ・選択中の保管場所、または全保管場所をA4縦向きで印刷
+  ・在庫チェックで使いやすいよう、1ページの商品表示数を増加
   ・作業者モードでも閲覧・印刷可能
 */
 
@@ -1126,7 +1127,7 @@
       <div class="location-stock-print-modal">
         <div class="location-stock-print-modal-head">
           <div>
-            <span class="location-stock-print-modal-kicker">A4横向き</span>
+            <span class="location-stock-print-modal-kicker">A4縦向き</span>
             <h3 id="location-stock-print-dialog-title">保管場所別在庫表を印刷</h3>
           </div>
           <button
@@ -1441,8 +1442,8 @@
         <title>${escapeHtml(title)}</title>
         <style>
           @page {
-            size: A4 landscape;
-            margin: 9mm;
+            size: A4 portrait;
+            margin: 6mm 7mm;
           }
 
           * {
@@ -1453,13 +1454,13 @@
             margin: 0;
             color: #111;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Yu Gothic", "Meiryo", sans-serif;
-            font-size: 10.5pt;
+            font-size: 8.7pt;
           }
 
           .print-meta {
-            margin-bottom: 5mm;
+            margin-bottom: 2.5mm;
             text-align: right;
-            font-size: 8.5pt;
+            font-size: 7.2pt;
             color: #444;
           }
 
@@ -1476,33 +1477,34 @@
             display: flex;
             align-items: flex-end;
             justify-content: space-between;
-            gap: 8mm;
-            margin-bottom: 4mm;
+            gap: 4mm;
+            margin-bottom: 2.5mm;
           }
 
           .print-kicker {
-            font-size: 8.5pt;
+            font-size: 7.2pt;
             font-weight: 700;
             color: #333;
           }
 
           h1 {
-            margin: 1mm 0 0;
-            font-size: 19pt;
-            line-height: 1.2;
+            margin: 0.5mm 0 0;
+            font-size: 15pt;
+            line-height: 1.15;
           }
 
           .print-summary-box {
             display: flex;
-            gap: 6mm;
-            padding: 2.5mm 4mm;
+            gap: 3mm;
+            padding: 1.5mm 2.5mm;
             border: 1px solid #777;
             border-radius: 2mm;
             white-space: nowrap;
+            font-size: 7.8pt;
           }
 
           .print-summary-box strong {
-            font-size: 12pt;
+            font-size: 9.5pt;
           }
 
           table {
@@ -1523,23 +1525,25 @@
           th,
           td {
             border: 1px solid #555;
-            padding: 2.1mm 2mm;
+            padding: 1.05mm 1mm;
             vertical-align: middle;
             overflow-wrap: anywhere;
+            line-height: 1.18;
           }
 
           th {
             background: #e8eef5;
-            font-size: 9.5pt;
+            font-size: 8pt;
             text-align: left;
+            white-space: nowrap;
           }
 
-          th:nth-child(1), td:nth-child(1) { width: 6%; }
+          th:nth-child(1), td:nth-child(1) { width: 5%; }
           th:nth-child(2), td:nth-child(2) { width: 15%; }
           th:nth-child(3), td:nth-child(3) { width: 18%; }
-          th:nth-child(4), td:nth-child(4) { width: 38%; }
+          th:nth-child(4), td:nth-child(4) { width: 37%; }
           th:nth-child(5), td:nth-child(5) { width: 11%; }
-          th:nth-child(6), td:nth-child(6) { width: 12%; }
+          th:nth-child(6), td:nth-child(6) { width: 14%; }
 
           .print-no {
             text-align: center;
@@ -1547,8 +1551,9 @@
 
           .print-stock {
             text-align: right;
-            font-size: 11pt;
+            font-size: 9.2pt;
             font-weight: 800;
+            white-space: nowrap;
           }
 
           .print-empty {

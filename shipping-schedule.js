@@ -31,6 +31,7 @@ let shippingScheduleCurrentPage = 1;
 let shippingAllocationCurrentPage = 1;
 let shippingAllocationSearchTimer = 0;
 let shippingManualAdditionDrafts = new Map();
+let shippingManualAdditionPendingQuantities = new Map();
 
 window.addEventListener("DOMContentLoaded", initializeShippingScheduleFeature);
 
@@ -142,6 +143,30 @@ function initializeShippingScheduleFeature() {
 
   if (manualSearch) {
     manualSearch.addEventListener("input", renderShippingManualAdditionSearchResults);
+    manualSearch.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter") return;
+
+      const schedule = getSelectedShippingSchedule();
+      if (!schedule || manualSearch.disabled) return;
+
+      const query = normalizeShippingManualSearchValue(manualSearch.value);
+      if (!query) return;
+
+      const matches = getShippingManualAdditionSearchMatches(schedule, query);
+      const exact = matches.find(function (product) {
+        return [product.internalCode, product.productCode]
+          .map(normalizeShippingManualSearchValue)
+          .some(function (value) {
+            return value === query;
+          });
+      });
+
+      const target = exact || (matches.length === 1 ? matches[0] : null);
+      if (!target) return;
+
+      event.preventDefault();
+      addShippingManualAdditionFromSearch(schedule, target);
+    });
   }
   if (saveManualButton) {
     saveManualButton.addEventListener("click", saveShippingManualAdditions);
@@ -1031,6 +1056,145 @@ function renderShippingAllocationTable() {
   if (next) next.disabled = shippingAllocationCurrentPage >= totalPages;
 }
 
+function getShippingManualPendingQuantityMap(scheduleId) {
+  const key = String(scheduleId || "");
+  if (!key) return new Map();
+
+  if (!shippingManualAdditionPendingQuantities.has(key)) {
+    shippingManualAdditionPendingQuantities.set(key, new Map());
+  }
+
+  return shippingManualAdditionPendingQuantities.get(key);
+}
+
+function rememberShippingManualPendingQuantity(scheduleId, internalCode, value) {
+  const code = String(internalCode || "").trim();
+  if (!scheduleId || !code) return;
+
+  getShippingManualPendingQuantityMap(scheduleId).set(code, String(value ?? ""));
+}
+
+function forgetShippingManualPendingQuantity(scheduleId, internalCode) {
+  const key = String(scheduleId || "");
+  const code = String(internalCode || "").trim();
+  if (!key || !code) return;
+
+  const map = shippingManualAdditionPendingQuantities.get(key);
+  if (!map) return;
+
+  map.delete(code);
+  if (map.size === 0) {
+    shippingManualAdditionPendingQuantities.delete(key);
+  }
+}
+
+function getShippingManualPendingQuantity(scheduleId, internalCode, fallback) {
+  const map = shippingManualAdditionPendingQuantities.get(String(scheduleId || ""));
+  const code = String(internalCode || "").trim();
+
+  if (map && map.has(code)) {
+    return map.get(code);
+  }
+
+  return fallback;
+}
+
+function normalizeShippingManualSearchValue(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .trim()
+    .toLowerCase();
+}
+
+function getShippingManualAdditionSearchMatches(schedule, query) {
+  if (!schedule || !query) return [];
+
+  const manualCodes = new Set(
+    getShippingManualAdditionRows(schedule).map(function (row) {
+      return row.internalCode;
+    })
+  );
+
+  const candidateCodes = new Set(
+    getShippingCandidateAllocationRows(schedule).map(function (row) {
+      return row.internalCode;
+    })
+  );
+
+  return shippingScheduleProducts
+    .filter(function (product) {
+      if (!isShippingAllocationTargetProduct(product)) return false;
+
+      const code = String(product.internalCode || "").trim();
+      if (!code || manualCodes.has(code) || candidateCodes.has(code)) return false;
+
+      return [product.internalCode, product.productCode, product.productName]
+        .map(normalizeShippingManualSearchValue)
+        .some(function (value) {
+          return value.includes(query);
+        });
+    })
+    .slice(0, 8);
+}
+
+function focusShippingManualAdditionSearch() {
+  const search = document.querySelector("#shipping-manual-addition-search");
+  if (!search || search.disabled) return;
+
+  try {
+    search.focus({ preventScroll: true });
+  } catch (error) {
+    search.focus();
+  }
+  search.select();
+}
+
+function focusShippingManualAdditionQuantity(internalCode) {
+  const code = String(internalCode || "").trim();
+  if (!code) return;
+
+  const card = Array.from(
+    document.querySelectorAll("#shipping-manual-addition-list .shipping-manual-addition-card")
+  ).find(function (item) {
+    return String(item.dataset.internalCode || "").trim() === code;
+  });
+
+  if (!card) return;
+
+  card.classList.add("shipping-manual-addition-hit");
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+
+  window.setTimeout(function () {
+    const input = card.querySelector(".shipping-manual-addition-quantity");
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }, 300);
+
+  window.setTimeout(function () {
+    card.classList.remove("shipping-manual-addition-hit");
+  }, 2200);
+}
+
+function addShippingManualAdditionFromSearch(schedule, product) {
+  if (!schedule || !product) return;
+
+  const code = String(product.internalCode || "").trim();
+  if (!code) return;
+
+  addShippingManualAdditionDraft(schedule.id, code);
+
+  const search = document.querySelector("#shipping-manual-addition-search");
+  if (search) search.value = "";
+
+  renderShippingManualAdditionArea(schedule, false);
+
+  window.setTimeout(function () {
+    focusShippingManualAdditionQuantity(code);
+  }, 30);
+}
+
 function getShippingManualDraftSet(scheduleId) {
   const key = String(scheduleId || "");
   if (!key) return new Set();
@@ -1091,9 +1255,13 @@ function getShippingManualAdditionRows(schedule) {
         productName: product.productName || "",
         location: product.location || "",
         stock: getShippingNumber(product.stock),
-        quantity: getCurrentScheduleAllocationQuantity(
+        quantity: getShippingManualPendingQuantity(
           schedule.id,
-          internalCode
+          internalCode,
+          getCurrentScheduleAllocationQuantity(
+            schedule.id,
+            internalCode
+          )
         ),
         saved: isShippingManualAddedProduct(
           schedule.id,
@@ -1325,6 +1493,32 @@ function renderShippingManualAdditionArea(
         );
       }
 
+      const quantityInput = card.querySelector(
+        ".shipping-manual-addition-quantity"
+      );
+
+      if (quantityInput) {
+        quantityInput.addEventListener("input", function () {
+          rememberShippingManualPendingQuantity(
+            schedule.id,
+            row.internalCode,
+            quantityInput.value
+          );
+        });
+
+        quantityInput.addEventListener("keydown", function (event) {
+          if (event.key !== "Enter") return;
+
+          event.preventDefault();
+          rememberShippingManualPendingQuantity(
+            schedule.id,
+            row.internalCode,
+            quantityInput.value
+          );
+          focusShippingManualAdditionSearch();
+        });
+      }
+
       list.appendChild(card);
     });
   }
@@ -1352,11 +1546,7 @@ function renderShippingManualAdditionSearchResults() {
   const schedule =
     getSelectedShippingSchedule();
 
-  const query =
-    String(search.value || "")
-      .normalize("NFKC")
-      .trim()
-      .toLowerCase();
+  const query = normalizeShippingManualSearchValue(search.value);
 
   results.innerHTML = "";
 
@@ -1368,55 +1558,7 @@ function renderShippingManualAdditionSearchResults() {
     return;
   }
 
-  const manualCodes =
-    new Set(
-      getShippingManualAdditionRows(schedule)
-        .map(function (row) {
-          return row.internalCode;
-        })
-    );
-
-  const candidateCodes =
-    new Set(
-      getShippingCandidateAllocationRows(schedule)
-        .map(function (row) {
-          return row.internalCode;
-        })
-    );
-
-  const matches =
-    shippingScheduleProducts
-      .filter(function (product) {
-        if (!isShippingAllocationTargetProduct(product)) {
-          return false;
-        }
-
-        const code =
-          String(product.internalCode || "").trim();
-
-        if (
-          !code ||
-          manualCodes.has(code) ||
-          candidateCodes.has(code)
-        ) {
-          return false;
-        }
-
-        return [
-          product.internalCode,
-          product.productCode,
-          product.productName
-        ]
-          .map(function (value) {
-            return String(value || "")
-              .normalize("NFKC")
-              .toLowerCase();
-          })
-          .some(function (value) {
-            return value.includes(query);
-          });
-      })
-      .slice(0, 8);
+  const matches = getShippingManualAdditionSearchMatches(schedule, query);
 
   if (matches.length === 0) {
     const empty =
@@ -1460,17 +1602,7 @@ function renderShippingManualAdditionSearchResults() {
       .addEventListener(
         "click",
         function () {
-          addShippingManualAdditionDraft(
-            schedule.id,
-            String(product.internalCode || "").trim()
-          );
-
-          search.value = "";
-
-          renderShippingManualAdditionArea(
-            schedule,
-            false
-          );
+          addShippingManualAdditionFromSearch(schedule, product);
         }
       );
 
@@ -1538,6 +1670,7 @@ async function removeShippingManualAddition(
 
       getShippingManualDraftSet(scheduleId)
         .delete(code);
+      forgetShippingManualPendingQuantity(scheduleId, code);
 
       await refreshShippingScheduleData();
       return;
@@ -1556,6 +1689,7 @@ async function removeShippingManualAddition(
 
   getShippingManualDraftSet(scheduleId)
     .delete(code);
+  forgetShippingManualPendingQuantity(scheduleId, code);
 
   renderShippingManualAdditionArea(
     getSelectedShippingSchedule(),
@@ -1736,6 +1870,10 @@ async function saveShippingManualAdditions() {
       ).delete(
         change.internalCode
       );
+      forgetShippingManualPendingQuantity(
+        schedule.id,
+        change.internalCode
+      );
     }
 
     await refreshShippingScheduleData();
@@ -1743,6 +1881,10 @@ async function saveShippingManualAdditions() {
     alert(
       "候補外の商品を船便へ追加・保存しました。"
     );
+
+    window.setTimeout(function () {
+      focusShippingManualAdditionSearch();
+    }, 50);
 
     if (
       window.shippingArrivalApp &&
@@ -3091,6 +3233,25 @@ function createShippingScheduleStyle() {
       margin: 0 0 12px;
       line-height: 1.6;
     }
+    #shipping-schedule .shipping-manual-addition-search-panel {
+      position: sticky;
+      top: 8px;
+      z-index: 20;
+      margin: 0 -2px 12px;
+      padding: 10px;
+      border: 1px solid #90caf9;
+      border-radius: 10px;
+      background: rgba(247, 251, 255, .98);
+      box-shadow: 0 5px 14px rgba(25, 118, 210, .12);
+      backdrop-filter: blur(3px);
+    }
+    #shipping-schedule .shipping-manual-addition-search-help {
+      margin-top: 7px;
+      color: #546e7a;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
     #shipping-schedule .shipping-manual-addition-search-wrap {
       display: grid;
       gap: 7px;
@@ -3102,7 +3263,9 @@ function createShippingScheduleStyle() {
     #shipping-schedule .shipping-manual-addition-search-results {
       display: grid;
       gap: 7px;
+      max-height: 260px;
       margin-top: 8px;
+      overflow-y: auto;
     }
     #shipping-schedule .shipping-manual-search-result {
       display: flex;
@@ -3152,6 +3315,11 @@ function createShippingScheduleStyle() {
       border-left: 6px solid #1976d2;
       border-radius: 12px;
       background: #fff;
+    }
+    #shipping-schedule .shipping-manual-addition-card.shipping-manual-addition-hit {
+      outline: 4px solid #42a5f5;
+      outline-offset: 2px;
+      box-shadow: 0 0 0 7px rgba(66, 165, 245, .15), 0 4px 14px rgba(0, 0, 0, .10);
     }
     #shipping-schedule .shipping-manual-addition-card-head {
       display: grid;

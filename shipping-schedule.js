@@ -1141,12 +1141,35 @@ function focusShippingManualAdditionSearch() {
   const search = document.querySelector("#shipping-manual-addition-search");
   if (!search || search.disabled) return;
 
-  try {
-    search.focus({ preventScroll: true });
-  } catch (error) {
-    search.focus();
-  }
-  search.select();
+  search.scrollIntoView({
+    behavior: "smooth",
+    block: "center"
+  });
+
+  window.setTimeout(function () {
+    try {
+      search.focus({ preventScroll: true });
+    } catch (error) {
+      search.focus();
+    }
+    search.select();
+  }, 280);
+}
+
+function showShippingManualSearchNotice(message) {
+  const search = document.querySelector("#shipping-manual-addition-search");
+  if (!search) return;
+
+  const defaultPlaceholder =
+    "社内コード・商品コード・商品名で検索";
+
+  search.placeholder = message || defaultPlaceholder;
+
+  window.setTimeout(function () {
+    const schedule = getSelectedShippingSchedule();
+    if (!schedule || search.disabled) return;
+    search.placeholder = defaultPlaceholder;
+  }, 2200);
 }
 
 function focusShippingManualAdditionQuantity(internalCode) {
@@ -1420,6 +1443,12 @@ function renderShippingManualAdditionArea(
               <strong>個</strong>
               <button
                 type="button"
+                class="shipping-manual-addition-save"
+              >
+                保存
+              </button>
+              <button
+                type="button"
                 class="shipping-manual-addition-remove"
               >
                 一覧から外す
@@ -1475,6 +1504,29 @@ function renderShippingManualAdditionArea(
         </div>
       `;
 
+      const quantityInput = card.querySelector(
+        ".shipping-manual-addition-quantity"
+      );
+
+      const itemSaveButton =
+        card.querySelector(
+          ".shipping-manual-addition-save"
+        );
+
+      if (itemSaveButton && quantityInput) {
+        itemSaveButton.addEventListener(
+          "click",
+          function () {
+            saveShippingManualAdditionItem(
+              schedule.id,
+              row.internalCode,
+              quantityInput,
+              itemSaveButton
+            );
+          }
+        );
+      }
+
       const removeButton =
         card.querySelector(
           ".shipping-manual-addition-remove"
@@ -1492,10 +1544,6 @@ function renderShippingManualAdditionArea(
           }
         );
       }
-
-      const quantityInput = card.querySelector(
-        ".shipping-manual-addition-quantity"
-      );
 
       if (quantityInput) {
         quantityInput.addEventListener("input", function () {
@@ -1695,6 +1743,184 @@ async function removeShippingManualAddition(
     getSelectedShippingSchedule(),
     false
   );
+}
+
+async function saveShippingManualAdditionItem(
+  scheduleId,
+  internalCode,
+  input,
+  button
+) {
+  const schedule = getSelectedShippingSchedule();
+  const code = String(internalCode || "").trim();
+
+  if (!schedule || schedule.id !== scheduleId || !code || !input) {
+    return;
+  }
+
+  if (isShippingScheduleReceived(schedule.id)) {
+    alert(
+      "この船便はすでに在庫へ入荷反映済みのため、商品を保存できません。"
+    );
+    return;
+  }
+
+  if (isShippingScheduleConfirmed(schedule)) {
+    alert(
+      "この船便は船積内容を確定済みです。変更する場合は、先に船便一覧で「確定を解除」してください。"
+    );
+    return;
+  }
+
+  const product = shippingScheduleProducts.find(function (item) {
+    return String(item.internalCode || "").trim() === code;
+  });
+
+  if (!product) return;
+
+  const quantity = Number(input.value);
+
+  if (!Number.isInteger(quantity) || quantity < 0) {
+    alert(
+      `${product.productName || code} の振分数量は0以上の整数で入力してください。`
+    );
+    input.focus();
+    input.select();
+    return;
+  }
+
+  const warehouseAllocated =
+    getShippingWarehouseAllocatedQuantity(
+      schedule.id,
+      code
+    );
+
+  if (quantity < warehouseAllocated) {
+    alert(
+      `${product.productName || code} は倉庫へ ` +
+      `${warehouseAllocated.toLocaleString("ja-JP")}個 振分け済みです。\n\n` +
+      "先に倉庫振分け数量を減らしてください。"
+    );
+    input.focus();
+    input.select();
+    return;
+  }
+
+  const currentQuantity =
+    getCurrentScheduleAllocationQuantity(
+      schedule.id,
+      code
+    );
+
+  const alreadySaved =
+    isShippingManualAddedProduct(
+      schedule.id,
+      code
+    );
+
+  if (quantity === currentQuantity && alreadySaved) {
+    rememberShippingManualPendingQuantity(
+      schedule.id,
+      code,
+      quantity
+    );
+    showShippingManualSearchNotice(
+      `社内コード ${code} は保存済みです。次の商品コードを入力`
+    );
+    focusShippingManualAdditionSearch();
+    return;
+  }
+
+  const originalText = button ? button.textContent : "";
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "保存中...";
+  }
+
+  try {
+    const existingRecords =
+      getAllocationRecordsForScheduleProduct(
+        schedule.id,
+        code
+      );
+
+    for (const existing of existingRecords) {
+      await deleteShippingAllocation(
+        existing.id
+      );
+    }
+
+    if (quantity > 0) {
+      await saveShippingAllocation({
+        id:
+          createShippingProductAllocationId(
+            schedule.id,
+            code
+          ),
+        scheduleId:
+          schedule.id,
+        shippingWishId:
+          "",
+        internalCode:
+          code,
+        productCode:
+          product.productCode || "",
+        productName:
+          product.productName || "",
+        quantity:
+          quantity,
+        source:
+          "manual-add",
+        updatedAt:
+          new Date().toISOString()
+      });
+    }
+
+    getShippingManualDraftSet(
+      schedule.id
+    ).delete(code);
+
+    forgetShippingManualPendingQuantity(
+      schedule.id,
+      code
+    );
+
+    await refreshShippingScheduleData();
+
+    showShippingManualSearchNotice(
+      `社内コード ${code} を保存しました。次の商品コードを入力`
+    );
+    focusShippingManualAdditionSearch();
+
+    if (
+      window.shippingArrivalApp &&
+      typeof window.shippingArrivalApp.checkNow === "function"
+    ) {
+      window.setTimeout(
+        function () {
+          window.shippingArrivalApp.checkNow({
+            showMessageWhenNone: false
+          });
+        },
+        100
+      );
+    }
+  } catch (error) {
+    console.error(
+      "候補外商品単品保存エラー",
+      error
+    );
+
+    alert(
+      "この候補外商品を保存できませんでした。"
+    );
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText || "保存";
+    }
+  }
 }
 
 async function saveShippingManualAdditions() {
@@ -3323,7 +3549,7 @@ function createShippingScheduleStyle() {
     }
     #shipping-schedule .shipping-manual-addition-card-head {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(260px, 330px);
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 430px);
       gap: 14px;
       align-items: center;
     }
@@ -3384,6 +3610,9 @@ function createShippingScheduleStyle() {
       font-size: 20px;
       font-weight: 800;
       text-align: right;
+    }
+    #shipping-schedule .shipping-manual-addition-save {
+      background: #2e7d32;
     }
     #shipping-schedule .shipping-manual-addition-remove {
       background: #c62828;

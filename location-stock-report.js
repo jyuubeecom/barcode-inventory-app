@@ -1,7 +1,7 @@
 "use strict";
 
 /*
-  v185 保管場所別在庫表 印刷の商品名削除・備考欄拡大
+  v190 保管場所別在庫表 「未確認」削除
   ・保管場所ごとの在庫を画面で確認
   ・画面では社内コード / 商品コード / 商品名 / 色 / 在庫数 / 商品状態を表示
   ・選択中の保管場所、または全保管場所をA4縦向きで印刷
@@ -27,8 +27,7 @@
     "本社2階 E区",
     "本社2階 F区",
     "酒本倉庫1階",
-    "酒本倉庫2階",
-    "未確認"
+    "酒本倉庫2階"
   ];
 
   const state = {
@@ -107,7 +106,6 @@
           <h2>保管場所別在庫表</h2>
           <p>
             保管場所を選ぶと、その場所にある商品の在庫を一覧で確認できます。
-            「未確認」の在庫もここから確認できます。
           </p>
         </div>
       </div>
@@ -675,6 +673,7 @@
 
           if (
             location === "" ||
+            location === "未確認" ||
             stock <= 0
           ) {
             return;
@@ -721,9 +720,9 @@
     const location =
       normalizeLocationName(
         product && product.location
-      ) || "未確認";
+      );
 
-    return stock > 0
+    return stock > 0 && location !== "" && location !== "未確認"
       ? [{ location: location, stock: stock }]
       : [];
   }
@@ -1167,7 +1166,7 @@
             data-location-stock-print-mode="all"
           >
             <strong>全保管場所</strong>
-            <span>本社・酒本倉庫・未確認を場所ごとにまとめて印刷</span>
+            <span>すべての保管場所を場所ごとにまとめて印刷</span>
           </button>
         </div>
 

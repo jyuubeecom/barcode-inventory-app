@@ -1,10 +1,13 @@
 "use strict";
 
 /* =========================================================
-   v177 PCホーム右側 要確認パネル + 印刷
+   v194 PCホーム右側 要確認パネル + 印刷 + 折りたたみ + 更新通知
    ・発注必要商品
    ・次の未確定船便で船積みが必要な商品
    ・PC表示のみ
+   ・通常は折りたたんでホーム画面を広く使う
+   ・発注 / 船積みの内容が変わったら画面上部へ通知
+   ・折りたたみ中は「更新あり」バッジを残す
    ・要確認を「全部 / 発注のみ / 船積のみ」でA4印刷
    ========================================================= */
 
@@ -16,10 +19,27 @@ document.addEventListener(
 let homeAlertLatestPurchaseData = null;
 let homeAlertLatestShippingData = null;
 
+const HOME_ALERT_COLLAPSED_KEY =
+  "barcode-inventory-home-alert-collapsed-v194";
+const HOME_ALERT_SNAPSHOT_KEY =
+  "barcode-inventory-home-alert-snapshot-v194";
+const HOME_ALERT_UNREAD_KEY =
+  "barcode-inventory-home-alert-unread-v194";
+
+let homeAlertCollapsed =
+  loadHomeAlertCollapsedState();
+let homeAlertUnreadState =
+  loadHomeAlertUnreadState();
+let homeAlertLastSnapshot =
+  loadHomeAlertSnapshot();
+let homeAlertToastTimer = null;
+
 
 function initializeHomeAlertPanel() {
   createHomeAlertPanelStyle();
   createHomeAlertPanel();
+  applyHomeAlertCollapsedState();
+  updateHomeAlertUnreadBadge();
 
   const home =
     document.querySelector(
@@ -71,6 +91,18 @@ function initializeHomeAlertPanel() {
     }
   );
 
+  document.addEventListener(
+    "visibilitychange",
+    function () {
+      if (
+        !document.hidden &&
+        isHomeAlertPanelUsable()
+      ) {
+        void refreshHomeAlertPanel();
+      }
+    }
+  );
+
   updateHomeAlertPanelVisibility();
 
   window.setTimeout(
@@ -105,61 +137,125 @@ function createHomeAlertPanel() {
   );
 
   panel.innerHTML = `
-    <div class="home-alert-panel-header">
-      <div>
-        <span class="home-alert-panel-kicker">
-          PC用
-        </span>
-        <h2>⚠ 要確認</h2>
-      </div>
-
-      <div class="home-alert-panel-actions">
-        <button
-          id="home-alert-print-button"
-          type="button"
-          class="home-alert-print-button"
-          title="要確認の内容を印刷"
-        >
-          印刷
-        </button>
-
-        <button
-          id="home-alert-refresh-button"
-          type="button"
-          class="home-alert-refresh-button"
-          title="最新データで再確認"
-        >
-          更新
-        </button>
-      </div>
-    </div>
-
-    <div
-      id="home-alert-loading"
-      class="home-alert-loading"
+    <button
+      id="home-alert-compact-toggle"
+      type="button"
+      class="home-alert-compact-toggle"
+      aria-expanded="false"
+      title="要確認を開く"
     >
-      最新データを確認しています…
+      <span class="home-alert-compact-icon">⚠</span>
+      <strong>要確認</strong>
+      <span
+        id="home-alert-compact-purchase"
+        class="home-alert-compact-count home-alert-compact-purchase"
+      >
+        発注 --
+      </span>
+      <span
+        id="home-alert-compact-shipping"
+        class="home-alert-compact-count home-alert-compact-shipping"
+      >
+        船積 --
+      </span>
+      <span
+        id="home-alert-unread-badge"
+        class="home-alert-unread-badge"
+        hidden
+      >
+        更新あり
+      </span>
+    </button>
+
+    <div class="home-alert-expanded-content">
+      <div class="home-alert-panel-header">
+        <div>
+          <span class="home-alert-panel-kicker">
+            PC用
+          </span>
+          <h2>⚠ 要確認</h2>
+        </div>
+
+        <div class="home-alert-panel-actions">
+          <button
+            id="home-alert-print-button"
+            type="button"
+            class="home-alert-print-button"
+            title="要確認の内容を印刷"
+          >
+            印刷
+          </button>
+
+          <button
+            id="home-alert-refresh-button"
+            type="button"
+            class="home-alert-refresh-button"
+            title="最新データで再確認"
+          >
+            更新
+          </button>
+
+          <button
+            id="home-alert-collapse-button"
+            type="button"
+            class="home-alert-collapse-button"
+            title="要確認を折りたたむ"
+          >
+            閉じる
+          </button>
+        </div>
+      </div>
+
+      <div
+        id="home-alert-loading"
+        class="home-alert-loading"
+      >
+        最新データを確認しています…
+      </div>
+
+      <div
+        id="home-alert-purchase"
+        class="home-alert-card home-alert-purchase"
+      ></div>
+
+      <div
+        id="home-alert-shipping"
+        class="home-alert-card home-alert-shipping"
+      ></div>
+
+      <div
+        id="home-alert-updated"
+        class="home-alert-updated"
+      ></div>
     </div>
-
-    <div
-      id="home-alert-purchase"
-      class="home-alert-card home-alert-purchase"
-    ></div>
-
-    <div
-      id="home-alert-shipping"
-      class="home-alert-card home-alert-shipping"
-    ></div>
-
-    <div
-      id="home-alert-updated"
-      class="home-alert-updated"
-    ></div>
   `;
 
   document.body.appendChild(
     panel
   );
+
+  panel
+    .querySelector(
+      "#home-alert-compact-toggle"
+    )
+    ?.addEventListener(
+      "click",
+      function () {
+        setHomeAlertCollapsed(false);
+        markHomeAlertUpdatesRead();
+      }
+    );
+
+  panel
+    .querySelector(
+      "#home-alert-collapse-button"
+    )
+    ?.addEventListener(
+      "click",
+      function () {
+        setHomeAlertCollapsed(true);
+      }
+    );
 
   panel
     .querySelector(
@@ -184,6 +280,573 @@ function createHomeAlertPanel() {
     );
 }
 
+function loadHomeAlertCollapsedState() {
+  try {
+    const saved =
+      window.localStorage.getItem(
+        HOME_ALERT_COLLAPSED_KEY
+      );
+
+    if (saved === null) {
+      return true;
+    }
+
+    return saved !== "false";
+  } catch (error) {
+    return true;
+  }
+}
+
+function saveHomeAlertCollapsedState() {
+  try {
+    window.localStorage.setItem(
+      HOME_ALERT_COLLAPSED_KEY,
+      String(homeAlertCollapsed)
+    );
+  } catch (error) {
+    // 保存できない環境でも動作は継続する。
+  }
+}
+
+function loadHomeAlertUnreadState() {
+  try {
+    const raw =
+      window.localStorage.getItem(
+        HOME_ALERT_UNREAD_KEY
+      );
+
+    if (!raw) {
+      return {
+        purchase: false,
+        shipping: false
+      };
+    }
+
+    const parsed =
+      JSON.parse(raw);
+
+    return {
+      purchase: Boolean(
+        parsed && parsed.purchase
+      ),
+      shipping: Boolean(
+        parsed && parsed.shipping
+      )
+    };
+  } catch (error) {
+    return {
+      purchase: false,
+      shipping: false
+    };
+  }
+}
+
+function saveHomeAlertUnreadState() {
+  try {
+    window.localStorage.setItem(
+      HOME_ALERT_UNREAD_KEY,
+      JSON.stringify(
+        homeAlertUnreadState
+      )
+    );
+  } catch (error) {
+    // 保存できない環境でも動作は継続する。
+  }
+}
+
+function loadHomeAlertSnapshot() {
+  try {
+    const raw =
+      window.localStorage.getItem(
+        HOME_ALERT_SNAPSHOT_KEY
+      );
+
+    if (!raw) {
+      return null;
+    }
+
+    return JSON.parse(raw);
+  } catch (error) {
+    return null;
+  }
+}
+
+function saveHomeAlertSnapshot(snapshot) {
+  homeAlertLastSnapshot = snapshot;
+
+  try {
+    window.localStorage.setItem(
+      HOME_ALERT_SNAPSHOT_KEY,
+      JSON.stringify(snapshot)
+    );
+  } catch (error) {
+    // 保存できない環境でも動作は継続する。
+  }
+}
+
+function setHomeAlertCollapsed(collapsed) {
+  homeAlertCollapsed =
+    Boolean(collapsed);
+
+  saveHomeAlertCollapsedState();
+  applyHomeAlertCollapsedState();
+
+  if (!homeAlertCollapsed) {
+    markHomeAlertUpdatesRead();
+  }
+}
+
+function applyHomeAlertCollapsedState() {
+  const panel =
+    document.querySelector(
+      "#home-alert-panel"
+    );
+
+  if (!panel) {
+    return;
+  }
+
+  panel.classList.toggle(
+    "is-collapsed",
+    homeAlertCollapsed
+  );
+
+  const compactToggle =
+    panel.querySelector(
+      "#home-alert-compact-toggle"
+    );
+
+  if (compactToggle) {
+    compactToggle.setAttribute(
+      "aria-expanded",
+      String(!homeAlertCollapsed)
+    );
+
+    compactToggle.title =
+      homeAlertCollapsed
+        ? "要確認を開く"
+        : "要確認を表示中";
+  }
+}
+
+function markHomeAlertUpdatesRead() {
+  if (
+    !homeAlertUnreadState.purchase &&
+    !homeAlertUnreadState.shipping
+  ) {
+    return;
+  }
+
+  homeAlertUnreadState = {
+    purchase: false,
+    shipping: false
+  };
+
+  saveHomeAlertUnreadState();
+  updateHomeAlertUnreadBadge();
+}
+
+function updateHomeAlertUnreadBadge() {
+  const badge =
+    document.querySelector(
+      "#home-alert-unread-badge"
+    );
+
+  if (!badge) {
+    return;
+  }
+
+  const hasUnread =
+    homeAlertUnreadState.purchase ||
+    homeAlertUnreadState.shipping;
+
+  badge.hidden = !hasUnread;
+
+  const labels = [];
+
+  if (homeAlertUnreadState.purchase) {
+    labels.push("発注");
+  }
+
+  if (homeAlertUnreadState.shipping) {
+    labels.push("船積");
+  }
+
+  badge.textContent =
+    hasUnread
+      ? labels.join("・") + " 更新"
+      : "";
+}
+
+function updateHomeAlertCompactSummary(
+  purchaseData,
+  shippingData
+) {
+  const purchase =
+    document.querySelector(
+      "#home-alert-compact-purchase"
+    );
+  const shipping =
+    document.querySelector(
+      "#home-alert-compact-shipping"
+    );
+
+  if (purchase) {
+    purchase.textContent =
+      "発注 " +
+      Number(
+        purchaseData &&
+        purchaseData.count ||
+        0
+      ).toLocaleString("ja-JP");
+  }
+
+  if (shipping) {
+    const hasSchedule =
+      Boolean(
+        shippingData &&
+        shippingData.hasSchedule
+      );
+
+    shipping.textContent =
+      hasSchedule
+        ? (
+          "船積 " +
+          Number(
+            shippingData.count || 0
+          ).toLocaleString("ja-JP")
+        )
+        : "船積 -";
+  }
+}
+
+function createHomeAlertSnapshot(
+  purchaseData,
+  shippingData
+) {
+  const purchaseRows =
+    Array.isArray(
+      purchaseData && purchaseData.rows
+    )
+      ? purchaseData.rows
+      : [];
+
+  const shippingRows =
+    Array.isArray(
+      shippingData && shippingData.rows
+    )
+      ? shippingData.rows
+      : [];
+
+  return {
+    purchase: {
+      count: Number(
+        purchaseData &&
+        purchaseData.count ||
+        0
+      ),
+      total: Number(
+        purchaseData &&
+        purchaseData.totalShortage ||
+        0
+      ),
+      rows: purchaseRows.map(
+        function (row) {
+          return [
+            String(
+              row.internalCode ||
+              row.productCode ||
+              ""
+            ),
+            Number(row.shortage || 0),
+            Number(row.currentStock || 0),
+            Number(row.orderRemaining || 0),
+            Number(row.requiredStock || 0)
+          ];
+        }
+      )
+    },
+    shipping: {
+      hasSchedule: Boolean(
+        shippingData &&
+        shippingData.hasSchedule
+      ),
+      scheduleId: String(
+        shippingData &&
+        shippingData.schedule &&
+        shippingData.schedule.id ||
+        ""
+      ),
+      scheduleName: String(
+        shippingData &&
+        shippingData.schedule &&
+        shippingData.schedule.name ||
+        ""
+      ),
+      count: Number(
+        shippingData &&
+        shippingData.count ||
+        0
+      ),
+      total: Number(
+        shippingData &&
+        shippingData.totalRemaining ||
+        0
+      ),
+      rows: shippingRows.map(
+        function (row) {
+          return [
+            String(
+              row.internalCode ||
+              row.productCode ||
+              ""
+            ),
+            Number(
+              row.recommendedQuantity ||
+              0
+            ),
+            Number(
+              row.currentAllocation ||
+              0
+            ),
+            Number(
+              row.remainingQuantity ||
+              0
+            )
+          ];
+        }
+      )
+    }
+  };
+}
+
+function homeAlertSnapshotPartChanged(
+  before,
+  after
+) {
+  return JSON.stringify(before) !==
+    JSON.stringify(after);
+}
+
+function handleHomeAlertSnapshotChange(
+  purchaseData,
+  shippingData
+) {
+  const nextSnapshot =
+    createHomeAlertSnapshot(
+      purchaseData,
+      shippingData
+    );
+
+  const previousSnapshot =
+    homeAlertLastSnapshot;
+
+  saveHomeAlertSnapshot(
+    nextSnapshot
+  );
+
+  if (!previousSnapshot) {
+    return;
+  }
+
+  const purchaseChanged =
+    homeAlertSnapshotPartChanged(
+      previousSnapshot.purchase,
+      nextSnapshot.purchase
+    );
+  const shippingChanged =
+    homeAlertSnapshotPartChanged(
+      previousSnapshot.shipping,
+      nextSnapshot.shipping
+    );
+
+  if (
+    !purchaseChanged &&
+    !shippingChanged
+  ) {
+    return;
+  }
+
+  homeAlertUnreadState = {
+    purchase:
+      homeAlertUnreadState.purchase ||
+      purchaseChanged,
+    shipping:
+      homeAlertUnreadState.shipping ||
+      shippingChanged
+  };
+
+  saveHomeAlertUnreadState();
+  updateHomeAlertUnreadBadge();
+
+  showHomeAlertUpdateToast({
+    purchaseChanged: purchaseChanged,
+    shippingChanged: shippingChanged,
+    previousSnapshot: previousSnapshot,
+    nextSnapshot: nextSnapshot
+  });
+}
+
+function showHomeAlertUpdateToast(change) {
+  let toast =
+    document.querySelector(
+      "#home-alert-update-toast"
+    );
+
+  if (!toast) {
+    toast =
+      document.createElement("div");
+    toast.id =
+      "home-alert-update-toast";
+    toast.className =
+      "home-alert-update-toast";
+    toast.setAttribute(
+      "role",
+      "status"
+    );
+    toast.setAttribute(
+      "aria-live",
+      "polite"
+    );
+    document.body.appendChild(toast);
+  }
+
+  const lines = [];
+
+  if (change.purchaseChanged) {
+    const oldCount = Number(
+      change.previousSnapshot &&
+      change.previousSnapshot.purchase &&
+      change.previousSnapshot.purchase.count ||
+      0
+    );
+    const newCount = Number(
+      change.nextSnapshot.purchase.count ||
+      0
+    );
+
+    lines.push(
+      "発注が必要：" +
+      oldCount.toLocaleString("ja-JP") +
+      " → " +
+      newCount.toLocaleString("ja-JP") +
+      "商品"
+    );
+  }
+
+  if (change.shippingChanged) {
+    const oldCount = Number(
+      change.previousSnapshot &&
+      change.previousSnapshot.shipping &&
+      change.previousSnapshot.shipping.count ||
+      0
+    );
+    const newCount = Number(
+      change.nextSnapshot.shipping.count ||
+      0
+    );
+
+    lines.push(
+      "船積みが必要：" +
+      oldCount.toLocaleString("ja-JP") +
+      " → " +
+      newCount.toLocaleString("ja-JP") +
+      "商品"
+    );
+  }
+
+  toast.innerHTML = `
+    <div class="home-alert-update-toast-icon">🔔</div>
+    <div class="home-alert-update-toast-body">
+      <strong>要確認の内容が更新されました</strong>
+      <span>${escapeHomeAlertHtml(lines.join(" / "))}</span>
+    </div>
+    <button
+      type="button"
+      class="home-alert-update-toast-open"
+    >
+      確認する
+    </button>
+    <button
+      type="button"
+      class="home-alert-update-toast-close"
+      aria-label="通知を閉じる"
+      title="閉じる"
+    >
+      ×
+    </button>
+  `;
+
+  toast.hidden = false;
+  toast.classList.add("is-visible");
+
+  toast
+    .querySelector(
+      ".home-alert-update-toast-open"
+    )
+    ?.addEventListener(
+      "click",
+      function () {
+        setHomeAlertCollapsed(false);
+        markHomeAlertUpdatesRead();
+        hideHomeAlertUpdateToast();
+      },
+      { once: true }
+    );
+
+  toast
+    .querySelector(
+      ".home-alert-update-toast-close"
+    )
+    ?.addEventListener(
+      "click",
+      function () {
+        hideHomeAlertUpdateToast();
+      },
+      { once: true }
+    );
+
+  if (homeAlertToastTimer) {
+    window.clearTimeout(
+      homeAlertToastTimer
+    );
+  }
+
+  homeAlertToastTimer =
+    window.setTimeout(
+      hideHomeAlertUpdateToast,
+      9000
+    );
+}
+
+function hideHomeAlertUpdateToast() {
+  const toast =
+    document.querySelector(
+      "#home-alert-update-toast"
+    );
+
+  if (!toast) {
+    return;
+  }
+
+  toast.classList.remove(
+    "is-visible"
+  );
+
+  window.setTimeout(
+    function () {
+      if (
+        !toast.classList.contains(
+          "is-visible"
+        )
+      ) {
+        toast.hidden = true;
+      }
+    },
+    220
+  );
+}
+
 function isHomeAlertPanelUsable() {
   const home =
     document.querySelector(
@@ -205,7 +868,7 @@ function isHomeAlertPanelUsable() {
   }
 
   return window.matchMedia(
-    "(min-width: 1500px)"
+    "(min-width: 1180px)"
   ).matches;
 }
 
@@ -221,6 +884,10 @@ function updateHomeAlertPanelVisibility() {
 
   panel.hidden =
     !isHomeAlertPanelUsable();
+
+  if (panel.hidden) {
+    hideHomeAlertUpdateToast();
+  }
 }
 
 async function refreshHomeAlertPanel() {
@@ -361,6 +1028,25 @@ async function refreshHomeAlertPanel() {
           minute: "2-digit"
         }
       );
+  }
+
+  updateHomeAlertCompactSummary(
+    purchaseResult.status === "fulfilled"
+      ? purchaseResult.value
+      : homeAlertLatestPurchaseData,
+    shippingResult.status === "fulfilled"
+      ? shippingResult.value
+      : homeAlertLatestShippingData
+  );
+
+  if (
+    purchaseResult.status === "fulfilled" &&
+    shippingResult.status === "fulfilled"
+  ) {
+    handleHomeAlertSnapshotChange(
+      purchaseResult.value,
+      shippingResult.value
+    );
   }
 }
 
@@ -1686,19 +2372,18 @@ function createHomeAlertPanelStyle() {
       display: none;
     }
 
-    @media (min-width: 1500px) {
+    @media (min-width: 1180px) {
       body[data-resolved-display-mode="pc"]
         #home-alert-panel:not([hidden]) {
         position: fixed;
         z-index: 500;
         top: 108px;
-        right: 22px;
-        display: grid;
+        right: 16px;
+        display: block;
         width: min(420px, calc(100vw - 32px));
         min-width: 380px;
         max-height: calc(100vh - 132px);
         box-sizing: border-box;
-        gap: 12px;
         overflow-y: auto;
         padding: 15px;
         border: 1px solid #cfd8dc;
@@ -1707,6 +2392,117 @@ function createHomeAlertPanelStyle() {
         box-shadow:
           0 8px 28px rgba(31, 54, 77, 0.15);
         backdrop-filter: blur(8px);
+        transition:
+          width 0.2s ease,
+          min-width 0.2s ease,
+          padding 0.2s ease;
+      }
+
+      body[data-resolved-display-mode="pc"]
+        #home-alert-panel.is-collapsed:not([hidden]) {
+        width: 112px;
+        min-width: 112px;
+        max-height: none;
+        overflow: visible;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+      }
+    }
+
+    .home-alert-expanded-content {
+      display: grid;
+      gap: 12px;
+    }
+
+    .home-alert-compact-toggle {
+      display: none;
+    }
+
+    #home-alert-panel.is-collapsed
+      .home-alert-expanded-content {
+      display: none;
+    }
+
+    #home-alert-panel.is-collapsed
+      .home-alert-compact-toggle {
+      position: relative;
+      display: grid;
+      width: 112px;
+      min-height: 176px;
+      margin: 0;
+      padding: 12px 8px;
+      place-items: center;
+      align-content: center;
+      gap: 6px;
+      border: 2px solid #ffb74d;
+      border-radius: 14px 0 0 14px;
+      background: rgba(255, 250, 243, 0.98);
+      color: #e65100;
+      box-shadow: 0 6px 22px rgba(31, 54, 77, 0.16);
+      font-size: 13px;
+      line-height: 1.25;
+    }
+
+    #home-alert-panel.is-collapsed
+      .home-alert-compact-toggle:hover {
+      filter: brightness(0.98);
+      transform: translateX(-2px);
+    }
+
+    .home-alert-compact-icon {
+      font-size: 27px;
+      line-height: 1;
+    }
+
+    .home-alert-compact-toggle strong {
+      font-size: 16px;
+      white-space: nowrap;
+    }
+
+    .home-alert-compact-count {
+      display: block;
+      width: 100%;
+      padding: 4px 5px;
+      border-radius: 7px;
+      background: #ffffff;
+      color: #455a64;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .home-alert-compact-shipping {
+      color: #6a1b9a;
+    }
+
+    .home-alert-unread-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      padding: 4px 7px;
+      border-radius: 999px;
+      background: #d32f2f;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 900;
+      white-space: nowrap;
+      animation: homeAlertUnreadPulse 1.6s ease-in-out infinite;
+    }
+
+    .home-alert-unread-badge[hidden] {
+      display: none !important;
+    }
+
+    @keyframes homeAlertUnreadPulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.30);
+      }
+      50% {
+        box-shadow: 0 0 0 6px rgba(211, 47, 47, 0);
       }
     }
 
@@ -1760,6 +2556,18 @@ function createHomeAlertPanelStyle() {
       border-radius: 9px;
       background: #546e7a;
       font-size: 13px;
+    }
+
+    #home-alert-panel
+      .home-alert-collapse-button {
+      min-height: 36px;
+      margin: 0;
+      padding: 7px 10px;
+      border: 1px solid #cfd8dc;
+      border-radius: 9px;
+      background: #ffffff;
+      color: #455a64;
+      font-size: 12px;
     }
 
     .home-alert-loading {
@@ -1952,6 +2760,97 @@ function createHomeAlertPanelStyle() {
       color: #90a4ae;
       font-size: 11px;
       text-align: right;
+    }
+
+
+    .home-alert-update-toast {
+      position: fixed;
+      z-index: 5500;
+      top: 116px;
+      left: 50%;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto auto;
+      align-items: center;
+      gap: 10px;
+      width: min(620px, calc(100vw - 36px));
+      padding: 12px 13px;
+      border: 2px solid #ffb74d;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 12px 36px rgba(31, 54, 77, 0.24);
+      transform: translate(-50%, -18px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .home-alert-update-toast[hidden] {
+      display: none !important;
+    }
+
+    .home-alert-update-toast.is-visible {
+      transform: translate(-50%, 0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .home-alert-update-toast-icon {
+      font-size: 26px;
+      line-height: 1;
+    }
+
+    .home-alert-update-toast-body {
+      min-width: 0;
+    }
+
+    .home-alert-update-toast-body strong,
+    .home-alert-update-toast-body span {
+      display: block;
+    }
+
+    .home-alert-update-toast-body strong {
+      color: #bf360c;
+      font-size: 15px;
+    }
+
+    .home-alert-update-toast-body span {
+      margin-top: 3px;
+      color: #546e7a;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .home-alert-update-toast-open {
+      min-height: 38px;
+      margin: 0;
+      padding: 8px 13px;
+      border-radius: 9px;
+      background: #1565c0;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .home-alert-update-toast-close {
+      min-width: 34px;
+      min-height: 34px;
+      margin: 0;
+      padding: 5px;
+      border-radius: 50%;
+      background: #eceff1;
+      color: #546e7a;
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    @media (max-width: 760px) {
+      .home-alert-update-toast {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+      }
+
+      .home-alert-update-toast-open {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
     }
 
 

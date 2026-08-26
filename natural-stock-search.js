@@ -1,7 +1,7 @@
 "use strict";
 
 /* =========================================================
-   v139 自然文検索（商品情報まとめ表示対応）
+   v191 自然文検索（月平均検索対応）
    ・端末内の商品データだけを使用
    ・社内コード / 商品コード / JAN / 商品名に対応
    ・JANなどが重複した場合は候補を一覧表示
@@ -15,6 +15,7 @@ document.addEventListener(
 function initializeNaturalStockSearch() {
   createNaturalStockSearchStyle();
   createNaturalRelationSearchStyle();
+  createNaturalMonthlyAverageStyle();
 
   const homeRoot =
     document.querySelector(
@@ -213,6 +214,19 @@ async function searchStockByNaturalText(
   }
 
   if (
+    isNaturalMonthlyAverageQuery(
+      query
+    )
+  ) {
+    await searchNaturalMonthlyAverage(
+      query,
+      status,
+      result
+    );
+    return;
+  }
+
+  if (
     isNaturalSummaryQuery(
       query
     )
@@ -321,6 +335,618 @@ async function searchStockByNaturalText(
     status.className =
       "natural-stock-search-status natural-stock-search-error";
   }
+}
+
+function isNaturalMonthlyAverageQuery(
+  rawQuery
+) {
+  const query =
+    normalizeNaturalStockText(
+      rawQuery
+    );
+
+  return /月平均|月間平均|平均販売数|月平均販売数/.test(
+    query
+  );
+}
+
+async function searchNaturalMonthlyAverage(
+  query,
+  status,
+  result
+) {
+  if (
+    typeof getAllProducts !==
+      "function" ||
+    typeof getAllSalesActuals !==
+      "function"
+  ) {
+    status.textContent =
+      "月平均を計算する準備ができていません。画面を更新して、もう一度お試しください。";
+    status.className =
+      "natural-stock-search-status natural-stock-search-error";
+    return;
+  }
+
+  status.textContent =
+    "直近6か月の販売実績から月平均を計算しています…";
+  status.className =
+    "natural-stock-search-status";
+
+  try {
+    const data =
+      await Promise.all([
+        getAllProducts(),
+        getAllSalesActuals()
+      ]);
+
+    const products = data[0];
+    const actuals = data[1];
+    const matches =
+      findNaturalStockMatches(
+        products,
+        query
+      );
+
+    if (matches.length === 0) {
+      status.textContent =
+        "月平均を確認する商品が見つかりませんでした。";
+      status.className =
+        "natural-stock-search-status natural-stock-search-warning";
+      renderNaturalMonthlyAverageNoProduct(
+        result,
+        query
+      );
+      return;
+    }
+
+    if (matches.length > 1) {
+      status.textContent =
+        `${matches.length}商品が候補に見つかりました。商品を選んでください。`;
+      status.className =
+        "natural-stock-search-status natural-stock-search-warning";
+      renderNaturalMonthlyAverageCandidates(
+        result,
+        matches,
+        actuals,
+        status
+      );
+      return;
+    }
+
+    renderNaturalMonthlyAverageAnswer(
+      result,
+      matches[0],
+      actuals
+    );
+    status.textContent =
+      "月平均を計算しました。";
+    status.className =
+      "natural-stock-search-status natural-stock-search-success";
+  } catch (error) {
+    console.error(
+      "月平均検索エラー",
+      error
+    );
+    status.textContent =
+      "月平均を計算できませんでした。販売実績CSVの取込状況を確認して、もう一度お試しください。";
+    status.className =
+      "natural-stock-search-status natural-stock-search-error";
+  }
+}
+
+function buildNaturalMonthlyAverageContext(
+  today
+) {
+  const base =
+    today instanceof Date &&
+    !Number.isNaN(today.getTime())
+      ? today
+      : new Date();
+
+  const monthKeys = [];
+
+  for (
+    let offset = 6;
+    offset >= 1;
+    offset -= 1
+  ) {
+    const date =
+      new Date(
+        base.getFullYear(),
+        base.getMonth() - offset,
+        1
+      );
+
+    monthKeys.push(
+      `${date.getFullYear()}-${String(
+        date.getMonth() + 1
+      ).padStart(2, "0")}`
+    );
+  }
+
+  return {
+    monthKeys: monthKeys,
+    startMonth: monthKeys[0] || "",
+    endMonth:
+      monthKeys[
+        monthKeys.length - 1
+      ] || ""
+  };
+}
+
+function calculateNaturalMonthlyAverage(
+  product,
+  actuals,
+  today
+) {
+  const context =
+    buildNaturalMonthlyAverageContext(
+      today
+    );
+
+  const internalCode =
+    String(
+      product &&
+        product.internalCode ||
+        ""
+    ).trim();
+
+  const monthTotals =
+    new Map(
+      context.monthKeys.map(
+        function (key) {
+          return [key, 0];
+        }
+      )
+    );
+
+  let excludedCount = 0;
+  let excludedQuantity = 0;
+
+  (Array.isArray(actuals)
+    ? actuals
+    : []
+  ).forEach(
+    function (record) {
+      if (
+        String(
+          record &&
+            record.internalCode ||
+            ""
+        ).trim() !== internalCode
+      ) {
+        return;
+      }
+
+      const saleDate =
+        String(
+          record &&
+            record.saleDate ||
+            ""
+        );
+
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(
+          saleDate
+        )
+      ) {
+        return;
+      }
+
+      const monthKey =
+        saleDate.slice(0, 7);
+
+      if (
+        !monthTotals.has(
+          monthKey
+        )
+      ) {
+        return;
+      }
+
+      const quantity =
+        Number(
+          record &&
+            record.quantity ||
+            0
+        );
+
+      if (
+        !Number.isFinite(
+          quantity
+        )
+      ) {
+        return;
+      }
+
+      if (
+        isNaturalMonthlyAverageExcludedCustomer(
+          record &&
+            record.customerName
+        )
+      ) {
+        excludedCount += 1;
+        excludedQuantity += quantity;
+        return;
+      }
+
+      monthTotals.set(
+        monthKey,
+        (monthTotals.get(
+          monthKey
+        ) || 0) + quantity
+      );
+    }
+  );
+
+  const monthlyRows =
+    context.monthKeys.map(
+      function (monthKey) {
+        return {
+          monthKey: monthKey,
+          quantity:
+            monthTotals.get(
+              monthKey
+            ) || 0
+        };
+      }
+    );
+
+  const sixMonthTotal =
+    monthlyRows.reduce(
+      function (sum, row) {
+        return sum + row.quantity;
+      },
+      0
+    );
+
+  return {
+    startMonth: context.startMonth,
+    endMonth: context.endMonth,
+    monthlyRows: monthlyRows,
+    sixMonthTotal: sixMonthTotal,
+    monthlyAverage:
+      Math.max(
+        0,
+        Math.ceil(
+          sixMonthTotal / 6
+        )
+      ),
+    excludedCount: excludedCount,
+    excludedQuantity:
+      excludedQuantity
+  };
+}
+
+function normalizeNaturalMonthlyAverageCustomer(
+  value
+) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(
+      /[\s\u3000]+/g,
+      ""
+    )
+    .trim();
+}
+
+function isNaturalMonthlyAverageExcludedCustomer(
+  value
+) {
+  const normalized =
+    normalizeNaturalMonthlyAverageCustomer(
+      value
+    );
+
+  return (
+    normalized ===
+      "株式会社後藤" ||
+    normalized ===
+      "清水産業株式会社"
+  );
+}
+
+function formatNaturalMonthlyAverageMonth(
+  monthKey
+) {
+  const match =
+    /^(\d{4})-(\d{2})$/.exec(
+      String(monthKey || "")
+    );
+
+  if (!match) {
+    return String(
+      monthKey || ""
+    );
+  }
+
+  return `${Number(match[1])}年${Number(match[2])}月`;
+}
+
+function renderNaturalMonthlyAverageAnswer(
+  container,
+  product,
+  actuals
+) {
+  container.innerHTML = "";
+
+  const calculation =
+    calculateNaturalMonthlyAverage(
+      product,
+      actuals,
+      new Date()
+    );
+
+  const unit =
+    getNaturalStockUnit(
+      product
+    );
+
+  const card =
+    document.createElement(
+      "article"
+    );
+
+  card.className =
+    "natural-monthly-average-card";
+
+  const heading =
+    document.createElement("h3");
+
+  heading.textContent =
+    product.productName ||
+    "商品名未登録";
+
+  const answer =
+    document.createElement("p");
+
+  answer.className =
+    "natural-monthly-average-answer";
+
+  const displayCode =
+    product.productCode ||
+    product.internalCode ||
+    "この商品";
+
+  answer.textContent =
+    `${displayCode}の月平均は${calculation.monthlyAverage.toLocaleString("ja-JP")}${unit}／月です。`;
+
+  const summary =
+    document.createElement("div");
+
+  summary.className =
+    "natural-monthly-average-summary";
+
+  [
+    [
+      "社内コード",
+      product.internalCode ||
+        "未登録"
+    ],
+    [
+      "商品コード",
+      product.productCode ||
+        "未登録"
+    ],
+    [
+      "月平均",
+      `${calculation.monthlyAverage.toLocaleString("ja-JP")}${unit}／月`
+    ],
+    [
+      "6か月合計",
+      `${calculation.sixMonthTotal.toLocaleString("ja-JP")}${unit}`
+    ]
+  ].forEach(
+    function (entry) {
+      const box =
+        document.createElement("div");
+      const label =
+        document.createElement("span");
+      const value =
+        document.createElement("strong");
+
+      label.textContent =
+        entry[0];
+      value.textContent =
+        entry[1];
+
+      box.appendChild(label);
+      box.appendChild(value);
+      summary.appendChild(box);
+    }
+  );
+
+  const period =
+    document.createElement("p");
+
+  period.className =
+    "natural-monthly-average-period";
+
+  period.textContent =
+    `対象期間：${formatNaturalMonthlyAverageMonth(calculation.startMonth)} ～ ${formatNaturalMonthlyAverageMonth(calculation.endMonth)}（前月までの直近6か月）`;
+
+  const breakdown =
+    document.createElement("div");
+
+  breakdown.className =
+    "natural-monthly-average-breakdown";
+
+  const breakdownTitle =
+    document.createElement("h4");
+
+  breakdownTitle.textContent =
+    "月別販売数";
+
+  breakdown.appendChild(
+    breakdownTitle
+  );
+
+  calculation.monthlyRows.forEach(
+    function (row) {
+      const item =
+        document.createElement("div");
+      const month =
+        document.createElement("span");
+      const quantity =
+        document.createElement("strong");
+
+      month.textContent =
+        formatNaturalMonthlyAverageMonth(
+          row.monthKey
+        );
+      quantity.textContent =
+        `${row.quantity.toLocaleString("ja-JP")}${unit}`;
+
+      item.appendChild(month);
+      item.appendChild(quantity);
+      breakdown.appendChild(item);
+    }
+  );
+
+  const note =
+    document.createElement("p");
+
+  note.className =
+    "natural-monthly-average-note";
+
+  note.textContent =
+    "計算方法：前月までの直近6か月の販売実績合計 ÷ 6（端数切り上げ）。「株式会社 後　藤」「清水産業 株式会社」の販売実績は除外しています。";
+
+  if (
+    calculation.excludedCount > 0
+  ) {
+    const excluded =
+      document.createElement("p");
+
+    excluded.className =
+      "natural-monthly-average-excluded";
+
+    excluded.textContent =
+      `今回の対象期間では、除外取引先の販売実績 ${calculation.excludedCount.toLocaleString("ja-JP")}件・数量 ${calculation.excludedQuantity.toLocaleString("ja-JP")}${unit} を計算から除外しました。`;
+
+    card.appendChild(heading);
+    card.appendChild(answer);
+    card.appendChild(summary);
+    card.appendChild(period);
+    card.appendChild(breakdown);
+    card.appendChild(note);
+    card.appendChild(excluded);
+  } else {
+    card.appendChild(heading);
+    card.appendChild(answer);
+    card.appendChild(summary);
+    card.appendChild(period);
+    card.appendChild(breakdown);
+    card.appendChild(note);
+  }
+
+  card.appendChild(
+    createNaturalStockDetailButton(
+      product
+    )
+  );
+
+  container.appendChild(card);
+}
+
+function renderNaturalMonthlyAverageCandidates(
+  container,
+  products,
+  actuals,
+  statusElement
+) {
+  container.innerHTML = "";
+
+  const intro =
+    document.createElement("div");
+
+  intro.className =
+    "natural-stock-candidate-intro";
+  intro.textContent =
+    "複数の商品が該当しました。月平均を確認する商品を選んでください。";
+
+  container.appendChild(intro);
+
+  products
+    .slice(0, 30)
+    .forEach(
+      function (product) {
+        const card =
+          document.createElement(
+            "article"
+          );
+
+        card.className =
+          "natural-stock-candidate-card";
+
+        const info =
+          document.createElement("div");
+        const title =
+          document.createElement("strong");
+        const meta =
+          document.createElement("span");
+        const button =
+          document.createElement("button");
+
+        title.textContent =
+          product.productName ||
+          "商品名未登録";
+        meta.textContent =
+          `社内コード：${product.internalCode || "未登録"} / 商品コード：${product.productCode || "未登録"}`;
+
+        button.type = "button";
+        button.textContent =
+          "この商品の月平均を見る";
+
+        button.addEventListener(
+          "click",
+          function () {
+            renderNaturalMonthlyAverageAnswer(
+              container,
+              product,
+              actuals
+            );
+
+            if (statusElement) {
+              statusElement.textContent =
+                "月平均を計算しました。";
+              statusElement.className =
+                "natural-stock-search-status natural-stock-search-success";
+            }
+          }
+        );
+
+        info.appendChild(title);
+        info.appendChild(meta);
+        card.appendChild(info);
+        card.appendChild(button);
+        container.appendChild(card);
+      }
+    );
+}
+
+function renderNaturalMonthlyAverageNoProduct(
+  container,
+  query
+) {
+  const box =
+    document.createElement("div");
+  const title =
+    document.createElement("strong");
+  const text =
+    document.createElement("p");
+
+  box.className =
+    "natural-stock-no-match";
+  title.textContent =
+    "月平均を検索するには";
+  text.textContent =
+    `「${query}」では商品を特定できませんでした。社内コード・商品コード・JANコード・商品名のどれかを文章に入れてください。`;
+
+  box.appendChild(title);
+  box.appendChild(text);
+  container.appendChild(box);
 }
 
 function findNaturalStockMatches(
@@ -5818,6 +6444,142 @@ function createNaturalRelationSearchStyle() {
   document.head.appendChild(
     style
   );
+}
+
+function createNaturalMonthlyAverageStyle() {
+  if (
+    document.querySelector(
+      "#natural-monthly-average-style"
+    )
+  ) {
+    return;
+  }
+
+  const style =
+    document.createElement("style");
+
+  style.id =
+    "natural-monthly-average-style";
+
+  style.textContent = `
+    .natural-monthly-average-card {
+      padding: 20px;
+      border: 2px solid #26a69a;
+      border-radius: 16px;
+      background: #ffffff;
+    }
+
+    .natural-monthly-average-card h3 {
+      margin: 0 0 12px;
+      color: #00695c;
+      font-size: 24px;
+    }
+
+    .natural-monthly-average-answer {
+      margin: 0 0 16px;
+      padding: 16px;
+      border-left: 5px solid #00897b;
+      border-radius: 8px;
+      background: #e0f2f1;
+      color: #004d40;
+      font-size: 21px;
+      font-weight: 800;
+      line-height: 1.7;
+    }
+
+    .natural-monthly-average-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .natural-monthly-average-summary > div {
+      padding: 12px;
+      border: 1px solid #b2dfdb;
+      border-radius: 10px;
+      background: #f6fffd;
+    }
+
+    .natural-monthly-average-summary span,
+    .natural-monthly-average-summary strong {
+      display: block;
+    }
+
+    .natural-monthly-average-summary span {
+      margin-bottom: 5px;
+      color: #607d8b;
+      font-size: 13px;
+    }
+
+    .natural-monthly-average-summary strong {
+      color: #00695c;
+      font-size: 17px;
+      overflow-wrap: anywhere;
+    }
+
+    .natural-monthly-average-period,
+    .natural-monthly-average-note,
+    .natural-monthly-average-excluded {
+      margin: 12px 0;
+      padding: 11px 13px;
+      border-radius: 9px;
+      line-height: 1.65;
+    }
+
+    .natural-monthly-average-period {
+      background: #e8f5e9;
+      color: #1b5e20;
+      font-weight: 800;
+    }
+
+    .natural-monthly-average-note {
+      background: #fff8e1;
+      color: #5d4037;
+      font-weight: 700;
+    }
+
+    .natural-monthly-average-excluded {
+      background: #f3e5f5;
+      color: #6a1b9a;
+      font-weight: 700;
+    }
+
+    .natural-monthly-average-breakdown {
+      display: grid;
+      gap: 6px;
+      margin: 14px 0;
+    }
+
+    .natural-monthly-average-breakdown h4 {
+      margin: 0 0 4px;
+      color: #00695c;
+      font-size: 18px;
+    }
+
+    .natural-monthly-average-breakdown > div {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 9px 12px;
+      border-bottom: 1px solid #e0e0e0;
+      background: #fafafa;
+    }
+
+    .natural-monthly-average-breakdown strong {
+      color: #00695c;
+      font-size: 17px;
+    }
+
+    @media (max-width: 760px) {
+      .natural-monthly-average-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
 }
 
 function createNaturalStockSearchStyle() {

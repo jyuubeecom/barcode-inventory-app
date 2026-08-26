@@ -1,7 +1,7 @@
 "use strict";
 
 /* =========================================================
-   v191 自然文検索（月平均検索対応）
+   v192 自然文検索（月平均検索拡張）
    ・端末内の商品データだけを使用
    ・社内コード / 商品コード / JAN / 商品名に対応
    ・JANなどが重複した場合は候補を一覧表示
@@ -285,10 +285,15 @@ async function searchStockByNaturalText(
     const products =
       await getAllProducts();
 
+    const productQuery =
+      extractNaturalMonthlyAverageProductQuery(
+        query
+      );
+
     const matches =
       findNaturalStockMatches(
         products,
-        query
+        productQuery || query
       );
 
     if (matches.length === 0) {
@@ -348,6 +353,30 @@ function isNaturalMonthlyAverageQuery(
   return /月平均|月間平均|平均販売数|月平均販売数/.test(
     query
   );
+}
+
+function extractNaturalMonthlyAverageProductQuery(
+  rawQuery
+) {
+  return String(rawQuery || "")
+    .normalize("NFKC")
+    .replace(
+      /(月平均販売数|平均販売数|月間平均|月平均)/gi,
+      " "
+    )
+    .replace(
+      /(を教えてください|教えてください|を教えて|教えて|を知りたい|知りたい|を確認したい|確認したい|検索して|検索)/gi,
+      " "
+    )
+    .replace(
+      /[はがをのにでと？?！!。、「」『』]/g,
+      " "
+    )
+    .replace(
+      /[\s\u3000]+/g,
+      " "
+    )
+    .trim();
 }
 
 async function searchNaturalMonthlyAverage(
@@ -435,8 +464,9 @@ async function searchNaturalMonthlyAverage(
   }
 }
 
-function buildNaturalMonthlyAverageContext(
-  today
+function buildNaturalMonthlyPeriodContext(
+  today,
+  monthCount
 ) {
   const base =
     today instanceof Date &&
@@ -444,10 +474,18 @@ function buildNaturalMonthlyAverageContext(
       ? today
       : new Date();
 
+  const count =
+    Math.max(
+      1,
+      Math.floor(
+        Number(monthCount) || 1
+      )
+    );
+
   const monthKeys = [];
 
   for (
-    let offset = 6;
+    let offset = count;
     offset >= 1;
     offset -= 1
   ) {
@@ -475,13 +513,36 @@ function buildNaturalMonthlyAverageContext(
   };
 }
 
+function buildNaturalMonthlyAverageContext(
+  today
+) {
+  return buildNaturalMonthlyPeriodContext(
+    today,
+    6
+  );
+}
+
+function buildNaturalMonthlySalesDisplayContext(
+  today
+) {
+  return buildNaturalMonthlyPeriodContext(
+    today,
+    12
+  );
+}
+
 function calculateNaturalMonthlyAverage(
   product,
   actuals,
   today
 ) {
-  const context =
+  const averageContext =
     buildNaturalMonthlyAverageContext(
+      today
+    );
+
+  const displayContext =
+    buildNaturalMonthlySalesDisplayContext(
       today
     );
 
@@ -492,13 +553,18 @@ function calculateNaturalMonthlyAverage(
         ""
     ).trim();
 
-  const monthTotals =
+  const displayMonthTotals =
     new Map(
-      context.monthKeys.map(
+      displayContext.monthKeys.map(
         function (key) {
           return [key, 0];
         }
       )
+    );
+
+  const averageMonthKeySet =
+    new Set(
+      averageContext.monthKeys
     );
 
   let excludedCount = 0;
@@ -538,7 +604,7 @@ function calculateNaturalMonthlyAverage(
         saleDate.slice(0, 7);
 
       if (
-        !monthTotals.has(
+        !displayMonthTotals.has(
           monthKey
         )
       ) {
@@ -566,14 +632,20 @@ function calculateNaturalMonthlyAverage(
             record.customerName
         )
       ) {
-        excludedCount += 1;
-        excludedQuantity += quantity;
+        if (
+          averageMonthKeySet.has(
+            monthKey
+          )
+        ) {
+          excludedCount += 1;
+          excludedQuantity += quantity;
+        }
         return;
       }
 
-      monthTotals.set(
+      displayMonthTotals.set(
         monthKey,
-        (monthTotals.get(
+        (displayMonthTotals.get(
           monthKey
         ) || 0) + quantity
       );
@@ -581,12 +653,12 @@ function calculateNaturalMonthlyAverage(
   );
 
   const monthlyRows =
-    context.monthKeys.map(
+    displayContext.monthKeys.map(
       function (monthKey) {
         return {
           monthKey: monthKey,
           quantity:
-            monthTotals.get(
+            displayMonthTotals.get(
               monthKey
             ) || 0
         };
@@ -594,16 +666,25 @@ function calculateNaturalMonthlyAverage(
     );
 
   const sixMonthTotal =
-    monthlyRows.reduce(
-      function (sum, row) {
-        return sum + row.quantity;
+    averageContext.monthKeys.reduce(
+      function (sum, monthKey) {
+        return sum +
+          (displayMonthTotals.get(
+            monthKey
+          ) || 0);
       },
       0
     );
 
   return {
-    startMonth: context.startMonth,
-    endMonth: context.endMonth,
+    startMonth:
+      averageContext.startMonth,
+    endMonth:
+      averageContext.endMonth,
+    displayStartMonth:
+      displayContext.startMonth,
+    displayEndMonth:
+      displayContext.endMonth,
     monthlyRows: monthlyRows,
     sixMonthTotal: sixMonthTotal,
     monthlyAverage:
@@ -776,10 +857,23 @@ function renderNaturalMonthlyAverageAnswer(
     document.createElement("h4");
 
   breakdownTitle.textContent =
-    "月別販売数";
+    "月別販売数（前月までの直近1年）";
 
   breakdown.appendChild(
     breakdownTitle
+  );
+
+  const breakdownPeriod =
+    document.createElement("p");
+
+  breakdownPeriod.className =
+    "natural-monthly-average-breakdown-period";
+
+  breakdownPeriod.textContent =
+    `${formatNaturalMonthlyAverageMonth(calculation.displayStartMonth)} ～ ${formatNaturalMonthlyAverageMonth(calculation.displayEndMonth)}`;
+
+  breakdown.appendChild(
+    breakdownPeriod
   );
 
   calculation.monthlyRows.forEach(
@@ -942,7 +1036,7 @@ function renderNaturalMonthlyAverageNoProduct(
   title.textContent =
     "月平均を検索するには";
   text.textContent =
-    `「${query}」では商品を特定できませんでした。社内コード・商品コード・JANコード・商品名のどれかを文章に入れてください。`;
+    `「${query}」では商品を特定できませんでした。社内コード・商品コード・JANコード・商品名を入れてください。商品コードは「251BK 月平均」のように一部だけでも検索できます。`;
 
   box.appendChild(title);
   box.appendChild(text);
@@ -7372,3 +7466,23 @@ function createNaturalStockSearchStyle() {
     style
   );
 }
+
+
+/* v192 月別販売数（直近1年）表示 */
+(function addNaturalMonthlyAverageV192Style() {
+  if (document.getElementById("natural-monthly-average-v192-style")) {
+    return;
+  }
+
+  const style = document.createElement("style");
+  style.id = "natural-monthly-average-v192-style";
+  style.textContent = `
+    .natural-monthly-average-breakdown-period {
+      margin: -4px 0 10px;
+      color: #5c6b73;
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+  `;
+  document.head.appendChild(style);
+})();

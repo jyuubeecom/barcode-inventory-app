@@ -1,7 +1,7 @@
 "use strict";
 
 /* =========================================================
-   v192 自然文検索（月平均検索拡張）
+   v193 自然文検索（月平均短縮コード検索修正）
    ・端末内の商品データだけを使用
    ・社内コード / 商品コード / JAN / 商品名に対応
    ・JANなどが重複した場合は候補を一覧表示
@@ -411,10 +411,18 @@ async function searchNaturalMonthlyAverage(
 
     const products = data[0];
     const actuals = data[1];
+
+    // 「251BK 月平均」のような入力では、
+    // 「月平均」などの質問語を除いた商品検索語だけで商品を探します。
+    const productQuery =
+      extractNaturalMonthlyAverageProductQuery(
+        query
+      );
+
     const matches =
       findNaturalStockMatches(
         products,
-        query
+        productQuery || query
       );
 
     if (matches.length === 0) {

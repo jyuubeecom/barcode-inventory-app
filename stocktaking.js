@@ -1605,40 +1605,67 @@ function createStocktakingStyle() {
 
     .stocktaking-table-area {
       width: 100%;
-      overflow-x: auto;
+      overflow-x: hidden;
     }
 
     .stocktaking-items-table {
       width: 100%;
-      min-width: 1250px;
+      min-width: 0;
+      table-layout: fixed;
       border-collapse: collapse;
     }
 
     .stocktaking-items-table th,
     .stocktaking-items-table td {
-      padding: 10px;
+      padding: 8px 6px;
       border: 1px solid #cfd8dc;
       text-align: left;
       vertical-align: middle;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .stocktaking-items-table th {
       background-color: #6a1b9a;
       color: #ffffff;
-      white-space: nowrap;
+      white-space: normal;
+      line-height: 1.35;
     }
 
-    .stocktaking-items-table input[type="number"] {
-      min-width: 100px;
-    }
+    .stocktaking-items-table th:nth-child(1) { width: 9%; }
+    .stocktaking-items-table th:nth-child(2) { width: 9%; }
+    .stocktaking-items-table th:nth-child(3) { width: 9%; }
+    .stocktaking-items-table th:nth-child(4) { width: 11%; }
+    .stocktaking-items-table th:nth-child(5) { width: 9%; }
+    .stocktaking-items-table th:nth-child(6) { width: 10%; }
+    .stocktaking-items-table th:nth-child(7) { width: 27%; }
+    .stocktaking-items-table th:nth-child(8) { width: 6%; }
+    .stocktaking-items-table th:nth-child(9) { width: 10%; }
 
+    .stocktaking-items-table input[type="number"],
     .stocktaking-items-table input[type="text"],
     .stocktaking-items-table select {
-      min-width: 180px;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
     }
 
     .stocktaking-location-count-cell {
-      min-width: 420px;
+      min-width: 0;
+    }
+
+    .stocktaking-location-entry {
+      grid-template-columns:
+        minmax(0, 1fr)
+        minmax(72px, 92px)
+        auto;
+      gap: 6px;
+      padding: 6px;
+    }
+
+    .stocktaking-location-total {
+      overflow-wrap: anywhere;
     }
 
     .stocktaking-mobile-location-heading,
@@ -4520,11 +4547,26 @@ function createStocktakingItemRow(
     "登録保管場所"
   );
 
+  const headquartersCountingMode =
+    currentStocktaking &&
+    isHeadquartersStocktakingLocation(
+      currentStocktaking.location
+    );
+
+  const registeredStockDisplay =
+    headquartersCountingMode
+      ? `本社全体 ${getValidStocktakingNumber(
+          item.registeredStock
+        ).toLocaleString("ja-JP")}個（参考）`
+      : item.registeredStock;
+
   appendStocktakingTextCell(
     row,
-    item.registeredStock,
+    registeredStockDisplay,
     "stocktaking-cell-registered-stock",
-    "登録在庫"
+    headquartersCountingMode
+      ? "本社全体在庫（参考）"
+      : "登録在庫"
   );
 
   const actualStockCell =
@@ -5204,6 +5246,25 @@ function refreshStocktakingItemFromLocations(
   item.actualStock =
     actualStock;
 
+  const headquartersCountingMode =
+    currentStocktaking &&
+    isHeadquartersStocktakingLocation(
+      currentStocktaking.location
+    );
+
+  if (headquartersCountingMode) {
+    item.difference = null;
+    item.result =
+      actualStock === ""
+        ? "未確認"
+        : "集約待ち";
+    item.checkedAt =
+      actualStock === ""
+        ? ""
+        : new Date().toISOString();
+    return;
+  }
+
   item.difference =
     actualStock === ""
       ? null
@@ -5854,7 +5915,7 @@ function getStocktakingCounts() {
       checked: checkedItems.length,
       unchecked:
         items.length - checkedItems.length,
-      match: checkedItems.length,
+      match: 0,
       shortage: 0,
       surplus: 0,
       bulkZero:

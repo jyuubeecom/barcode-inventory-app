@@ -3,20 +3,9 @@
 const SHIPPING_SCHEDULE_PAGE_SIZE = 20;
 const SHIPPING_ALLOCATION_PAGE_SIZE = 20;
 const SHIPPING_DESTINATION_LOCATIONS = [
+  "本社",
   "酒本倉庫1階",
-  "酒本倉庫2階",
-  "本社1階　A区",
-  "本社1階　B区",
-  "本社1階　C区",
-  "本社1階　D区",
-  "本社1階　E区",
-  "本社1階　F区",
-  "本社2階　A区",
-  "本社2階　B区",
-  "本社2階　C区",
-  "本社2階　D区",
-  "本社2階　E区",
-  "本社2階　F区"
+  "酒本倉庫2階"
 ];
 let shippingScheduleRecords = [];
 let shippingScheduleAllocations = [];
@@ -277,6 +266,13 @@ function scrollShippingWarehouseIntoView() {
 }
 
 async function refreshShippingScheduleData() {
+  if (
+    typeof migrateShippingWarehouseAllocationsToThreeBases ===
+    "function"
+  ) {
+    await migrateShippingWarehouseAllocationsToThreeBases();
+  }
+
   const results = await Promise.all([
     getAllShippingSchedules(),
     getAllShippingAllocations(),

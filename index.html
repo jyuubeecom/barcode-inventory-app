@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v194
+            画面版 v195
           </span>
         </div>
       </div>
@@ -812,8 +812,7 @@
 
       <div style="margin: 14px 0 18px; padding: 14px 16px; border: 2px solid #f0a020; border-radius: 10px; background: #fff4df; color: #7a4300; line-height: 1.8;">
         <strong style="font-size: 1.05em;">⚠ 販売実績CSVを取り込むと、販売数量を場所別在庫から自動出庫します。</strong><br>
-        出庫の優先順：<strong>本社1階 → 本社2階 → 酒本倉庫1階 → 酒本倉庫2階</strong><br>
-        本社1階・本社2階は、それぞれ <strong>A区 → B区 → C区 → D区 → E区 → F区</strong> の順に在庫を減らします。<br>
+        出庫の優先順：<strong>本社 → 酒本倉庫1階 → 酒本倉庫2階</strong><br><br>
         返品分は販売数から差し引いて処理します。取込前に、下のプレビューで内容を必ず確認してください。<br>
         <strong>商品状態が「廃盤」の商品が含まれている場合はエラーとして表示し、その行は取り込みません。</strong>
       </div>
@@ -1638,7 +1637,7 @@
 
       <p>
         古い保管場所、または保管場所が空欄の商品を確認し、
-        正しい区画へまとめて変更します。
+        正しい保管場所へまとめて変更します。
       </p>
 
       <div class="unassigned-location-controls">
@@ -1652,20 +1651,9 @@
         <label for="bulk-location-destination">変更先の保管場所</label>
         <select id="bulk-location-destination">
           <option value="">選択してください</option>
+          <option value="本社">本社</option>
           <option value="酒本倉庫1階">酒本倉庫1階</option>
           <option value="酒本倉庫2階">酒本倉庫2階</option>
-          <option value="本社1階　A区">本社1階　A区</option>
-          <option value="本社1階　B区">本社1階　B区</option>
-          <option value="本社1階　C区">本社1階　C区</option>
-          <option value="本社1階　D区">本社1階　D区</option>
-          <option value="本社1階　E区">本社1階　E区</option>
-          <option value="本社1階　F区">本社1階　F区</option>
-          <option value="本社2階　A区">本社2階　A区</option>
-          <option value="本社2階　B区">本社2階　B区</option>
-          <option value="本社2階　C区">本社2階　C区</option>
-          <option value="本社2階　D区">本社2階　D区</option>
-          <option value="本社2階　E区">本社2階　E区</option>
-          <option value="本社2階　F区">本社2階　F区</option>
         </select>
 
         <div class="unassigned-location-actions">
@@ -1839,20 +1827,9 @@
             required
           >
             <option value="">選択してください</option>
+            <option value="本社">本社</option>
             <option value="酒本倉庫1階">酒本倉庫1階</option>
             <option value="酒本倉庫2階">酒本倉庫2階</option>
-            <option value="本社1階　A区">本社1階　A区</option>
-            <option value="本社1階　B区">本社1階　B区</option>
-            <option value="本社1階　C区">本社1階　C区</option>
-            <option value="本社1階　D区">本社1階　D区</option>
-            <option value="本社1階　E区">本社1階　E区</option>
-            <option value="本社1階　F区">本社1階　F区</option>
-            <option value="本社2階　A区">本社2階　A区</option>
-            <option value="本社2階　B区">本社2階　B区</option>
-            <option value="本社2階　C区">本社2階　C区</option>
-            <option value="本社2階　D区">本社2階　D区</option>
-            <option value="本社2階　E区">本社2階　E区</option>
-            <option value="本社2階　F区">本社2階　F区</option>
           </select>
         </div>
 
@@ -2996,20 +2973,9 @@
             required
           >
             <option value="">選択してください</option>
+            <option value="本社">本社</option>
             <option value="酒本倉庫1階">酒本倉庫1階</option>
             <option value="酒本倉庫2階">酒本倉庫2階</option>
-            <option value="本社1階　A区">本社1階　A区</option>
-            <option value="本社1階　B区">本社1階　B区</option>
-            <option value="本社1階　C区">本社1階　C区</option>
-            <option value="本社1階　D区">本社1階　D区</option>
-            <option value="本社1階　E区">本社1階　E区</option>
-            <option value="本社1階　F区">本社1階　F区</option>
-            <option value="本社2階　A区">本社2階　A区</option>
-            <option value="本社2階　B区">本社2階　B区</option>
-            <option value="本社2階　C区">本社2階　C区</option>
-            <option value="本社2階　D区">本社2階　D区</option>
-            <option value="本社2階　E区">本社2階　E区</option>
-            <option value="本社2階　F区">本社2階　F区</option>
           </select>
         </div>
 
@@ -3200,28 +3166,28 @@
 
   </main>
 
-<script src="storage.js?v=178"></script>
-<script src="app.js?v=143"></script>
+<script src="storage.js?v=195"></script>
+<script src="app.js?v=195"></script>
 <script src="natural-stock-search.js?v=191"></script>
 <script src="product-history.js?v=107"></script>
-<script src="inventory.js?v=97"></script>
-<script src="transfer-list.js?v=83"></script>
-<script src="location-stock-report.js?v=190"></script>
+<script src="inventory.js?v=195"></script>
+<script src="transfer-list.js?v=195"></script>
+<script src="location-stock-report.js?v=195"></script>
 <script src="libs/barcode-detector-zxing-adapter.js?v=31"></script>
 <script src="scanner.js?v=126"></script>
-<script src="stocktaking.js?v=131"></script>
+<script src="stocktaking.js?v=195"></script>
 <script src="stocktaking-history.js?v=33"></script>
-<script src="stocktaking-transfer.js?v=80"></script>
+<script src="stocktaking-transfer.js?v=195"></script>
 <script src="csv.js?v=90"></script>
 <script src="csv-import.js?v=146"></script>
 <script src="csv-update.js?v=74"></script>
 <script src="pwa.js?v=31"></script>
 <script src="sales-plan.js?v=176"></script>
-<script src="sales-actual.js?v=154"></script>
+<script src="sales-actual.js?v=195"></script>
 <script src="purchase-required.js?v=140"></script>
 <script src="order-remaining.js?v=119"></script>
 <script src="low-shipment.js?v=45"></script>
-<script src="shipping-schedule.js?v=187"></script>
+<script src="shipping-schedule.js?v=195"></script>
 <script src="dedicated-product.js?v=108"></script>
 <script src="shipping-arrival.js?v=118"></script>
 <script src="barcode-print.js?v=142"></script>

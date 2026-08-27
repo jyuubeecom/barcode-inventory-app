@@ -1211,6 +1211,13 @@ function createTransferSubmissionItem(item) {
         item.registeredStock,
         0
       ),
+    registeredTotalStock:
+      normalizeTransferNonNegativeInteger(
+        item.registeredTotalStock !== undefined
+          ? item.registeredTotalStock
+          : item.registeredStock,
+        0
+      ),
     locationBreakdown:
       normalizeTransferLocationBreakdown(
         item.locationBreakdown
@@ -2173,6 +2180,8 @@ function buildStocktakingAggregationRows(
                   new Set(),
                 registeredStocks:
                   new Set(),
+                registeredTotalStocks:
+                  new Set(),
                 people:
                   new Set(),
                 submissionIds:
@@ -2220,6 +2229,15 @@ function buildStocktakingAggregationRows(
           group.registeredStocks.add(
             normalizeTransferNonNegativeInteger(
               item.registeredStock,
+              0
+            )
+          );
+
+          group.registeredTotalStocks.add(
+            normalizeTransferNonNegativeInteger(
+              item.registeredTotalStock !== undefined
+                ? item.registeredTotalStock
+                : item.registeredStock,
               0
             )
           );
@@ -2331,7 +2349,9 @@ function buildStocktakingAggregationRows(
 
       const registeredStockValues =
         Array.from(
-          group.registeredStocks
+          group.registeredTotalStocks.size > 0
+            ? group.registeredTotalStocks
+            : group.registeredStocks
         );
 
       let registeredStock = null;
@@ -2352,6 +2372,7 @@ function buildStocktakingAggregationRows(
       let actualStockTotal = 0;
       let hasActualStock = false;
       const locationBreakdownTexts = [];
+      const locationBreakdownEntries = [];
 
       group.locations.forEach(
         function (locationGroup) {
@@ -2400,6 +2421,11 @@ function buildStocktakingAggregationRows(
             locationBreakdownTexts.push(
               locationText
             );
+
+            locationBreakdownEntries.push({
+              location: locationGroup.location,
+              quantity: quantity
+            });
 
             return;
           }
@@ -2469,6 +2495,8 @@ function buildStocktakingAggregationRows(
           locationBreakdownTexts.join(
             " / "
           ),
+        locationBreakdownEntries:
+          locationBreakdownEntries,
         people:
           Array.from(group.people).join(
             " / "
@@ -3060,7 +3088,7 @@ async function previewStocktakingReflection() {
       previewRows.filter(function (row) {
         return (
           row.blockers.length === 0 &&
-          row.changeQuantity !== 0
+          (row.changeQuantity !== 0 || row.locationChanged)
         );
       }).length;
 
@@ -3068,7 +3096,8 @@ async function previewStocktakingReflection() {
       previewRows.filter(function (row) {
         return (
           row.blockers.length === 0 &&
-          row.changeQuantity === 0
+          row.changeQuantity === 0 &&
+          !row.locationChanged
         );
       }).length;
 
@@ -3123,6 +3152,181 @@ async function previewStocktakingReflection() {
   }
 }
 
+const STOCKTAKING_REFLECTION_HEADQUARTERS_ZONES = [
+  "本社1階 A区",
+  "本社1階 B区",
+  "本社1階 C区",
+  "本社1階 D区",
+  "本社1階 E区",
+  "本社1階 F区",
+  "本社2階 A区",
+  "本社2階 B区",
+  "本社2階 C区",
+  "本社2階 D区",
+  "本社2階 E区",
+  "本社2階 F区"
+];
+
+function getMissingHeadquartersStocktakingZones(entries) {
+  const normalized = new Set(
+    normalizeStocktakingReflectionLocationEntries(entries)
+      .map(function (entry) {
+        return String(entry.location || "")
+          .normalize("NFKC")
+          .trim()
+          .replace(/[\s\u3000]+/g, " ");
+      })
+  );
+
+  const hasAnyHeadquartersZone =
+    STOCKTAKING_REFLECTION_HEADQUARTERS_ZONES.some(
+      function (zone) {
+        return normalized.has(zone);
+      }
+    );
+
+  if (!hasAnyHeadquartersZone) {
+    return [];
+  }
+
+  return STOCKTAKING_REFLECTION_HEADQUARTERS_ZONES.filter(
+    function (zone) {
+      return !normalized.has(zone);
+    }
+  );
+}
+
+function getStocktakingReflectionBaseLocation(location) {
+  const text = String(location || "")
+    .normalize("NFKC")
+    .trim()
+    .replace(/[\s\u3000]+/g, " ");
+
+  if (/^本社[12]階\s*[A-Fa-f]区$/.test(text)) {
+    return "本社";
+  }
+
+  if (text === "本社") {
+    return "本社";
+  }
+
+  if (text === "酒本倉庫1階") {
+    return "酒本倉庫1階";
+  }
+
+  if (text === "酒本倉庫2階") {
+    return "酒本倉庫2階";
+  }
+
+  return text;
+}
+
+function normalizeStocktakingReflectionLocationEntries(entries) {
+  return (Array.isArray(entries) ? entries : [])
+    .map(function (entry) {
+      const location = String(entry && entry.location || "").trim();
+      const quantity = normalizeTransferNonNegativeInteger(
+        entry && entry.quantity,
+        0
+      );
+
+      if (!location) {
+        return null;
+      }
+
+      return {
+        location: location,
+        quantity: quantity
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildStocktakingReflectionLocationStocks(
+  product,
+  locationEntries
+) {
+  const currentEntries =
+    typeof getProductLocationStocks === "function"
+      ? getProductLocationStocks(product)
+      : [];
+
+  const groupedCurrent = new Map();
+
+  currentEntries.forEach(function (entry) {
+    const base = getStocktakingReflectionBaseLocation(
+      entry.location
+    );
+    if (!base) return;
+    groupedCurrent.set(
+      base,
+      (groupedCurrent.get(base) || 0) +
+        normalizeTransferNonNegativeInteger(entry.stock, 0)
+    );
+  });
+
+  const replacementGroups = new Map();
+
+  normalizeStocktakingReflectionLocationEntries(
+    locationEntries
+  ).forEach(function (entry) {
+    const base = getStocktakingReflectionBaseLocation(
+      entry.location
+    );
+    if (!base || base === "未確認") return;
+    replacementGroups.set(
+      base,
+      (replacementGroups.get(base) || 0) + entry.quantity
+    );
+  });
+
+  replacementGroups.forEach(function (quantity, base) {
+    groupedCurrent.set(base, quantity);
+  });
+
+  const order = ["本社", "酒本倉庫1階", "酒本倉庫2階"];
+  const orderMap = new Map(order.map(function (name, index) {
+    return [name, index];
+  }));
+
+  return Array.from(groupedCurrent, function ([location, stock]) {
+    return {
+      location: location,
+      stock: normalizeTransferNonNegativeInteger(stock, 0)
+    };
+  })
+    .filter(function (entry) {
+      return entry.stock > 0;
+    })
+    .sort(function (left, right) {
+      const li = orderMap.has(left.location) ? orderMap.get(left.location) : 999;
+      const ri = orderMap.has(right.location) ? orderMap.get(right.location) : 999;
+      if (li !== ri) return li - ri;
+      return left.location.localeCompare(right.location, "ja");
+    });
+}
+
+function areStocktakingReflectionLocationStocksEqual(leftEntries, rightEntries) {
+  const normalize = function (entries) {
+    return (Array.isArray(entries) ? entries : [])
+      .map(function (entry) {
+        return {
+          location: getStocktakingReflectionBaseLocation(entry.location),
+          stock: normalizeTransferNonNegativeInteger(entry.stock, 0)
+        };
+      })
+      .filter(function (entry) {
+        return entry.location && entry.stock > 0;
+      })
+      .sort(function (a, b) {
+        return a.location.localeCompare(b.location, "ja");
+      });
+  };
+
+  return JSON.stringify(normalize(leftEntries)) ===
+    JSON.stringify(normalize(rightEntries));
+}
+
 function createStocktakingReflectionPreviewRow(
   aggregationRow,
   product
@@ -3153,8 +3357,24 @@ function createStocktakingReflectionPreviewRow(
     );
   }
 
+  const missingHeadquartersZones =
+    getMissingHeadquartersStocktakingZones(
+      aggregationRow.locationBreakdownEntries
+    );
+
+  if (missingHeadquartersZones.length > 0) {
+    blockers.push(
+      "本社の棚卸を反映するには、本社1階A～F区・本社2階A～F区の12区画すべての提出が必要です。未取込：" +
+      missingHeadquartersZones.join(" / ")
+    );
+  }
+
   let currentStock = null;
   let productStatus = "";
+  let currentLocationStocks = [];
+  let afterLocationStocks = [];
+  let afterStock = aggregationRow.actualStock;
+  let locationChanged = false;
 
   if (product) {
     currentStock =
@@ -3201,6 +3421,30 @@ function createStocktakingReflectionPreviewRow(
         "商品名が提出データと現在の商品情報で異なります。"
       );
     }
+
+    currentLocationStocks =
+      typeof getProductLocationStocks === "function"
+        ? getProductLocationStocks(product)
+        : [];
+
+    afterLocationStocks =
+      buildStocktakingReflectionLocationStocks(
+        product,
+        aggregationRow.locationBreakdownEntries
+      );
+
+    afterStock = afterLocationStocks.reduce(
+      function (sum, entry) {
+        return sum + normalizeTransferNonNegativeInteger(entry.stock, 0);
+      },
+      0
+    );
+
+    locationChanged =
+      !areStocktakingReflectionLocationStocksEqual(
+        currentLocationStocks,
+        afterLocationStocks
+      );
   }
 
   if (aggregationRow.warnings) {
@@ -3208,9 +3452,6 @@ function createStocktakingReflectionPreviewRow(
       aggregationRow.warnings
     );
   }
-
-  const afterStock =
-    aggregationRow.actualStock;
 
   const changeQuantity =
     currentStock === null ||
@@ -3222,7 +3463,7 @@ function createStocktakingReflectionPreviewRow(
 
   if (blockers.length === 0) {
     judgment =
-      changeQuantity === 0
+      changeQuantity === 0 && !locationChanged
         ? "変更なし"
         : "反映可能";
   }
@@ -3244,8 +3485,13 @@ function createStocktakingReflectionPreviewRow(
     beforeStock: currentStock,
     afterStock: afterStock,
     changeQuantity: changeQuantity,
+    locationChanged: locationChanged,
+    currentLocationStocks: currentLocationStocks,
+    afterLocationStocks: afterLocationStocks,
     locationBreakdown:
       aggregationRow.locationBreakdown,
+    locationBreakdownEntries:
+      aggregationRow.locationBreakdownEntries,
     people:
       aggregationRow.people,
     submissionCount:
@@ -3284,7 +3530,8 @@ function renderStocktakingReflectionPreview(
           "stocktaking-reflection-blocked"
         );
       } else if (
-        previewRow.changeQuantity === 0
+        previewRow.changeQuantity === 0 &&
+        !previewRow.locationChanged
       ) {
         row.classList.add(
           "stocktaking-reflection-no-change"
@@ -3485,7 +3732,10 @@ async function applyStocktakingReflection() {
 
   const changedRows =
     freshRows.filter(function (row) {
-      return row.changeQuantity !== 0;
+      return (
+        row.changeQuantity !== 0 ||
+        row.locationChanged
+      );
     });
 
   const confirmed = window.confirm(
@@ -3517,17 +3767,38 @@ async function applyStocktakingReflection() {
 
     freshRows.forEach(function (row, index) {
       if (
-        row.changeQuantity === 0 ||
+        (row.changeQuantity === 0 && !row.locationChanged) ||
         !row.product
       ) {
         return;
       }
 
-      const updatedProduct = {
-        ...row.product,
-        stock: row.afterStock,
-        updatedAt: reflectedAt
-      };
+      const nextLocationStocks =
+        Array.isArray(row.afterLocationStocks)
+          ? row.afterLocationStocks
+          : [];
+
+      const nextPrimaryLocation =
+        nextLocationStocks.length > 0
+          ? nextLocationStocks[0].location
+          : (row.product.location || "本社");
+
+      const updatedProduct =
+        typeof normalizeProductLocationStocks === "function"
+          ? normalizeProductLocationStocks({
+              ...row.product,
+              stock: row.afterStock,
+              location: nextPrimaryLocation,
+              locationStocks: nextLocationStocks,
+              updatedAt: reflectedAt
+            })
+          : {
+              ...row.product,
+              stock: row.afterStock,
+              location: nextPrimaryLocation,
+              locationStocks: nextLocationStocks,
+              updatedAt: reflectedAt
+            };
 
       updatedProducts.push(updatedProduct);
 
@@ -3591,7 +3862,7 @@ async function applyStocktakingReflection() {
         freshRows.map(function (row) {
           return {
             judgment:
-              row.changeQuantity === 0
+              row.changeQuantity === 0 && !row.locationChanged
                 ? "変更なし"
                 : "反映済み",
             internalCode:
@@ -3608,6 +3879,8 @@ async function applyStocktakingReflection() {
               row.changeQuantity,
             locationBreakdown:
               row.locationBreakdown,
+            locationBreakdownEntries:
+              row.locationBreakdownEntries,
             people:
               row.people,
             submissionCount:
@@ -3875,6 +4148,13 @@ function validateAndNormalizeStocktakingSubmission(
       registeredStock:
         normalizeTransferNonNegativeInteger(
           item.registeredStock,
+          0
+        ),
+      registeredTotalStock:
+        normalizeTransferNonNegativeInteger(
+          item.registeredTotalStock !== undefined
+            ? item.registeredTotalStock
+            : item.registeredStock,
           0
         ),
       locationBreakdown:

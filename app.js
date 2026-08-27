@@ -514,6 +514,7 @@ async function initializeApp() {
 
   try {
     await migrateProductLocationStocks();
+    await migrateProductLocationsToThreeBases();
 
     const savedProducts =
       await getAllProducts();
@@ -2039,20 +2040,9 @@ function getProductByInternalCode(
 }
 
 const PRODUCT_LOCATION_OPTIONS = Object.freeze([
+  "本社",
   "酒本倉庫1階",
-  "酒本倉庫2階",
-  "本社1階　A区",
-  "本社1階　B区",
-  "本社1階　C区",
-  "本社1階　D区",
-  "本社1階　E区",
-  "本社1階　F区",
-  "本社2階　A区",
-  "本社2階　B区",
-  "本社2階　C区",
-  "本社2階　D区",
-  "本社2階　E区",
-  "本社2階　F区"
+  "酒本倉庫2階"
 ]);
 
 function isValidProductLocation(value) {

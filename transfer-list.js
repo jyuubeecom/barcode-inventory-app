@@ -2,18 +2,7 @@
 
 (function () {
   const LOCATION_OPTIONS = [
-    "本社1階 A区",
-    "本社1階 B区",
-    "本社1階 C区",
-    "本社1階 D区",
-    "本社1階 E区",
-    "本社1階 F区",
-    "本社2階 A区",
-    "本社2階 B区",
-    "本社2階 C区",
-    "本社2階 D区",
-    "本社2階 E区",
-    "本社2階 F区",
+    "本社",
     "酒本倉庫1階",
     "酒本倉庫2階"
   ];
@@ -326,11 +315,7 @@
       const select = document.querySelector(selector);
       if (!select || select.options.length > 0) return;
 
-      // 「未確認」は、保管場所が未確定の在庫を正しい場所へ直すため、
-      // 移動元だけで選べるようにします。移動先には表示しません。
-      const locations = selector === "#transfer-source"
-        ? LOCATION_OPTIONS.concat("未確認")
-        : LOCATION_OPTIONS;
+      const locations = LOCATION_OPTIONS;
 
       select.innerHTML = '<option value="">選択してください</option>' + locations.map(function (location) {
         return `<option value="${escapeHtml(location)}">${escapeHtml(location)}</option>`;

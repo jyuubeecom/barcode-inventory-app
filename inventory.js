@@ -203,18 +203,7 @@ const cancelStockAdjustButton =
   );
 
 const INVENTORY_LOCATION_OPTIONS = Object.freeze([
-  "本社1階 A区",
-  "本社1階 B区",
-  "本社1階 C区",
-  "本社1階 D区",
-  "本社1階 E区",
-  "本社1階 F区",
-  "本社2階 A区",
-  "本社2階 B区",
-  "本社2階 C区",
-  "本社2階 D区",
-  "本社2階 E区",
-  "本社2階 F区",
+  "本社",
   "酒本倉庫1階",
   "酒本倉庫2階"
 ]);
@@ -294,7 +283,7 @@ function chooseInventoryPrimaryLocation(product, entries, fallbackLocation) {
     return nextEntry.location;
   }
 
-  return normalizeLocationStockName(fallbackLocation) || currentPrimary || "未確認";
+  return normalizeLocationStockName(fallbackLocation) || currentPrimary || "本社";
 }
 
 document.addEventListener(

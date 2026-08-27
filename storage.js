@@ -57,24 +57,48 @@ const LOCATION_STOCK_UNCONFIRMED_NAME =
   "未確認";
 
 const SALES_ACTUAL_OUTBOUND_LOCATION_PRIORITY = Object.freeze([
-  "本社1階 A区",
-  "本社1階 B区",
-  "本社1階 C区",
-  "本社1階 D区",
-  "本社1階 E区",
-  "本社1階 F区",
-  "本社2階 A区",
-  "本社2階 B区",
-  "本社2階 C区",
-  "本社2階 D区",
-  "本社2階 E区",
-  "本社2階 F区",
+  "本社",
   "酒本倉庫1階",
   "酒本倉庫2階"
 ]);
 
 const SALES_ACTUAL_RETURN_LOCATION =
-  "本社1階 A区";
+  "本社";
+
+const HEADQUARTERS_STOCKTAKING_LOCATION_PATTERN =
+  /^本社[12]階\s*[A-Fa-f]区$/;
+
+function isHeadquartersStocktakingLocationName(value) {
+  const normalized = String(value || "")
+    .normalize("NFKC")
+    .trim()
+    .replace(/[\s\u3000]+/g, " ");
+
+  return HEADQUARTERS_STOCKTAKING_LOCATION_PATTERN.test(
+    normalized
+  );
+}
+
+function getInventoryBaseLocationName(value) {
+  const normalized = normalizeLocationStockName(value);
+
+  if (
+    normalized === "本社" ||
+    isHeadquartersStocktakingLocationName(normalized)
+  ) {
+    return "本社";
+  }
+
+  if (normalized === "酒本倉庫1階") {
+    return "酒本倉庫1階";
+  }
+
+  if (normalized === "酒本倉庫2階") {
+    return "酒本倉庫2階";
+  }
+
+  return normalized;
+}
 
 const LOCATION_STOCK_DISPLAY_ORDER = Object.freeze([
   ...SALES_ACTUAL_OUTBOUND_LOCATION_PRIORITY,
@@ -112,6 +136,10 @@ function normalizeLocationStockName(value) {
 
   if (location === "") {
     return "";
+  }
+
+  if (location === "本社") {
+    return "本社";
   }
 
   const headquartersMatch = location.match(
@@ -436,6 +464,162 @@ async function migrateProductLocationStocks() {
 
     transaction.onabort =
       transaction.onerror;
+  });
+}
+
+async function migrateProductLocationsToThreeBases() {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      PRODUCT_STORE_NAME,
+      "readwrite"
+    );
+    const store = transaction.objectStore(
+      PRODUCT_STORE_NAME
+    );
+    const request = store.getAll();
+    let updatedCount = 0;
+
+    request.onsuccess = function () {
+      const records = request.result || [];
+
+      records.forEach(function (rawProduct) {
+        const product = normalizeProductLocationStocks(
+          rawProduct
+        );
+        const grouped = new Map();
+
+        getProductLocationStocks(product).forEach(
+          function (entry) {
+            const baseLocation =
+              getInventoryBaseLocationName(
+                entry.location
+              );
+
+            if (!baseLocation) {
+              return;
+            }
+
+            grouped.set(
+              baseLocation,
+              (grouped.get(baseLocation) || 0) +
+                normalizeLocationStockQuantity(
+                  entry.stock
+                )
+            );
+          }
+        );
+
+        let locationStocks = Array.from(
+          grouped,
+          function ([location, stock]) {
+            return {
+              location: location,
+              stock: stock
+            };
+          }
+        ).filter(function (entry) {
+          return entry.stock > 0;
+        });
+
+        locationStocks =
+          sortLocationStocksByDisplayOrder(
+            locationStocks
+          );
+
+        const currentBaseLocation =
+          getInventoryBaseLocationName(
+            product.location
+          );
+
+        let primaryLocation = currentBaseLocation;
+
+        if (
+          !locationStocks.some(function (entry) {
+            return (
+              entry.location === primaryLocation &&
+              entry.stock > 0
+            );
+          })
+        ) {
+          primaryLocation =
+            locationStocks.length > 0
+              ? locationStocks[0].location
+              : (
+                  currentBaseLocation ||
+                  "本社"
+                );
+        }
+
+        const totalStock = locationStocks.reduce(
+          function (sum, entry) {
+            return sum + entry.stock;
+          },
+          0
+        );
+
+        const updatedProduct = {
+          ...product,
+          stock: totalStock,
+          location: primaryLocation,
+          locationStocks: locationStocks,
+          locationMigrationBackupV195:
+            product.locationMigrationBackupV195 || {
+              stock:
+                normalizeLocationStockQuantity(
+                  rawProduct.stock
+                ),
+              location:
+                String(rawProduct.location || ""),
+              locationStocks:
+                Array.isArray(rawProduct.locationStocks)
+                  ? rawProduct.locationStocks.map(function (entry) {
+                      return {
+                        location:
+                          String(entry && entry.location || ""),
+                        stock:
+                          normalizeLocationStockQuantity(
+                            entry && entry.stock
+                          )
+                      };
+                    })
+                  : [],
+              migratedAt:
+                new Date().toISOString()
+            }
+        };
+
+        const beforeSnapshot = JSON.stringify({
+          stock: rawProduct.stock,
+          location: rawProduct.location,
+          locationStocks: rawProduct.locationStocks
+        });
+        const afterSnapshot = JSON.stringify({
+          stock: updatedProduct.stock,
+          location: updatedProduct.location,
+          locationStocks: updatedProduct.locationStocks
+        });
+
+        if (beforeSnapshot !== afterSnapshot) {
+          store.put(updatedProduct);
+          updatedCount += 1;
+        }
+      });
+    };
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve(updatedCount);
+    };
+
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+
+    transaction.onabort = transaction.onerror;
   });
 }
 
@@ -2476,7 +2660,7 @@ async function saveSalesActualImportBatch(batchRecord, salesRecords) {
               `商品コード：${product.productCode || "-"}\n\n` +
               "販売実績CSVを出庫する保管場所の在庫が不足しています。\n" +
               `自動出庫の対象在庫：${eligibleStock}個 / CSV出庫：${netSalesQuantity}個\n\n` +
-              "自動出庫は「本社1階 → 本社2階 → 酒本倉庫1階 → 酒本倉庫2階」の順です。"
+              "自動出庫は「本社 → 酒本倉庫1階 → 酒本倉庫2階」の順です。"
             );
             return;
           }
@@ -2591,7 +2775,7 @@ async function saveSalesActualImportBatch(batchRecord, salesRecords) {
         inventoryAdjustmentCount: inventoryAdjustments.length,
         inventoryAdjustments: inventoryAdjustments,
         inventorySkippedCodes: inventorySkippedCodes,
-        inventoryRule: "本社1階→本社2階→酒本倉庫1階→酒本倉庫2階"
+        inventoryRule: "本社→酒本倉庫1階→酒本倉庫2階"
       };
 
       batchStore.add(savedBatch);
@@ -2977,6 +3161,106 @@ async function deleteShippingAllocation(id) {
     transaction.objectStore(SHIPPING_ALLOCATION_STORE_NAME).delete(id);
     transaction.oncomplete = function () { database.close(); resolve(); };
     transaction.onerror = function () { const error = transaction.error; database.close(); reject(error); };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function migrateShippingWarehouseAllocationsToThreeBases() {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME,
+      "readwrite"
+    );
+    const store = transaction.objectStore(
+      SHIPPING_WAREHOUSE_ALLOCATION_STORE_NAME
+    );
+    const request = store.getAll();
+    let updatedCount = 0;
+
+    request.onsuccess = function () {
+      const records = request.result || [];
+      const grouped = new Map();
+      let needsMigration = false;
+
+      records.forEach(function (record) {
+        const rawDestination = String(
+          record && record.destination || ""
+        ).trim();
+        const destination =
+          getInventoryBaseLocationName(
+            rawDestination
+          );
+
+        if (destination !== rawDestination) {
+          needsMigration = true;
+        }
+
+        const scheduleId = String(
+          record && record.scheduleId || ""
+        );
+        const internalCode = String(
+          record && record.internalCode || ""
+        );
+        const key = [
+          scheduleId,
+          internalCode,
+          destination
+        ].join("::");
+
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            ...record,
+            id:
+              `${scheduleId}::warehouse::${encodeURIComponent(internalCode)}::${encodeURIComponent(destination)}`,
+            destination: destination,
+            quantity: 0
+          });
+        } else {
+          needsMigration = true;
+        }
+
+        const groupedRecord = grouped.get(key);
+        groupedRecord.quantity +=
+          normalizeLocationStockQuantity(
+            record && record.quantity
+          );
+
+        const currentUpdatedAt = String(
+          groupedRecord.updatedAt || ""
+        );
+        const recordUpdatedAt = String(
+          record && record.updatedAt || ""
+        );
+
+        if (recordUpdatedAt > currentUpdatedAt) {
+          groupedRecord.updatedAt = recordUpdatedAt;
+        }
+      });
+
+      if (!needsMigration) {
+        return;
+      }
+
+      store.clear();
+      grouped.forEach(function (record) {
+        store.put(record);
+        updatedCount += 1;
+      });
+    };
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve(updatedCount);
+    };
+
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+
     transaction.onabort = transaction.onerror;
   });
 }

@@ -192,6 +192,13 @@ function createStocktakingHistoryScreens() {
     </button>
 
     <button
+      id="cancel-stocktaking-history-button"
+      type="button"
+    >
+      この棚卸を取り消す
+    </button>
+
+    <button
       id="back-to-stocktaking-history"
       type="button"
     >
@@ -251,6 +258,13 @@ function createStocktakingHistoryScreens() {
   );
 
   document.querySelector(
+    "#cancel-stocktaking-history-button"
+  ).addEventListener(
+    "click",
+    cancelCurrentStocktakingHistory
+  );
+
+  document.querySelector(
     "#export-stocktaking-submission-button"
   ).addEventListener(
     "click",
@@ -260,6 +274,17 @@ function createStocktakingHistoryScreens() {
       ) {
         alert(
           "出力する棚卸履歴が見つかりません。"
+        );
+
+        return;
+      }
+
+      if (
+        currentStocktakingHistoryDetailSession.status === "取消" ||
+        currentStocktakingHistoryDetailSession.status === "無効"
+      ) {
+        alert(
+          "取り消し済みの棚卸は提出ファイルを出力できません。"
         );
 
         return;
@@ -434,6 +459,23 @@ function createStocktakingHistoryStyle() {
 
     #export-stocktaking-submission-button {
       background-color: #00838f;
+    }
+
+    #cancel-stocktaking-history-button {
+      background-color: #c62828;
+      color: #ffffff;
+      font-weight: bold;
+    }
+
+    #cancel-stocktaking-history-button:disabled {
+      background-color: #b0bec5;
+      color: #546e7a;
+      cursor: not-allowed;
+    }
+
+    .stocktaking-history-cancelled-row {
+      background-color: #f5f5f5;
+      color: #607d8b;
     }
 
     @media (max-width: 700px) {
@@ -626,10 +668,12 @@ function displayStocktakingHistory() {
         document.createElement("tr");
 
       row.classList.add(
-        session.status ===
-          "確定済み"
-          ? "stocktaking-history-completed-row"
-          : "stocktaking-history-open-row"
+        session.status === "取消" ||
+        session.status === "無効"
+          ? "stocktaking-history-cancelled-row"
+          : session.status === "確定済み"
+            ? "stocktaking-history-completed-row"
+            : "stocktaking-history-open-row"
       );
 
       appendTextCell(
@@ -818,6 +862,20 @@ function openStocktakingHistoryDetail(
     )
   );
 
+  if (session.cancelledAt) {
+    appendInfoRow(
+      infoBody,
+      "取消日時",
+      formatHistoryDateTime(
+        session.cancelledAt
+      )
+    );
+  }
+
+  updateStocktakingHistoryDetailActions(
+    session
+  );
+
   summary.innerHTML = `
     <p>
       対象商品：
@@ -863,6 +921,257 @@ function openStocktakingHistoryDetail(
   moveToStocktakingHistorySection(
     stocktakingHistoryDetailScreen
   );
+}
+
+function updateStocktakingHistoryDetailActions(
+  session
+) {
+  const cancelButton =
+    document.querySelector(
+      "#cancel-stocktaking-history-button"
+    );
+
+  const exportButton =
+    document.querySelector(
+      "#export-stocktaking-submission-button"
+    );
+
+  if (!cancelButton || !exportButton) {
+    return;
+  }
+
+  const isCancelled =
+    session.status === "取消" ||
+    session.status === "無効";
+
+  exportButton.disabled =
+    isCancelled;
+
+  cancelButton.hidden =
+    isCancelled;
+
+  cancelButton.disabled =
+    session.reflectedToInventory === true;
+
+  cancelButton.title =
+    session.reflectedToInventory === true
+      ? "現在庫へ反映済みの棚卸は、この画面から直接取り消せません。"
+      : "現在庫を変更せず、棚卸結果を取消状態にします。";
+}
+
+async function cancelCurrentStocktakingHistory() {
+  const session =
+    currentStocktakingHistoryDetailSession;
+
+  if (!session) {
+    alert(
+      "取り消す棚卸履歴が見つかりません。"
+    );
+
+    return;
+  }
+
+  if (
+    session.status === "取消" ||
+    session.status === "無効"
+  ) {
+    alert(
+      "この棚卸はすでに取り消されています。"
+    );
+
+    return;
+  }
+
+  if (session.reflectedToInventory === true) {
+    const message =
+      "この棚卸は現在庫へ反映済みです。\n\n" +
+      "履歴だけを取り消すと現在庫と履歴が合わなくなるため、この画面からは取り消せません。";
+
+    if (
+      typeof showStocktakingNotice ===
+      "function"
+    ) {
+      await showStocktakingNotice(
+        message,
+        {
+          title: "取り消しできません",
+          type: "warning",
+          icon: "⚠"
+        }
+      );
+    } else {
+      alert(message);
+    }
+
+    return;
+  }
+
+  const message =
+    "この棚卸を取り消しますか？\n\n" +
+    `棚卸日：${session.stocktakingDate || "記録なし"}\n` +
+    `担当者：${session.person || "未登録"}\n` +
+    `保管場所：${session.location || "未登録"}\n\n` +
+    "この棚卸は現在庫へ反映されていないため、現在庫は変更しません。\n" +
+    "棚卸履歴は『取消』として残します。\n" +
+    "同じ棚卸の取り込み済み提出データがある場合は、集約対象から外すため同時に削除します。";
+
+  let confirmed = false;
+
+  if (
+    typeof showStocktakingConfirm ===
+    "function"
+  ) {
+    confirmed =
+      await showStocktakingConfirm(
+        message,
+        {
+          title: "棚卸を取り消しますか？",
+          type: "danger",
+          icon: "✖",
+          confirmText: "この棚卸を取り消す",
+          cancelText: "戻る"
+        }
+      );
+  } else {
+    confirmed =
+      window.confirm(message);
+  }
+
+  if (!confirmed) {
+    return;
+  }
+
+  const cancelButton =
+    document.querySelector(
+      "#cancel-stocktaking-history-button"
+    );
+
+  if (cancelButton) {
+    cancelButton.disabled = true;
+  }
+
+  try {
+    const cancelledAt =
+      new Date().toISOString();
+
+    const cancelledSession = {
+      ...session,
+      status: "取消",
+      cancelledAt: cancelledAt,
+      updatedAt: cancelledAt,
+      reflectedToInventory: false
+    };
+
+    await updateStocktakingSession(
+      cancelledSession
+    );
+
+    const removedSubmissions =
+      await removeLinkedStocktakingSubmissions(
+        session.id
+      );
+
+    currentStocktakingHistoryDetailSession =
+      cancelledSession;
+
+    const resultMessage =
+      "棚卸を取り消しました。\n\n" +
+      "現在庫は変更していません。\n" +
+      (
+        removedSubmissions > 0
+          ? `集約用の取り込み済み提出データも ${removedSubmissions}件 削除しました。`
+          : "集約用の取り込み済み提出データはありませんでした。"
+      );
+
+    if (
+      typeof showStocktakingNotice ===
+      "function"
+    ) {
+      await showStocktakingNotice(
+        resultMessage,
+        {
+          title: "棚卸を取り消しました",
+          type: "success",
+          icon: "✓"
+        }
+      );
+    } else {
+      alert(resultMessage);
+    }
+
+    await openStocktakingHistoryScreen();
+  } catch (error) {
+    console.error(error);
+
+    const errorMessage =
+      "棚卸を取り消せませんでした。\n\n" +
+      "画面を更新して、もう一度お試しください。";
+
+    if (
+      typeof showStocktakingNotice ===
+      "function"
+    ) {
+      await showStocktakingNotice(
+        errorMessage,
+        {
+          title: "取り消しエラー",
+          type: "danger",
+          icon: "✖"
+        }
+      );
+    } else {
+      alert(errorMessage);
+    }
+
+    if (cancelButton) {
+      cancelButton.disabled = false;
+    }
+  }
+}
+
+async function removeLinkedStocktakingSubmissions(
+  sessionId
+) {
+  if (
+    typeof getAllStocktakingSubmissions !==
+      "function" ||
+    typeof deleteStocktakingSubmission !==
+      "function"
+  ) {
+    return 0;
+  }
+
+  const submissions =
+    await getAllStocktakingSubmissions();
+
+  const expectedSubmissionId =
+    `stocktaking-submission-${sessionId}`;
+
+  const targets =
+    submissions.filter(
+      function (submission) {
+        const sourceSessionId =
+          submission &&
+          submission.stocktaking
+            ? submission.stocktaking.sourceSessionId
+            : "";
+
+        return (
+          submission.submissionId ===
+            expectedSubmissionId ||
+          String(sourceSessionId || "") ===
+            String(sessionId || "")
+        );
+      }
+    );
+
+  for (const submission of targets) {
+    await deleteStocktakingSubmission(
+      submission.submissionId
+    );
+  }
+
+  return targets.length;
 }
 
 function displayStocktakingHistoryItems(
@@ -1297,6 +1606,13 @@ function formatItemDifference(
 function getReflectedText(
   session
 ) {
+  if (
+    session.status === "取消" ||
+    session.status === "無効"
+  ) {
+    return "取消済み";
+  }
+
   if (
     session.status !==
     "確定済み"

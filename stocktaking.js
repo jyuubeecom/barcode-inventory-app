@@ -6004,33 +6004,17 @@ function getStocktakingCounts() {
       currentStocktaking.location
     );
 
+  // v201: 棚卸場所に関係なく「実際に入力した商品」だけを確認済みとして扱う。
+  // 未入力の商品が内部的に0になっていても、確認済み・差異判定には含めない。
   const checkedItems =
     items.filter(
       function (item) {
-        return headquartersCountingMode
-          ? isStocktakingItemExplicitlyEntered(
-              item,
-              currentStocktaking
-            )
-          : item.actualStock !== "";
+        return isStocktakingItemExplicitlyEntered(
+          item,
+          currentStocktaking
+        );
       }
     );
-
-  if (headquartersCountingMode) {
-    return {
-      target: items.length,
-      checked: checkedItems.length,
-      unchecked:
-        items.length - checkedItems.length,
-      match: 0,
-      shortage: 0,
-      surplus: 0,
-      bulkZero:
-        items.filter(function (item) {
-          return item.bulkZeroApplied === true;
-        }).length
-    };
-  }
 
   return {
     target: items.length,
@@ -6038,19 +6022,25 @@ function getStocktakingCounts() {
     unchecked:
       items.length - checkedItems.length,
     match:
-      items.filter(function (item) {
-        return item.result === "差異なし";
-      }).length,
+      headquartersCountingMode
+        ? 0
+        : checkedItems.filter(function (item) {
+            return item.result === "差異なし";
+          }).length,
     shortage:
-      items.filter(function (item) {
-        return item.result === "在庫不足";
-      }).length,
+      headquartersCountingMode
+        ? 0
+        : checkedItems.filter(function (item) {
+            return item.result === "在庫不足";
+          }).length,
     surplus:
-      items.filter(function (item) {
-        return item.result === "在庫過剰";
-      }).length,
+      headquartersCountingMode
+        ? 0
+        : checkedItems.filter(function (item) {
+            return item.result === "在庫過剰";
+          }).length,
     bulkZero:
-      items.filter(function (item) {
+      checkedItems.filter(function (item) {
         return item.bulkZeroApplied === true;
       }).length
   };
@@ -7191,10 +7181,7 @@ async function handleConfirmStocktaking() {
       currentStocktaking.location
     );
 
-  if (
-    headquartersCountingMode &&
-    counts.checked === 0
-  ) {
+  if (counts.checked === 0) {
     showStocktakingNotice(
       "入力済みの商品がありません。\n\n" +
       "バーコード読取・社内コード検索・手入力などで、棚卸した商品を1件以上入力してから確定してください。"
@@ -7202,19 +7189,8 @@ async function handleConfirmStocktaking() {
     return;
   }
 
-  if (
-    !headquartersCountingMode &&
-    counts.unchecked > 0
-  ) {
-    showStocktakingNotice(
-      "未確認の商品が残っているため、棚卸を確定できません。\n\n" +
-      `未確認商品：${counts.unchecked}件\n\n` +
-      "すべての商品に実在庫を入力してください。"
-    );
-
-    focusFirstUncheckedItem();
-    return;
-  }
+  // v201: すべての保管場所で、未入力商品は0個扱いにせず確定可能にする。
+  // 0個を確認した商品は、数量欄へ0を手入力するか「一括0入力」を使う。
 
   const selectedReflectInput =
     document.querySelector(
@@ -7257,12 +7233,16 @@ async function handleConfirmStocktaking() {
         )
       : (
           "次の内容で棚卸を確定しますか？\n\n" +
-          `対象商品：${counts.target}件\n` +
-          `確認済み：${counts.checked}件\n` +
+          `登録商品：${counts.target}件\n` +
+          `今回入力済み：${counts.checked}件\n` +
+          `未入力：${counts.unchecked}件（0個扱いにせず、保存・反映対象外）\n` +
           `差異なし：${counts.match}件\n` +
           `在庫不足：${counts.shortage}件\n` +
           `在庫過剰：${counts.surplus}件\n` +
           `一括0入力：${counts.bulkZero}件\n\n` +
+          "入力した商品だけを棚卸結果として保存します。\n" +
+          "0個を確認した商品は数量欄へ0を入力してください。\n" +
+          "未入力の商品は現在庫を変更しません。\n\n" +
           `在庫処理：${reflectText}\n\n` +
           "確定後は、この棚卸を編集できません。"
         );
@@ -7290,6 +7270,17 @@ async function handleConfirmStocktaking() {
     const confirmedAt =
       new Date().toISOString();
 
+    // v201: 入力した商品だけを確定・保存・在庫反映の対象にする。
+    const itemsToConfirm =
+      currentStocktaking.items.filter(
+        function (item) {
+          return isStocktakingItemExplicitlyEntered(
+            item,
+            currentStocktaking
+          );
+        }
+      );
+
     const updatedProducts = [];
     const movements = [];
 
@@ -7315,7 +7306,7 @@ async function handleConfirmStocktaking() {
         currentStocktaking.locationStockVersion ===
         1;
 
-      currentStocktaking.items.forEach(
+      itemsToConfirm.forEach(
         function (item) {
           const product =
             productMap.get(
@@ -7403,7 +7394,7 @@ async function handleConfirmStocktaking() {
         return;
       }
 
-      currentStocktaking.items.forEach(
+      itemsToConfirm.forEach(
         function (item, index) {
           const product =
             productMap.get(
@@ -7599,16 +7590,7 @@ async function handleConfirmStocktaking() {
     }
 
     const completedItems =
-      headquartersCountingMode
-        ? currentStocktaking.items.filter(
-            function (item) {
-              return isStocktakingItemExplicitlyEntered(
-                item,
-                currentStocktaking
-              );
-            }
-          )
-        : currentStocktaking.items;
+      itemsToConfirm;
 
     const completedStocktaking = {
       ...currentStocktaking,
@@ -7618,23 +7600,10 @@ async function handleConfirmStocktaking() {
       updatedAt: confirmedAt,
       reflectedToInventory:
         reflectToInventory,
-      partialItemsOnly:
-        headquartersCountingMode,
-      explicitInputTrackingVersion:
-        headquartersCountingMode
-          ? 1
-          : (
-              currentStocktaking.explicitInputTrackingVersion ||
-              0
-            ),
-      originalTargetCount:
-        headquartersCountingMode
-          ? counts.target
-          : completedItems.length,
-      excludedUncheckedCount:
-        headquartersCountingMode
-          ? counts.unchecked
-          : 0
+      partialItemsOnly: true,
+      explicitInputTrackingVersion: 1,
+      originalTargetCount: counts.target,
+      excludedUncheckedCount: counts.unchecked
     };
 
     await completeStocktakingSession(

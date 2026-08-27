@@ -2811,7 +2811,7 @@ async function handleStocktakingStart(
     confirmedAt: "",
     reflectedToInventory: false,
     locationStockVersion: 1,
-    explicitInputTrackingVersion: 1,
+    explicitInputTrackingVersion: 2,
     items:
       createStocktakingItems(
         targetProducts,
@@ -3134,7 +3134,8 @@ function createInitialStocktakingLocationBreakdown(
             createStocktakingLocationEntryId(),
           location:
             entry.location || "",
-          quantity: ""
+          quantity: "",
+          quantityEnteredByUser: false
         };
       }
     );
@@ -3146,7 +3147,8 @@ function createInitialStocktakingLocationBreakdown(
         createStocktakingLocationEntryId(),
       location:
         fallbackLocation || "",
-      quantity: ""
+      quantity: "",
+      quantityEnteredByUser: false
     }
   ];
 }
@@ -3606,6 +3608,60 @@ function formatRegisteredStocktakingLocations(
     .join(" / ");
 }
 
+function isStocktakingStrictInputTrackingEnabled(
+  stocktaking
+) {
+  const targetStocktaking =
+    stocktaking ||
+    currentStocktaking;
+
+  return Boolean(
+    targetStocktaking &&
+    Number(
+      targetStocktaking.explicitInputTrackingVersion
+    ) >= 2
+  );
+}
+
+function hasStocktakingTouchedQuantity(item) {
+  if (!item) {
+    return false;
+  }
+
+  const entries =
+    Array.isArray(item.locationBreakdown)
+      ? item.locationBreakdown
+      : [];
+
+  return entries.some(function (entry) {
+    if (
+      !entry ||
+      entry.quantityEnteredByUser !== true
+    ) {
+      return false;
+    }
+
+    const quantityText =
+      String(
+        entry.quantity === undefined ||
+        entry.quantity === null
+          ? ""
+          : entry.quantity
+      ).trim();
+
+    if (quantityText === "") {
+      return false;
+    }
+
+    const quantity = Number(quantityText);
+
+    return (
+      Number.isInteger(quantity) &&
+      quantity >= 0
+    );
+  });
+}
+
 function hasStocktakingEnteredQuantity(item) {
   if (!item) {
     return false;
@@ -3647,16 +3703,22 @@ function isStocktakingItemExplicitlyEntered(
     return false;
   }
 
-  const trackingEnabled =
-    Boolean(
-      stocktaking &&
-      Number(
-        stocktaking.explicitInputTrackingVersion
-      ) >= 1
+  const trackingVersion =
+    stocktaking
+      ? Number(
+          stocktaking.explicitInputTrackingVersion
+        )
+      : 0;
+
+  if (trackingVersion >= 2) {
+    return (
+      item.bulkZeroApplied === true ||
+      hasStocktakingTouchedQuantity(item)
     );
+  }
 
   if (
-    trackingEnabled ||
+    trackingVersion >= 1 ||
     Object.prototype.hasOwnProperty.call(
       item,
       "enteredByUser"
@@ -3682,7 +3744,11 @@ function syncStocktakingItemEnteredFlag(item) {
 
   item.enteredByUser =
     item.bulkZeroApplied === true ||
-    hasStocktakingEnteredQuantity(item);
+    (
+      isStocktakingStrictInputTrackingEnabled()
+        ? hasStocktakingTouchedQuantity(item)
+        : hasStocktakingEnteredQuantity(item)
+    );
 }
 
 function normalizeStocktakingItem(item) {
@@ -3705,9 +3771,14 @@ function normalizeStocktakingItem(item) {
       item
     );
 
+  const strictInputTracking =
+    isStocktakingStrictInputTrackingEnabled();
+
   const actualStock =
     calculateStocktakingLocationTotal(
-      locationBreakdown
+      locationBreakdown,
+      strictInputTracking,
+      item.bulkZeroApplied === true
     );
 
   const difference =
@@ -3717,12 +3788,21 @@ function normalizeStocktakingItem(item) {
         registeredStock;
 
   const enteredByUser =
-    typeof item.enteredByUser ===
-      "boolean"
-      ? item.enteredByUser
-      : (
+    strictInputTracking
+      ? (
           item.bulkZeroApplied === true ||
-          actualStock !== ""
+          hasStocktakingTouchedQuantity({
+            locationBreakdown: locationBreakdown
+          })
+        )
+      : (
+          typeof item.enteredByUser ===
+            "boolean"
+            ? item.enteredByUser
+            : (
+                item.bulkZeroApplied === true ||
+                actualStock !== ""
+              )
         );
 
   return {
@@ -4904,7 +4984,8 @@ function createStocktakingItemRow(
         id:
           createStocktakingLocationEntryId(),
         location: "",
-        quantity: ""
+        quantity: "",
+        quantityEnteredByUser: false
       });
 
       renderStocktakingLocationEntries(
@@ -5016,7 +5097,8 @@ function renderStocktakingLocationEntries(
           item.location === "未登録"
             ? ""
             : item.location,
-        quantity: ""
+        quantity: "",
+        quantityEnteredByUser: false
       }
     ];
   }
@@ -5141,9 +5223,15 @@ function renderStocktakingLocationEntries(
         "数量";
 
       quantityInput.value =
-        entry.quantity === ""
+        isStocktakingStrictInputTrackingEnabled() &&
+        item.bulkZeroApplied !== true &&
+        entry.quantityEnteredByUser !== true
           ? ""
-          : entry.quantity;
+          : (
+              entry.quantity === ""
+                ? ""
+                : entry.quantity
+            );
 
       quantityInput.classList.add(
         "stocktaking-actual-input"
@@ -5219,6 +5307,8 @@ function renderStocktakingLocationEntries(
           clearStocktakingBulkZeroFlag(
             item
           );
+
+          entry.quantityEnteredByUser = true;
 
           entry.quantity =
             quantityInput.value.trim();
@@ -5344,7 +5434,9 @@ function refreshStocktakingItemFromLocations(
 ) {
   const actualStock =
     calculateStocktakingLocationTotal(
-      item.locationBreakdown
+      item.locationBreakdown,
+      isStocktakingStrictInputTrackingEnabled(),
+      item.bulkZeroApplied === true
     );
 
   item.actualStock =
@@ -5387,7 +5479,9 @@ function refreshStocktakingItemFromLocations(
 }
 
 function calculateStocktakingLocationTotal(
-  locationBreakdown
+  locationBreakdown,
+  requireExplicitTouch,
+  bulkZeroApplied
 ) {
   if (
     !Array.isArray(
@@ -5404,6 +5498,14 @@ function calculateStocktakingLocationTotal(
 
   locationBreakdown.forEach(
     function (entry) {
+      if (
+        requireExplicitTouch === true &&
+        bulkZeroApplied !== true &&
+        (!entry || entry.quantityEnteredByUser !== true)
+      ) {
+        return;
+      }
+
       const quantityText =
         String(
           entry.quantity ===
@@ -5504,7 +5606,10 @@ function normalizeStocktakingLocationBreakdown(
             ) &&
             quantity >= 0
               ? quantity
-              : ""
+              : "",
+          quantityEnteredByUser:
+            entry &&
+            entry.quantityEnteredByUser === true
         };
       }
     );
@@ -5516,7 +5621,8 @@ function normalizeStocktakingLocationBreakdown(
           id:
             createStocktakingLocationEntryId(),
           location: "",
-          quantity: ""
+          quantity: "",
+          quantityEnteredByUser: false
         }
       ];
 }
@@ -6350,7 +6456,8 @@ function applyBulkZeroToStocktakingItem(
         createStocktakingLocationEntryId(),
       location:
         bulkZeroLocation,
-      quantity: 0
+      quantity: 0,
+      quantityEnteredByUser: false
     }
   ];
 
@@ -6505,7 +6612,8 @@ async function handleUndoBulkZero() {
             createStocktakingLocationEntryId(),
           location:
             restoredLocation,
-          quantity: ""
+          quantity: "",
+          quantityEnteredByUser: false
         }
       ];
 
@@ -7189,7 +7297,7 @@ async function handleConfirmStocktaking() {
     return;
   }
 
-  // v201: すべての保管場所で、未入力商品は0個扱いにせず確定可能にする。
+  // v202: 数量欄を実際に操作した商品だけを入力済みとして扱う。
   // 0個を確認した商品は、数量欄へ0を手入力するか「一括0入力」を使う。
 
   const selectedReflectInput =
@@ -7270,7 +7378,7 @@ async function handleConfirmStocktaking() {
     const confirmedAt =
       new Date().toISOString();
 
-    // v201: 入力した商品だけを確定・保存・在庫反映の対象にする。
+    // v202: 数量欄を実際に操作した商品だけを確定・保存・在庫反映の対象にする。
     const itemsToConfirm =
       currentStocktaking.items.filter(
         function (item) {
@@ -7601,7 +7709,7 @@ async function handleConfirmStocktaking() {
       reflectedToInventory:
         reflectToInventory,
       partialItemsOnly: true,
-      explicitInputTrackingVersion: 1,
+      explicitInputTrackingVersion: 2,
       originalTargetCount: counts.target,
       excludedUncheckedCount: counts.unchecked
     };

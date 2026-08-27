@@ -53,12 +53,7 @@ const STOCKTAKING_LOCATION_OPTIONS =
     "本社1階 D区",
     "本社1階 E区",
     "本社1階 F区",
-    "本社2階 A区",
-    "本社2階 B区",
-    "本社2階 C区",
-    "本社2階 D区",
-    "本社2階 E区",
-    "本社2階 F区",
+    "本社2階",
     "酒本倉庫1階",
     "酒本倉庫2階"
   ]);
@@ -75,11 +70,16 @@ const STOCKTAKING_HEADQUARTERS_BASE_LOCATION =
 function isHeadquartersStocktakingLocation(
   location
 ) {
-  return /^本社[12]階\s*[A-Fa-f]区$/.test(
+  const text =
     String(location || "")
       .normalize("NFKC")
       .trim()
-      .replace(/[\s\u3000]+/g, " ")
+      .replace(/[\s\u3000]+/g, " ");
+
+  return (
+    /^本社1階\s*[A-Fa-f]区$/.test(text) ||
+    text === "本社2階" ||
+    /^本社2階\s*[A-Fa-f]区$/.test(text)
   );
 }
 
@@ -3395,7 +3395,7 @@ async function showActiveStocktaking(
       )
     ) {
       stocktakingNotice.textContent =
-        `「${currentStocktaking.location}」は本社の区画棚卸です。ここでは実在庫を数えて保存します。区画ごとの結果を集約すると、本社1階A～F区・本社2階A～F区を合計して「本社」の在庫へ反映できます。`;
+        `「${currentStocktaking.location}」は本社の区画棚卸です。ここでは実在庫を数えて保存します。区画ごとの結果を集約すると、本社1階A～F区と本社2階を合計して「本社」の在庫へ反映できます。`;
     } else {
       stocktakingNotice.textContent =
         `「${currentStocktaking.location}」の場所別在庫を棚卸します。この棚卸を確定した場合、この保管場所の在庫だけを実在庫へ置き換え、ほかの保管場所の在庫は変更しません。`;
@@ -3488,7 +3488,7 @@ async function showActiveStocktaking(
       }
 
       modeNote.textContent =
-        "本社区画は単独では現在庫へ反映しません。各区画を確定後、棚卸提出データの集約で「本社」へ合算して反映してください。";
+        "本社の棚卸区分は単独では現在庫へ反映しません。本社1階A～F区と本社2階を確定後、棚卸提出データの集約で「本社」へ合算して反映してください。";
     } else if (modeNote) {
       modeNote.remove();
     }
@@ -7085,7 +7085,7 @@ async function handleConfirmStocktaking() {
     )
   ) {
     showStocktakingNotice(
-      "本社1階・本社2階の区画棚卸は、区画ごとの数量を保存してから合算して「本社」在庫へ反映します。\n\nこの棚卸では「棚卸結果だけを保存し、現在庫は変更しない」を選んで確定してください。"
+      "本社1階A～F区と本社2階の棚卸は、各区分の数量を保存してから合算して「本社」在庫へ反映します。\n\nこの棚卸では「棚卸結果だけを保存し、現在庫は変更しない」を選んで確定してください。"
     );
     return;
   }

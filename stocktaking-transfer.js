@@ -319,7 +319,6 @@ function createStocktakingAggregationScreen() {
           <table class="stocktaking-aggregation-result-table">
             <thead>
               <tr>
-                <th>棚卸日</th>
                 <th>結果</th>
                 <th>社内コード</th>
                 <th>商品コード</th>
@@ -327,16 +326,12 @@ function createStocktakingAggregationScreen() {
                 <th>登録在庫</th>
                 <th>集約実在庫</th>
                 <th>差異</th>
-                <th>保管場所別内訳</th>
-                <th>担当者</th>
-                <th>提出数</th>
-                <th>警告</th>
               </tr>
             </thead>
 
             <tbody id="stocktaking-aggregation-body">
               <tr>
-                <td colspan="12">
+                <td colspan="7">
                   提出ファイルを取り込むと集約結果が表示されます。
                 </td>
               </tr>
@@ -790,7 +785,7 @@ function createStocktakingAggregationStyle() {
 
     .stocktaking-aggregation-table-area {
       width: 100%;
-      overflow-x: auto;
+      overflow-x: visible;
       margin: 14px 0;
       border-radius: 8px;
     }
@@ -804,7 +799,67 @@ function createStocktakingAggregationStyle() {
     }
 
     .stocktaking-aggregation-result-table {
-      min-width: 1550px;
+      width: 100%;
+      min-width: 0;
+      table-layout: fixed;
+    }
+
+    .stocktaking-aggregation-result-table th:nth-child(1),
+    .stocktaking-aggregation-result-table td:nth-child(1) {
+      width: 10%;
+    }
+
+    .stocktaking-aggregation-result-table th:nth-child(2),
+    .stocktaking-aggregation-result-table td:nth-child(2) {
+      width: 12%;
+    }
+
+    .stocktaking-aggregation-result-table th:nth-child(3),
+    .stocktaking-aggregation-result-table td:nth-child(3) {
+      width: 13%;
+    }
+
+    .stocktaking-aggregation-result-table th:nth-child(4),
+    .stocktaking-aggregation-result-table td:nth-child(4) {
+      width: 29%;
+    }
+
+    .stocktaking-aggregation-result-table th:nth-child(5),
+    .stocktaking-aggregation-result-table td:nth-child(5),
+    .stocktaking-aggregation-result-table th:nth-child(6),
+    .stocktaking-aggregation-result-table td:nth-child(6),
+    .stocktaking-aggregation-result-table th:nth-child(7),
+    .stocktaking-aggregation-result-table td:nth-child(7) {
+      width: 12%;
+      text-align: right;
+    }
+
+    .stocktaking-aggregation-result-table td {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .stocktaking-aggregation-detail-row td {
+      padding: 8px 10px 12px;
+      border-top: 0;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .stocktaking-aggregation-detail {
+      display: grid;
+      gap: 5px;
+    }
+
+    .stocktaking-aggregation-detail strong {
+      color: #37474f;
+    }
+
+    .stocktaking-aggregation-location-breakdown {
+      padding: 7px 9px;
+      border-radius: 7px;
+      background-color: rgba(255, 255, 255, 0.72);
+      overflow-wrap: anywhere;
     }
 
     .stocktaking-reflection-preview-table {
@@ -2138,6 +2193,60 @@ function updateStocktakingAggregationResults() {
   loadExistingStocktakingReflectionForCurrentSelection();
 }
 
+function normalizeStocktakingAggregationLocationName(
+  location
+) {
+  const text = String(location || "")
+    .normalize("NFKC")
+    .trim()
+    .replace(/[\s\u3000]+/g, " ");
+
+  if (/^本社2階\s*[A-Fa-f]区$/.test(text)) {
+    return "本社2階";
+  }
+
+  return text;
+}
+
+function isLegacySecondFloorStocktakingZone(
+  location
+) {
+  return /^本社2階\s*[A-Fa-f]区$/.test(
+    String(location || "")
+      .normalize("NFKC")
+      .trim()
+      .replace(/[\s\u3000]+/g, " ")
+  );
+}
+
+function getResolvedStocktakingObservationQuantity(
+  observations
+) {
+  const quantities =
+    Array.from(
+      new Set(
+        (Array.isArray(observations) ? observations : [])
+          .map(function (observation) {
+            return observation.quantity;
+          })
+      )
+    );
+
+  if (quantities.length !== 1) {
+    return {
+      ok: false,
+      quantity: null,
+      quantities: quantities
+    };
+  }
+
+  return {
+    ok: true,
+    quantity: quantities[0],
+    quantities: quantities
+  };
+}
+
 function buildStocktakingAggregationRows(
   submissions
 ) {
@@ -2272,9 +2381,17 @@ function buildStocktakingAggregationRows(
 
           locationEntries.forEach(
             function (entry) {
+              const sourceEntryLocation =
+                String(entry.location || "").trim();
+
+              const aggregationLocation =
+                normalizeStocktakingAggregationLocationName(
+                  sourceEntryLocation
+                );
+
               const locationKey =
                 normalizeTransferText(
-                  entry.location
+                  aggregationLocation
                 );
 
               if (!group.locations.has(locationKey)) {
@@ -2282,7 +2399,7 @@ function buildStocktakingAggregationRows(
                   locationKey,
                   {
                     location:
-                      entry.location,
+                      aggregationLocation,
                     observations: []
                   }
                 );
@@ -2301,6 +2418,8 @@ function buildStocktakingAggregationRows(
                   sourceLocation:
                     stocktaking.location ||
                     "場所未登録",
+                  sourceEntryLocation:
+                    sourceEntryLocation,
                   bulkZeroApplied:
                     item.bulkZeroApplied ===
                     true
@@ -2387,19 +2506,170 @@ function buildStocktakingAggregationRows(
             );
           }
 
-          const quantities =
-            Array.from(
-              new Set(
-                locationGroup.observations.map(
-                  function (observation) {
-                    return observation.quantity;
-                  }
-                )
-              )
+          if (
+            normalizeTransferText(
+              locationGroup.location
+            ) === "本社2階"
+          ) {
+            const directObservations =
+              locationGroup.observations.filter(
+                function (observation) {
+                  return (
+                    normalizeTransferText(
+                      observation.sourceEntryLocation
+                    ) === "本社2階"
+                  );
+                }
+              );
+
+            const legacyObservations =
+              locationGroup.observations.filter(
+                function (observation) {
+                  return isLegacySecondFloorStocktakingZone(
+                    observation.sourceEntryLocation
+                  );
+                }
+              );
+
+            if (
+              directObservations.length > 0 &&
+              legacyObservations.length > 0
+            ) {
+              hasLocationConflict = true;
+              locationBreakdownTexts.push(
+                "本社2階：新旧の棚卸区分が混在（要確認）"
+              );
+              warnings.push(
+                "本社2階の提出に「本社2階」と旧区分（本社2階A～F区）が混在しています。重複集計を防ぐため確認してください。"
+              );
+              return;
+            }
+
+            if (directObservations.length > 0) {
+              const resolved =
+                getResolvedStocktakingObservationQuantity(
+                  directObservations
+                );
+
+              if (!resolved.ok) {
+                hasLocationConflict = true;
+                locationBreakdownTexts.push(
+                  `本社2階：${resolved.quantities
+                    .map(function (quantity) {
+                      return `${quantity}個`;
+                    })
+                    .join(" / ")}（要確認）`
+                );
+                warnings.push(
+                  "保管場所「本社2階」の数量が一致しません。"
+                );
+                return;
+              }
+
+              actualStockTotal += resolved.quantity;
+              hasActualStock = true;
+
+              locationBreakdownTexts.push(
+                `本社2階：${resolved.quantity}個`
+              );
+
+              locationBreakdownEntries.push({
+                location: "本社2階",
+                quantity: resolved.quantity,
+                sourceLocations: ["本社2階"]
+              });
+
+              if (directObservations.length > 1) {
+                warnings.push(
+                  `保管場所「本社2階」が複数の提出に含まれています。同数のため1件分だけ集計しました。`
+                );
+              }
+
+              return;
+            }
+
+            const legacyZoneGroups = new Map();
+
+            legacyObservations.forEach(
+              function (observation) {
+                const zone =
+                  String(
+                    observation.sourceEntryLocation || ""
+                  )
+                    .normalize("NFKC")
+                    .trim()
+                    .replace(/[\s\u3000]+/g, " ");
+
+                if (!legacyZoneGroups.has(zone)) {
+                  legacyZoneGroups.set(zone, []);
+                }
+
+                legacyZoneGroups.get(zone).push(observation);
+              }
             );
 
-          if (quantities.length === 1) {
-            const quantity = quantities[0];
+            let secondFloorTotal = 0;
+            let secondFloorConflict = false;
+            const sourceLocations = [];
+
+            legacyZoneGroups.forEach(
+              function (observations, zone) {
+                const resolved =
+                  getResolvedStocktakingObservationQuantity(
+                    observations
+                  );
+
+                sourceLocations.push(zone);
+
+                if (!resolved.ok) {
+                  secondFloorConflict = true;
+                  warnings.push(
+                    `旧保管場所「${zone}」の数量が一致しません。`
+                  );
+                  return;
+                }
+
+                secondFloorTotal += resolved.quantity;
+
+                if (observations.length > 1) {
+                  warnings.push(
+                    `旧保管場所「${zone}」が複数の提出に含まれています。同数のため1件分だけ集計しました。`
+                  );
+                }
+              }
+            );
+
+            if (secondFloorConflict) {
+              hasLocationConflict = true;
+              locationBreakdownTexts.push(
+                "本社2階：旧区分の数量に不一致あり（要確認）"
+              );
+              return;
+            }
+
+            actualStockTotal += secondFloorTotal;
+            hasActualStock = true;
+
+            locationBreakdownTexts.push(
+              `本社2階：${secondFloorTotal}個`
+            );
+
+            locationBreakdownEntries.push({
+              location: "本社2階",
+              quantity: secondFloorTotal,
+              sourceLocations: sourceLocations.sort()
+            });
+
+            return;
+          }
+
+          const resolved =
+            getResolvedStocktakingObservationQuantity(
+              locationGroup.observations
+            );
+
+          if (resolved.ok) {
+            const quantity = resolved.quantity;
 
             actualStockTotal += quantity;
             hasActualStock = true;
@@ -2424,7 +2694,8 @@ function buildStocktakingAggregationRows(
 
             locationBreakdownEntries.push({
               location: locationGroup.location,
-              quantity: quantity
+              quantity: quantity,
+              sourceLocations: [locationGroup.location]
             });
 
             return;
@@ -2433,7 +2704,7 @@ function buildStocktakingAggregationRows(
           hasLocationConflict = true;
 
           const quantityText =
-            quantities
+            resolved.quantities
               .map(function (quantity) {
                 return `${quantity}個`;
               })
@@ -2653,7 +2924,7 @@ function renderStocktakingAggregationRows(
   if (rows.length === 0) {
     stocktakingAggregationBody.innerHTML = `
       <tr>
-        <td colspan="12">
+        <td colspan="7">
           集約できる提出データがありません。
         </td>
       </tr>
@@ -2680,29 +2951,23 @@ function renderStocktakingAggregationRows(
       const row =
         document.createElement("tr");
 
+      let resultClass =
+        "stocktaking-transfer-valid";
+
       if (
         resultRow.result === "要確認" ||
         resultRow.result === "未確認"
       ) {
-        row.classList.add(
-          "stocktaking-transfer-warning"
-        );
+        resultClass =
+          "stocktaking-transfer-warning";
       } else if (
         resultRow.result === "在庫不足"
       ) {
-        row.classList.add(
-          "stocktaking-transfer-error"
-        );
-      } else {
-        row.classList.add(
-          "stocktaking-transfer-valid"
-        );
+        resultClass =
+          "stocktaking-transfer-error";
       }
 
-      appendTransferCell(
-        row,
-        resultRow.stocktakingDate
-      );
+      row.classList.add(resultClass);
 
       appendTransferResultCell(
         row,
@@ -2749,30 +3014,54 @@ function renderStocktakingAggregationRows(
         )
       );
 
-      appendTransferCell(
-        row,
-        resultRow.locationBreakdown ||
-        "未確認"
-      );
-
-      appendTransferCell(
-        row,
-        resultRow.people
-      );
-
-      appendTransferCell(
-        row,
-        `${resultRow.submissionCount}件`
-      );
-
-      appendTransferCell(
-        row,
-        resultRow.warnings ||
-        "なし"
-      );
-
       stocktakingAggregationBody.appendChild(
         row
+      );
+
+      const detailRow =
+        document.createElement("tr");
+
+      detailRow.classList.add(
+        resultClass,
+        "stocktaking-aggregation-detail-row"
+      );
+
+      const detailCell =
+        document.createElement("td");
+
+      detailCell.colSpan = 7;
+
+      const locationText =
+        resultRow.locationBreakdown ||
+        "未確認";
+
+      detailCell.innerHTML = `
+        <div class="stocktaking-aggregation-detail">
+          <div>
+            <strong>棚卸日：</strong>
+            ${escapeTransferHtml(resultRow.stocktakingDate || "未登録")}
+            &nbsp;&nbsp;
+            <strong>担当者：</strong>
+            ${escapeTransferHtml(resultRow.people || "未登録")}
+            &nbsp;&nbsp;
+            <strong>提出：</strong>
+            ${escapeTransferHtml(`${resultRow.submissionCount}件`)}
+          </div>
+          <div class="stocktaking-aggregation-location-breakdown">
+            <strong>区画別内訳：</strong>
+            ${escapeTransferHtml(locationText)}
+          </div>
+          ${
+            resultRow.warnings
+              ? `<div><strong>警告：</strong>${escapeTransferHtml(resultRow.warnings)}</div>`
+              : ""
+          }
+        </div>
+      `;
+
+      detailRow.appendChild(detailCell);
+      stocktakingAggregationBody.appendChild(
+        detailRow
       );
     }
   );
@@ -3159,6 +3448,10 @@ const STOCKTAKING_REFLECTION_HEADQUARTERS_ZONES = [
   "本社1階 D区",
   "本社1階 E区",
   "本社1階 F区",
+  "本社2階"
+];
+
+const STOCKTAKING_REFLECTION_LEGACY_SECOND_FLOOR_ZONES = [
   "本社2階 A区",
   "本社2階 B区",
   "本社2階 C区",
@@ -3168,32 +3461,88 @@ const STOCKTAKING_REFLECTION_HEADQUARTERS_ZONES = [
 ];
 
 function getMissingHeadquartersStocktakingZones(entries) {
-  const normalized = new Set(
+  const normalizedEntries =
     normalizeStocktakingReflectionLocationEntries(entries)
       .map(function (entry) {
-        return String(entry.location || "")
-          .normalize("NFKC")
-          .trim()
-          .replace(/[\s\u3000]+/g, " ");
-      })
+        return {
+          location:
+            String(entry.location || "")
+              .normalize("NFKC")
+              .trim()
+              .replace(/[\s\u3000]+/g, " "),
+          sourceLocations:
+            Array.isArray(entry.sourceLocations)
+              ? entry.sourceLocations.map(function (location) {
+                  return String(location || "")
+                    .normalize("NFKC")
+                    .trim()
+                    .replace(/[\s\u3000]+/g, " ");
+                })
+              : []
+        };
+      });
+
+  const normalized = new Set(
+    normalizedEntries.map(function (entry) {
+      return entry.location;
+    })
   );
 
   const hasAnyHeadquartersZone =
-    STOCKTAKING_REFLECTION_HEADQUARTERS_ZONES.some(
-      function (zone) {
-        return normalized.has(zone);
-      }
-    );
+    normalizedEntries.some(function (entry) {
+      return (
+        /^本社1階\s*[A-Fa-f]区$/.test(entry.location) ||
+        entry.location === "本社2階" ||
+        /^本社2階\s*[A-Fa-f]区$/.test(entry.location)
+      );
+    });
 
   if (!hasAnyHeadquartersZone) {
     return [];
   }
 
-  return STOCKTAKING_REFLECTION_HEADQUARTERS_ZONES.filter(
-    function (zone) {
-      return !normalized.has(zone);
+  const missing =
+    STOCKTAKING_REFLECTION_HEADQUARTERS_ZONES
+      .slice(0, 6)
+      .filter(function (zone) {
+        return !normalized.has(zone);
+      });
+
+  const secondFloorEntry =
+    normalizedEntries.find(function (entry) {
+      return entry.location === "本社2階";
+    });
+
+  let hasSecondFloor = false;
+
+  if (secondFloorEntry) {
+    if (
+      secondFloorEntry.sourceLocations.length === 0 ||
+      secondFloorEntry.sourceLocations.includes("本社2階")
+    ) {
+      hasSecondFloor = true;
+    } else {
+      hasSecondFloor =
+        STOCKTAKING_REFLECTION_LEGACY_SECOND_FLOOR_ZONES
+          .every(function (zone) {
+            return secondFloorEntry.sourceLocations.includes(zone);
+          });
     }
-  );
+  } else {
+    const legacyPresent =
+      STOCKTAKING_REFLECTION_LEGACY_SECOND_FLOOR_ZONES
+        .every(function (zone) {
+          return normalized.has(zone);
+        });
+
+    hasSecondFloor = legacyPresent;
+  }
+
+  if (!hasSecondFloor) {
+    missing.push("本社2階");
+  }
+
+  return missing;
 }
 
 function getStocktakingReflectionBaseLocation(location) {
@@ -3202,7 +3551,11 @@ function getStocktakingReflectionBaseLocation(location) {
     .trim()
     .replace(/[\s\u3000]+/g, " ");
 
-  if (/^本社[12]階\s*[A-Fa-f]区$/.test(text)) {
+  if (
+    /^本社1階\s*[A-Fa-f]区$/.test(text) ||
+    text === "本社2階" ||
+    /^本社2階\s*[A-Fa-f]区$/.test(text)
+  ) {
     return "本社";
   }
 
@@ -3236,7 +3589,11 @@ function normalizeStocktakingReflectionLocationEntries(entries) {
 
       return {
         location: location,
-        quantity: quantity
+        quantity: quantity,
+        sourceLocations:
+          Array.isArray(entry && entry.sourceLocations)
+            ? entry.sourceLocations.slice()
+            : []
       };
     })
     .filter(Boolean);
@@ -3364,7 +3721,7 @@ function createStocktakingReflectionPreviewRow(
 
   if (missingHeadquartersZones.length > 0) {
     blockers.push(
-      "本社の棚卸を反映するには、本社1階A～F区・本社2階A～F区の12区画すべての提出が必要です。未取込：" +
+      "本社の棚卸を反映するには、本社1階A～F区と本社2階の7区分すべての提出が必要です。未取込：" +
       missingHeadquartersZones.join(" / ")
     );
   }
@@ -4452,6 +4809,15 @@ function sanitizeTransferFileNamePart(value) {
       .replace(/\s+/g, "_");
 
   return text || "未登録";
+}
+
+function escapeTransferHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function normalizeTransferText(value) {

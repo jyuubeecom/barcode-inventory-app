@@ -1174,7 +1174,10 @@ async function exportStocktakingSubmission(
 
   const checkedItems =
     items.filter(function (item) {
-      return isTransferItemChecked(item);
+      return isTransferItemExplicitlyEntered(
+        item,
+        session
+      );
     });
 
   const uncheckedCount =
@@ -1239,6 +1242,10 @@ async function exportStocktakingSubmission(
           createTransferSubmissionItem
         ),
       partialItemsOnly: true,
+      explicitInputTrackingVersion:
+        Number(session.explicitInputTrackingVersion) >= 1
+          ? Number(session.explicitInputTrackingVersion)
+          : 0,
       originalTargetCount:
         Number.isInteger(
           Number(session.originalTargetCount)
@@ -1319,6 +1326,8 @@ function createTransferSubmissionItem(item) {
         : null,
     result:
       String(item.result || "未確認"),
+    enteredByUser:
+      item.enteredByUser === true,
     bulkZeroApplied:
       item.bulkZeroApplied === true,
     bulkZeroAppliedAt:
@@ -4700,6 +4709,38 @@ function normalizeTransferLocationBreakdown(
     .filter(function (entry) {
       return entry !== null;
     });
+}
+
+function isTransferItemExplicitlyEntered(
+  item,
+  session
+) {
+  if (!item) {
+    return false;
+  }
+
+  const trackingEnabled =
+    Boolean(
+      session &&
+      Number(
+        session.explicitInputTrackingVersion
+      ) >= 1
+    );
+
+  if (
+    trackingEnabled ||
+    Object.prototype.hasOwnProperty.call(
+      item,
+      "enteredByUser"
+    )
+  ) {
+    return (
+      item.enteredByUser === true ||
+      item.bulkZeroApplied === true
+    );
+  }
+
+  return isTransferItemChecked(item);
 }
 
 function isTransferItemChecked(item) {

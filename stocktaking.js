@@ -2811,6 +2811,7 @@ async function handleStocktakingStart(
     confirmedAt: "",
     reflectedToInventory: false,
     locationStockVersion: 1,
+    explicitInputTrackingVersion: 1,
     items:
       createStocktakingItems(
         targetProducts,
@@ -3296,6 +3297,7 @@ function createStocktakingItems(
         result: "未確認",
         memo: "",
         checkedAt: "",
+        enteredByUser: false,
         bulkZeroApplied: false,
         bulkZeroAppliedAt: ""
       };
@@ -3604,6 +3606,85 @@ function formatRegisteredStocktakingLocations(
     .join(" / ");
 }
 
+function hasStocktakingEnteredQuantity(item) {
+  if (!item) {
+    return false;
+  }
+
+  const entries =
+    Array.isArray(item.locationBreakdown)
+      ? item.locationBreakdown
+      : [];
+
+  return entries.some(function (entry) {
+    const quantityText =
+      String(
+        entry &&
+        entry.quantity !== undefined &&
+        entry.quantity !== null
+          ? entry.quantity
+          : ""
+      ).trim();
+
+    if (quantityText === "") {
+      return false;
+    }
+
+    const quantity = Number(quantityText);
+
+    return (
+      Number.isInteger(quantity) &&
+      quantity >= 0
+    );
+  });
+}
+
+function isStocktakingItemExplicitlyEntered(
+  item,
+  stocktaking
+) {
+  if (!item) {
+    return false;
+  }
+
+  const trackingEnabled =
+    Boolean(
+      stocktaking &&
+      Number(
+        stocktaking.explicitInputTrackingVersion
+      ) >= 1
+    );
+
+  if (
+    trackingEnabled ||
+    Object.prototype.hasOwnProperty.call(
+      item,
+      "enteredByUser"
+    )
+  ) {
+    return (
+      item.enteredByUser === true ||
+      item.bulkZeroApplied === true
+    );
+  }
+
+  return !(
+    item.actualStock === "" ||
+    item.actualStock === null ||
+    item.actualStock === undefined
+  );
+}
+
+function syncStocktakingItemEnteredFlag(item) {
+  if (!item) {
+    return;
+  }
+
+  item.enteredByUser =
+    item.bulkZeroApplied === true ||
+    hasStocktakingEnteredQuantity(item);
+}
+
 function normalizeStocktakingItem(item) {
   const registeredLocationBreakdown =
     normalizeRegisteredStocktakingLocationBreakdown(
@@ -3634,6 +3715,15 @@ function normalizeStocktakingItem(item) {
       ? null
       : actualStock -
         registeredStock;
+
+  const enteredByUser =
+    typeof item.enteredByUser ===
+      "boolean"
+      ? item.enteredByUser
+      : (
+          item.bulkZeroApplied === true ||
+          actualStock !== ""
+        );
 
   return {
     internalCode:
@@ -3675,6 +3765,8 @@ function normalizeStocktakingItem(item) {
             item.checkedAt ||
             new Date().toISOString()
           ),
+    enteredByUser:
+      enteredByUser,
     bulkZeroApplied:
       actualStock !== "" &&
       item.bulkZeroApplied === true,
@@ -5105,6 +5197,10 @@ function renderStocktakingLocationEntries(
             item
           );
 
+          syncStocktakingItemEnteredFlag(
+            item
+          );
+
           updateStocktakingLocationDisplay(
             item,
             row,
@@ -5128,6 +5224,10 @@ function renderStocktakingLocationEntries(
             quantityInput.value.trim();
 
           refreshStocktakingItemFromLocations(
+            item
+          );
+
+          syncStocktakingItemEnteredFlag(
             item
           );
 
@@ -5169,6 +5269,10 @@ function renderStocktakingLocationEntries(
             );
 
           refreshStocktakingItemFromLocations(
+            item
+          );
+
+          syncStocktakingItemEnteredFlag(
             item
           );
 
@@ -5894,19 +5998,22 @@ function getStocktakingCounts() {
       ? currentStocktaking.items
       : [];
 
-  const checkedItems =
-    items.filter(
-      function (item) {
-        return (
-          item.actualStock !== ""
-        );
-      }
-    );
-
   const headquartersCountingMode =
     currentStocktaking &&
     isHeadquartersStocktakingLocation(
       currentStocktaking.location
+    );
+
+  const checkedItems =
+    items.filter(
+      function (item) {
+        return headquartersCountingMode
+          ? isStocktakingItemExplicitlyEntered(
+              item,
+              currentStocktaking
+            )
+          : item.actualStock !== "";
+      }
     );
 
   if (headquartersCountingMode) {
@@ -6216,12 +6323,15 @@ function getBulkZeroEligibleItems() {
 
   return currentStocktaking.items.filter(
     function (item) {
-      if (item.actualStock !== "") {
-        return false;
+      if (headquartersCountingMode) {
+        return !isStocktakingItemExplicitlyEntered(
+          item,
+          currentStocktaking
+        );
       }
 
-      if (headquartersCountingMode) {
-        return true;
+      if (item.actualStock !== "") {
+        return false;
       }
 
       return (
@@ -6260,6 +6370,7 @@ function applyBulkZeroToStocktakingItem(
 
   item.bulkZeroApplied = true;
   item.bulkZeroAppliedAt = appliedAt;
+  item.enteredByUser = true;
 
   return true;
 }
@@ -6415,6 +6526,10 @@ async function handleUndoBulkZero() {
       refreshStocktakingItemFromLocations(
         item
       );
+
+      syncStocktakingItemEnteredFlag(
+        item
+      );
     }
   );
 
@@ -6450,9 +6565,22 @@ async function handleStocktakingCardSaveAction(
   saveAndScanButton,
   saveAndTopButton
 ) {
+  const headquartersCountingMode =
+    currentStocktaking &&
+    isHeadquartersStocktakingLocation(
+      currentStocktaking.location
+    );
+
   if (
     !item ||
-    item.actualStock === ""
+    (
+      headquartersCountingMode
+        ? !isStocktakingItemExplicitlyEntered(
+            item,
+            currentStocktaking
+          )
+        : item.actualStock === ""
+    )
   ) {
     showStocktakingNotice(
       "この商品の数量を入力してください。\n\n" +
@@ -7474,7 +7602,10 @@ async function handleConfirmStocktaking() {
       headquartersCountingMode
         ? currentStocktaking.items.filter(
             function (item) {
-              return item.actualStock !== "";
+              return isStocktakingItemExplicitlyEntered(
+                item,
+                currentStocktaking
+              );
             }
           )
         : currentStocktaking.items;
@@ -7489,6 +7620,13 @@ async function handleConfirmStocktaking() {
         reflectToInventory,
       partialItemsOnly:
         headquartersCountingMode,
+      explicitInputTrackingVersion:
+        headquartersCountingMode
+          ? 1
+          : (
+              currentStocktaking.explicitInputTrackingVersion ||
+              0
+            ),
       originalTargetCount:
         headquartersCountingMode
           ? counts.target
@@ -9381,7 +9519,17 @@ function filterStocktakingItems() {
             if (filterType === "unchecked") {
               filterMatches =
                 Boolean(item) &&
-                item.actualStock === "";
+                (
+                  currentStocktaking &&
+                  isHeadquartersStocktakingLocation(
+                    currentStocktaking.location
+                  )
+                    ? !isStocktakingItemExplicitlyEntered(
+                        item,
+                        currentStocktaking
+                      )
+                    : item.actualStock === ""
+                );
             } else if (
               filterType === "bulk-zero"
             ) {
@@ -9534,7 +9682,17 @@ function focusFirstUncheckedItem() {
   const uncheckedItem =
     currentStocktaking.items.find(
       function (item) {
-        return item.actualStock === "";
+        return (
+          currentStocktaking &&
+          isHeadquartersStocktakingLocation(
+            currentStocktaking.location
+          )
+            ? !isStocktakingItemExplicitlyEntered(
+                item,
+                currentStocktaking
+              )
+            : item.actualStock === ""
+        );
       }
     );
 

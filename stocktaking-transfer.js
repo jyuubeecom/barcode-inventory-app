@@ -1172,17 +1172,28 @@ async function exportStocktakingSubmission(
       ? session.items
       : [];
 
-  const uncheckedCount =
+  const checkedItems =
     items.filter(function (item) {
-      return !isTransferItemChecked(item);
-    }).length;
+      return isTransferItemChecked(item);
+    });
+
+  const uncheckedCount =
+    items.length - checkedItems.length;
+
+  if (checkedItems.length === 0) {
+    alert(
+      "入力済みの商品がないため、提出ファイルを作成できません。"
+    );
+    return;
+  }
 
   if (uncheckedCount > 0) {
     const continueExport =
       window.confirm(
-        "未確認の商品が残っています。\n\n" +
+        "未確認の商品は提出ファイルに含めません。\n\n" +
+        `入力済み：${checkedItems.length}件\n` +
         `未確認：${uncheckedCount}件\n\n` +
-        "このまま提出ファイルを出力しますか？"
+        "入力済みの商品だけで提出ファイルを出力しますか？"
       );
 
     if (!continueExport) {
@@ -1224,8 +1235,24 @@ async function exportStocktakingSubmission(
         session.reflectedToInventory ===
         true,
       items:
-        items.map(
+        checkedItems.map(
           createTransferSubmissionItem
+        ),
+      partialItemsOnly: true,
+      originalTargetCount:
+        Number.isInteger(
+          Number(session.originalTargetCount)
+        )
+          ? Number(session.originalTargetCount)
+          : items.length,
+      excludedUncheckedCount:
+        Math.max(
+          0,
+          Number.isInteger(
+            Number(session.excludedUncheckedCount)
+          )
+            ? Number(session.excludedUncheckedCount)
+            : uncheckedCount
         )
     }
   };

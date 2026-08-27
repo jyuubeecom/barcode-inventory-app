@@ -7058,7 +7058,26 @@ async function handleConfirmStocktaking() {
   const counts =
     getStocktakingCounts();
 
-  if (counts.unchecked > 0) {
+  const headquartersCountingMode =
+    isHeadquartersStocktakingLocation(
+      currentStocktaking.location
+    );
+
+  if (
+    headquartersCountingMode &&
+    counts.checked === 0
+  ) {
+    showStocktakingNotice(
+      "入力済みの商品がありません。\n\n" +
+      "バーコード読取・社内コード検索・手入力などで、棚卸した商品を1件以上入力してから確定してください。"
+    );
+    return;
+  }
+
+  if (
+    !headquartersCountingMode &&
+    counts.unchecked > 0
+  ) {
     showStocktakingNotice(
       "未確認の商品が残っているため、棚卸を確定できません。\n\n" +
       `未確認商品：${counts.unchecked}件\n\n` +
@@ -7096,15 +7115,29 @@ async function handleConfirmStocktaking() {
       : "現在庫は変更しない";
 
   const confirmationMessage =
-    "次の内容で棚卸を確定しますか？\n\n" +
-    `対象商品：${counts.target}件\n` +
-    `確認済み：${counts.checked}件\n` +
-    `差異なし：${counts.match}件\n` +
-    `在庫不足：${counts.shortage}件\n` +
-    `在庫過剰：${counts.surplus}件\n` +
-    `一括0入力：${counts.bulkZero}件\n\n` +
-    `在庫処理：${reflectText}\n\n` +
-    "確定後は、この棚卸を編集できません。";
+    headquartersCountingMode
+      ? (
+          "次の内容で本社区画の棚卸を確定しますか？\n\n" +
+          `登録商品：${counts.target}件\n` +
+          `今回入力済み：${counts.checked}件\n` +
+          `未入力：${counts.unchecked}件（0個扱いにせず、提出・集約対象外）\n` +
+          `一括0入力：${counts.bulkZero}件\n\n` +
+          "入力した商品だけを棚卸結果として保存します。\n" +
+          "未入力の商品は現在庫を変更しません。\n\n" +
+          `在庫処理：${reflectText}\n\n` +
+          "確定後は、この棚卸を編集できません。"
+        )
+      : (
+          "次の内容で棚卸を確定しますか？\n\n" +
+          `対象商品：${counts.target}件\n` +
+          `確認済み：${counts.checked}件\n` +
+          `差異なし：${counts.match}件\n` +
+          `在庫不足：${counts.shortage}件\n` +
+          `在庫過剰：${counts.surplus}件\n` +
+          `一括0入力：${counts.bulkZero}件\n\n` +
+          `在庫処理：${reflectText}\n\n` +
+          "確定後は、この棚卸を編集できません。"
+        );
 
   const isConfirmed =
     await showStocktakingConfirm(
@@ -7437,13 +7470,33 @@ async function handleConfirmStocktaking() {
       );
     }
 
+    const completedItems =
+      headquartersCountingMode
+        ? currentStocktaking.items.filter(
+            function (item) {
+              return item.actualStock !== "";
+            }
+          )
+        : currentStocktaking.items;
+
     const completedStocktaking = {
       ...currentStocktaking,
+      items: completedItems,
       status: "確定済み",
       confirmedAt: confirmedAt,
       updatedAt: confirmedAt,
       reflectedToInventory:
-        reflectToInventory
+        reflectToInventory,
+      partialItemsOnly:
+        headquartersCountingMode,
+      originalTargetCount:
+        headquartersCountingMode
+          ? counts.target
+          : completedItems.length,
+      excludedUncheckedCount:
+        headquartersCountingMode
+          ? counts.unchecked
+          : 0
     };
 
     await completeStocktakingSession(

@@ -94,7 +94,19 @@ async function refreshPurchaseRequiredData() {
     const batches = result[3];
 
     const context = buildPurchaseRequiredDateContext(new Date());
-    const actualByProduct = aggregatePurchaseActuals(actuals, context.actualMonthKeys);
+    const normalCalculation =
+      window.normalShipmentCalculator &&
+      typeof window.normalShipmentCalculator.calculateRange === "function"
+        ? window.normalShipmentCalculator.calculateRange(
+            actuals,
+            plans,
+            context.actualStartDate,
+            context.actualEndDate
+          )
+        : null;
+    const actualByProduct = normalCalculation
+      ? null
+      : aggregatePurchaseActuals(actuals, context.actualMonthKeys);
     const planByProduct = aggregatePurchasePlans(plans, context.forecastStartDate, context.forecastEndDate);
     const coverage = calculatePurchaseActualCoverage(batches, context.actualStartDate, context.actualEndDate);
 
@@ -102,8 +114,19 @@ async function refreshPurchaseRequiredData() {
       .filter(function (product) { return !isPurchaseDiscontinuedProduct(product); })
       .map(function (product) {
         const internalCode = String(product.internalCode || "").trim();
-        const sixMonthSales = actualByProduct.get(internalCode) || 0;
-        const monthlyAverage = Math.ceil(sixMonthSales / 6);
+        const normalSummary = normalCalculation
+          ? window.normalShipmentCalculator.getProductSummary(normalCalculation, internalCode)
+          : null;
+        const grossSixMonthSales = normalSummary
+          ? Number(normalSummary.totalShipment || 0)
+          : Number(actualByProduct.get(internalCode) || 0);
+        const plannedShipmentExcluded = normalSummary
+          ? Number(normalSummary.plannedShipment || 0)
+          : 0;
+        const sixMonthSales = normalSummary
+          ? Math.max(0, Number(normalSummary.normalShipment || 0))
+          : Math.max(0, grossSixMonthSales);
+        const monthlyAverage = Math.max(0, Math.ceil(sixMonthSales / 6));
         const threeMonthBase = monthlyAverage * 3;
         const plannedQuantity = planByProduct.get(internalCode) || 0;
         const requiredStockRaw = threeMonthBase + plannedQuantity;
@@ -132,6 +155,8 @@ async function refreshPurchaseRequiredData() {
             currentStock +
             orderRemaining,
           currentShortage: currentShortage,
+          grossSixMonthSales: grossSixMonthSales,
+          plannedShipmentExcluded: plannedShipmentExcluded,
           sixMonthSales: sixMonthSales,
           monthlyAverage: monthlyAverage,
           threeMonthBase: threeMonthBase,
@@ -408,7 +433,7 @@ function renderPurchaseRequiredSummary() {
   const backorderCount = purchaseRequiredRows.filter(function (row) { return row.isBackorder; }).length;
   summary.innerHTML = `
     <strong>判定日：</strong>${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.evaluationDate))}<br>
-    <strong>平均販売数：</strong>${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.actualStartDate))} ～ ${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.actualEndDate))} の6か月平均<br>
+    <strong>平均通常出荷数：</strong>${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.actualStartDate))} ～ ${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.actualEndDate))} の通常出荷数量から6か月平均<br>
     <strong>販売予定：</strong>${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.forecastStartDate))} ～ ${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.forecastEndDate))}<br>
     <strong>発注必要：</strong>${requiredRows.length.toLocaleString("ja-JP")}商品 /
     <strong>発注済み：</strong>${orderedRows.length.toLocaleString("ja-JP")}商品 /
@@ -644,7 +669,7 @@ function renderPurchaseRequiredTable() {
           </div>
 
           <div class="purchase-required-metric">
-            <span>月平均販売数</span>
+            <span>月平均通常出荷</span>
             <strong>
               ${formatPurchaseWholeNumber(item.monthlyAverage)}個
             </strong>
@@ -674,8 +699,15 @@ function renderPurchaseRequiredTable() {
 
         <div class="purchase-required-item-sub">
           <span>
-            6か月販売数：
+            6か月通常出荷：
             <strong>${formatPurchaseQuantity(item.sixMonthSales)}個</strong>
+          </span>
+
+          <span>
+            総出荷：
+            <strong>${formatPurchaseQuantity(item.grossSixMonthSales)}個</strong>
+            / 販売予定分：
+            <strong>${formatPurchaseQuantity(item.plannedShipmentExcluded)}個</strong>
           </span>
 
           <span>

@@ -388,6 +388,8 @@ async function searchNaturalMonthlyAverage(
     typeof getAllProducts !==
       "function" ||
     typeof getAllSalesActuals !==
+      "function" ||
+    typeof getAllSalesPlans !==
       "function"
   ) {
     status.textContent =
@@ -406,11 +408,13 @@ async function searchNaturalMonthlyAverage(
     const data =
       await Promise.all([
         getAllProducts(),
-        getAllSalesActuals()
+        getAllSalesActuals(),
+        getAllSalesPlans()
       ]);
 
     const products = data[0];
     const actuals = data[1];
+    const plans = data[2];
 
     // 「251BK 月平均」のような入力では、
     // 「月平均」などの質問語を除いた商品検索語だけで商品を探します。
@@ -446,6 +450,7 @@ async function searchNaturalMonthlyAverage(
         result,
         matches,
         actuals,
+        plans,
         status
       );
       return;
@@ -454,7 +459,8 @@ async function searchNaturalMonthlyAverage(
     renderNaturalMonthlyAverageAnswer(
       result,
       matches[0],
-      actuals
+      actuals,
+      plans
     );
     status.textContent =
       "月平均を計算しました。";
@@ -542,6 +548,7 @@ function buildNaturalMonthlySalesDisplayContext(
 function calculateNaturalMonthlyAverage(
   product,
   actuals,
+  plans,
   today
 ) {
   const averageContext =
@@ -561,6 +568,139 @@ function calculateNaturalMonthlyAverage(
         ""
     ).trim();
 
+  if (
+    window.normalShipmentCalculator &&
+    typeof window.normalShipmentCalculator.calculateRange === "function" &&
+    displayContext.monthKeys.length > 0
+  ) {
+    const displayStartDate =
+      `${displayContext.monthKeys[0]}-01`;
+    const displayEndDate =
+      getNaturalMonthlyLastDate(
+        displayContext.monthKeys[
+          displayContext.monthKeys.length - 1
+        ]
+      );
+
+    const calculation =
+      window.normalShipmentCalculator.calculateRange(
+        actuals,
+        plans,
+        displayStartDate,
+        displayEndDate
+      );
+
+    const monthlyRows =
+      displayContext.monthKeys.map(
+        function (monthKey) {
+          const summary =
+            window.normalShipmentCalculator.getProductMonthSummary(
+              calculation,
+              internalCode,
+              monthKey
+            );
+
+          return {
+            monthKey: monthKey,
+            quantity: Math.max(
+              0,
+              Number(
+                summary.normalShipment ||
+                  0
+              )
+            ),
+            totalShipment: Number(
+              summary.totalShipment ||
+                0
+            ),
+            plannedShipment: Number(
+              summary.plannedShipment ||
+                0
+            )
+          };
+        }
+      );
+
+    const averageMonthKeySet =
+      new Set(
+        averageContext.monthKeys
+      );
+
+    const averageRows =
+      monthlyRows.filter(
+        function (row) {
+          return averageMonthKeySet.has(
+            row.monthKey
+          );
+        }
+      );
+
+    const sixMonthTotal =
+      averageRows.reduce(
+        function (sum, row) {
+          return sum +
+            Number(
+              row.quantity || 0
+            );
+        },
+        0
+      );
+
+    const grossSixMonthTotal =
+      averageRows.reduce(
+        function (sum, row) {
+          return sum +
+            Number(
+              row.totalShipment || 0
+            );
+        },
+        0
+      );
+
+    const excludedQuantity =
+      averageRows.reduce(
+        function (sum, row) {
+          return sum +
+            Number(
+              row.plannedShipment || 0
+            );
+        },
+        0
+      );
+
+    return {
+      startMonth:
+        averageContext.startMonth,
+      endMonth:
+        averageContext.endMonth,
+      displayStartMonth:
+        displayContext.startMonth,
+      displayEndMonth:
+        displayContext.endMonth,
+      monthlyRows: monthlyRows,
+      sixMonthTotal:
+        Math.max(
+          0,
+          sixMonthTotal
+        ),
+      grossSixMonthTotal:
+        grossSixMonthTotal,
+      monthlyAverage:
+        Math.max(
+          0,
+          Math.ceil(
+            sixMonthTotal / 6
+          )
+        ),
+      excludedCount:
+        excludedQuantity > 0
+          ? 1
+          : 0,
+      excludedQuantity:
+        excludedQuantity
+    };
+  }
+
   const displayMonthTotals =
     new Map(
       displayContext.monthKeys.map(
@@ -569,14 +709,6 @@ function calculateNaturalMonthlyAverage(
         }
       )
     );
-
-  const averageMonthKeySet =
-    new Set(
-      averageContext.monthKeys
-    );
-
-  let excludedCount = 0;
-  let excludedQuantity = 0;
 
   (Array.isArray(actuals)
     ? actuals
@@ -634,23 +766,6 @@ function calculateNaturalMonthlyAverage(
         return;
       }
 
-      if (
-        isNaturalMonthlyAverageExcludedCustomer(
-          record &&
-            record.customerName
-        )
-      ) {
-        if (
-          averageMonthKeySet.has(
-            monthKey
-          )
-        ) {
-          excludedCount += 1;
-          excludedQuantity += quantity;
-        }
-        return;
-      }
-
       displayMonthTotals.set(
         monthKey,
         (displayMonthTotals.get(
@@ -666,9 +781,17 @@ function calculateNaturalMonthlyAverage(
         return {
           monthKey: monthKey,
           quantity:
+            Math.max(
+              0,
+              displayMonthTotals.get(
+                monthKey
+              ) || 0
+            ),
+          totalShipment:
             displayMonthTotals.get(
               monthKey
-            ) || 0
+            ) || 0,
+          plannedShipment: 0
         };
       }
     );
@@ -677,9 +800,12 @@ function calculateNaturalMonthlyAverage(
     averageContext.monthKeys.reduce(
       function (sum, monthKey) {
         return sum +
-          (displayMonthTotals.get(
-            monthKey
-          ) || 0);
+          Math.max(
+            0,
+            displayMonthTotals.get(
+              monthKey
+            ) || 0
+          );
       },
       0
     );
@@ -695,6 +821,7 @@ function calculateNaturalMonthlyAverage(
       displayContext.endMonth,
     monthlyRows: monthlyRows,
     sixMonthTotal: sixMonthTotal,
+    grossSixMonthTotal: sixMonthTotal,
     monthlyAverage:
       Math.max(
         0,
@@ -702,10 +829,31 @@ function calculateNaturalMonthlyAverage(
           sixMonthTotal / 6
         )
       ),
-    excludedCount: excludedCount,
-    excludedQuantity:
-      excludedQuantity
+    excludedCount: 0,
+    excludedQuantity: 0
   };
+}
+
+function getNaturalMonthlyLastDate(
+  monthKey
+) {
+  const match =
+    /^(\d{4})-(\d{2})$/.exec(
+      String(monthKey || "")
+    );
+
+  if (!match) {
+    return "";
+  }
+
+  const lastDay =
+    new Date(
+      Number(match[1]),
+      Number(match[2]),
+      0
+    ).getDate();
+
+  return `${match[1]}-${match[2]}-${String(lastDay).padStart(2, "0")}`;
 }
 
 function normalizeNaturalMonthlyAverageCustomer(
@@ -756,7 +904,8 @@ function formatNaturalMonthlyAverageMonth(
 function renderNaturalMonthlyAverageAnswer(
   container,
   product,
-  actuals
+  actuals,
+  plans
 ) {
   container.innerHTML = "";
 
@@ -764,6 +913,7 @@ function renderNaturalMonthlyAverageAnswer(
     calculateNaturalMonthlyAverage(
       product,
       actuals,
+      plans,
       new Date()
     );
 
@@ -799,7 +949,7 @@ function renderNaturalMonthlyAverageAnswer(
     "この商品";
 
   answer.textContent =
-    `${displayCode}の月平均は${calculation.monthlyAverage.toLocaleString("ja-JP")}${unit}／月です。`;
+    `${displayCode}の月平均通常出荷は${calculation.monthlyAverage.toLocaleString("ja-JP")}${unit}／月です。`;
 
   const summary =
     document.createElement("div");
@@ -819,12 +969,20 @@ function renderNaturalMonthlyAverageAnswer(
         "未登録"
     ],
     [
-      "月平均",
+      "月平均通常出荷",
       `${calculation.monthlyAverage.toLocaleString("ja-JP")}${unit}／月`
     ],
     [
-      "6か月合計",
+      "6か月通常出荷",
       `${calculation.sixMonthTotal.toLocaleString("ja-JP")}${unit}`
+    ],
+    [
+      "6か月総出荷",
+      `${Number(calculation.grossSixMonthTotal || 0).toLocaleString("ja-JP")}${unit}`
+    ],
+    [
+      "販売予定分を除外",
+      `${Number(calculation.excludedQuantity || 0).toLocaleString("ja-JP")}${unit}`
     ]
   ].forEach(
     function (entry) {
@@ -913,7 +1071,7 @@ function renderNaturalMonthlyAverageAnswer(
     "natural-monthly-average-note";
 
   note.textContent =
-    "計算方法：前月までの直近6か月の販売実績合計 ÷ 6（端数切り上げ）。「株式会社 後　藤」「清水産業 株式会社」の販売実績は除外しています。";
+    "計算方法：前月までの直近6か月の販売実績から、同じ商品・取引先・出荷時期に登録されている販売予定分を除いた『通常出荷数量』÷ 6（端数切り上げ）です。";
 
   if (
     calculation.excludedCount > 0
@@ -925,7 +1083,7 @@ function renderNaturalMonthlyAverageAnswer(
       "natural-monthly-average-excluded";
 
     excluded.textContent =
-      `今回の対象期間では、除外取引先の販売実績 ${calculation.excludedCount.toLocaleString("ja-JP")}件・数量 ${calculation.excludedQuantity.toLocaleString("ja-JP")}${unit} を計算から除外しました。`;
+      `今回の対象期間では、販売予定として照合できた ${calculation.excludedQuantity.toLocaleString("ja-JP")}${unit} を通常出荷数量から除外しました。`;
 
     card.appendChild(heading);
     card.appendChild(answer);
@@ -956,6 +1114,7 @@ function renderNaturalMonthlyAverageCandidates(
   container,
   products,
   actuals,
+  plans,
   statusElement
 ) {
   container.innerHTML = "";
@@ -1007,7 +1166,8 @@ function renderNaturalMonthlyAverageCandidates(
             renderNaturalMonthlyAverageAnswer(
               container,
               product,
-              actuals
+              actuals,
+              plans
             );
 
             if (statusElement) {

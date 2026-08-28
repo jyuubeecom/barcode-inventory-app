@@ -88,14 +88,28 @@ async function refreshLowShipmentData() {
     const result = await Promise.all([
       getAllProducts(),
       getAllSalesActuals(),
+      getAllSalesPlans(),
       getAllSalesImportBatches()
     ]);
     const products = result[0];
     const actuals = result[1];
-    const batches = result[2];
+    const plans = result[2];
+    const batches = result[3];
 
     const context = buildLowShipmentDateContext(new Date());
-    const actualByProduct = aggregateLowShipmentActuals(actuals, context.actualMonthKeys);
+    const normalCalculation =
+      window.normalShipmentCalculator &&
+      typeof window.normalShipmentCalculator.calculateRange === "function"
+        ? window.normalShipmentCalculator.calculateRange(
+            actuals,
+            plans,
+            context.actualStartDate,
+            context.actualEndDate
+          )
+        : null;
+    const actualByProduct = normalCalculation
+      ? null
+      : aggregateLowShipmentActuals(actuals, context.actualMonthKeys);
     const coverage = calculateLowShipmentActualCoverage(batches, context.actualStartDate, context.actualEndDate);
 
     const activeProducts = products.filter(function (product) {
@@ -105,7 +119,18 @@ async function refreshLowShipmentData() {
     lowShipmentRows = activeProducts
       .map(function (product) {
         const internalCode = String(product.internalCode || "").trim();
-        const sixMonthSales = actualByProduct.get(internalCode) || 0;
+        const normalSummary = normalCalculation
+          ? window.normalShipmentCalculator.getProductSummary(normalCalculation, internalCode)
+          : null;
+        const grossSixMonthSales = normalSummary
+          ? Number(normalSummary.totalShipment || 0)
+          : Number(actualByProduct.get(internalCode) || 0);
+        const plannedShipmentExcluded = normalSummary
+          ? Number(normalSummary.plannedShipment || 0)
+          : 0;
+        const sixMonthSales = normalSummary
+          ? Math.max(0, Number(normalSummary.normalShipment || 0))
+          : Math.max(0, grossSixMonthSales);
         const monthlyAverage = Math.max(0, Math.ceil(sixMonthSales / 6));
         const currentStock = getLowShipmentStockNumber(product.stock);
         const noSales = monthlyAverage <= 0;
@@ -118,6 +143,8 @@ async function refreshLowShipmentData() {
           productCode: product.productCode || "",
           productName: product.productName || "",
           currentStock: currentStock,
+          grossSixMonthSales: grossSixMonthSales,
+          plannedShipmentExcluded: plannedShipmentExcluded,
           sixMonthSales: sixMonthSales,
           monthlyAverage: monthlyAverage,
           stockMonths: stockMonths,
@@ -245,7 +272,7 @@ function renderLowShipmentSummary() {
 
   summary.innerHTML = `
     <strong>判定日：</strong>${escapeLowShipmentHtml(formatLowShipmentDisplayDate(lowShipmentContext.evaluationDate))}<br>
-    <strong>平均販売数：</strong>${escapeLowShipmentHtml(formatLowShipmentDisplayDate(lowShipmentContext.actualStartDate))} ～ ${escapeLowShipmentHtml(formatLowShipmentDisplayDate(lowShipmentContext.actualEndDate))} の6か月平均（返品差引後・小数切り上げ）<br>
+    <strong>平均通常出荷数：</strong>${escapeLowShipmentHtml(formatLowShipmentDisplayDate(lowShipmentContext.actualStartDate))} ～ ${escapeLowShipmentHtml(formatLowShipmentDisplayDate(lowShipmentContext.actualEndDate))} の6か月平均（販売予定分を除外・小数切り上げ）<br>
     <strong>判定基準：</strong>現在庫が月平均販売数の24か月分以上<br>
     <strong>出荷低迷：</strong>${lowShipmentRows.length.toLocaleString("ja-JP")}商品
     （2年以上分 ${lowShipmentContext.overTwoYearsCount.toLocaleString("ja-JP")}商品 / 販売実績なし ${lowShipmentContext.noSalesCount.toLocaleString("ja-JP")}商品）

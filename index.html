@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v205
+            画面版 v206
           </span>
         </div>
       </div>
@@ -289,7 +289,7 @@
           </summary>
 
           <p class="home-panel-description">
-            販売予定、発注判定、発注残、出荷低迷、船便スケジュールを管理します。
+            販売予定、通常出荷数量、発注判定、発注残、出荷低迷、船便スケジュールを管理します。
           </p>
 
           <div
@@ -315,6 +315,13 @@
               type="button"
             >
               販売実績CSVを読み込む
+            </button>
+
+            <button
+              id="show-normal-shipment-button"
+              type="button"
+            >
+              通常出荷数量を見る
             </button>
 
             <button
@@ -891,13 +898,88 @@
       <button id="back-home-from-sales-actual" type="button">ホームへ戻る</button>
     </section>
 
+    <!-- 通常出荷数量 -->
+    <section id="normal-shipment" hidden>
+      <h2>通常出荷数量</h2>
+
+      <p>
+        販売実績CSVの出荷数量から、販売予定として登録していた出荷分を除いて、普段の出荷分だけを計算します。<br>
+        「通常出荷数量」は、発注が必要な商品一覧や出荷低迷判定の月平均にも使用します。
+      </p>
+
+      <div class="normal-shipment-card">
+        <div id="normal-shipment-summary" class="normal-shipment-summary">
+          通常出荷数量を計算します。
+        </div>
+
+        <div class="normal-shipment-note">
+          <strong>計算方法</strong><br>
+          通常出荷数量 ＝ 総出荷数量（返品差引後）－ 販売予定として照合できた数量<br>
+          販売予定は「同じ商品・同じ取引先・出荷日または出荷期間」が一致した実績と照合します。<br>
+          取引先名の「株式会社」などの表記差や空白は無視して照合します。<br>
+          <strong>注意：</strong>過去の販売予定を削除すると、その予定分は通常出荷から除外できなくなるため、出荷済みの販売予定は残しておいてください。
+        </div>
+
+        <p>
+          <button id="refresh-normal-shipment-button" type="button">最新データで再計算する</button>
+        </p>
+      </div>
+
+      <div id="normal-shipment-list-area" class="normal-shipment-card">
+        <div class="normal-shipment-filter-row">
+          <div>
+            <label for="normal-shipment-search">商品を検索</label>
+            <input id="normal-shipment-search" type="search" placeholder="社内コード・商品コード・商品名・保管場所">
+          </div>
+
+          <div>
+            <label for="normal-shipment-filter">表示内容</label>
+            <select id="normal-shipment-filter">
+              <option value="all">すべての商品</option>
+              <option value="normal">通常出荷あり</option>
+              <option value="planned">販売予定分あり</option>
+              <option value="actual">出荷実績あり</option>
+            </select>
+          </div>
+
+          <strong id="normal-shipment-filter-count">表示：0商品</strong>
+        </div>
+
+        <div class="normal-shipment-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>社内コード</th>
+                <th>商品コード</th>
+                <th>商品名</th>
+                <th>6か月総出荷</th>
+                <th>販売予定分</th>
+                <th>6か月通常出荷</th>
+                <th>月平均通常出荷</th>
+              </tr>
+            </thead>
+            <tbody id="normal-shipment-table-body"></tbody>
+          </table>
+        </div>
+
+        <div class="normal-shipment-pager">
+          <button id="normal-shipment-prev-page" type="button">前へ</button>
+          <strong id="normal-shipment-page-status">1 / 1ページ</strong>
+          <button id="normal-shipment-next-page" type="button">次へ</button>
+        </div>
+      </div>
+
+      <button id="back-home-from-normal-shipment" type="button">ホームへ戻る</button>
+    </section>
+
     <!-- 発注が必要な商品一覧 -->
     <section id="purchase-required" hidden>
       <h2>発注が必要な商品一覧</h2>
 
       <p>
-        「前月までの直近6か月の月平均販売数 × 3か月 ＋ 今後3か月の販売予定数」
+        「前月までの直近6か月の月平均通常出荷数 × 3か月 ＋ 今後3か月の販売予定数」
         を必要数として、現在庫と発注残数を差し引いて追加発注が必要か判定します。<br>
+        月平均通常出荷数は、販売実績から販売予定として照合できた数量を除いて計算します。<br>
         現在庫だけでは不足する商品を「発注必要」「発注済み」に振り分けます。廃盤・廃盤予定・専用商品は対象外です。
       </p>
 
@@ -1244,9 +1326,9 @@
       <h2>出荷低迷商品の一覧</h2>
 
       <p>
-        前月までの直近6か月の販売実績（返品差引後）から月平均販売数を計算し、
+        前月までの直近6か月の販売実績から販売予定分を除いた「通常出荷数量」で月平均を計算し、
         現在庫が24か月分以上ある商品を自動表示します。
-        6か月の月平均販売数が0個で在庫が残っている商品は「販売実績なし」として表示します。
+        6か月の月平均通常出荷数が0個で在庫が残っている商品は「販売実績なし」として表示します。
         廃盤商品は対象外です。
       </p>
 
@@ -1285,8 +1367,8 @@
                 <th>商品コード</th>
                 <th>商品名</th>
                 <th>現在庫</th>
-                <th>6か月販売数（返品差引後）</th>
-                <th>月平均販売数</th>
+                <th>6か月通常出荷</th>
+                <th>月平均通常出荷</th>
                 <th>在庫月数</th>
                 <th>保管場所</th>
                 <th>判定</th>
@@ -3233,8 +3315,9 @@
   </main>
 
 <script src="storage.js?v=195"></script>
+<script src="normal-shipment.js?v=206"></script>
 <script src="app.js?v=196"></script>
-<script src="natural-stock-search.js?v=191"></script>
+<script src="natural-stock-search.js?v=206"></script>
 <script src="product-history.js?v=107"></script>
 <script src="inventory.js?v=195"></script>
 <script src="transfer-list.js?v=195"></script>
@@ -3250,9 +3333,9 @@
 <script src="pwa.js?v=31"></script>
 <script src="sales-plan.js?v=176"></script>
 <script src="sales-actual.js?v=195"></script>
-<script src="purchase-required.js?v=140"></script>
+<script src="purchase-required.js?v=206"></script>
 <script src="order-remaining.js?v=120"></script>
-<script src="low-shipment.js?v=45"></script>
+<script src="low-shipment.js?v=206"></script>
 <script src="shipping-schedule.js?v=195"></script>
 <script src="dedicated-product.js?v=108"></script>
 <script src="shipping-arrival.js?v=118"></script>

@@ -2,10 +2,14 @@
 
 (function () {
   const LOCATION_OPTIONS = ["本社", "酒本倉庫1階", "酒本倉庫2階"];
+  const AUTO_SUGGEST_MIN_LENGTH = 2;
+  const AUTO_SUGGEST_LIMIT = 10;
+  const AUTO_SUGGEST_DELAY = 120;
 
   let products = [];
   let sourceProduct = null;
   let targetProduct = null;
+  const suggestTimers = { source: null, target: null };
 
   document.addEventListener("DOMContentLoaded", initializeProcessingConversion);
 
@@ -32,18 +36,8 @@
       void searchProducts("target");
     });
 
-    document.querySelector("#processing-source-search")?.addEventListener("keydown", function (event) {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        void searchProducts("source");
-      }
-    });
-    document.querySelector("#processing-target-search")?.addEventListener("keydown", function (event) {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        void searchProducts("target");
-      }
-    });
+    setupPredictiveSearch("source");
+    setupPredictiveSearch("target");
 
     document.querySelector("#processing-source-location")?.addEventListener("change", updateSourceLocationStock);
     document.querySelector("#processing-target-location")?.addEventListener("change", updateTargetLocationStock);
@@ -94,6 +88,156 @@
     const now = new Date();
     const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
     input.value = local.toISOString().slice(0, 10);
+  }
+
+
+  function setupPredictiveSearch(role) {
+    const input = document.querySelector(`#processing-${role}-search`);
+    if (!input) return;
+
+    input.setAttribute("autocomplete", "off");
+    input.setAttribute("aria-autocomplete", "list");
+
+    input.addEventListener("input", function () {
+      clearSelectedProductIfSearchChanged(role);
+
+      if (suggestTimers[role]) {
+        window.clearTimeout(suggestTimers[role]);
+      }
+
+      const query = normalizeSearchText(input.value);
+      if (query.length < AUTO_SUGGEST_MIN_LENGTH) {
+        hideCandidates(role);
+        return;
+      }
+
+      suggestTimers[role] = window.setTimeout(function () {
+        void showPredictiveSuggestions(role);
+      }, AUTO_SUGGEST_DELAY);
+    });
+
+    input.addEventListener("focus", function () {
+      const query = normalizeSearchText(input.value);
+      if (query.length >= AUTO_SUGGEST_MIN_LENGTH) {
+        void showPredictiveSuggestions(role);
+      }
+    });
+
+    input.addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void searchProducts(role);
+        return;
+      }
+
+      if (event.key === "Escape") {
+        hideCandidates(role);
+      }
+    });
+  }
+
+  function clearSelectedProductIfSearchChanged(role) {
+    const selectedProduct = role === "source" ? sourceProduct : targetProduct;
+    if (!selectedProduct) return;
+
+    const input = document.querySelector(`#processing-${role}-search`);
+    const current = normalizeSearchText(input?.value);
+    const selectedValues = [
+      selectedProduct.internalCode,
+      selectedProduct.productCode,
+      selectedProduct.productName
+    ].map(normalizeSearchText).filter(Boolean);
+
+    if (selectedValues.includes(current)) return;
+
+    if (role === "source") {
+      sourceProduct = null;
+    } else {
+      targetProduct = null;
+    }
+
+    const selectedArea = document.querySelector(`#processing-${role}-selected`);
+    if (selectedArea) selectedArea.hidden = true;
+
+    setText(`#processing-${role}-internal-code`, "-");
+    setText(`#processing-${role}-product-code`, "-");
+    setText(`#processing-${role}-product-name`, "-");
+    setText(`#processing-${role}-color`, "-");
+    setText(`#processing-${role}-total-stock`, "0個");
+
+    const stockOutput = document.querySelector(`#processing-${role}-location-stock`);
+    if (stockOutput) stockOutput.value = "0個";
+
+    updateDifference();
+  }
+
+  async function showPredictiveSuggestions(role) {
+    if (products.length === 0) await refreshProducts();
+
+    const input = document.querySelector(`#processing-${role}-search`);
+    const query = normalizeSearchText(input?.value);
+
+    if (query.length < AUTO_SUGGEST_MIN_LENGTH) {
+      hideCandidates(role);
+      return;
+    }
+
+    const matches = getPredictiveMatches(query).slice(0, AUTO_SUGGEST_LIMIT);
+    if (!matches.length) {
+      hideCandidates(role);
+      return;
+    }
+
+    renderCandidates(role, matches, {
+      title: `予測候補：${matches.length}商品`,
+      isPredictive: true
+    });
+  }
+
+  function getPredictiveMatches(query) {
+    return products
+      .map(function (product, index) {
+        const internalCode = normalizeSearchText(product.internalCode);
+        const productCode = normalizeSearchText(product.productCode);
+        const productName = normalizeSearchText(product.productName);
+
+        let score = Number.POSITIVE_INFINITY;
+
+        if (internalCode === query || productCode === query) {
+          score = 0;
+        } else if (internalCode.startsWith(query) || productCode.startsWith(query)) {
+          score = 1;
+        } else if (productName.startsWith(query)) {
+          score = 2;
+        } else if (internalCode.includes(query) || productCode.includes(query)) {
+          score = 3;
+        } else if (productName.includes(query)) {
+          score = 4;
+        }
+
+        return { product: product, score: score, index: index };
+      })
+      .filter(function (entry) {
+        return Number.isFinite(entry.score);
+      })
+      .sort(function (a, b) {
+        if (a.score !== b.score) return a.score - b.score;
+
+        const aCode = String(a.product.productCode || a.product.internalCode || "");
+        const bCode = String(b.product.productCode || b.product.internalCode || "");
+        const codeCompare = aCode.localeCompare(bCode, "ja", { numeric: true, sensitivity: "base" });
+        return codeCompare || a.index - b.index;
+      })
+      .map(function (entry) {
+        return entry.product;
+      });
+  }
+
+  function hideCandidates(role) {
+    const area = document.querySelector(`#processing-${role}-candidates`);
+    if (!area) return;
+    area.innerHTML = "";
+    area.hidden = true;
   }
 
   function normalizeSearchText(value) {
@@ -160,7 +304,7 @@
     renderCandidates(role, matches);
   }
 
-  function renderCandidates(role, matches) {
+  function renderCandidates(role, matches, options) {
     const area = document.querySelector(`#processing-${role}-candidates`);
     if (!area) return;
 
@@ -172,8 +316,14 @@
     }
 
     const title = document.createElement("strong");
-    title.textContent = `候補：${matches.length}商品（該当商品を選んでください）`;
+    title.textContent = options?.title || `候補：${matches.length}商品（該当商品を選んでください）`;
     area.appendChild(title);
+
+    if (options?.isPredictive) {
+      area.classList.add("is-predictive");
+    } else {
+      area.classList.remove("is-predictive");
+    }
 
     const list = document.createElement("div");
     list.className = "processing-conversion-candidate-list";
@@ -191,6 +341,11 @@
 
       const stock = document.createElement("small");
       stock.textContent = `総在庫：${toNonNegativeInteger(product.stock)}個`;
+
+      button.setAttribute(
+        "aria-label",
+        `${product.internalCode || "-"} ${product.productCode || "-"} ${product.productName || "商品名未登録"} 総在庫${toNonNegativeInteger(product.stock)}個`
+      );
 
       button.append(code, name, stock);
       button.addEventListener("click", function () {
@@ -217,6 +372,7 @@
     if (candidates) {
       candidates.innerHTML = "";
       candidates.hidden = true;
+      candidates.classList.remove("is-predictive");
     }
 
     if (searchInput) {
@@ -657,6 +813,7 @@
       if (candidates) {
         candidates.innerHTML = "";
         candidates.hidden = true;
+        candidates.classList.remove("is-predictive");
       }
       populateLocationSelect(document.querySelector(`#processing-${role}-location`));
     });
@@ -752,9 +909,11 @@
       .processing-conversion-search-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: stretch; }
       .processing-conversion-search-row button { min-width: 150px; background: #1565c0; color: #fff; font-weight: 800; }
       .processing-conversion-candidates { margin-top: 12px; padding: 12px; background: #f7fbff; border: 1px solid #bbdefb; border-radius: 10px; }
+      .processing-conversion-candidates.is-predictive { margin-top: 4px; padding: 8px; box-shadow: 0 8px 20px rgba(21,101,192,.12); }
+      .processing-conversion-candidates.is-predictive > strong { display: block; margin: 2px 4px 7px; color: #1565c0; font-size: 13px; }
       .processing-conversion-candidate-list { display: grid; gap: 8px; margin-top: 8px; max-height: 330px; overflow: auto; }
       .processing-conversion-candidate { display: grid; gap: 3px; width: 100%; padding: 11px 13px; text-align: left; background: #fff; color: #263238; border: 1px solid #cfd8dc; border-radius: 8px; }
-      .processing-conversion-candidate:hover { border-color: #42a5f5; background: #eef7ff; }
+      .processing-conversion-candidate:hover, .processing-conversion-candidate:focus-visible { border-color: #42a5f5; background: #eef7ff; outline: 2px solid #90caf9; outline-offset: 1px; }
       .processing-conversion-candidate span { font-weight: 600; }
       .processing-conversion-candidate small { color: #607d8b; }
       .processing-conversion-selected { margin-top: 14px; }

@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v211
+            画面版 v212
           </span>
         </div>
       </div>
@@ -282,6 +282,13 @@
               type="button"
             >
               加工・商品切替 記入シート
+            </button>
+
+            <button
+              id="show-processing-conversion-button"
+              type="button"
+            >
+              加工・商品切替 在庫反映
             </button>
           </div>
         </details>
@@ -980,6 +987,155 @@
           </p>
         </article>
       </div>
+    </section>
+
+    <!-- 加工・商品切替 在庫反映 -->
+    <section id="processing-conversion-screen" hidden>
+      <div class="processing-conversion-heading">
+        <h2>加工・商品切替 在庫反映</h2>
+        <p>作業場から戻ってきた「加工・商品切替 記入シート」を見ながら、加工元Aを減らし、加工後Bを増やします。</p>
+      </div>
+
+      <div class="processing-conversion-guide">
+        <strong>この処理で行うこと</strong>
+        <span>加工元A：在庫を減らす ／ 加工後B：在庫を増やす ／ 両方の入出庫履歴に「加工・商品切替」として記録します。</span>
+      </div>
+
+      <form id="processing-conversion-form" novalidate>
+        <section class="processing-conversion-card processing-conversion-basic">
+          <h3>1. 基本情報</h3>
+          <div class="processing-conversion-grid processing-conversion-grid-4">
+            <label>
+              <span>作業日（必須）</span>
+              <input id="processing-conversion-date" type="date" required>
+            </label>
+            <label>
+              <span>担当者（必須）</span>
+              <input id="processing-conversion-person" type="text" placeholder="例：担当者" required>
+            </label>
+            <label>
+              <span>作業場所</span>
+              <input id="processing-conversion-workplace" type="text" placeholder="例：本社加工場">
+            </label>
+            <label>
+              <span>作業番号</span>
+              <input id="processing-conversion-work-no" type="text" placeholder="記入シートの番号">
+            </label>
+          </div>
+        </section>
+
+        <section class="processing-conversion-card processing-source-card">
+          <div class="processing-conversion-card-title">
+            <div>
+              <span class="processing-conversion-badge processing-conversion-badge-a">A</span>
+              <strong>加工元の商品</strong>
+            </div>
+            <span>在庫を減らす商品</span>
+          </div>
+
+          <div class="processing-conversion-search-row">
+            <input id="processing-source-search" type="text" placeholder="社内コード・商品コード・商品名で検索">
+            <button id="processing-source-search-button" type="button">商品を検索</button>
+          </div>
+          <div id="processing-source-candidates" class="processing-conversion-candidates" hidden></div>
+
+          <div id="processing-source-selected" class="processing-conversion-selected" hidden>
+            <div class="processing-conversion-product-summary">
+              <div><span>社内コード</span><strong id="processing-source-internal-code">-</strong></div>
+              <div><span>商品コード</span><strong id="processing-source-product-code">-</strong></div>
+              <div class="wide"><span>商品名</span><strong id="processing-source-product-name">-</strong></div>
+              <div><span>色</span><strong id="processing-source-color">-</strong></div>
+              <div><span>総在庫</span><strong id="processing-source-total-stock">0個</strong></div>
+            </div>
+
+            <div class="processing-conversion-grid processing-conversion-grid-3">
+              <label>
+                <span>加工元の保管場所（必須）</span>
+                <select id="processing-source-location" required></select>
+              </label>
+              <label>
+                <span>その場所の現在庫</span>
+                <input id="processing-source-location-stock" type="text" readonly>
+              </label>
+              <label>
+                <span>使用数量（必須）</span>
+                <input id="processing-source-quantity" type="number" min="1" step="1" value="1" required>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <div class="processing-conversion-arrow">↓ 加工・商品切替 ↓</div>
+
+        <section class="processing-conversion-card processing-target-card">
+          <div class="processing-conversion-card-title">
+            <div>
+              <span class="processing-conversion-badge processing-conversion-badge-b">B</span>
+              <strong>加工後の商品</strong>
+            </div>
+            <span>在庫を増やす商品</span>
+          </div>
+
+          <div class="processing-conversion-search-row">
+            <input id="processing-target-search" type="text" placeholder="社内コード・商品コード・商品名で検索">
+            <button id="processing-target-search-button" type="button">商品を検索</button>
+          </div>
+          <div id="processing-target-candidates" class="processing-conversion-candidates" hidden></div>
+
+          <div id="processing-target-selected" class="processing-conversion-selected" hidden>
+            <div class="processing-conversion-product-summary">
+              <div><span>社内コード</span><strong id="processing-target-internal-code">-</strong></div>
+              <div><span>商品コード</span><strong id="processing-target-product-code">-</strong></div>
+              <div class="wide"><span>商品名</span><strong id="processing-target-product-name">-</strong></div>
+              <div><span>色</span><strong id="processing-target-color">-</strong></div>
+              <div><span>総在庫</span><strong id="processing-target-total-stock">0個</strong></div>
+            </div>
+
+            <div class="processing-conversion-grid processing-conversion-grid-3">
+              <label>
+                <span>加工後の保管場所（必須）</span>
+                <select id="processing-target-location" required></select>
+              </label>
+              <label>
+                <span>その場所の現在庫</span>
+                <input id="processing-target-location-stock" type="text" readonly>
+              </label>
+              <label>
+                <span>完成数量（必須）</span>
+                <input id="processing-target-quantity" type="number" min="1" step="1" value="1" required>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section class="processing-conversion-card processing-conversion-notes-card">
+          <h3>2. 差異・補足</h3>
+          <div class="processing-conversion-grid processing-conversion-grid-3">
+            <label>
+              <span>使用数量</span>
+              <input id="processing-summary-source-quantity" type="text" readonly value="1個">
+            </label>
+            <label>
+              <span>完成数量</span>
+              <input id="processing-summary-target-quantity" type="text" readonly value="1個">
+            </label>
+            <label>
+              <span>差異（使用－完成）</span>
+              <input id="processing-summary-difference" type="text" readonly value="0個">
+            </label>
+          </div>
+          <label class="processing-conversion-memo-label">
+            <span>加工内容・理由・備考</span>
+            <textarea id="processing-conversion-memo" rows="3" placeholder="例：色変更のため加工。記入シートの備考など"></textarea>
+          </label>
+        </section>
+
+        <div class="processing-conversion-actions">
+          <button id="processing-conversion-confirm-button" type="submit">在庫反映内容を確認する</button>
+          <button id="processing-conversion-clear-button" type="button">入力をクリア</button>
+          <button id="back-home-from-processing-conversion" type="button">ホームへ戻る</button>
+        </div>
+      </form>
     </section>
 
     <!-- 販売予定表 -->
@@ -3899,7 +4055,7 @@
 
   </main>
 
-<script src="storage.js?v=210"></script>
+<script src="storage.js?v=212"></script>
 <script src="normal-shipment.js?v=206"></script>
 <script src="manual.js?v=207"></script>
 <script src="backorder-list.js?v=208"></script>
@@ -3931,8 +4087,9 @@
 <script src="restore.js?v=120"></script>
 <script src="location-management.js?v=100"></script>
 <script src="processing-sheet.js?v=211"></script>
+<script src="processing-conversion.js?v=212"></script>
 <script src="home-dashboard.js?v=125"></script>
-<script src="app-settings.js?v=208"></script>
+<script src="app-settings.js?v=212"></script>
 <script src="home-alerts.js?v=208"></script>
 </body>
 </html>

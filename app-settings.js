@@ -976,6 +976,7 @@
     const adminOnlySelectors = [
       "#show-register-button",
       "#show-backorder-list-button",
+      "#show-processing-conversion-button",
       "#stock-adjust-from-detail-button",
       "#edit-from-detail-button",
       "#delete-from-detail-button"
@@ -1039,6 +1040,7 @@
       "#product-register",
       "#product-edit",
       "#stock-adjust",
+      "#processing-conversion-screen",
       "#unassigned-location-products"
     ];
 

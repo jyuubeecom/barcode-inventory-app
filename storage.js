@@ -1692,6 +1692,85 @@ async function recordStockMovement(
   });
 }
 
+
+async function recordProcessingConversion(
+  updatedSourceProduct,
+  updatedTargetProduct,
+  sourceMovement,
+  targetMovement
+) {
+  const database =
+    await openDatabase();
+
+  return new Promise(function (
+    resolve,
+    reject
+  ) {
+    const transaction =
+      database.transaction(
+        [
+          PRODUCT_STORE_NAME,
+          MOVEMENT_STORE_NAME
+        ],
+        "readwrite"
+      );
+
+    const productStore =
+      transaction.objectStore(
+        PRODUCT_STORE_NAME
+      );
+
+    const movementStore =
+      transaction.objectStore(
+        MOVEMENT_STORE_NAME
+      );
+
+    productStore.put(
+      normalizeProductLocationStocks(
+        updatedSourceProduct
+      )
+    );
+
+    productStore.put(
+      normalizeProductLocationStocks(
+        updatedTargetProduct
+      )
+    );
+
+    movementStore.add(
+      sourceMovement
+    );
+
+    movementStore.add(
+      targetMovement
+    );
+
+    transaction.oncomplete =
+      function () {
+        database.close();
+        resolve();
+      };
+
+    transaction.onerror =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
+
+    transaction.onabort =
+      function () {
+        const error =
+          transaction.error;
+
+        database.close();
+        reject(error);
+      };
+  });
+}
+
 async function saveStocktakingSession(
   stocktaking
 ) {

@@ -30,7 +30,8 @@
     "show-sales-plan-list-button",
     "show-purchase-required-button",
     "show-low-shipment-button",
-    "show-stocktaking-history-button"
+    "show-stocktaking-history-button",
+    "show-manual-button"
   ]);
 
   let homeObserver = null;

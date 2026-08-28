@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v206
+            画面版 v207
           </span>
         </div>
       </div>
@@ -404,6 +404,33 @@
             class="home-panel-buttons"
           ></div>
         </details>
+
+        <details
+          class="home-function-panel"
+          data-home-panel="manual"
+          open
+        >
+          <summary>
+            マニュアル
+          </summary>
+
+          <p class="home-panel-description">
+            アプリの操作方法を確認します。キーワードで検索できます。
+          </p>
+
+          <div
+            id="home-manual-buttons"
+            class="home-panel-buttons"
+          >
+            <button
+              id="show-manual-button"
+              type="button"
+              class="home-dashboard-action"
+            >
+              マニュアルを見る・検索する
+            </button>
+          </div>
+        </details>
       </div>
 
       <p class="home-storage-note">
@@ -579,6 +606,200 @@
           </button>
         </div>
       </div>
+    </section>
+
+    <!-- 操作マニュアル -->
+    <section id="manual-screen" hidden>
+      <div class="manual-heading">
+        <div>
+          <span class="manual-kicker">操作ガイド</span>
+          <h2>マニュアル</h2>
+          <p>
+            分からない操作をキーワードで検索できます。
+            「棚卸」「CSV」「発注」「船積」など、短い言葉で検索するのがおすすめです。
+          </p>
+        </div>
+      </div>
+
+      <div class="manual-search-card">
+        <label for="manual-search-input">マニュアルを検索</label>
+        <div class="manual-search-row">
+          <input
+            id="manual-search-input"
+            type="search"
+            autocomplete="off"
+            placeholder="例：棚卸、CSV、追加発注、バーコード印刷"
+          >
+          <button id="manual-search-clear" type="button">検索をクリア</button>
+        </div>
+        <p id="manual-search-status" class="manual-search-status" aria-live="polite">
+          すべての項目を表示しています。
+        </p>
+      </div>
+
+      <div id="manual-topic-list" class="manual-topic-list">
+        <details class="manual-topic" data-manual-keywords="ホーム 画面 メニュー 管理者 作業者 表示 権限 初めて はじめに">
+          <summary>1. ホーム画面・表示モード・権限</summary>
+          <div class="manual-topic-body">
+            <ol>
+              <li>ホーム画面から、使いたい機能のボタンを押します。</li>
+              <li>右上の「表示・権限設定」から、PC表示・スマホ表示・管理者・作業者を切り替えます。</li>
+              <li>作業者モードでは、商品削除や数量調整など一部の管理操作が非表示になります。</li>
+              <li>画面右上の「画面版 v○○」で、更新後のバージョンを確認できます。</li>
+            </ol>
+          </div>
+        </details>
+
+        <details class="manual-topic" data-manual-keywords="商品 一覧 検索 社内コード 商品コード JAN 商品名 在庫 場所 自然文 KW">
+          <summary>2. 商品一覧・在庫を検索する</summary>
+          <div class="manual-topic-body">
+            <ol>
+              <li>ホームの「商品一覧」から登録済み商品を確認します。</li>
+              <li>社内コード・商品コード・JANコード・商品名などで商品を絞り込めます。</li>
+              <li>ホーム上部の文章検索では、「KW-251BKの在庫数は？」のように入力できます。</li>
+              <li>検索結果では、合計在庫と本社・酒本倉庫などの場所別在庫を確認できます。</li>
+            </ol>
+          </div>
+        </details>
+
+        <details class="manual-topic" data-manual-keywords="入庫 出庫 在庫 履歴 数量 使用 販売 出荷 調整">
+          <summary>3. 入庫・出庫・在庫履歴</summary>
+          <div class="manual-topic-body">
+            <ol>
+              <li>商品一覧から対象商品を開きます。</li>
+              <li>商品詳細の「入庫する」または「出庫する」を押します。</li>
+              <li>数量・担当者・理由などを入力して確定します。</li>
+              <li>「在庫履歴を見る」から、その商品の在庫の動きを確認できます。</li>
+              <li>在庫数を直接修正する場合は、管理者モードの「数量調整する」を使用します。</li>
+            </ol>
+          </div>
+        </details>
+
+        <details class="manual-topic" data-manual-keywords="棚卸 バーコード 手入力 実在庫 場所 一括0 確定 履歴 集約 CSV 送信">
+          <summary>4. 棚卸をする</summary>
+          <div class="manual-topic-body">
+            <ol>
+              <li>ホームの「棚卸を開始する」を押します。</li>
+              <li>棚卸する場所と担当者などを設定します。</li>
+              <li>バーコード読み取り、または手入力で商品を呼び出します。</li>
+              <li>実際に数えた数量を入力します。</li>
+              <li>未確認商品を確認してから棚卸を確定します。</li>
+              <li>必要に応じて棚卸結果CSVや集約機能を使用します。</li>
+            </ol>
+            <p class="manual-note">棚卸場所が確定している画面では、場所欄を省略して数量入力を大きく表示します。</p>
+          </div>
+        </details>
+
+        <details class="manual-topic" data-manual-keywords="販売予定 取引先 副題 出荷時期 期間 複数商品 まとめ入力 カレンダー リスト 印刷">
+          <summary>5. 販売予定を登録・確認する</summary>
+          <div class="manual-topic-body">
+            <ol>
+              <li>ホームの「販売予定を登録する」を開きます。</li>
+              <li>取引先名・副題・出荷日または出荷期間を入力します。</li>
+              <li>社内コードや商品コードから商品を呼び出し、数量を入力します。</li>
+              <li>同じ取引先・同じ出荷期間の商品は、複数商品をまとめて登録できます。</li>
+              <li>「販売予定一覧を見る」から登録内容を確認・編集・印刷できます。</li>
+            </ol>
+          </div>
+        </details>
+
+        <details class="manual-topic" data-manual-keywords="販売実績 CSV 通常出荷 数量 月平均 販売予定 除外 6か月">
+          <summary>6. 販売実績CSV・通常出荷数量</summary>
+          <div class="manual-topic-body">
+            <ol>
+              <li>ホームの「販売実績CSVを読み込む」から販売実績を取り込みます。</li>
+              <li>「通常出荷数量を見る」を開くと、前月までの直近6か月を集計します。</li>
+              <li>総出荷数量から販売予定として照合できた出荷分を除き、通常出荷数量を計算します。</li>
+              <li>通常出荷数量を6か月で割った値を、月平均通常出荷として発注判定などに使用します。</li>
+            </ol>
+            <p class="manual-note">出荷済みの販売予定を削除すると照合できなくなるため、基本的に履歴として残します。</p>
+          </div>
+        </details>
+
+        <details class="manual-topic" data-manual-keywords="発注 必要 商品一覧 発注残 追加発注 入荷 仕入先 履歴 注残 廃盤予定">
+          <summary>7. 発注が必要な商品・発注残・追加発注</summary>
+          <div class="manual-topic-body">
+            <ol>
+              <li>「発注が必要な商品一覧」で不足候補を確認します。</li>
+              <li>発注済み数量は「発注残」として管理し、現在庫とは分けて扱います。</li>
+              <li>仕入先へ追加発注した場合は、商品詳細の「追加発注する」から数量を入力します。</li>
+              <li>追加発注を登録すると、現在庫は変えず、発注残だけが増えます。</li>
+              <li>発注残の変更は「発注残一覧・編集」の変更履歴で確認できます。</li>
+              <li>商品が入荷したときは、入荷数量に応じて発注残を減らします。</li>
+            </ol>
+          </div>
+        </details>
+
+        <details class="manual-topic" data-manual-keywords="船便 船積 スケジュール 出港 入港 倉庫到着日 振り分け 倉庫 仕入先 入荷">
+          <summary>8. 船便スケジュール・船積リスト</summary>
+          <div class="manual-topic-body">
+            <ol>
+              <li>「船便スケジュールを登録する」から出港日・入港日・倉庫到着日などを登録します。</li>
+              <li>「船便別に商品を振り分ける」で、対象商品と船積数量を設定します。</li>
+              <li>「船積リストを倉庫へ振り分ける」で、各倉庫への数量を編集します。</li>
+              <li>必要に応じて船積リストや倉庫振分け内容を印刷します。</li>
+              <li>船便の入荷反映は、倉庫到着日を基準に処理します。</li>
+            </ol>
+          </div>
+        </details>
+
+        <details class="manual-topic" data-manual-keywords="移動 倉庫 本社 酒本 移動元 移動先 リスト 印刷 チェック">
+          <summary>9. 商品を倉庫・本社間で移動する</summary>
+          <div class="manual-topic-body">
+            <ol>
+              <li>商品移動の画面で、移動元・移動先・商品・移動数量を設定します。</li>
+              <li>移動内容を確認して確定します。</li>
+              <li>必要に応じて移動リストを印刷し、移動元・移動先の確認に使用します。</li>
+            </ol>
+          </div>
+        </details>
+
+        <details class="manual-topic" data-manual-keywords="バーコード 印刷 社内コード JAN CODE128 EAN A4 4分割 8分割 ラベル 枚数">
+          <summary>10. バーコードを印刷する</summary>
+          <div class="manual-topic-body">
+            <ol>
+              <li>ホームの「バーコードを印刷する」を開きます。</li>
+              <li>商品を検索して、印刷対象へ追加します。</li>
+              <li>社内コード・JANコード、A4の分割数、ラベル枚数を設定します。</li>
+              <li>「選択したバーコードを印刷する」で印刷画面を開きます。</li>
+            </ol>
+          </div>
+        </details>
+
+        <details class="manual-topic" data-manual-keywords="CSV 商品一覧 入出庫 棚卸 読込 出力 Excel UTF-8 BOM バックアップ 復元 保存">
+          <summary>11. CSV・バックアップ・復元</summary>
+          <div class="manual-topic-body">
+            <ol>
+              <li>商品一覧・入出庫履歴・棚卸結果などはCSVで出力できます。</li>
+              <li>商品データを一括登録するときはCSV読込を使用し、プレビューとエラーを確認します。</li>
+              <li>アプリ全体のデータを保存するときは「バックアップ」を使用します。</li>
+              <li>別端末や復旧時は、対応するバックアップファイルを選んで復元します。</li>
+            </ol>
+            <p class="manual-note">大きな変更やCSV更新の前には、先にバックアップを取るのがおすすめです。</p>
+          </div>
+        </details>
+
+        <details class="manual-topic" data-manual-keywords="PWA ホーム画面 追加 アプリ スマホ iPhone Android オフライン 更新 Ctrl F5 バージョン">
+          <summary>12. スマホ・PWA・画面更新</summary>
+          <div class="manual-topic-body">
+            <ol>
+              <li>対応端末ではホーム画面へ追加して、アプリのように起動できます。</li>
+              <li>更新後は画面右上のバージョン番号を確認します。</li>
+              <li>PCで古い画面が残る場合は、Ctrlキーを押しながらF5キーを押して再読み込みします。</li>
+              <li>スマホ表示では、棚卸や商品確認をしやすい画面構成になります。</li>
+            </ol>
+          </div>
+        </details>
+      </div>
+
+      <div id="manual-no-results" class="manual-no-results" hidden>
+        <strong>該当する項目が見つかりませんでした。</strong>
+        <p>短い言葉に変えて検索してください。例：「発注」「棚卸」「CSV」</p>
+      </div>
+
+      <button id="back-home-from-manual" type="button" class="manual-back-button">
+        ホームへ戻る
+      </button>
     </section>
 
     <!-- 販売予定表 -->
@@ -3316,6 +3537,7 @@
 
 <script src="storage.js?v=195"></script>
 <script src="normal-shipment.js?v=206"></script>
+<script src="manual.js?v=207"></script>
 <script src="app.js?v=196"></script>
 <script src="natural-stock-search.js?v=206"></script>
 <script src="product-history.js?v=107"></script>
@@ -3344,7 +3566,7 @@
 <script src="restore.js?v=120"></script>
 <script src="location-management.js?v=100"></script>
 <script src="home-dashboard.js?v=125"></script>
-<script src="app-settings.js?v=104"></script>
+<script src="app-settings.js?v=207"></script>
 <script src="home-alerts.js?v=194"></script>
 </body>
 </html>

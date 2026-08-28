@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v208
+            画面版 v209
           </span>
         </div>
       </div>
@@ -1106,6 +1106,25 @@
       <div class="sales-actual-card">
         <h3>3. 取込履歴</h3>
         <p id="sales-actual-history-empty">まだ販売実績CSVを取り込んでいません。</p>
+
+        <div class="sales-actual-history-sort" aria-label="取込履歴の並び替え">
+          <label for="sales-actual-history-sort-key">
+            並び替える項目
+            <select id="sales-actual-history-sort-key">
+              <option value="importedAt">取込日時</option>
+              <option value="reportPeriod">帳票期間</option>
+            </select>
+          </label>
+
+          <label for="sales-actual-history-sort-direction">
+            並び順
+            <select id="sales-actual-history-sort-direction">
+              <option value="desc">新しい順</option>
+              <option value="asc">古い順</option>
+            </select>
+          </label>
+        </div>
+
         <div class="sales-actual-table-wrap">
           <table>
             <thead>
@@ -3726,7 +3745,7 @@
 <script src="csv-update.js?v=74"></script>
 <script src="pwa.js?v=31"></script>
 <script src="sales-plan.js?v=176"></script>
-<script src="sales-actual.js?v=195"></script>
+<script src="sales-actual.js?v=209"></script>
 <script src="purchase-required.js?v=206"></script>
 <script src="order-remaining.js?v=120"></script>
 <script src="low-shipment.js?v=206"></script>

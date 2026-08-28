@@ -14,6 +14,8 @@ function initializeSalesActualFeature() {
   const importButton = document.querySelector("#import-sales-actual-button");
   const printErrorsButton = document.querySelector("#print-sales-actual-errors-button");
   const clearButton = document.querySelector("#clear-sales-actual-preview-button");
+  const historySortKey = document.querySelector("#sales-actual-history-sort-key");
+  const historySortDirection = document.querySelector("#sales-actual-history-sort-direction");
 
   if (!showButton || !fileInput || !importButton) return;
 
@@ -29,6 +31,14 @@ function initializeSalesActualFeature() {
     );
   }
   if (clearButton) clearButton.addEventListener("click", clearSalesActualPreview);
+
+  if (historySortKey) {
+    historySortKey.addEventListener("change", renderSalesActualImportHistory);
+  }
+
+  if (historySortDirection) {
+    historySortDirection.addEventListener("change", renderSalesActualImportHistory);
+  }
 }
 
 async function openSalesActualScreen() {
@@ -1229,6 +1239,53 @@ function formatSalesActualPrintQuantity(
   );
 }
 
+
+function getSortedSalesActualImportHistory() {
+  const keySelect = document.querySelector("#sales-actual-history-sort-key");
+  const directionSelect = document.querySelector("#sales-actual-history-sort-direction");
+  const sortKey = keySelect ? keySelect.value : "importedAt";
+  const direction = directionSelect && directionSelect.value === "asc" ? 1 : -1;
+
+  return salesActualImportHistory.slice().sort(function (a, b) {
+    if (sortKey === "reportPeriod") {
+      const aStart = String(a.reportStartDate || "");
+      const bStart = String(b.reportStartDate || "");
+      const aEnd = String(a.reportEndDate || "");
+      const bEnd = String(b.reportEndDate || "");
+
+      const aMissing = !aStart && !aEnd;
+      const bMissing = !bStart && !bEnd;
+
+      if (aMissing !== bMissing) {
+        return aMissing ? 1 : -1;
+      }
+
+      const startCompare = aStart.localeCompare(bStart);
+      if (startCompare !== 0) {
+        return startCompare * direction;
+      }
+
+      const endCompare = aEnd.localeCompare(bEnd);
+      if (endCompare !== 0) {
+        return endCompare * direction;
+      }
+
+      return String(b.importedAt || "").localeCompare(String(a.importedAt || ""));
+    }
+
+    const aImported = String(a.importedAt || "");
+    const bImported = String(b.importedAt || "");
+    const aMissing = !aImported;
+    const bMissing = !bImported;
+
+    if (aMissing !== bMissing) {
+      return aMissing ? 1 : -1;
+    }
+
+    return aImported.localeCompare(bImported) * direction;
+  });
+}
+
 function renderSalesActualImportHistory() {
   const body = document.querySelector("#sales-actual-import-history-body");
   const empty = document.querySelector("#sales-actual-history-empty");
@@ -1241,7 +1298,9 @@ function renderSalesActualImportHistory() {
   }
   if (empty) empty.hidden = true;
 
-  salesActualImportHistory.forEach(function (batch) {
+  const sortedHistory = getSortedSalesActualImportHistory();
+
+  sortedHistory.forEach(function (batch) {
     const row = document.createElement("tr");
     const range = batch.reportStartDate && batch.reportEndDate
       ? `${formatSalesActualDate(batch.reportStartDate)} ～ ${formatSalesActualDate(batch.reportEndDate)}`
@@ -1394,6 +1453,31 @@ function createSalesActualStyle() {
     #sales-actual-import .sales-actual-preview-summary { background: #eef6ff; border-radius: 10px; padding: 13px; line-height: 1.7; }
     #sales-actual-import .sales-actual-warnings { white-space: pre-line; color: #bf360c; font-weight: 700; margin-top: 10px; }
     #sales-actual-import .sales-actual-table-wrap { overflow-x: auto; margin-top: 12px; }
+    #sales-actual-import .sales-actual-history-sort {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      gap: 12px;
+      margin: 14px 0 6px;
+      padding: 14px;
+      background: #f3f8fd;
+      border: 1px solid #c9ddf2;
+      border-radius: 10px;
+    }
+    #sales-actual-import .sales-actual-history-sort label {
+      display: grid;
+      gap: 6px;
+      min-width: 210px;
+      font-weight: 800;
+    }
+    #sales-actual-import .sales-actual-history-sort select {
+      min-height: 48px;
+      padding: 8px 12px;
+      border: 1px solid #90a4ae;
+      border-radius: 8px;
+      background: #ffffff;
+      font-size: 1rem;
+    }
     #sales-actual-import table { min-width: 760px; }
     #sales-actual-import .sales-actual-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
     #sales-actual-import .sales-actual-ok { color: #2e7d32; font-weight: 700; }
@@ -1566,6 +1650,8 @@ function createSalesActualStyle() {
     @media (max-width: 700px) {
       #sales-actual-import .sales-actual-card { padding: 13px; }
       #sales-actual-import .sales-actual-actions { display: grid; grid-template-columns: 1fr; }
+      #sales-actual-import .sales-actual-history-sort { display: grid; grid-template-columns: 1fr; }
+      #sales-actual-import .sales-actual-history-sort label { min-width: 0; }
     }
   `;
   document.head.appendChild(style);

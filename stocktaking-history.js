@@ -149,6 +149,32 @@ function createStocktakingHistoryScreens() {
   stocktakingHistoryDetailScreen.innerHTML = `
     <h2>棚卸履歴の詳細</h2>
 
+    <div
+      id="stocktaking-history-detail-sticky-actions"
+      class="stocktaking-history-detail-sticky-actions"
+    >
+      <button
+        id="cancel-stocktaking-history-button-top"
+        type="button"
+      >
+        この棚卸を取り消す
+      </button>
+
+      <button
+        id="back-to-stocktaking-history-top"
+        type="button"
+      >
+        棚卸履歴一覧へ戻る
+      </button>
+
+      <button
+        id="back-home-from-stocktaking-history-detail-top"
+        type="button"
+      >
+        ホームへ戻る
+      </button>
+    </div>
+
     <table class="stocktaking-history-info-table">
       <tbody
         id="stocktaking-history-detail-info"
@@ -251,6 +277,13 @@ function createStocktakingHistoryScreens() {
   );
 
   document.querySelector(
+    "#back-to-stocktaking-history-top"
+  ).addEventListener(
+    "click",
+    returnToStocktakingHistoryList
+  );
+
+  document.querySelector(
     "#back-home-from-stocktaking-history-detail"
   ).addEventListener(
     "click",
@@ -258,7 +291,21 @@ function createStocktakingHistoryScreens() {
   );
 
   document.querySelector(
+    "#back-home-from-stocktaking-history-detail-top"
+  ).addEventListener(
+    "click",
+    returnHomeFromStocktakingHistory
+  );
+
+  document.querySelector(
     "#cancel-stocktaking-history-button"
+  ).addEventListener(
+    "click",
+    cancelCurrentStocktakingHistory
+  );
+
+  document.querySelector(
+    "#cancel-stocktaking-history-button-top"
   ).addEventListener(
     "click",
     cancelCurrentStocktakingHistory
@@ -457,17 +504,48 @@ function createStocktakingHistoryStyle() {
       white-space: nowrap;
     }
 
+    .stocktaking-history-detail-sticky-actions {
+      position: sticky;
+      top: 8px;
+      z-index: 30;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 0 0 18px;
+      padding: 10px;
+      border: 1px solid #bbdefb;
+      border-radius: 10px;
+      background-color: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+      backdrop-filter: blur(3px);
+    }
+
+    .stocktaking-history-detail-sticky-actions button {
+      margin: 0;
+      min-height: 44px;
+      padding: 9px 14px;
+      font-size: 15px;
+      font-weight: bold;
+    }
+
+    #back-to-stocktaking-history-top,
+    #back-home-from-stocktaking-history-detail-top {
+      background-color: #1565c0;
+    }
+
     #export-stocktaking-submission-button {
       background-color: #00838f;
     }
 
-    #cancel-stocktaking-history-button {
+    #cancel-stocktaking-history-button,
+    #cancel-stocktaking-history-button-top {
       background-color: #c62828;
       color: #ffffff;
       font-weight: bold;
     }
 
-    #cancel-stocktaking-history-button:disabled {
+    #cancel-stocktaking-history-button:disabled,
+    #cancel-stocktaking-history-button-top:disabled {
       background-color: #b0bec5;
       color: #546e7a;
       cursor: not-allowed;
@@ -483,6 +561,16 @@ function createStocktakingHistoryStyle() {
       #stocktaking-history-detail > button {
         width: 100%;
         margin: 6px 0;
+      }
+
+      .stocktaking-history-detail-sticky-actions {
+        position: static;
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      .stocktaking-history-detail-sticky-actions button {
+        width: 100%;
       }
 
       .stocktaking-history-info-table th {
@@ -926,17 +1014,24 @@ function openStocktakingHistoryDetail(
 function updateStocktakingHistoryDetailActions(
   session
 ) {
-  const cancelButton =
+  const cancelButtons = [
     document.querySelector(
       "#cancel-stocktaking-history-button"
-    );
+    ),
+    document.querySelector(
+      "#cancel-stocktaking-history-button-top"
+    )
+  ].filter(Boolean);
 
   const exportButton =
     document.querySelector(
       "#export-stocktaking-submission-button"
     );
 
-  if (!cancelButton || !exportButton) {
+  if (
+    cancelButtons.length === 0 ||
+    !exportButton
+  ) {
     return;
   }
 
@@ -947,16 +1042,20 @@ function updateStocktakingHistoryDetailActions(
   exportButton.disabled =
     isCancelled;
 
-  cancelButton.hidden =
-    isCancelled;
+  cancelButtons.forEach(
+    function (button) {
+      button.hidden =
+        isCancelled;
 
-  cancelButton.disabled =
-    session.reflectedToInventory === true;
+      button.disabled =
+        session.reflectedToInventory === true;
 
-  cancelButton.title =
-    session.reflectedToInventory === true
-      ? "現在庫へ反映済みの棚卸は、この画面から直接取り消せません。"
-      : "現在庫を変更せず、棚卸結果を取消状態にします。";
+      button.title =
+        session.reflectedToInventory === true
+          ? "現在庫へ反映済みの棚卸は、この画面から直接取り消せません。"
+          : "現在庫を変更せず、棚卸結果を取消状態にします。";
+    }
+  );
 }
 
 async function cancelCurrentStocktakingHistory() {
@@ -1041,14 +1140,20 @@ async function cancelCurrentStocktakingHistory() {
     return;
   }
 
-  const cancelButton =
+  const cancelButtons = [
     document.querySelector(
       "#cancel-stocktaking-history-button"
-    );
+    ),
+    document.querySelector(
+      "#cancel-stocktaking-history-button-top"
+    )
+  ].filter(Boolean);
 
-  if (cancelButton) {
-    cancelButton.disabled = true;
-  }
+  cancelButtons.forEach(
+    function (button) {
+      button.disabled = true;
+    }
+  );
 
   try {
     const cancelledAt =
@@ -1123,9 +1228,11 @@ async function cancelCurrentStocktakingHistory() {
       alert(errorMessage);
     }
 
-    if (cancelButton) {
-      cancelButton.disabled = false;
-    }
+    cancelButtons.forEach(
+      function (button) {
+        button.disabled = false;
+      }
+    );
   }
 }
 

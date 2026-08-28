@@ -329,6 +329,7 @@ hr {
     margin: 6px 0;
   }
 }
+/* v205 確認ダイアログの文字色修正 */
 /* 共通の警告・確認ダイアログ */
 body.app-dialog-open {
   overflow: hidden;
@@ -455,7 +456,7 @@ body.app-dialog-open {
   cursor: pointer;
 }
 
-.app-dialog-confirm {
+.app-dialog-button.app-dialog-confirm {
   background-color: #1565c0;
   color: #ffffff;
 }

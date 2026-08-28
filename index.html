@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v210
+            画面版 v211
           </span>
         </div>
       </div>
@@ -275,6 +275,13 @@
               type="button"
             >
               入出庫履歴を見る
+            </button>
+
+            <button
+              id="show-processing-sheet-button"
+              type="button"
+            >
+              加工・商品切替 記入シート
             </button>
           </div>
         </details>
@@ -761,8 +768,21 @@
           </div>
         </details>
 
+        <details class="manual-topic" data-manual-keywords="加工 商品切替 記入シート B5 印刷 加工元 加工後 使用数量 完成数量 ロス 作業場">
+          <summary>10. 加工・商品切替の記入シートを印刷する</summary>
+          <div class="manual-topic-body">
+            <ol>
+              <li>ホームの「入出庫・履歴」から「加工・商品切替 記入シート」を開きます。</li>
+              <li>画面で用紙の内容を確認し、「B5で印刷する」を押します。</li>
+              <li>作業場では、加工元A・加工後B・使用数量・完成数量・担当者などを手書きします。</li>
+              <li>作業後は用紙を在庫管理担当者へ提出し、在庫反映後に確認欄へ記入します。</li>
+            </ol>
+            <p class="manual-note">印刷はB5縦1枚を想定しています。プリンター側でも用紙サイズがB5になっていることを確認してください。</p>
+          </div>
+        </details>
+
         <details class="manual-topic" data-manual-keywords="バーコード 印刷 社内コード JAN CODE128 EAN A4 4分割 8分割 ラベル 枚数">
-          <summary>10. バーコードを印刷する</summary>
+          <summary>11. バーコードを印刷する</summary>
           <div class="manual-topic-body">
             <ol>
               <li>ホームの「バーコードを印刷する」を開きます。</li>
@@ -774,7 +794,7 @@
         </details>
 
         <details class="manual-topic" data-manual-keywords="CSV 商品一覧 入出庫 棚卸 読込 出力 Excel UTF-8 BOM バックアップ 復元 保存">
-          <summary>11. CSV・バックアップ・復元</summary>
+          <summary>12. CSV・バックアップ・復元</summary>
           <div class="manual-topic-body">
             <ol>
               <li>商品一覧・入出庫履歴・棚卸結果などはCSVで出力できます。</li>
@@ -787,7 +807,7 @@
         </details>
 
         <details class="manual-topic" data-manual-keywords="PWA ホーム画面 追加 アプリ スマホ iPhone Android オフライン 更新 Ctrl F5 バージョン">
-          <summary>12. スマホ・PWA・画面更新</summary>
+          <summary>13. スマホ・PWA・画面更新</summary>
           <div class="manual-topic-body">
             <ol>
               <li>対応端末ではホーム画面へ追加して、アプリのように起動できます。</li>
@@ -807,6 +827,159 @@
       <button id="back-home-from-manual" type="button" class="manual-back-button">
         ホームへ戻る
       </button>
+    </section>
+
+    <!-- 加工・商品切替 記入シート -->
+    <section id="processing-sheet-screen" hidden>
+      <div class="processing-screen-heading">
+        <h2>加工・商品切替 記入シート</h2>
+        <p>作業場で手書きしてもらうためのB5縦向きの記入シートです。画面で内容を確認して、そのまま印刷できます。</p>
+      </div>
+
+      <div class="processing-screen-actions">
+        <button id="print-processing-sheet-button" type="button">B5で印刷する</button>
+        <button id="back-home-from-processing-sheet" type="button">ホームへ戻る</button>
+      </div>
+
+      <p class="processing-preview-note">
+        印刷画面が開いたら、プリンターの用紙サイズが「B5」、向きが「縦」になっていることを確認してください。
+      </p>
+
+      <div class="processing-paper-wrap">
+        <article id="processing-sheet-paper" class="processing-paper">
+          <div class="processing-paper-title">
+            <h1>加工・商品切替 記入シート</h1>
+            <p>作業場記入用</p>
+          </div>
+
+          <table class="processing-table processing-basic-table">
+            <tbody>
+              <tr>
+                <th>作業日</th>
+                <td></td>
+                <th>担当者</th>
+                <td></td>
+              </tr>
+              <tr>
+                <th>作業場所</th>
+                <td></td>
+                <th>作業番号</th>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <section class="processing-section">
+            <div class="processing-section-heading">
+              <span>加工元の商品（A）</span>
+              <small>加工する前の商品</small>
+            </div>
+            <table class="processing-table processing-product-table">
+              <tbody>
+                <tr>
+                  <th>社内コード</th>
+                  <td></td>
+                  <th>商品コード</th>
+                  <td></td>
+                </tr>
+                <tr>
+                  <th>商品名</th>
+                  <td colspan="3"></td>
+                </tr>
+                <tr>
+                  <th>色</th>
+                  <td></td>
+                  <th>保管場所</th>
+                  <td></td>
+                </tr>
+                <tr class="processing-quantity-row">
+                  <th>使用数量</th>
+                  <td colspan="3"></td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <div class="processing-arrow">↓ 加工・商品切替 ↓</div>
+
+          <section class="processing-section">
+            <div class="processing-section-heading">
+              <span>加工後の商品（B）</span>
+              <small>加工して完成した商品</small>
+            </div>
+            <table class="processing-table processing-product-table">
+              <tbody>
+                <tr>
+                  <th>社内コード</th>
+                  <td></td>
+                  <th>商品コード</th>
+                  <td></td>
+                </tr>
+                <tr>
+                  <th>商品名</th>
+                  <td colspan="3"></td>
+                </tr>
+                <tr>
+                  <th>色</th>
+                  <td></td>
+                  <th>保管場所</th>
+                  <td></td>
+                </tr>
+                <tr class="processing-quantity-row">
+                  <th>完成数量</th>
+                  <td colspan="3"></td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section class="processing-section">
+            <div class="processing-section-heading">
+              <span>差異・補足</span>
+              <small>必要な場合のみ記入</small>
+            </div>
+            <table class="processing-table processing-loss-table">
+              <tbody>
+                <tr>
+                  <th>加工ロス数量</th>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="processing-notes">
+              <strong>加工内容・理由</strong>
+              <span class="processing-note-line"></span>
+              <span class="processing-note-line"></span>
+            </div>
+            <div class="processing-notes">
+              <strong>備考</strong>
+              <span class="processing-note-line"></span>
+              <span class="processing-note-line"></span>
+            </div>
+          </section>
+
+          <table class="processing-table processing-confirm-table">
+            <tbody>
+              <tr>
+                <th>作業者確認</th>
+                <td></td>
+                <th>受取確認</th>
+                <td></td>
+              </tr>
+              <tr>
+                <th>在庫反映確認</th>
+                <td></td>
+                <th>在庫反映日</th>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p class="processing-footer-note">
+            ※ 作業完了後、この用紙を在庫管理担当者へ提出してください。
+          </p>
+        </article>
+      </div>
     </section>
 
     <!-- 販売予定表 -->
@@ -3757,6 +3930,7 @@
 <script src="backup.js?v=120"></script>
 <script src="restore.js?v=120"></script>
 <script src="location-management.js?v=100"></script>
+<script src="processing-sheet.js?v=211"></script>
 <script src="home-dashboard.js?v=125"></script>
 <script src="app-settings.js?v=208"></script>
 <script src="home-alerts.js?v=208"></script>

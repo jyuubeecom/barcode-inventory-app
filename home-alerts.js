@@ -1,7 +1,7 @@
 "use strict";
 
 /* =========================================================
-   v194 PCホーム右側 要確認パネル + 印刷 + 折りたたみ + 更新通知
+   v208 PCホーム右側 要確認パネル + 注残優先表示 + 印刷 + 折りたたみ + 更新通知
    ・発注必要商品
    ・次の未確定船便で船積みが必要な商品
    ・PC表示のみ
@@ -612,7 +612,8 @@ function createHomeAlertSnapshot(
             Number(
               row.remainingQuantity ||
               0
-            )
+            ),
+            Boolean(row.isBackorder)
           ];
         }
       )
@@ -1385,7 +1386,7 @@ function renderHomeShippingAlert(
       ${topRows.map(
         function (row) {
           return `
-            <div class="home-alert-item">
+            <div class="home-alert-item ${row.isBackorder ? "home-alert-item-backorder" : ""}">
               <div>
                 <strong>
                   ${escapeHomeAlertHtml(
@@ -1393,6 +1394,7 @@ function renderHomeShippingAlert(
                     row.internalCode ||
                     "コード未登録"
                   )}
+                  ${row.isBackorder ? '<em class="home-alert-backorder-badge">注残</em>' : ""}
                 </strong>
                 <span>
                   ${escapeHomeAlertHtml(
@@ -2704,6 +2706,27 @@ function createHomeAlertPanelStyle() {
     .home-alert-shipping
       .home-alert-item b {
       color: #6a1b9a;
+    }
+
+    .home-alert-item-backorder {
+      border: 2px solid #f9a825;
+      background: #fff8d7;
+      box-shadow: 0 0 0 1px rgba(249, 168, 37, 0.08);
+    }
+
+    .home-alert-backorder-badge {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 6px;
+      padding: 2px 6px;
+      border: 1px solid #f9a825;
+      border-radius: 999px;
+      background: #fff176;
+      color: #5d4a00;
+      font-size: 10px;
+      font-style: normal;
+      font-weight: 900;
+      vertical-align: middle;
     }
 
     .home-alert-more {

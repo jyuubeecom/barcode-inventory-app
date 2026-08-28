@@ -3948,7 +3948,9 @@ window.shippingScheduleApp.getHomeAlertData =
               currentAllocation:
                 allocated,
               remainingQuantity:
-                remaining
+                remaining,
+              isBackorder:
+                Boolean(row.isBackorder)
             };
           }
         )
@@ -3962,6 +3964,13 @@ window.shippingScheduleApp.getHomeAlertData =
         )
         .sort(
           function (a, b) {
+            if (
+              Boolean(a.isBackorder) !==
+              Boolean(b.isBackorder)
+            ) {
+              return a.isBackorder ? -1 : 1;
+            }
+
             if (
               b.remainingQuantity !==
               a.remainingQuantity

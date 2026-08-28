@@ -975,6 +975,7 @@
   ) {
     const adminOnlySelectors = [
       "#show-register-button",
+      "#show-backorder-list-button",
       "#stock-adjust-from-detail-button",
       "#edit-from-detail-button",
       "#delete-from-detail-button"

@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v207
+            画面版 v208
           </span>
         </div>
       </div>
@@ -336,6 +336,13 @@
               type="button"
             >
               発注残一覧・編集
+            </button>
+
+            <button
+              id="show-backorder-list-button"
+              type="button"
+            >
+              注残リストを読み込む・見る
             </button>
 
             <button
@@ -1535,6 +1542,170 @@
 
       <button
         id="back-home-from-order-remaining"
+        type="button"
+      >
+        ホームへ戻る
+      </button>
+    </section>
+
+
+    <!-- 注残リスト -->
+    <section id="backorder-list-screen" hidden>
+      <h2>注残リスト</h2>
+
+      <p>
+        社内で管理している注残CSVを読み込み、商品マスタと照合します。<br>
+        確認後に選択した商品の在庫状態を「注残」に一括変更できます。
+      </p>
+
+      <div class="backorder-card backorder-import-card">
+        <h3>注残CSVを読み込む</h3>
+
+        <div class="backorder-column-note">
+          この画面では、CSVの
+          <strong>B列＝社内コード / C列＝商品コード / D列＝商品名 / E列＝色 / I列＝数量</strong>
+          として読み込みます。<br>
+          B列の社内コードを優先して商品マスタと照合し、必要に応じてC列の商品コードでも確認します。
+        </div>
+
+        <div class="backorder-import-row">
+          <input
+            id="backorder-csv-file"
+            type="file"
+            accept=".csv,text/csv"
+          >
+
+          <button
+            id="clear-backorder-csv-preview"
+            type="button"
+          >
+            読込内容をクリア
+          </button>
+        </div>
+
+        <p
+          id="backorder-csv-message"
+          class="backorder-csv-message backorder-message-info"
+          aria-live="polite"
+        >
+          CSVを選ぶと照合結果を表示します。
+        </p>
+
+        <div class="backorder-important-note">
+          CSVに載っていない既存の「注残」商品は、自動では解除しません。<br>
+          現在庫や発注残数も、このCSV反映では変更しません。
+        </div>
+      </div>
+
+      <div
+        id="backorder-csv-preview"
+        class="backorder-card"
+        hidden
+      >
+        <h3>CSV読込結果</h3>
+
+        <div
+          id="backorder-preview-summary"
+          class="backorder-preview-summary"
+        >
+          CSVを読み込むと、ここに照合結果が表示されます。
+        </div>
+
+        <div class="backorder-list-toolbar">
+          <input
+            id="backorder-preview-search"
+            class="backorder-search-input"
+            type="search"
+            placeholder="社内コード・商品コード・商品名・色・判定で検索"
+          >
+
+          <button
+            id="select-all-backorder-csv"
+            type="button"
+          >
+            一致商品をすべて選択
+          </button>
+
+          <button
+            id="clear-backorder-csv-selection"
+            type="button"
+          >
+            選択をすべて解除
+          </button>
+        </div>
+
+        <div class="backorder-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>反映</th>
+                <th>照合結果</th>
+                <th>社内コード</th>
+                <th>商品コード</th>
+                <th>商品名</th>
+                <th>色</th>
+                <th>数量</th>
+                <th>現在状態</th>
+              </tr>
+            </thead>
+            <tbody id="backorder-preview-table-body"></tbody>
+          </table>
+        </div>
+
+        <div class="backorder-preview-actions">
+          <button
+            id="apply-backorder-csv"
+            type="button"
+            disabled
+          >
+            選択した商品を「注残」に反映する
+          </button>
+        </div>
+      </div>
+
+      <div class="backorder-card">
+        <h3>現在「注残」の商品</h3>
+
+        <div class="backorder-list-toolbar">
+          <input
+            id="backorder-current-search"
+            class="backorder-search-input"
+            type="search"
+            placeholder="社内コード・商品コード・商品名・色・仕入先で検索"
+          >
+
+          <button
+            id="refresh-backorder-current-list"
+            type="button"
+          >
+            最新データを読み込む
+          </button>
+
+          <strong id="backorder-current-count">
+            表示：0商品
+          </strong>
+        </div>
+
+        <div class="backorder-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>社内コード</th>
+                <th>商品コード</th>
+                <th>商品名</th>
+                <th>色</th>
+                <th>注残数量</th>
+                <th>状態</th>
+                <th>最終反映</th>
+              </tr>
+            </thead>
+            <tbody id="backorder-current-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <button
+        id="back-home-from-backorder-list"
         type="button"
       >
         ホームへ戻る
@@ -3538,6 +3709,7 @@
 <script src="storage.js?v=195"></script>
 <script src="normal-shipment.js?v=206"></script>
 <script src="manual.js?v=207"></script>
+<script src="backorder-list.js?v=208"></script>
 <script src="app.js?v=196"></script>
 <script src="natural-stock-search.js?v=206"></script>
 <script src="product-history.js?v=107"></script>
@@ -3558,7 +3730,7 @@
 <script src="purchase-required.js?v=206"></script>
 <script src="order-remaining.js?v=120"></script>
 <script src="low-shipment.js?v=206"></script>
-<script src="shipping-schedule.js?v=195"></script>
+<script src="shipping-schedule.js?v=208"></script>
 <script src="dedicated-product.js?v=108"></script>
 <script src="shipping-arrival.js?v=118"></script>
 <script src="barcode-print.js?v=142"></script>
@@ -3566,7 +3738,7 @@
 <script src="restore.js?v=120"></script>
 <script src="location-management.js?v=100"></script>
 <script src="home-dashboard.js?v=125"></script>
-<script src="app-settings.js?v=207"></script>
-<script src="home-alerts.js?v=194"></script>
+<script src="app-settings.js?v=208"></script>
+<script src="home-alerts.js?v=208"></script>
 </body>
 </html>

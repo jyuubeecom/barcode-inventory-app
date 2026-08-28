@@ -2597,6 +2597,68 @@ async function saveSalesActualImportBatch(batchRecord, salesRecords) {
       if (startedWrites || failureError) return;
       startedWrites = true;
 
+      const inventoryValidationErrors = [];
+
+      productCodes.forEach(function (internalCode) {
+        const savedProduct = productsByCode.get(internalCode);
+        const netSalesQuantity = netSalesByCode.get(internalCode) || 0;
+        if (!savedProduct || netSalesQuantity <= 0) return;
+
+        const product = normalizeProductLocationStocks(savedProduct);
+        const beforeStock = normalizeLocationStockQuantity(product.stock);
+        const eligibleStock = product.locationStocks.reduce(function (sum, entry) {
+          const location = normalizeLocationStockName(entry.location);
+          if (!SALES_ACTUAL_OUTBOUND_LOCATION_PRIORITY.includes(location)) return sum;
+          return sum + normalizeLocationStockQuantity(entry.stock);
+        }, 0);
+
+        if (beforeStock < netSalesQuantity) {
+          inventoryValidationErrors.push({
+            internalCode: internalCode,
+            productCode: product.productCode || "-",
+            currentStock: beforeStock,
+            eligibleStock: eligibleStock,
+            csvOutbound: netSalesQuantity,
+            shortage: netSalesQuantity - beforeStock,
+            reason: "現在庫不足"
+          });
+          return;
+        }
+
+        if (eligibleStock < netSalesQuantity) {
+          inventoryValidationErrors.push({
+            internalCode: internalCode,
+            productCode: product.productCode || "-",
+            currentStock: beforeStock,
+            eligibleStock: eligibleStock,
+            csvOutbound: netSalesQuantity,
+            shortage: netSalesQuantity - eligibleStock,
+            reason: "自動出庫対象在庫不足"
+          });
+        }
+      });
+
+      if (inventoryValidationErrors.length > 0) {
+        const shown = inventoryValidationErrors.slice(0, 20);
+        const lines = shown.map(function (item) {
+          return (
+            `社内コード：${item.internalCode} / 商品コード：${item.productCode} / ` +
+            `現在庫：${item.currentStock}個 / CSV出庫：${item.csvOutbound}個 / ` +
+            `不足：${item.shortage}個`
+          );
+        });
+        if (inventoryValidationErrors.length > shown.length) {
+          lines.push(`ほか ${inventoryValidationErrors.length - shown.length}商品`);
+        }
+
+        abortWithMessage(
+          `販売実績CSVに在庫不足の商品が${inventoryValidationErrors.length}商品あります。\n\n` +
+          lines.join("\n") +
+          "\n\n在庫数を確認してから、CSVをもう一度選択してください。"
+        );
+        return;
+      }
+
       const inventoryAdjustments = [];
       const inventorySkippedCodes = [];
       const now = new Date().toISOString();

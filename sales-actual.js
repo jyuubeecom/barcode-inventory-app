@@ -1,6 +1,11 @@
 "use strict";
 
 const SALES_ACTUAL_PREVIEW_LIMIT = 20;
+const SALES_ACTUAL_INVENTORY_LOCATION_PRIORITY = Object.freeze([
+  "本社",
+  "酒本倉庫1階",
+  "酒本倉庫2階"
+]);
 let salesActualSelectedPreview = null;
 let salesActualImportHistory = [];
 let salesActualProducts = [];
@@ -130,7 +135,10 @@ async function handleSalesActualFileSelection(event) {
     const preview = await buildSalesActualImportPreview(file, fingerprint, parsed);
     salesActualSelectedPreview = preview;
     renderSalesActualPreview(preview);
-    setSalesActualImportButtonEnabled(preview.importRecords.length > 0);
+    setSalesActualImportButtonEnabled(
+      preview.importRecords.length > 0 &&
+      preview.inventoryErrorRecords.length === 0
+    );
   } catch (error) {
     console.error("販売実績CSV確認エラー", error);
     salesActualSelectedPreview = null;
@@ -312,6 +320,7 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
   const duplicateRecords = [];
   const ignoredRecords = [];
   const errorRecords = [];
+  const inputErrorRecords = [];
   const discontinuedErrorRecords = [];
   const unregisteredCodes = new Set();
   let saleRows = 0;
@@ -344,7 +353,7 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
           internalCode
         );
 
-      errorRecords.push({
+      const inputError = {
         rowNumber:
           parsed.headerIndex +
           index +
@@ -388,7 +397,10 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
           errors.join(
             " / "
           )
-      });
+      };
+
+      errorRecords.push(inputError);
+      inputErrorRecords.push(inputError);
 
       continue;
     }
@@ -493,6 +505,15 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
     }
   }
 
+  const inventoryErrorRecords = buildSalesActualInventoryErrorRecords(
+    importRecords,
+    productMap
+  );
+
+  inventoryErrorRecords.forEach(function (record) {
+    errorRecords.push(record);
+  });
+
   let reportStartDate = parsed.reportStartDate;
   let reportEndDate = parsed.reportEndDate;
   const validDates = importRecords.concat(duplicateRecords).map(function (record) { return record.saleDate; }).filter(Boolean).sort();
@@ -513,11 +534,125 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
     duplicateRecords: duplicateRecords,
     ignoredRecords: ignoredRecords,
     errorRecords: errorRecords,
+    inputErrorRecords: inputErrorRecords,
     discontinuedErrorRecords: discontinuedErrorRecords,
+    inventoryErrorRecords: inventoryErrorRecords,
     unregisteredCodes: Array.from(unregisteredCodes).sort(function (a, b) {
       return a.localeCompare(b, "ja", { numeric: true });
     })
   };
+}
+
+function buildSalesActualInventoryErrorRecords(importRecords, productMap) {
+  const netSalesByCode = new Map();
+
+  importRecords.forEach(function (record) {
+    const internalCode = normalizeSalesActualText(record && record.internalCode);
+    const quantity = Number(record && record.quantity);
+    if (!internalCode || !Number.isFinite(quantity)) return;
+    netSalesByCode.set(
+      internalCode,
+      (netSalesByCode.get(internalCode) || 0) + quantity
+    );
+  });
+
+  const errorRecords = [];
+
+  netSalesByCode.forEach(function (netSalesQuantity, internalCode) {
+    if (netSalesQuantity <= 0) return;
+
+    const product = productMap.get(internalCode);
+    if (!product) return;
+
+    const currentStock = normalizeSalesActualInventoryQuantity(product.stock);
+    const eligibleStock = calculateSalesActualEligibleOutboundStock(product, currentStock);
+
+    if (currentStock < netSalesQuantity) {
+      const shortageQuantity = netSalesQuantity - currentStock;
+      errorRecords.push({
+        rowNumber: "集計",
+        internalCode: internalCode,
+        productCode: product.productCode || "",
+        productName: product.productName || "",
+        customerName: "CSV全体集計",
+        saleDate: "",
+        quantity: netSalesQuantity,
+        detailType: "売上集計",
+        errorType: "在庫不足エラー",
+        reason:
+          `現在庫 ${formatSalesActualNumber(currentStock)}個に対して、` +
+          `CSV出庫 ${formatSalesActualNumber(netSalesQuantity)}個のため、` +
+          `${formatSalesActualNumber(shortageQuantity)}個不足しています。`,
+        currentStock: currentStock,
+        eligibleStock: eligibleStock,
+        csvOutboundQuantity: netSalesQuantity,
+        shortageQuantity: shortageQuantity
+      });
+      return;
+    }
+
+    if (eligibleStock < netSalesQuantity) {
+      const shortageQuantity = netSalesQuantity - eligibleStock;
+      errorRecords.push({
+        rowNumber: "集計",
+        internalCode: internalCode,
+        productCode: product.productCode || "",
+        productName: product.productName || "",
+        customerName: "CSV全体集計",
+        saleDate: "",
+        quantity: netSalesQuantity,
+        detailType: "売上集計",
+        errorType: "在庫不足エラー",
+        reason:
+          `現在庫は ${formatSalesActualNumber(currentStock)}個ありますが、` +
+          `自動出庫対象（本社・酒本倉庫1階・酒本倉庫2階）は ${formatSalesActualNumber(eligibleStock)}個のため、` +
+          `${formatSalesActualNumber(shortageQuantity)}個不足しています。`,
+        currentStock: currentStock,
+        eligibleStock: eligibleStock,
+        csvOutboundQuantity: netSalesQuantity,
+        shortageQuantity: shortageQuantity
+      });
+    }
+  });
+
+  return errorRecords.sort(function (left, right) {
+    return String(left.internalCode || "").localeCompare(
+      String(right.internalCode || ""),
+      "ja",
+      { numeric: true }
+    );
+  });
+}
+
+function normalizeSalesActualInventoryQuantity(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.trunc(number));
+}
+
+function calculateSalesActualEligibleOutboundStock(product, currentStock) {
+  const locationStocks = Array.isArray(product && product.locationStocks)
+    ? product.locationStocks
+    : [];
+
+  let total = 0;
+  let hasUsableLocationStock = false;
+
+  locationStocks.forEach(function (entry) {
+    const location = normalizeSalesActualText(entry && entry.location);
+    if (!SALES_ACTUAL_INVENTORY_LOCATION_PRIORITY.includes(location)) return;
+    hasUsableLocationStock = true;
+    total += normalizeSalesActualInventoryQuantity(entry && entry.stock);
+  });
+
+  if (hasUsableLocationStock) return total;
+
+  const primaryLocation = normalizeSalesActualText(product && product.location);
+  if (SALES_ACTUAL_INVENTORY_LOCATION_PRIORITY.includes(primaryLocation)) {
+    return currentStock;
+  }
+
+  return 0;
 }
 
 function isSalesActualDiscontinuedProduct(
@@ -599,6 +734,8 @@ function renderSalesActualPreview(preview) {
     `<strong>重複スキップ：</strong>${preview.duplicateRecords.length}件`,
     `<strong>対象外（値引など）：</strong>${preview.ignoredRecords.length}件`,
     `<strong>廃盤商品エラー：</strong>${preview.discontinuedErrorRecords.length}件`,
+    `<strong>在庫不足エラー：</strong>${preview.inventoryErrorRecords.length}件`,
+    `<strong>入力エラー：</strong>${preview.inputErrorRecords.length}件`,
     `<strong>エラー合計：</strong>${preview.errorRecords.length}件`
   ].join("<br>");
 
@@ -653,6 +790,38 @@ function renderSalesActualPreview(preview) {
       }
     );
 
+  preview.inventoryErrorRecords
+    .slice(0, SALES_ACTUAL_PREVIEW_LIMIT)
+    .forEach(function (record) {
+      const row = document.createElement("tr");
+      row.classList.add("sales-actual-inventory-error-row");
+      row.innerHTML = `
+        <td>CSV集計</td>
+        <td>${escapeSalesActualHtml(record.internalCode)}</td>
+        <td>${escapeSalesActualHtml(record.productCode || "未登録")}</td>
+        <td>${escapeSalesActualHtml(record.productName || "")}</td>
+        <td>${formatSalesActualNumber(record.csvOutboundQuantity)}個</td>
+        <td><span class="sales-actual-error">在庫不足 ${formatSalesActualNumber(record.shortageQuantity)}個</span></td>
+      `;
+      tableBody.appendChild(row);
+    });
+
+  preview.inputErrorRecords
+    .slice(0, SALES_ACTUAL_PREVIEW_LIMIT)
+    .forEach(function (record) {
+      const row = document.createElement("tr");
+      row.classList.add("sales-actual-input-error-row");
+      row.innerHTML = `
+        <td>${escapeSalesActualHtml(formatSalesActualDate(record.saleDate))}</td>
+        <td>${escapeSalesActualHtml(record.internalCode || "未入力")}</td>
+        <td>${escapeSalesActualHtml(record.productCode || "未登録")}</td>
+        <td>${escapeSalesActualHtml(record.customerName || "")}</td>
+        <td>${escapeSalesActualHtml(formatSalesActualPrintQuantity(record.quantity))}</td>
+        <td><span class="sales-actual-error">入力エラー</span></td>
+      `;
+      tableBody.appendChild(row);
+    });
+
   if (preview.importRecords.length > SALES_ACTUAL_PREVIEW_LIMIT) {
     messages.push(`プレビューは先頭${SALES_ACTUAL_PREVIEW_LIMIT}件を表示しています。`);
   }
@@ -690,9 +859,18 @@ function renderSalesActualPreview(preview) {
     );
   }
 
+  if (preview.inventoryErrorRecords.length > 0) {
+    messages.push(
+      `⚠ 在庫不足の商品が${preview.inventoryErrorRecords.length}商品あります。CSV全体を確認した結果をまとめて表示しています。`
+    );
+    messages.push(
+      "在庫不足が1件でもある間は、このCSVの取込ボタンを無効にしています。エラー一覧を印刷して在庫を修正後、同じCSVをもう一度選択してください。"
+    );
+  }
+
   if (preview.errorRecords.length > 0) {
     messages.push(
-      `取込不可の行が合計${preview.errorRecords.length}件あります。エラー行は保存せず、正常な行だけを取り込みます。`
+      `エラーが合計${preview.errorRecords.length}件あります。「エラー一覧を印刷する」で廃盤・在庫不足・入力エラーをまとめて確認できます。`
     );
   }
   if (preview.returnRows > 0) {
@@ -715,6 +893,23 @@ function renderSalesActualPreview(preview) {
 
 async function importSelectedSalesActualFile() {
   const preview = salesActualSelectedPreview;
+
+  if (
+    preview &&
+    Array.isArray(preview.inventoryErrorRecords) &&
+    preview.inventoryErrorRecords.length > 0
+  ) {
+    await showAppDialog({
+      type: "danger",
+      icon: "📦",
+      title: "在庫不足エラーを先に修正してください",
+      message: `在庫不足の商品が${preview.inventoryErrorRecords.length}商品あります。CSVはまだ取り込みません。`,
+      notice: "「エラー一覧を印刷する」で廃盤商品などと一緒にまとめて確認できます。在庫を修正後、同じCSVをもう一度選択してください。",
+      confirmText: "確認して閉じる"
+    });
+    return;
+  }
+
   if (!preview || preview.importRecords.length === 0) {
     await showAppDialog({
       type: "warning",
@@ -736,6 +931,8 @@ async function importSelectedSalesActualFile() {
       { label: "新規販売実績", value: `${preview.importRecords.length}件` },
       { label: "重複スキップ", value: `${preview.duplicateRecords.length}件` },
       { label: "廃盤商品エラー", value: `${preview.discontinuedErrorRecords.length}件` },
+      { label: "在庫不足エラー", value: `${preview.inventoryErrorRecords.length}件` },
+      { label: "入力エラー", value: `${preview.inputErrorRecords.length}件` },
       { label: "商品未登録コード", value: `${preview.unregisteredCodes.length}件` }
     ],
     notice:
@@ -831,7 +1028,11 @@ async function importSelectedSalesActualFile() {
     }
   } finally {
     button.textContent = "このCSVを取り込む";
-    setSalesActualImportButtonEnabled(Boolean(salesActualSelectedPreview && salesActualSelectedPreview.importRecords.length > 0));
+    setSalesActualImportButtonEnabled(Boolean(
+      salesActualSelectedPreview &&
+      salesActualSelectedPreview.importRecords.length > 0 &&
+      salesActualSelectedPreview.inventoryErrorRecords.length === 0
+    ));
   }
 }
 
@@ -962,6 +1163,16 @@ function printSalesActualErrorList() {
               record.quantity
             );
 
+          const customerName =
+            record.errorType === "在庫不足エラー"
+              ? (record.productName || "商品集計")
+              : (record.customerName || "未入力");
+
+          const saleDateForPrint =
+            record.errorType === "在庫不足エラー"
+              ? "CSV集計"
+              : saleDate;
+
           const errorType =
             record.errorType ||
             (
@@ -979,10 +1190,10 @@ function printSalesActualErrorList() {
             <tr>
               <td class="center">${index + 1}</td>
               <td class="center">${escapeSalesActualHtml(record.rowNumber || "")}</td>
-              <td>${escapeSalesActualHtml(saleDate)}</td>
+              <td>${escapeSalesActualHtml(saleDateForPrint)}</td>
               <td>${escapeSalesActualHtml(record.internalCode || "未入力")}</td>
               <td>${escapeSalesActualHtml(record.productCode || "未登録")}</td>
-              <td>${escapeSalesActualHtml(record.customerName || "未入力")}</td>
+              <td>${escapeSalesActualHtml(customerName)}</td>
               <td class="number">${escapeSalesActualHtml(quantity)}</td>
               <td>${escapeSalesActualHtml(errorType)}</td>
               <td>${escapeSalesActualHtml(record.reason || "内容を確認してください")}</td>
@@ -1037,7 +1248,7 @@ function printSalesActualErrorList() {
     .summary {
       display: grid;
       grid-template-columns:
-        1.5fr 1fr 0.8fr;
+        1.5fr 1fr 0.8fr 0.8fr 0.8fr;
       gap: 8px;
       margin-bottom: 10px;
     }
@@ -1129,13 +1340,15 @@ function printSalesActualErrorList() {
   <div class="summary">
     <div><strong>ファイル：</strong>${escapeSalesActualHtml(preview.fileName || "販売実績CSV")}</div>
     <div><strong>帳票期間：</strong>${escapeSalesActualHtml(rangeText)}</div>
-    <div><strong>エラー：</strong>${preview.errorRecords.length}件</div>
+    <div><strong>全エラー：</strong>${preview.errorRecords.length}件</div>
+    <div><strong>廃盤：</strong>${preview.discontinuedErrorRecords.length}件</div>
+    <div><strong>在庫不足：</strong>${preview.inventoryErrorRecords.length}件</div>
   </div>
 
   <div class="notice">
-    下記の販売実績はシステムに取り込まれていません。
-    元データを確認・修正し、修正後のCSVを再度出力してください。
-    修正した行は右端の「修正確認」にチェックしてください。
+    CSV全体を事前確認し、廃盤商品・在庫不足・入力エラーをまとめて表示しています。
+    元データまたは在庫数を確認・修正し、同じCSVを再度選択してください。
+    修正した項目は右端の「修正確認」にチェックしてください。
   </div>
 
   <table>
@@ -1485,6 +1698,10 @@ function createSalesActualStyle() {
     #sales-actual-import .sales-actual-error { color: #c62828; font-weight: 800; }
     #sales-actual-import .sales-actual-discontinued-row { background: #ffebee; }
     #sales-actual-import .sales-actual-discontinued-row td { border-color: #ef9a9a; }
+    #sales-actual-import .sales-actual-inventory-error-row { background: #fff3e0; }
+    #sales-actual-import .sales-actual-inventory-error-row td { border-color: #ffb74d; }
+    #sales-actual-import .sales-actual-input-error-row { background: #fff8e1; }
+    #sales-actual-import .sales-actual-input-error-row td { border-color: #ffd54f; }
 
     #sales-actual-import .sales-actual-summary {
       font-size: 1.08rem;

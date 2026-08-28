@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v209
+            画面版 v210
           </span>
         </div>
       </div>
@@ -1049,7 +1049,8 @@
         <strong style="font-size: 1.05em;">⚠ 販売実績CSVを取り込むと、販売数量を場所別在庫から自動出庫します。</strong><br>
         出庫の優先順：<strong>本社 → 酒本倉庫1階 → 酒本倉庫2階</strong><br><br>
         返品分は販売数から差し引いて処理します。取込前に、下のプレビューで内容を必ず確認してください。<br>
-        <strong>商品状態が「廃盤」の商品が含まれている場合はエラーとして表示し、その行は取り込みません。</strong>
+        <strong>商品状態が「廃盤」の商品に加えて、CSV出庫数が現在庫を上回る商品も、CSV全体を事前確認してまとめてエラー表示します。</strong><br>
+        エラーが複数あっても1件ずつ止めず、一覧と印刷でまとめて確認できます。
       </div>
 
       <div class="sales-actual-card">
@@ -1069,7 +1070,7 @@
       </div>
 
       <div class="sales-actual-card">
-        <h3>2. 取込内容を確認する</h3>
+        <h3>2. 取込内容・エラーをまとめて確認する</h3>
         <div id="sales-actual-preview-summary" class="sales-actual-preview-summary">
           CSVを選ぶと、取り込み前に内容を確認できます。
         </div>
@@ -3725,7 +3726,7 @@
 
   </main>
 
-<script src="storage.js?v=195"></script>
+<script src="storage.js?v=210"></script>
 <script src="normal-shipment.js?v=206"></script>
 <script src="manual.js?v=207"></script>
 <script src="backorder-list.js?v=208"></script>
@@ -3745,7 +3746,7 @@
 <script src="csv-update.js?v=74"></script>
 <script src="pwa.js?v=31"></script>
 <script src="sales-plan.js?v=176"></script>
-<script src="sales-actual.js?v=209"></script>
+<script src="sales-actual.js?v=210"></script>
 <script src="purchase-required.js?v=206"></script>
 <script src="order-remaining.js?v=120"></script>
 <script src="low-shipment.js?v=206"></script>

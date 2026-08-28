@@ -10,7 +10,7 @@
 
   <meta name="theme-color" content="#1565c0">
 
-  <link rel="stylesheet" href="style.css?v=107">
+  <link rel="stylesheet" href="style.css?v=108">
 
   <link rel="manifest" href="manifest.json">
 
@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v203
+            画面版 v204
           </span>
         </div>
       </div>
@@ -1032,6 +1032,7 @@
             <select id="order-remaining-history-source">
               <option value="all">すべて</option>
               <option value="手動編集">手動編集</option>
+              <option value="追加発注">追加発注</option>
               <option value="CSV一括更新">CSV一括更新</option>
               <option value="船便入荷">船便入荷</option>
             </select>
@@ -2136,7 +2137,7 @@
 
       <p id="product-detail-worker-notice" hidden>
         🔒 作業者モードでは「入庫」「出庫」「在庫履歴」は利用できますが、
-        数量調整・商品編集・商品削除は管理者専用です。
+        追加発注・数量調整・商品編集・商品削除は管理者専用です。
       </p>
 
       <div class="product-detail-actions">
@@ -2164,6 +2165,71 @@
             >
               在庫履歴を見る
             </button>
+          </div>
+        </div>
+
+        <div
+          id="product-detail-order-actions"
+          class="product-detail-action-group product-detail-action-group-order"
+        >
+          <h3>発注管理</h3>
+
+          <p class="product-detail-order-help">
+            仕入先へ追加で発注した数量を、現在の発注残へ加算します。現在庫数は変更しません。
+          </p>
+
+          <div class="product-detail-action-buttons product-detail-order-buttons">
+            <button
+              id="add-order-remaining-from-detail-button"
+              type="button"
+            >
+              追加発注する
+            </button>
+          </div>
+
+          <div
+            id="detail-order-add-panel"
+            class="detail-order-add-panel"
+            hidden
+          >
+            <label for="detail-order-add-quantity">
+              今回の追加発注数
+            </label>
+
+            <input
+              id="detail-order-add-quantity"
+              type="number"
+              min="1"
+              step="1"
+              inputmode="numeric"
+              placeholder="例：60"
+            >
+
+            <small>
+              入力した数量を現在の発注残に足します。発注日時と数量は「発注残変更履歴」に残ります。
+            </small>
+
+            <div class="detail-order-add-actions">
+              <button
+                id="confirm-detail-order-add-button"
+                type="button"
+              >
+                追加発注を確定
+              </button>
+
+              <button
+                id="cancel-detail-order-add-button"
+                type="button"
+              >
+                キャンセル
+              </button>
+            </div>
+
+            <p
+              id="detail-order-add-message"
+              class="detail-order-add-message"
+              aria-live="polite"
+            ></p>
           </div>
         </div>
 
@@ -3167,7 +3233,7 @@
   </main>
 
 <script src="storage.js?v=195"></script>
-<script src="app.js?v=195"></script>
+<script src="app.js?v=196"></script>
 <script src="natural-stock-search.js?v=191"></script>
 <script src="product-history.js?v=107"></script>
 <script src="inventory.js?v=195"></script>
@@ -3185,7 +3251,7 @@
 <script src="sales-plan.js?v=176"></script>
 <script src="sales-actual.js?v=195"></script>
 <script src="purchase-required.js?v=140"></script>
-<script src="order-remaining.js?v=119"></script>
+<script src="order-remaining.js?v=120"></script>
 <script src="low-shipment.js?v=45"></script>
 <script src="shipping-schedule.js?v=195"></script>
 <script src="dedicated-product.js?v=108"></script>
@@ -3195,7 +3261,7 @@
 <script src="restore.js?v=120"></script>
 <script src="location-management.js?v=100"></script>
 <script src="home-dashboard.js?v=125"></script>
-<script src="app-settings.js?v=103"></script>
+<script src="app-settings.js?v=104"></script>
 <script src="home-alerts.js?v=194"></script>
 </body>
 </html>

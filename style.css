@@ -1146,3 +1146,108 @@ body.app-dialog-open {
     white-space: pre-line;
   }
 }
+
+
+/* =========================================================
+   v108 商品詳細：追加発注
+   ========================================================= */
+.product-detail-action-group-order {
+  border-left: 5px solid #1565c0;
+  background-color: #f5f9ff;
+}
+
+.product-detail-order-help {
+  margin: 0 0 12px;
+  line-height: 1.7;
+  color: #455a64;
+}
+
+.product-detail-order-buttons {
+  grid-template-columns: minmax(0, 260px);
+}
+
+#add-order-remaining-from-detail-button,
+#confirm-detail-order-add-button {
+  background-color: #1565c0;
+}
+
+.detail-order-add-panel {
+  margin-top: 14px;
+  padding: 14px;
+  border: 2px solid #90caf9;
+  border-radius: 12px;
+  background-color: #ffffff;
+}
+
+.detail-order-add-panel label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 17px;
+  font-weight: bold;
+}
+
+.detail-order-add-panel input {
+  width: min(100%, 320px);
+  min-height: 52px;
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.detail-order-add-panel small {
+  display: block;
+  margin-bottom: 12px;
+  line-height: 1.6;
+  color: #546e7a;
+}
+
+.detail-order-add-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.detail-order-add-actions button {
+  min-height: 50px;
+  margin: 0;
+}
+
+#cancel-detail-order-add-button {
+  background-color: #607d8b;
+}
+
+.detail-order-add-message {
+  min-height: 1.5em;
+  margin: 10px 0 0;
+  font-weight: bold;
+}
+
+.detail-order-add-message.is-success {
+  color: #1b5e20;
+}
+
+.detail-order-add-message.is-error {
+  color: #b71c1c;
+}
+
+@media (max-width: 700px) {
+  .product-detail-order-buttons {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-order-add-panel input {
+    width: 100%;
+  }
+
+  .detail-order-add-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .detail-order-add-actions button {
+    width: 100%;
+    min-height: 56px;
+    font-size: 17px;
+  }
+}

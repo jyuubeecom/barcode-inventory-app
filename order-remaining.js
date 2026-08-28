@@ -2727,9 +2727,12 @@ function renderOrderRemainingHistory() {
         history.source === "船便入荷"
           ? "shipping"
           : history.source ===
-              "CSV一括更新"
-            ? "csv"
-            : "manual";
+              "追加発注"
+            ? "additional"
+            : history.source ===
+                "CSV一括更新"
+              ? "csv"
+              : "manual";
 
       card.innerHTML = `
         <div class="order-remaining-history-head">
@@ -3350,6 +3353,11 @@ function createOrderRemainingStyle() {
     #order-remaining-management .order-remaining-history-source.shipping {
       background: #fff3e0;
       color: #e65100;
+    }
+
+    #order-remaining-management .order-remaining-history-source.additional {
+      background: #ede7f6;
+      color: #4527a0;
     }
 
     #order-remaining-management .order-remaining-history-name {

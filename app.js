@@ -84,6 +84,36 @@ const deleteFromDetailButton =
     "#delete-from-detail-button"
   );
 
+const addOrderRemainingFromDetailButton =
+  document.querySelector(
+    "#add-order-remaining-from-detail-button"
+  );
+
+const detailOrderAddPanel =
+  document.querySelector(
+    "#detail-order-add-panel"
+  );
+
+const detailOrderAddQuantityInput =
+  document.querySelector(
+    "#detail-order-add-quantity"
+  );
+
+const confirmDetailOrderAddButton =
+  document.querySelector(
+    "#confirm-detail-order-add-button"
+  );
+
+const cancelDetailOrderAddButton =
+  document.querySelector(
+    "#cancel-detail-order-add-button"
+  );
+
+const detailOrderAddMessage =
+  document.querySelector(
+    "#detail-order-add-message"
+  );
+
 const cancelEditButton =
   document.querySelector(
     "#cancel-edit-button"
@@ -442,6 +472,29 @@ async function initializeApp() {
       openEditScreen(detailInternalCodeValue);
     }
   );
+
+  if (addOrderRemainingFromDetailButton) {
+    addOrderRemainingFromDetailButton.addEventListener(
+      "click",
+      openAdditionalOrderPanelFromDetail
+    );
+  }
+
+  if (confirmDetailOrderAddButton) {
+    confirmDetailOrderAddButton.addEventListener(
+      "click",
+      function () {
+        void handleAdditionalOrderFromDetail();
+      }
+    );
+  }
+
+  if (cancelDetailOrderAddButton) {
+    cancelDetailOrderAddButton.addEventListener(
+      "click",
+      closeAdditionalOrderPanelFromDetail
+    );
+  }
 
   deleteFromDetailButton.addEventListener(
     "click",
@@ -1351,7 +1404,312 @@ function openDetailScreen(internalCode) {
   detailUpdatedAt.textContent =
     formatDateTime(selectedProduct.updatedAt);
 
+  closeAdditionalOrderPanelFromDetail();
   showScreen("detail");
+}
+
+async function openAdditionalOrderPanelFromDetail() {
+  if (
+    !(await requireAdminPermission(
+      "追加発注の登録"
+    ))
+  ) {
+    return;
+  }
+
+  if (!detailInternalCodeValue) {
+    await showAppDialog({
+      type: "warning",
+      icon: "📦",
+      title: "商品が選択されていません",
+      message:
+        "商品一覧から追加発注する商品を選択してください。",
+      confirmText: "閉じる"
+    });
+    return;
+  }
+
+  if (!detailOrderAddPanel) {
+    return;
+  }
+
+  detailOrderAddPanel.hidden = false;
+
+  if (detailOrderAddQuantityInput) {
+    detailOrderAddQuantityInput.value = "";
+    detailOrderAddQuantityInput.focus();
+  }
+
+  setDetailOrderAddMessage("", "");
+}
+
+function closeAdditionalOrderPanelFromDetail() {
+  if (detailOrderAddPanel) {
+    detailOrderAddPanel.hidden = true;
+  }
+
+  if (detailOrderAddQuantityInput) {
+    detailOrderAddQuantityInput.value = "";
+  }
+
+  setDetailOrderAddMessage("", "");
+}
+
+function setDetailOrderAddMessage(
+  message,
+  type
+) {
+  if (!detailOrderAddMessage) {
+    return;
+  }
+
+  detailOrderAddMessage.textContent =
+    message || "";
+  detailOrderAddMessage.className =
+    "detail-order-add-message";
+
+  if (type === "success") {
+    detailOrderAddMessage.classList.add(
+      "is-success"
+    );
+  } else if (type === "error") {
+    detailOrderAddMessage.classList.add(
+      "is-error"
+    );
+  }
+}
+
+async function handleAdditionalOrderFromDetail() {
+  if (
+    !(await requireAdminPermission(
+      "追加発注の登録"
+    ))
+  ) {
+    return;
+  }
+
+  const selectedProduct =
+    getProductByInternalCode(
+      detailInternalCodeValue
+    );
+
+  if (!selectedProduct) {
+    await showAppDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "商品情報を確認できませんでした",
+      message:
+        "商品一覧を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
+    return;
+  }
+
+  const quantity = Number(
+    detailOrderAddQuantityInput
+      ? detailOrderAddQuantityInput.value
+      : ""
+  );
+
+  if (
+    !Number.isSafeInteger(quantity) ||
+    quantity <= 0
+  ) {
+    setDetailOrderAddMessage(
+      "追加発注数は1以上の整数で入力してください。",
+      "error"
+    );
+
+    await showAppDialog({
+      type: "warning",
+      icon: "📦",
+      title: "追加発注数を確認してください",
+      message:
+        "1以上の整数で入力してください。",
+      details: [
+        {
+          label: "入力例",
+          value: "1、60、120"
+        }
+      ],
+      confirmText: "入力に戻る"
+    });
+
+    if (detailOrderAddQuantityInput) {
+      detailOrderAddQuantityInput.focus();
+    }
+    return;
+  }
+
+  const beforeOrderRemaining =
+    getOrderRemaining(selectedProduct);
+  const afterOrderRemaining =
+    beforeOrderRemaining + quantity;
+
+  if (
+    !Number.isSafeInteger(
+      afterOrderRemaining
+    )
+  ) {
+    await showAppDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "発注残数が大きすぎます",
+      message:
+        "入力する追加発注数を確認してください。",
+      confirmText: "閉じる"
+    });
+    return;
+  }
+
+  const confirmed = await showAppDialog({
+    type: "confirm",
+    icon: "📦",
+    title: "追加発注を登録しますか？",
+    message:
+      "今回の発注数を現在の発注残へ加算します。現在庫数は変更しません。",
+    details: [
+      {
+        label: "商品",
+        value:
+          selectedProduct.productName ||
+          selectedProduct.internalCode
+      },
+      {
+        label: "社内コード",
+        value:
+          selectedProduct.internalCode ||
+          "未登録"
+      },
+      {
+        label: "現在の発注残",
+        value:
+          `${beforeOrderRemaining.toLocaleString(
+            "ja-JP"
+          )}個`
+      },
+      {
+        label: "今回の追加発注",
+        value:
+          `${quantity.toLocaleString(
+            "ja-JP"
+          )}個`
+      },
+      {
+        label: "登録後の発注残",
+        value:
+          `${afterOrderRemaining.toLocaleString(
+            "ja-JP"
+          )}個`
+      }
+    ],
+    notice:
+      "この操作は発注残変更履歴に記録されます。",
+    isConfirm: true,
+    confirmText: "追加発注を登録",
+    cancelText: "キャンセル"
+  });
+
+  if (!confirmed) {
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const updatedProduct = {
+    ...selectedProduct,
+    orderRemaining:
+      afterOrderRemaining,
+    updatedAt: now
+  };
+
+  const history = {
+    id:
+      `order-remaining-additional-${Date.now()}-` +
+      `${Math.random().toString(36).slice(2, 8)}`,
+    dateTime: now,
+    recordedAt: now,
+    internalCode:
+      selectedProduct.internalCode || "",
+    productCode:
+      selectedProduct.productCode || "",
+    productName:
+      selectedProduct.productName || "",
+    beforeOrderRemaining:
+      beforeOrderRemaining,
+    afterOrderRemaining:
+      afterOrderRemaining,
+    change: quantity,
+    additionalOrderQuantity: quantity,
+    source: "追加発注",
+    memo:
+      "商品詳細画面から追加発注を登録"
+  };
+
+  try {
+    await saveOrderRemainingChange(
+      updatedProduct,
+      history
+    );
+
+    applyUpdatedProduct(updatedProduct);
+    closeAdditionalOrderPanelFromDetail();
+    openDetailScreen(
+      updatedProduct.internalCode
+    );
+
+    await showAppDialog({
+      type: "success",
+      icon: "✅",
+      title: "追加発注を登録しました",
+      message:
+        "発注残数を更新しました。現在庫数は変更していません。",
+      details: [
+        {
+          label: "今回の追加発注",
+          value:
+            `${quantity.toLocaleString(
+              "ja-JP"
+            )}個`
+        },
+        {
+          label: "発注残",
+          value:
+            `${afterOrderRemaining.toLocaleString(
+              "ja-JP"
+            )}個`
+        },
+        {
+          label: "現在庫",
+          value:
+            `${getValidStockNumber(
+              updatedProduct.stock
+            ).toLocaleString(
+              "ja-JP"
+            )}個（変更なし）`
+        }
+      ],
+      confirmText: "閉じる"
+    });
+  } catch (error) {
+    console.error(
+      "追加発注の保存エラー",
+      error
+    );
+
+    setDetailOrderAddMessage(
+      "追加発注を保存できませんでした。",
+      "error"
+    );
+
+    await showAppDialog({
+      type: "danger",
+      icon: "⚠️",
+      title: "追加発注を保存できませんでした",
+      message:
+        "画面を更新して、もう一度お試しください。",
+      confirmText: "閉じる"
+    });
+  }
 }
 
 function openEditScreen(internalCode) {

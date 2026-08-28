@@ -1011,17 +1011,19 @@
       );
     }
 
-    const adminActionGroup =
-      document.querySelector(
-        "#product-detail-admin-actions"
+    const adminActionGroups =
+      document.querySelectorAll(
+        "#product-detail-admin-actions, #product-detail-order-actions"
       );
 
-    if (adminActionGroup) {
-      adminActionGroup.classList.toggle(
-        "role-menu-hidden",
-        roleMode === "worker"
-      );
-    }
+    adminActionGroups.forEach(
+      function (adminActionGroup) {
+        adminActionGroup.classList.toggle(
+          "role-menu-hidden",
+          roleMode === "worker"
+        );
+      }
+    );
   }
 
   function enforceWorkerScreenRestriction(

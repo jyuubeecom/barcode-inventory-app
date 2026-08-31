@@ -544,22 +544,39 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
 }
 
 function buildSalesActualInventoryErrorRecords(importRecords, productMap) {
-  const netSalesByCode = new Map();
+  const salesSummaryByCode = new Map();
 
   importRecords.forEach(function (record) {
     const internalCode = normalizeSalesActualText(record && record.internalCode);
     const quantity = Number(record && record.quantity);
     if (!internalCode || !Number.isFinite(quantity)) return;
-    netSalesByCode.set(
-      internalCode,
-      (netSalesByCode.get(internalCode) || 0) + quantity
-    );
+
+    if (!salesSummaryByCode.has(internalCode)) {
+      salesSummaryByCode.set(internalCode, {
+        quantity: 0,
+        customerNames: new Set()
+      });
+    }
+
+    const summary = salesSummaryByCode.get(internalCode);
+    summary.quantity += quantity;
+
+    const customerName = normalizeSalesActualText(record && record.customerName);
+    if (customerName) {
+      summary.customerNames.add(customerName);
+    }
   });
 
   const errorRecords = [];
 
-  netSalesByCode.forEach(function (netSalesQuantity, internalCode) {
+  salesSummaryByCode.forEach(function (summary, internalCode) {
+    const netSalesQuantity = summary.quantity;
     if (netSalesQuantity <= 0) return;
+
+    const customerNames = Array.from(summary.customerNames);
+    const customerName = customerNames.length > 0
+      ? customerNames.join(" / ")
+      : "未入力";
 
     const product = productMap.get(internalCode);
     if (!product) return;
@@ -574,7 +591,8 @@ function buildSalesActualInventoryErrorRecords(importRecords, productMap) {
         internalCode: internalCode,
         productCode: product.productCode || "",
         productName: product.productName || "",
-        customerName: "CSV全体集計",
+        customerName: customerName,
+        customerNames: customerNames,
         saleDate: "",
         quantity: netSalesQuantity,
         detailType: "売上集計",
@@ -598,7 +616,8 @@ function buildSalesActualInventoryErrorRecords(importRecords, productMap) {
         internalCode: internalCode,
         productCode: product.productCode || "",
         productName: product.productName || "",
-        customerName: "CSV全体集計",
+        customerName: customerName,
+        customerNames: customerNames,
         saleDate: "",
         quantity: netSalesQuantity,
         detailType: "売上集計",
@@ -799,7 +818,7 @@ function renderSalesActualPreview(preview) {
         <td>CSV集計</td>
         <td>${escapeSalesActualHtml(record.internalCode)}</td>
         <td>${escapeSalesActualHtml(record.productCode || "未登録")}</td>
-        <td>${escapeSalesActualHtml(record.productName || "")}</td>
+        <td>${escapeSalesActualHtml(record.customerName || "未入力")}</td>
         <td>${formatSalesActualNumber(record.csvOutboundQuantity)}個</td>
         <td><span class="sales-actual-error">在庫不足 ${formatSalesActualNumber(record.shortageQuantity)}個</span></td>
       `;
@@ -1164,9 +1183,8 @@ function printSalesActualErrorList() {
             );
 
           const customerName =
-            record.errorType === "在庫不足エラー"
-              ? (record.productName || "商品集計")
-              : (record.customerName || "未入力");
+            record.customerName ||
+            (record.errorType === "在庫不足エラー" ? "CSV全体集計" : "未入力");
 
           const saleDateForPrint =
             record.errorType === "在庫不足エラー"

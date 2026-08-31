@@ -1149,7 +1149,13 @@ function validateCompanyMasterItem(
       );
     }
 
+    const dedicatedLocked =
+      isCsvDedicatedStatusLocked(
+        existingProduct
+      );
+
     if (
+      !dedicatedLocked &&
       existingStatus !==
       item.productStatus
     ) {
@@ -1158,7 +1164,28 @@ function validateCompanyMasterItem(
       );
     }
 
-    if (changes.length > 0) {
+    if (
+      dedicatedLocked &&
+      item.productStatus !==
+        "専用商品"
+    ) {
+      changes.push(
+        `商品状態：専用商品（固定のためCSVの「${item.productStatus}」判定は反映しません）`
+      );
+      item.dedicatedStatusProtected =
+        true;
+    }
+
+    const hasActualUpdate =
+      existingColor !==
+        item.productColor ||
+      (
+        !dedicatedLocked &&
+        existingStatus !==
+          item.productStatus
+      );
+
+    if (hasActualUpdate) {
       item.status =
         "更新";
 
@@ -1171,9 +1198,12 @@ function validateCompanyMasterItem(
     item.status =
       "変更なし";
 
-    item.messages = [
-      "商品の色・商品状態はCSVと同じです。"
-    ];
+    item.messages =
+      changes.length > 0
+        ? changes
+        : [
+            "商品の色・商品状態はCSVと同じです。"
+          ];
 
     return;
   }
@@ -1192,9 +1222,45 @@ function validateCompanyMasterItem(
   }
 }
 
+function isCsvDedicatedStatusLocked(
+  product
+) {
+  if (!product) {
+    return false;
+  }
+
+  if (
+    product.dedicatedStatusLocked === true
+  ) {
+    return true;
+  }
+
+  const savedStatus =
+    String(
+      product.productStatus || ""
+    )
+      .normalize("NFKC")
+      .trim()
+      .toLowerCase();
+
+  return (
+    savedStatus === "専用商品" ||
+    savedStatus === "専用" ||
+    savedStatus === "dedicated" ||
+    savedStatus === "exclusive"
+  );
+}
+
 function getCsvExistingProductStatus(
   product
 ) {
+  if (
+    isCsvDedicatedStatusLocked(
+      product
+    )
+  ) {
+    return "専用商品";
+  }
   const savedStatus =
     String(
       product &&
@@ -1846,16 +1912,33 @@ async function registerNewCsvProducts() {
       const dateTime =
         new Date().toISOString();
 
+      const dedicatedLocked =
+        isCsvDedicatedStatusLocked(
+          currentProduct
+        );
+
+      const nextProductStatus =
+        dedicatedLocked
+          ? "専用商品"
+          : item.productStatus;
+
       const updatedProduct = {
         ...currentProduct,
         productColor:
           item.productColor,
         productStatus:
-          item.productStatus,
+          nextProductStatus,
+        dedicatedStatusLocked:
+          dedicatedLocked ||
+          nextProductStatus ===
+            "専用商品",
         discontinuedFlag:
-          item.discontinuedFlag,
+          nextProductStatus ===
+            "廃盤"
+            ? item.discontinuedFlag
+            : "",
         discontinued:
-          item.productStatus ===
+          nextProductStatus ===
           "廃盤",
         updatedAt:
           dateTime
@@ -2045,6 +2128,10 @@ function createProductFromCsvItem(
 
     productStatus:
       item.productStatus,
+
+    dedicatedStatusLocked:
+      item.productStatus ===
+        "専用商品",
 
     discontinuedFlag:
       item.discontinuedFlag,

@@ -1,19 +1,19 @@
 "use strict";
 
-const CACHE_NAME = "barcode-inventory-app-v214";
+const CACHE_NAME = "barcode-inventory-app-v215";
 const APP_FILES = [
   "./", "./index.html", "./style.css?v=108", "./storage.js?v=212",
   "./normal-shipment.js?v=206",
   "./manual.js?v=207",
-  "./backorder-list.js?v=208",
-  "./app.js?v=196", "./natural-stock-search.js?v=206", "./product-history.js?v=107", "./inventory.js?v=97", "./transfer-list.js?v=83", "./location-stock-report.js?v=185",
+  "./backorder-list.js?v=215",
+  "./app.js?v=215", "./natural-stock-search.js?v=206", "./product-history.js?v=107", "./inventory.js?v=97", "./transfer-list.js?v=83", "./location-stock-report.js?v=185",
   "./libs/barcode-detector-zxing-adapter.js?v=31",
   "./libs/ZXING-LICENSE.txt",
   "./scanner.js?v=126", "./stocktaking.js?v=202",
   "./stocktaking-history.js?v=35", "./stocktaking-transfer.js?v=201",
-  "./csv.js?v=90", "./csv-import.js?v=146", "./csv-update.js?v=74",
+  "./csv.js?v=90", "./csv-import.js?v=215", "./csv-update.js?v=74",
   "./sales-plan.js?v=176", "./sales-actual.js?v=210", "./purchase-required.js?v=206", "./order-remaining.js?v=120", "./low-shipment.js?v=206",
-  "./shipping-schedule.js?v=208", "./dedicated-product.js?v=108", "./shipping-arrival.js?v=118", "./barcode-print.js?v=142",
+  "./shipping-schedule.js?v=208", "./dedicated-product.js?v=215", "./shipping-arrival.js?v=118", "./barcode-print.js?v=142",
   "./backup.js?v=120", "./restore.js?v=120", "./location-management.js?v=100",
   "./processing-sheet.js?v=211",
   "./processing-conversion.js?v=213",

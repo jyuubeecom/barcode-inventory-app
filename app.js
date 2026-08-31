@@ -965,8 +965,13 @@ async function handleProductSubmit(event) {
     }),
     supplier: supplier,
     orderRemaining: orderRemaining,
-    backorderStatus: backorderStatus,
+    backorderStatus:
+      productStatus === "専用商品"
+        ? ""
+        : backorderStatus,
     productStatus: productStatus,
+    dedicatedStatusLocked:
+      productStatus === "専用商品",
     discontinuedFlag:
       productStatus === "廃盤"
         ? "9"
@@ -1998,10 +2003,61 @@ async function handleEditProductSubmit(event) {
   }
 
 
+  const currentLifecycleStatus =
+    getProductLifecycleStatus(
+      currentProduct
+    );
+
+  const dedicatedStatusWasLocked =
+    Boolean(
+      currentProduct &&
+      currentProduct.dedicatedStatusLocked === true
+    ) ||
+    currentLifecycleStatus ===
+      "専用商品";
+
+  if (
+    dedicatedStatusWasLocked &&
+    productStatus !== "専用商品"
+  ) {
+    const unlockConfirmed =
+      await showAppDialog({
+        type: "warning",
+        icon: "🔒",
+        title: "専用商品の固定を解除しますか？",
+        message:
+          "この商品は「専用商品」として固定されています。管理者が明示的に変更した場合だけ固定を解除できます。",
+        details: [
+          {
+            label: "現在の商品状態",
+            value: "専用商品（固定）"
+          },
+          {
+            label: "変更後の商品状態",
+            value: productStatus
+          }
+        ],
+        notice:
+          "固定を解除すると、今後CSV読込や自動判定の対象になる場合があります。",
+        isConfirm: true,
+        cancelText: "専用商品のままにする",
+        confirmText: "固定を解除して変更する"
+      });
+
+    if (!unlockConfirmed) {
+      editProductStatusInput.value =
+        "専用商品";
+      editProductStatusInput.focus();
+      return;
+    }
+  }
+
   const updatedProduct = {
+    ...currentProduct,
     internalCode: editingInternalCode,
     productCode: productCode,
     productName: productName,
+    productColor: productColor,
     janCode: janCode,
     stock: Number(currentProduct.stock),
     minStock: minStock,
@@ -2014,12 +2070,19 @@ async function handleEditProductSubmit(event) {
       ),
     supplier: supplier,
     orderRemaining: orderRemaining,
-    backorderStatus: backorderStatus,
+    backorderStatus:
+      productStatus === "専用商品"
+        ? ""
+        : backorderStatus,
     productStatus: productStatus,
+    dedicatedStatusLocked:
+      productStatus === "専用商品",
     discontinuedFlag:
       productStatus === "廃盤"
         ? "9"
         : "",
+    discontinued:
+      productStatus === "廃盤",
     createdAt:
       currentProduct.createdAt ||
       new Date().toISOString(),
@@ -2501,6 +2564,13 @@ function renderDetailLocationStocks(product) {
 function getProductLifecycleStatus(
   product
 ) {
+  if (
+    product &&
+    product.dedicatedStatusLocked === true
+  ) {
+    return "専用商品";
+  }
+
   const savedStatus =
     String(
       product &&

@@ -129,6 +129,28 @@
     }
   }
 
+  function isBackorderDedicatedProtected(product) {
+    if (!product) return false;
+
+    if (product.dedicatedStatusLocked === true) {
+      return true;
+    }
+
+    const status = String(
+      product.productStatus || ""
+    )
+      .normalize("NFKC")
+      .trim()
+      .toLowerCase();
+
+    return (
+      status === "専用商品" ||
+      status === "専用" ||
+      status === "dedicated" ||
+      status === "exclusive"
+    );
+  }
+
   function buildBackorderImportRows(csvRows, products) {
     const merged = new Map();
 
@@ -194,6 +216,14 @@
         normalizeBackorderKey(row.productCode) !== normalizeBackorderKey(product.productCode)
       ) {
         issue = "社内コードは一致していますが商品コードが異なります";
+        canApply = false;
+      } else if (
+        isBackorderDedicatedProtected(
+          product
+        )
+      ) {
+        issue =
+          "専用商品（固定のため注残へ変更しません）";
         canApply = false;
       }
 
@@ -372,7 +402,16 @@
       const actualIndex = importedRows.indexOf(row);
       const productName = row.masterProductName || row.productName || "-";
       const color = row.masterColor || row.color || "-";
-      const stateText = row.currentBackorderStatus === "注残" ? "注残" : "通常";
+      const stateText =
+        row.product &&
+        isBackorderDedicatedProtected(
+          row.product
+        )
+          ? "専用商品"
+          : row.currentBackorderStatus ===
+              "注残"
+            ? "注残"
+            : "通常";
       const statusClass = row.canApply ? "backorder-match-ok" : "backorder-match-warning";
       const statusText = row.canApply ? row.matchType : row.issue;
 

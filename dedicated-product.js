@@ -5,6 +5,7 @@
   ・商品状態が「専用商品」の商品は通常の在庫管理には残す
   ・船便別の商品振り分け候補からは除外する
   ・すでに保存済みの過去の船積データは自動削除しない
+  ・専用商品は dedicatedStatusLocked でも保護判定する
 */
 
 document.addEventListener(
@@ -153,6 +154,13 @@ async function refreshDedicatedProductCodes() {
 }
 
 function isDedicatedProduct(product) {
+  if (
+    product &&
+    product.dedicatedStatusLocked === true
+  ) {
+    return true;
+  }
+
   const status =
     String(
       product &&

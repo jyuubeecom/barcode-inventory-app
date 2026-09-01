@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v215
+            画面版 v216
           </span>
         </div>
       </div>
@@ -1941,8 +1941,9 @@
         </p>
 
         <div class="backorder-important-note">
-          CSVに載っていない既存の「注残」商品は、自動では解除しません。<br>
-          現在庫や発注残数も、このCSV反映では変更しません。
+          <strong>最新の注残CSVを正として上書きします。</strong><br>
+          CSVの数量は現在の注残数量へ加算せず、その数量に置き換えます。<br>
+          CSVに載っていない既存の「注残」商品は解除します。現在庫や発注残数は変更しません。
         </div>
       </div>
 
@@ -2007,7 +2008,7 @@
             type="button"
             disabled
           >
-            選択した商品を「注残」に反映する
+            最新CSVの内容で注残を上書きする
           </button>
         </div>
       </div>
@@ -4059,7 +4060,7 @@
 <script src="storage.js?v=212"></script>
 <script src="normal-shipment.js?v=206"></script>
 <script src="manual.js?v=207"></script>
-<script src="backorder-list.js?v=215"></script>
+<script src="backorder-list.js?v=216"></script>
 <script src="app.js?v=215"></script>
 <script src="natural-stock-search.js?v=206"></script>
 <script src="product-history.js?v=107"></script>

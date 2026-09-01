@@ -254,36 +254,79 @@
         type: "warning",
         icon: "⚠️",
         title: "反映する商品を選んでください",
-        message: "CSV読込結果から、注残に変更する商品を1件以上選択してください。",
+        message: "CSV読込結果から、注残として反映する商品を1件以上選択してください。",
         confirmText: "確認"
       });
       return;
     }
 
-    if (!(await requireBackorderAdminPermission("注残状態の一括反映"))) return;
+    if (!(await requireBackorderAdminPermission("注残CSVの上書き反映"))) return;
 
     const totalQuantity = selectedRows.reduce(function (sum, row) {
       return sum + Number(row.quantity || 0);
     }, 0);
 
+    const latestProducts = await getAllProducts();
+    const csvMatchedInternalCodes = new Set(
+      importedRows.map(function (row) {
+        return normalizeBackorderCode(row.product && row.product.internalCode);
+      }).filter(Boolean)
+    );
+
+    const clearTargets = (Array.isArray(latestProducts) ? latestProducts : []).filter(function (product) {
+      const internalCode = normalizeBackorderCode(product && product.internalCode);
+      if (!internalCode) return false;
+      if (isBackorderDedicatedProtected(product)) return false;
+      if (getBackorderStatus(product) !== "注残") return false;
+
+      // 最新CSVに存在しない既存の注残は解除します。
+      // CSVに存在するが利用者が反映チェックを外した商品は、安全のため現在状態を維持します。
+      return !csvMatchedInternalCodes.has(internalCode);
+    });
+
     const confirmed = await showBackorderConfirmDialog(
       selectedRows.length,
-      totalQuantity
+      totalQuantity,
+      clearTargets.length
     );
 
     if (!confirmed) return;
 
     const now = new Date().toISOString();
-    const updatedProducts = selectedRows.map(function (row) {
+    const sourceProductsByCode = new Map(
+      (Array.isArray(latestProducts) ? latestProducts : []).map(function (product) {
+        return [normalizeBackorderCode(product && product.internalCode), product];
+      })
+    );
+
+    const overwriteProducts = selectedRows.map(function (row) {
+      const internalCode = normalizeBackorderCode(row.product && row.product.internalCode);
+      const baseProduct = sourceProductsByCode.get(internalCode) || row.product;
       return {
-        ...row.product,
+        ...baseProduct,
         backorderStatus: "注残",
         backorderQuantity: Math.max(0, Math.trunc(Number(row.quantity || 0))),
-        backorderSource: "注残CSV",
+        backorderSource: "注残CSV（最新データ上書き）",
         backorderUpdatedAt: now,
         updatedAt: now
       };
     });
+
+    const clearedProducts = clearTargets.map(function (product) {
+      const legacyInventoryStatus = String(product.inventoryStatus || "").normalize("NFKC").trim();
+      return {
+        ...product,
+        backorderStatus: "",
+        inventoryStatus: legacyInventoryStatus === "注残" ? "" : product.inventoryStatus,
+        backorder: false,
+        backorderQuantity: 0,
+        backorderSource: "注残CSV（最新データで解除）",
+        backorderUpdatedAt: now,
+        updatedAt: now
+      };
+    });
+
+    const updatedProducts = overwriteProducts.concat(clearedProducts);
 
     try {
       await updateProductsInBatch(updatedProducts);
@@ -298,14 +341,14 @@
       });
 
       selectedRows.forEach(function (row) {
-        row.product = updatedProducts.find(function (product) {
+        row.product = overwriteProducts.find(function (product) {
           return normalizeBackorderCode(product.internalCode) === normalizeBackorderCode(row.product.internalCode);
         }) || row.product;
         row.currentBackorderStatus = "注残";
       });
 
       setBackorderMessage(
-        `${selectedRows.length.toLocaleString("ja-JP")}商品を「注残」に反映しました。ホームの「船積が必要」では注残商品を優先して表示します。`,
+        `最新CSVの内容で注残を上書きしました。反映：${selectedRows.length.toLocaleString("ja-JP")}商品 / CSVにない既存注残の解除：${clearedProducts.length.toLocaleString("ja-JP")}商品`,
         "success"
       );
 
@@ -315,17 +358,18 @@
       await showBackorderDialog({
         type: "success",
         icon: "✅",
-        title: "注残を反映しました",
-        message: "選択した商品の在庫状態を「注残」に変更しました。",
+        title: "注残を最新CSVで上書きしました",
+        message: "数量は加算せず、最新CSVの数量へ置き換えました。CSVに載っていない既存の注残商品は解除しました。",
         details: [
-          { label: "反映商品数", value: `${selectedRows.length.toLocaleString("ja-JP")}商品` },
-          { label: "注残数量合計", value: `${totalQuantity.toLocaleString("ja-JP")}個` }
+          { label: "上書き商品数", value: `${selectedRows.length.toLocaleString("ja-JP")}商品` },
+          { label: "最新CSV 注残数量合計", value: `${totalQuantity.toLocaleString("ja-JP")}個` },
+          { label: "CSVにない既存注残の解除", value: `${clearedProducts.length.toLocaleString("ja-JP")}商品` }
         ],
         confirmText: "閉じる"
       });
     } catch (error) {
-      console.error("注残一括反映エラー", error);
-      setBackorderMessage("注残を反映できませんでした。もう一度お試しください。", "error");
+      console.error("注残CSV上書き反映エラー", error);
+      setBackorderMessage("注残を上書きできませんでした。もう一度お試しください。", "error");
     }
   }
 
@@ -600,24 +644,29 @@
     element.className = `backorder-csv-message ${type ? `backorder-message-${type}` : ""}`;
   }
 
-  async function showBackorderConfirmDialog(productCount, totalQuantity) {
+  async function showBackorderConfirmDialog(productCount, totalQuantity, clearCount) {
+    const clearTargetCount = Math.max(0, Number(clearCount || 0));
+
     if (window.inventoryApp && typeof window.inventoryApp.showAppDialog === "function") {
       return window.inventoryApp.showAppDialog({
         type: "warning",
         icon: "📋",
-        title: "選択した商品を注残にしますか？",
-        message: "選択した商品の在庫状態を「注残」に変更します。現在庫や発注残数は変更しません。",
+        title: "最新の注残CSVで上書きしますか？",
+        message: "最新CSVを正として注残一覧を更新します。CSVの数量は現在の注残数量へ加算せず、その数量に置き換えます。CSVに載っていない既存の注残商品は解除します。現在庫や発注残数は変更しません。",
         details: [
-          { label: "対象商品", value: `${productCount.toLocaleString("ja-JP")}商品` },
-          { label: "CSV注残数量合計", value: `${totalQuantity.toLocaleString("ja-JP")}個` }
+          { label: "上書き対象", value: `${productCount.toLocaleString("ja-JP")}商品` },
+          { label: "CSV注残数量合計", value: `${totalQuantity.toLocaleString("ja-JP")}個` },
+          { label: "CSVにない既存注残の解除", value: `${clearTargetCount.toLocaleString("ja-JP")}商品` }
         ],
-        confirmText: "注残として反映",
+        confirmText: "最新CSVで上書きする",
         cancelText: "キャンセル",
         isConfirm: true
       });
     }
 
-    return window.confirm(`${productCount}商品を注残に反映しますか？`);
+    return window.confirm(
+      `最新CSVで注残を上書きしますか？\n上書き：${productCount}商品\nCSVにない既存注残の解除：${clearTargetCount}商品`
+    );
   }
 
   async function showBackorderDialog(options) {

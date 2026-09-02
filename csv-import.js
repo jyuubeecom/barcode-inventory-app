@@ -1149,13 +1149,16 @@ function validateCompanyMasterItem(
       );
     }
 
-    const dedicatedLocked =
-      isCsvDedicatedStatusLocked(
+    const lockedProductStatus =
+      getCsvLockedProductStatus(
         existingProduct
       );
 
+    const productStatusLocked =
+      lockedProductStatus !== "";
+
     if (
-      !dedicatedLocked &&
+      !productStatusLocked &&
       existingStatus !==
       item.productStatus
     ) {
@@ -1165,22 +1168,36 @@ function validateCompanyMasterItem(
     }
 
     if (
-      dedicatedLocked &&
+      productStatusLocked &&
       item.productStatus !==
-        "専用商品"
+        lockedProductStatus
     ) {
       changes.push(
-        `商品状態：専用商品（固定のためCSVの「${item.productStatus}」判定は反映しません）`
+        `商品状態：${lockedProductStatus}（固定のためCSVの「${item.productStatus}」判定は反映しません）`
       );
-      item.dedicatedStatusProtected =
-        true;
+
+      if (
+        lockedProductStatus ===
+        "専用商品"
+      ) {
+        item.dedicatedStatusProtected =
+          true;
+      }
+
+      if (
+        lockedProductStatus ===
+        "廃盤予定"
+      ) {
+        item.plannedDiscontinuedStatusProtected =
+          true;
+      }
     }
 
     const hasActualUpdate =
       existingColor !==
         item.productColor ||
       (
-        !dedicatedLocked &&
+        !productStatusLocked &&
         existingStatus !==
           item.productStatus
       );
@@ -1251,7 +1268,36 @@ function isCsvDedicatedStatusLocked(
   );
 }
 
-function getCsvExistingProductStatus(
+function isCsvPlannedDiscontinuedStatusLocked(
+  product
+) {
+  if (!product) {
+    return false;
+  }
+
+  if (
+    product.plannedDiscontinuedStatusLocked === true
+  ) {
+    return true;
+  }
+
+  const savedStatus =
+    String(
+      product.productStatus || ""
+    )
+      .normalize("NFKC")
+      .trim()
+      .toLowerCase();
+
+  return (
+    savedStatus === "廃盤予定" ||
+    savedStatus === "discontinued planned" ||
+    savedStatus === "planned discontinued" ||
+    savedStatus === "planned-discontinued"
+  );
+}
+
+function getCsvLockedProductStatus(
   product
 ) {
   if (
@@ -1261,6 +1307,30 @@ function getCsvExistingProductStatus(
   ) {
     return "専用商品";
   }
+
+  if (
+    isCsvPlannedDiscontinuedStatusLocked(
+      product
+    )
+  ) {
+    return "廃盤予定";
+  }
+
+  return "";
+}
+
+function getCsvExistingProductStatus(
+  product
+) {
+  const lockedProductStatus =
+    getCsvLockedProductStatus(
+      product
+    );
+
+  if (lockedProductStatus) {
+    return lockedProductStatus;
+  }
+
   const savedStatus =
     String(
       product &&
@@ -1912,15 +1982,14 @@ async function registerNewCsvProducts() {
       const dateTime =
         new Date().toISOString();
 
-      const dedicatedLocked =
-        isCsvDedicatedStatusLocked(
+      const lockedProductStatus =
+        getCsvLockedProductStatus(
           currentProduct
         );
 
       const nextProductStatus =
-        dedicatedLocked
-          ? "専用商品"
-          : item.productStatus;
+        lockedProductStatus ||
+        item.productStatus;
 
       const updatedProduct = {
         ...currentProduct,
@@ -1929,9 +1998,11 @@ async function registerNewCsvProducts() {
         productStatus:
           nextProductStatus,
         dedicatedStatusLocked:
-          dedicatedLocked ||
           nextProductStatus ===
             "専用商品",
+        plannedDiscontinuedStatusLocked:
+          nextProductStatus ===
+            "廃盤予定",
         discontinuedFlag:
           nextProductStatus ===
             "廃盤"
@@ -2132,6 +2203,10 @@ function createProductFromCsvItem(
     dedicatedStatusLocked:
       item.productStatus ===
         "専用商品",
+
+    plannedDiscontinuedStatusLocked:
+      item.productStatus ===
+        "廃盤予定",
 
     discontinuedFlag:
       item.discontinuedFlag,

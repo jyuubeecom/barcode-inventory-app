@@ -972,6 +972,8 @@ async function handleProductSubmit(event) {
     productStatus: productStatus,
     dedicatedStatusLocked:
       productStatus === "専用商品",
+    plannedDiscontinuedStatusLocked:
+      productStatus === "廃盤予定",
     discontinuedFlag:
       productStatus === "廃盤"
         ? "9"
@@ -2052,6 +2054,50 @@ async function handleEditProductSubmit(event) {
     }
   }
 
+  const plannedDiscontinuedStatusWasLocked =
+    Boolean(
+      currentProduct &&
+      currentProduct.plannedDiscontinuedStatusLocked === true
+    ) ||
+    currentLifecycleStatus ===
+      "廃盤予定";
+
+  if (
+    plannedDiscontinuedStatusWasLocked &&
+    productStatus !== "廃盤予定"
+  ) {
+    const unlockConfirmed =
+      await showAppDialog({
+        type: "warning",
+        icon: "🔒",
+        title: "廃盤予定の固定を解除しますか？",
+        message:
+          "この商品は「廃盤予定」として固定されています。管理者が明示的に変更した場合だけ固定を解除できます。",
+        details: [
+          {
+            label: "現在の商品状態",
+            value: "廃盤予定（固定）"
+          },
+          {
+            label: "変更後の商品状態",
+            value: productStatus
+          }
+        ],
+        notice:
+          "固定を解除すると、今後CSV読込や自動判定によって商品状態が変更される場合があります。",
+        isConfirm: true,
+        cancelText: "廃盤予定のままにする",
+        confirmText: "固定を解除して変更する"
+      });
+
+    if (!unlockConfirmed) {
+      editProductStatusInput.value =
+        "廃盤予定";
+      editProductStatusInput.focus();
+      return;
+    }
+  }
+
   const updatedProduct = {
     ...currentProduct,
     internalCode: editingInternalCode,
@@ -2077,6 +2123,8 @@ async function handleEditProductSubmit(event) {
     productStatus: productStatus,
     dedicatedStatusLocked:
       productStatus === "専用商品",
+    plannedDiscontinuedStatusLocked:
+      productStatus === "廃盤予定",
     discontinuedFlag:
       productStatus === "廃盤"
         ? "9"
@@ -2571,6 +2619,13 @@ function getProductLifecycleStatus(
     return "専用商品";
   }
 
+  if (
+    product &&
+    product.plannedDiscontinuedStatusLocked === true
+  ) {
+    return "廃盤予定";
+  }
+
   const savedStatus =
     String(
       product &&
@@ -2906,7 +2961,7 @@ function createProductListResponsiveStyle() {
 
     #product-list .product-list-table th,
     #product-list .product-list-table td {
-      padding: 10px 8px;
+      padding: 12px 8px;
       white-space: normal;
       overflow-wrap: anywhere;
       word-break: normal;
@@ -2914,23 +2969,25 @@ function createProductListResponsiveStyle() {
     }
 
     #product-list .product-list-table th {
-      font-size: 14px;
-      line-height: 1.25;
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.3;
       text-align: center;
     }
 
-    #product-list .product-list-table th:nth-child(1) { width: 138px; }
-    #product-list .product-list-table th:nth-child(2) { width: 88px; }
-    #product-list .product-list-table th:nth-child(3) { width: 105px; }
-    #product-list .product-list-table th:nth-child(5) { width: 78px; }
-    #product-list .product-list-table th:nth-child(6) { width: 82px; }
-    #product-list .product-list-table th:nth-child(7) { width: 96px; }
-    #product-list .product-list-table th:nth-child(8) { width: 100px; }
-    #product-list .product-list-table th:nth-child(9) { width: 104px; }
+    #product-list .product-list-table th:nth-child(1) { width: 126px; }
+    #product-list .product-list-table th:nth-child(2) { width: 82px; }
+    #product-list .product-list-table th:nth-child(3) { width: 100px; }
+    #product-list .product-list-table th:nth-child(5) { width: 76px; }
+    #product-list .product-list-table th:nth-child(6) { width: 80px; }
+    #product-list .product-list-table th:nth-child(7) { width: 92px; }
+    #product-list .product-list-table th:nth-child(8) { width: 86px; }
+    #product-list .product-list-table th:nth-child(9) { width: 98px; }
 
     #product-list .product-list-card-row td {
-      font-size: 14px;
-      line-height: 1.4;
+      font-size: 15px;
+      line-height: 1.5;
+      color: #263238;
     }
 
     #product-list .product-list-card-row:hover td {
@@ -2955,11 +3012,11 @@ function createProductListResponsiveStyle() {
       width: 100%;
       min-width: 0;
       margin: 0;
-      padding: 8px 5px;
+      padding: 9px 5px;
       border-radius: 7px;
-      font-size: 13px;
-      font-weight: 700;
-      line-height: 1.2;
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.25;
     }
 
     .product-list-detail-button {
@@ -2992,9 +3049,9 @@ function createProductListResponsiveStyle() {
       background: transparent;
       color: #0d47a1;
       font: inherit;
-      font-size: 16px;
+      font-size: 18px;
       font-weight: 800;
-      line-height: 1.35;
+      line-height: 1.4;
       text-align: left;
       text-decoration: underline;
       text-decoration-color: #90caf9;
@@ -3015,13 +3072,13 @@ function createProductListResponsiveStyle() {
     #product-list .product-list-product-meta {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 4px 12px;
-      margin-top: 7px;
-      padding-top: 7px;
-      border-top: 1px dashed #d7e1e7;
-      color: #455a64;
-      font-size: 12px;
-      line-height: 1.35;
+      gap: 6px 14px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed #c5d2da;
+      color: #37474f;
+      font-size: 13px;
+      line-height: 1.45;
     }
 
     #product-list .product-list-product-meta-item {
@@ -3032,8 +3089,8 @@ function createProductListResponsiveStyle() {
 
     #product-list .product-list-product-meta-label {
       flex: 0 0 auto;
-      color: #78909c;
-      font-weight: 700;
+      color: #546e7a;
+      font-weight: 800;
     }
 
     #product-list .product-list-product-meta-value {
@@ -3068,40 +3125,42 @@ function createProductListResponsiveStyle() {
     #product-list .product-lifecycle-badge {
       min-width: 0;
       max-width: 100%;
-      padding: 5px 7px;
-      font-size: 12px;
+      padding: 6px 8px;
+      font-size: 13px;
+      font-weight: 800;
       white-space: normal;
-      line-height: 1.25;
+      line-height: 1.3;
     }
 
     @media (max-width: 1100px) and (min-width: 701px) {
-      #product-list .product-list-table th:nth-child(1) { width: 120px; }
-      #product-list .product-list-table th:nth-child(2) { width: 80px; }
-      #product-list .product-list-table th:nth-child(3) { width: 94px; }
-      #product-list .product-list-table th:nth-child(5) { width: 70px; }
-      #product-list .product-list-table th:nth-child(6) { width: 76px; }
-      #product-list .product-list-table th:nth-child(7) { width: 88px; }
-      #product-list .product-list-table th:nth-child(8) { width: 88px; }
-      #product-list .product-list-table th:nth-child(9) { width: 94px; }
+      #product-list .product-list-table th:nth-child(1) { width: 116px; }
+      #product-list .product-list-table th:nth-child(2) { width: 76px; }
+      #product-list .product-list-table th:nth-child(3) { width: 90px; }
+      #product-list .product-list-table th:nth-child(5) { width: 68px; }
+      #product-list .product-list-table th:nth-child(6) { width: 72px; }
+      #product-list .product-list-table th:nth-child(7) { width: 84px; }
+      #product-list .product-list-table th:nth-child(8) { width: 78px; }
+      #product-list .product-list-table th:nth-child(9) { width: 88px; }
 
       #product-list .product-list-table th,
       #product-list .product-list-card-row td {
         padding-left: 6px;
         padding-right: 6px;
-        font-size: 13px;
-      }
-
-      .product-list-operation-buttons button {
-        font-size: 12px;
-      }
-
-      .product-list-name-button {
         font-size: 15px;
       }
 
+      .product-list-operation-buttons button {
+        font-size: 13px;
+      }
+
+      .product-list-name-button {
+        font-size: 17px;
+      }
+
       #product-list .product-list-product-meta {
-        grid-template-columns: 1fr;
-        font-size: 11px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        font-size: 13px;
+        line-height: 1.5;
       }
     }
 

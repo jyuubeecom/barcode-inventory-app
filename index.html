@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v216
+            画面版 v217
           </span>
         </div>
       </div>
@@ -1437,7 +1437,17 @@
         <h3>3. 取込履歴</h3>
         <p id="sales-actual-history-empty">まだ販売実績CSVを取り込んでいません。</p>
 
-        <div class="sales-actual-history-sort" aria-label="取込履歴の並び替え">
+        <div class="sales-actual-history-sort" aria-label="取込履歴の検索・並び替え">
+          <label class="sales-actual-history-search-label" for="sales-actual-history-search">
+            履歴を検索
+            <input
+              id="sales-actual-history-search"
+              type="search"
+              placeholder="帳票日・ファイル名で検索　例：2026/8/28"
+              autocomplete="off"
+            >
+          </label>
+
           <label for="sales-actual-history-sort-key">
             並び替える項目
             <select id="sales-actual-history-sort-key">
@@ -1453,9 +1463,23 @@
               <option value="asc">古い順</option>
             </select>
           </label>
+
+          <label for="sales-actual-history-page-size">
+            1ページの表示件数
+            <select id="sales-actual-history-page-size">
+              <option value="10" selected>10件</option>
+              <option value="20">20件</option>
+              <option value="50">50件</option>
+            </select>
+          </label>
         </div>
 
-        <div class="sales-actual-table-wrap">
+        <div class="sales-actual-history-status-row">
+          <strong id="sales-actual-history-count">0件</strong>
+          <button id="sales-actual-history-clear-search" type="button">検索を解除</button>
+        </div>
+
+        <div class="sales-actual-table-wrap sales-actual-history-table-wrap">
           <table>
             <thead>
               <tr>
@@ -1469,6 +1493,14 @@
             </thead>
             <tbody id="sales-actual-import-history-body"></tbody>
           </table>
+        </div>
+
+        <div class="sales-actual-history-pagination" aria-label="取込履歴のページ移動">
+          <button id="sales-actual-history-first" type="button">最初</button>
+          <button id="sales-actual-history-prev" type="button">前へ</button>
+          <strong id="sales-actual-history-page-info">1 / 1ページ</strong>
+          <button id="sales-actual-history-next" type="button">次へ</button>
+          <button id="sales-actual-history-last" type="button">最後</button>
         </div>
       </div>
 
@@ -4077,7 +4109,7 @@
 <script src="csv-update.js?v=74"></script>
 <script src="pwa.js?v=31"></script>
 <script src="sales-plan.js?v=176"></script>
-<script src="sales-actual.js?v=210"></script>
+<script src="sales-actual.js?v=217"></script>
 <script src="purchase-required.js?v=206"></script>
 <script src="order-remaining.js?v=120"></script>
 <script src="low-shipment.js?v=206"></script>

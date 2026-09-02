@@ -9,6 +9,7 @@ const SALES_ACTUAL_INVENTORY_LOCATION_PRIORITY = Object.freeze([
 let salesActualSelectedPreview = null;
 let salesActualImportHistory = [];
 let salesActualProducts = [];
+let salesActualHistoryPage = 1;
 
 window.addEventListener("DOMContentLoaded", initializeSalesActualFeature);
 
@@ -21,6 +22,13 @@ function initializeSalesActualFeature() {
   const clearButton = document.querySelector("#clear-sales-actual-preview-button");
   const historySortKey = document.querySelector("#sales-actual-history-sort-key");
   const historySortDirection = document.querySelector("#sales-actual-history-sort-direction");
+  const historySearch = document.querySelector("#sales-actual-history-search");
+  const historyPageSize = document.querySelector("#sales-actual-history-page-size");
+  const historyClearSearch = document.querySelector("#sales-actual-history-clear-search");
+  const historyFirst = document.querySelector("#sales-actual-history-first");
+  const historyPrev = document.querySelector("#sales-actual-history-prev");
+  const historyNext = document.querySelector("#sales-actual-history-next");
+  const historyLast = document.querySelector("#sales-actual-history-last");
 
   if (!showButton || !fileInput || !importButton) return;
 
@@ -38,11 +46,74 @@ function initializeSalesActualFeature() {
   if (clearButton) clearButton.addEventListener("click", clearSalesActualPreview);
 
   if (historySortKey) {
-    historySortKey.addEventListener("change", renderSalesActualImportHistory);
+    historySortKey.addEventListener("change", function () {
+      salesActualHistoryPage = 1;
+      renderSalesActualImportHistory();
+    });
   }
 
   if (historySortDirection) {
-    historySortDirection.addEventListener("change", renderSalesActualImportHistory);
+    historySortDirection.addEventListener("change", function () {
+      salesActualHistoryPage = 1;
+      renderSalesActualImportHistory();
+    });
+  }
+
+  if (historySearch) {
+    historySearch.addEventListener("input", function () {
+      salesActualHistoryPage = 1;
+      renderSalesActualImportHistory();
+    });
+  }
+
+  if (historyPageSize) {
+    historyPageSize.addEventListener("change", function () {
+      salesActualHistoryPage = 1;
+      renderSalesActualImportHistory();
+    });
+  }
+
+  if (historyClearSearch) {
+    historyClearSearch.addEventListener("click", function () {
+      if (historySearch) historySearch.value = "";
+      salesActualHistoryPage = 1;
+      renderSalesActualImportHistory();
+      if (historySearch) historySearch.focus();
+    });
+  }
+
+  if (historyFirst) {
+    historyFirst.addEventListener("click", function () {
+      salesActualHistoryPage = 1;
+      renderSalesActualImportHistory();
+      scrollSalesActualHistoryToTop();
+    });
+  }
+
+  if (historyPrev) {
+    historyPrev.addEventListener("click", function () {
+      salesActualHistoryPage = Math.max(1, salesActualHistoryPage - 1);
+      renderSalesActualImportHistory();
+      scrollSalesActualHistoryToTop();
+    });
+  }
+
+  if (historyNext) {
+    historyNext.addEventListener("click", function () {
+      salesActualHistoryPage += 1;
+      renderSalesActualImportHistory();
+      scrollSalesActualHistoryToTop();
+    });
+  }
+
+  if (historyLast) {
+    historyLast.addEventListener("click", function () {
+      const pageSize = getSalesActualHistoryPageSize();
+      const totalPages = Math.max(1, Math.ceil(getFilteredSalesActualImportHistory().length / pageSize));
+      salesActualHistoryPage = totalPages;
+      renderSalesActualImportHistory();
+      scrollSalesActualHistoryToTop();
+    });
   }
 }
 
@@ -63,6 +134,7 @@ async function openSalesActualScreen() {
       return String(b.importedAt || "").localeCompare(String(a.importedAt || ""));
     });
     salesActualProducts = result[1].slice();
+    salesActualHistoryPage = 1;
     renderSalesActualImportHistory();
   } catch (error) {
     console.error("販売実績読込履歴エラー", error);
@@ -1517,32 +1589,118 @@ function getSortedSalesActualImportHistory() {
   });
 }
 
+function normalizeSalesActualHistorySearch(value) {
+  return String(value === undefined || value === null ? "" : value)
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[\s\-\/年月日:：～〜~]/g, "");
+}
+
+function getSalesActualHistoryPageSize() {
+  const select = document.querySelector("#sales-actual-history-page-size");
+  const number = Number(select ? select.value : 10);
+  return [10, 20, 50].includes(number) ? number : 10;
+}
+
+function getFilteredSalesActualImportHistory() {
+  const searchInput = document.querySelector("#sales-actual-history-search");
+  const query = normalizeSalesActualHistorySearch(searchInput ? searchInput.value : "");
+  const sortedHistory = getSortedSalesActualImportHistory();
+
+  if (!query) return sortedHistory;
+
+  return sortedHistory.filter(function (batch) {
+    const values = [
+      batch.fileName,
+      batch.importedAt,
+      formatSalesActualDateTime(batch.importedAt),
+      batch.reportStartDate,
+      batch.reportEndDate,
+      formatSalesActualDate(batch.reportStartDate),
+      formatSalesActualDate(batch.reportEndDate)
+    ];
+
+    return values.some(function (value) {
+      return normalizeSalesActualHistorySearch(value).includes(query);
+    });
+  });
+}
+
+function scrollSalesActualHistoryToTop() {
+  const historyCard = document.querySelector("#sales-actual-import-history-body");
+  const target = historyCard ? historyCard.closest(".sales-actual-card") : null;
+  if (target) {
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
 function renderSalesActualImportHistory() {
   const body = document.querySelector("#sales-actual-import-history-body");
   const empty = document.querySelector("#sales-actual-history-empty");
+  const count = document.querySelector("#sales-actual-history-count");
+  const pageInfo = document.querySelector("#sales-actual-history-page-info");
+  const firstButton = document.querySelector("#sales-actual-history-first");
+  const prevButton = document.querySelector("#sales-actual-history-prev");
+  const nextButton = document.querySelector("#sales-actual-history-next");
+  const lastButton = document.querySelector("#sales-actual-history-last");
+  const clearButton = document.querySelector("#sales-actual-history-clear-search");
+  const searchInput = document.querySelector("#sales-actual-history-search");
   if (!body) return;
   body.innerHTML = "";
 
   if (salesActualImportHistory.length === 0) {
-    if (empty) empty.hidden = false;
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = "まだ販売実績CSVを取り込んでいません。";
+    }
+    if (count) count.textContent = "0件";
+    if (pageInfo) pageInfo.textContent = "1 / 1ページ";
+    [firstButton, prevButton, nextButton, lastButton].forEach(function (button) {
+      if (button) button.disabled = true;
+    });
     return;
   }
-  if (empty) empty.hidden = true;
 
-  const sortedHistory = getSortedSalesActualImportHistory();
+  const filteredHistory = getFilteredSalesActualImportHistory();
+  const pageSize = getSalesActualHistoryPageSize();
+  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / pageSize));
+  salesActualHistoryPage = Math.min(Math.max(1, salesActualHistoryPage), totalPages);
+  const startIndex = (salesActualHistoryPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filteredHistory.length);
+  const pageHistory = filteredHistory.slice(startIndex, endIndex);
 
-  sortedHistory.forEach(function (batch) {
+  if (empty) {
+    empty.hidden = filteredHistory.length !== 0;
+    empty.textContent = filteredHistory.length === 0
+      ? "検索条件に一致する取込履歴はありません。"
+      : "";
+  }
+
+  if (count) {
+    count.textContent = filteredHistory.length === 0
+      ? `検索結果：0件 / 全${salesActualImportHistory.length}件`
+      : `表示：${startIndex + 1}～${endIndex}件 / 検索結果${filteredHistory.length}件 / 全${salesActualImportHistory.length}件`;
+  }
+
+  if (pageInfo) pageInfo.textContent = `${salesActualHistoryPage} / ${totalPages}ページ`;
+  if (firstButton) firstButton.disabled = salesActualHistoryPage <= 1 || filteredHistory.length === 0;
+  if (prevButton) prevButton.disabled = salesActualHistoryPage <= 1 || filteredHistory.length === 0;
+  if (nextButton) nextButton.disabled = salesActualHistoryPage >= totalPages || filteredHistory.length === 0;
+  if (lastButton) lastButton.disabled = salesActualHistoryPage >= totalPages || filteredHistory.length === 0;
+  if (clearButton) clearButton.disabled = !(searchInput && searchInput.value.trim());
+
+  pageHistory.forEach(function (batch) {
     const row = document.createElement("tr");
     const range = batch.reportStartDate && batch.reportEndDate
       ? `${formatSalesActualDate(batch.reportStartDate)} ～ ${formatSalesActualDate(batch.reportEndDate)}`
       : "不明";
     row.innerHTML = `
-      <td>${escapeSalesActualHtml(formatSalesActualDateTime(batch.importedAt))}</td>
-      <td>${escapeSalesActualHtml(batch.fileName || "")}</td>
-      <td>${escapeSalesActualHtml(range)}</td>
-      <td>${Number(batch.importedCount || 0)}件</td>
-      <td>${Array.isArray(batch.unregisteredCodes) ? batch.unregisteredCodes.length : 0}件</td>
-      <td><button type="button" class="sales-actual-delete-batch" data-batch-id="${escapeSalesActualHtml(batch.batchId)}">取込を取り消す</button></td>
+      <td class="sales-actual-history-date">${escapeSalesActualHtml(formatSalesActualDateTime(batch.importedAt))}</td>
+      <td class="sales-actual-history-file">${escapeSalesActualHtml(batch.fileName || "")}</td>
+      <td class="sales-actual-history-period">${escapeSalesActualHtml(range)}</td>
+      <td class="sales-actual-history-number">${Number(batch.importedCount || 0)}件</td>
+      <td class="sales-actual-history-number">${Array.isArray(batch.unregisteredCodes) ? batch.unregisteredCodes.length : 0}件</td>
+      <td class="sales-actual-history-action"><button type="button" class="sales-actual-delete-batch" data-batch-id="${escapeSalesActualHtml(batch.batchId)}">取込を取り消す</button></td>
     `;
     body.appendChild(row);
   });
@@ -1701,13 +1859,75 @@ function createSalesActualStyle() {
       min-width: 210px;
       font-weight: 800;
     }
-    #sales-actual-import .sales-actual-history-sort select {
+    #sales-actual-import .sales-actual-history-sort select,
+    #sales-actual-import .sales-actual-history-sort input {
       min-height: 48px;
       padding: 8px 12px;
       border: 1px solid #90a4ae;
       border-radius: 8px;
       background: #ffffff;
       font-size: 1rem;
+    }
+    #sales-actual-import .sales-actual-history-search-label {
+      flex: 1 1 360px;
+      min-width: 300px;
+    }
+    #sales-actual-import .sales-actual-history-status-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 10px 0;
+      padding: 10px 12px;
+      background: #eef6ff;
+      border-radius: 8px;
+    }
+    #sales-actual-import .sales-actual-history-status-row button {
+      min-height: 42px;
+      padding: 8px 16px;
+      background: #546e7a;
+    }
+    #sales-actual-import .sales-actual-history-table-wrap table {
+      table-layout: fixed;
+      min-width: 900px;
+    }
+    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(1) { width: 150px; }
+    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(2) { width: 330px; }
+    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(3) { width: 180px; }
+    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(4) { width: 90px; }
+    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(5) { width: 100px; }
+    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(6) { width: 150px; }
+    #sales-actual-import .sales-actual-history-table-wrap td {
+      vertical-align: middle;
+      padding-top: 10px;
+      padding-bottom: 10px;
+    }
+    #sales-actual-import .sales-actual-history-file {
+      overflow-wrap: anywhere;
+      line-height: 1.45;
+    }
+    #sales-actual-import .sales-actual-history-date,
+    #sales-actual-import .sales-actual-history-period,
+    #sales-actual-import .sales-actual-history-number,
+    #sales-actual-import .sales-actual-history-action {
+      white-space: nowrap;
+    }
+    #sales-actual-import .sales-actual-history-pagination {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    #sales-actual-import .sales-actual-history-pagination button {
+      min-height: 46px;
+      padding: 9px 18px;
+    }
+    #sales-actual-import .sales-actual-history-pagination strong {
+      min-width: 120px;
+      text-align: center;
     }
     #sales-actual-import table { min-width: 760px; }
     #sales-actual-import .sales-actual-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
@@ -1886,7 +2106,12 @@ function createSalesActualStyle() {
       #sales-actual-import .sales-actual-card { padding: 13px; }
       #sales-actual-import .sales-actual-actions { display: grid; grid-template-columns: 1fr; }
       #sales-actual-import .sales-actual-history-sort { display: grid; grid-template-columns: 1fr; }
-      #sales-actual-import .sales-actual-history-sort label { min-width: 0; }
+      #sales-actual-import .sales-actual-history-sort label,
+      #sales-actual-import .sales-actual-history-search-label { min-width: 0; }
+      #sales-actual-import .sales-actual-history-status-row { align-items: stretch; }
+      #sales-actual-import .sales-actual-history-status-row button { width: 100%; }
+      #sales-actual-import .sales-actual-history-pagination { display: grid; grid-template-columns: repeat(2, 1fr); }
+      #sales-actual-import .sales-actual-history-pagination strong { grid-column: 1 / -1; grid-row: 1; }
     }
   `;
   document.head.appendChild(style);

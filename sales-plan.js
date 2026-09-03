@@ -276,6 +276,10 @@ function renderSalesPlanProductSuggestions(keyword) {
     return normalizeSalesPlanSearchText(product.productCode) === target;
   });
 
+  const exactJanCodeMatches = salesPlanProducts.filter(function (product) {
+    return normalizeSalesPlanSearchText(product.janCode) === target;
+  });
+
   let matches;
 
   if (exactInternalMatches.length > 0) {
@@ -292,17 +296,30 @@ function renderSalesPlanProductSuggestions(keyword) {
           { numeric: true }
         );
       });
+  } else if (exactJanCodeMatches.length > 0) {
+    // JANコードも重複登録を許可しているため、完全一致した商品をすべて候補に表示します。
+    matches = exactJanCodeMatches
+      .slice()
+      .sort(function (a, b) {
+        return String(a.internalCode || "").localeCompare(
+          String(b.internalCode || ""),
+          "ja",
+          { numeric: true }
+        );
+      });
   } else {
-    // 完全一致がないときだけ、社内コード・商品コード・商品名の部分一致候補を表示します。
+    // 完全一致がないときだけ、社内コード・商品コード・JANコード・商品名の部分一致候補を表示します。
     matches = salesPlanProducts
       .filter(function (product) {
         const internalCode = normalizeSalesPlanSearchText(product.internalCode);
         const productCode = normalizeSalesPlanSearchText(product.productCode);
+        const janCode = normalizeSalesPlanSearchText(product.janCode);
         const productName = normalizeSalesPlanSearchText(product.productName);
 
         return (
           internalCode.includes(target) ||
           productCode.includes(target) ||
+          janCode.includes(target) ||
           productName.includes(target)
         );
       })
@@ -311,16 +328,19 @@ function renderSalesPlanProductSuggestions(keyword) {
         const bInternal = normalizeSalesPlanSearchText(b.internalCode);
         const aProduct = normalizeSalesPlanSearchText(a.productCode);
         const bProduct = normalizeSalesPlanSearchText(b.productCode);
+        const aJan = normalizeSalesPlanSearchText(a.janCode);
+        const bJan = normalizeSalesPlanSearchText(b.janCode);
 
-        const getRank = function (internalCode, productCode) {
+        const getRank = function (internalCode, productCode, janCode) {
           if (internalCode.startsWith(target)) return 0;
           if (productCode.startsWith(target)) return 1;
-          return 2;
+          if (janCode.startsWith(target)) return 2;
+          return 3;
         };
 
         const rankDiff =
-          getRank(aInternal, aProduct) -
-          getRank(bInternal, bProduct);
+          getRank(aInternal, aProduct, aJan) -
+          getRank(bInternal, bProduct, bJan);
 
         if (rankDiff !== 0) return rankDiff;
 
@@ -348,7 +368,7 @@ function renderSalesPlanProductSuggestions(keyword) {
     name.textContent = product.productName || "商品名未登録";
 
     const codes = document.createElement("span");
-    codes.textContent = `社内コード：${product.internalCode || "未登録"}　商品コード：${product.productCode || "未登録"}`;
+    codes.textContent = `社内コード：${product.internalCode || "未登録"}　商品コード：${product.productCode || "未登録"}　JAN：${product.janCode || "未登録"}`;
 
     button.appendChild(name);
     button.appendChild(codes);
@@ -388,9 +408,9 @@ async function loadSalesPlanProduct() {
       await showSalesPlanDialog({
         type: "warning",
         icon: "✏️",
-        title: "社内コードまたは商品コードを入力してください",
+        title: "社内コード・商品コード・JANコードを入力してください",
         message: "販売予定の商品を検索するコードを入力してください。",
-        notice: "社内コード・商品コードのどちらでも検索できます。",
+        notice: "社内コード・商品コード・JANコードのどれでも検索できます。",
         confirmText: "入力に戻る"
       });
     } else if (!findSalesPlanProductMatches(enteredCode).length) {
@@ -398,7 +418,7 @@ async function loadSalesPlanProduct() {
         type: "danger",
         icon: "🔎",
         title: "商品が見つかりません",
-        message: "入力した社内コード・商品コードに一致する商品は登録されていません。",
+        message: "入力した社内コード・商品コード・JANコードに一致する商品は登録されていません。",
         details: [
           { label: "入力したコード", value: enteredCode }
         ],
@@ -428,8 +448,16 @@ function findSalesPlanProductMatches(code) {
     return [internalMatch];
   }
 
-  return salesPlanProducts.filter(function (product) {
+  const productCodeMatches = salesPlanProducts.filter(function (product) {
     return normalizeSalesPlanSearchText(product.productCode) === target;
+  });
+
+  if (productCodeMatches.length > 0) {
+    return productCodeMatches;
+  }
+
+  return salesPlanProducts.filter(function (product) {
+    return normalizeSalesPlanSearchText(product.janCode) === target;
   });
 }
 
@@ -484,7 +512,7 @@ function showSalesPlanProductChoiceDialog(enteredCode, products) {
 
     const title = document.createElement("h2");
     title.className = "app-dialog-title";
-    title.textContent = "同じ商品コードの商品が複数あります";
+    title.textContent = "同じコードの商品が複数あります";
 
     header.appendChild(icon);
     header.appendChild(title);
@@ -494,7 +522,7 @@ function showSalesPlanProductChoiceDialog(enteredCode, products) {
 
     const message = document.createElement("p");
     message.className = "app-dialog-message";
-    message.textContent = "登録する商品を選んでください。商品コードは重複登録できるため、社内コードと商品名を確認してください。";
+    message.textContent = "登録する商品を選んでください。商品コードやJANコードは重複する場合があるため、社内コードと商品名を確認してください。";
     content.appendChild(message);
 
     const details = document.createElement("div");
@@ -502,7 +530,7 @@ function showSalesPlanProductChoiceDialog(enteredCode, products) {
     const row = document.createElement("div");
     row.className = "app-dialog-detail-row";
     const label = document.createElement("strong");
-    label.textContent = "入力した商品コード";
+    label.textContent = "入力したコード";
     const value = document.createElement("span");
     value.textContent = enteredCode;
     row.appendChild(label);
@@ -531,7 +559,7 @@ function showSalesPlanProductChoiceDialog(enteredCode, products) {
         name.textContent = product.productName || "商品名未登録";
 
         const codes = document.createElement("span");
-        codes.textContent = `社内コード：${product.internalCode || "未登録"}　商品コード：${product.productCode || "未登録"}`;
+        codes.textContent = `社内コード：${product.internalCode || "未登録"}　商品コード：${product.productCode || "未登録"}　JAN：${product.janCode || "未登録"}`;
 
         button.appendChild(name);
         button.appendChild(codes);
@@ -545,7 +573,7 @@ function showSalesPlanProductChoiceDialog(enteredCode, products) {
 
     const notice = document.createElement("div");
     notice.className = "app-dialog-notice";
-    notice.textContent = "商品コードが同じでも、社内コードが違えば別の商品として管理されています。";
+    notice.textContent = "商品コードやJANコードが同じでも、社内コードが違えば別の商品として管理されています。";
     content.appendChild(notice);
 
     const actions = document.createElement("div");
@@ -754,7 +782,7 @@ async function addSalesPlanPendingItem() {
         message:
           "まとめて登録する商品を検索して選択してください。",
         notice:
-          "社内コード・商品コード・商品名から検索できます。",
+          "社内コード・商品コード・JANコード・商品名から検索できます。",
         confirmText: "入力に戻る"
       });
     } else if (

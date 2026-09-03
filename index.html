@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v225
+            画面版 v226
           </span>
         </div>
       </div>
@@ -730,8 +730,8 @@
             <ol>
               <li>ホームの「販売実績CSVを読み込む」から販売実績を取り込みます。</li>
               <li>「通常出荷数量を見る」を開くと、前月までの直近6か月を集計します。</li>
-              <li>総出荷数量から販売予定として照合できた出荷分を除き、通常出荷数量を計算します。</li>
-              <li>通常出荷数量を6か月で割った値を、月平均通常出荷として発注判定などに使用します。</li>
+              <li>通常出荷数量の表示はこれまでどおり販売予定との照合結果を確認できます。</li>
+              <li>発注判定・出荷低迷・船積・ホーム検索の月平均は、「株式会社 後藤」「清水産業 株式会社」の販売実績を除外して6か月平均を計算します。</li>
             </ol>
             <p class="manual-note">出荷済みの販売予定を削除すると照合できなくなるため、基本的に履歴として残します。</p>
           </div>
@@ -1525,8 +1525,8 @@
       <h2>通常出荷数量</h2>
 
       <p>
-        販売実績CSVの出荷数量から、販売予定として登録していた出荷分を除いて、普段の出荷分だけを計算します。<br>
-        「通常出荷数量」は、発注が必要な商品一覧や出荷低迷判定の月平均にも使用します。
+        販売実績CSVの出荷数量から、販売予定として登録していた出荷分を除いた「通常出荷数量」を確認できます。<br>
+        月平均の計算は別ルールで、「株式会社 後藤」「清水産業 株式会社」の販売実績を除外した数量を使用します。
       </p>
 
       <div class="normal-shipment-card">
@@ -1539,7 +1539,8 @@
           通常出荷数量 ＝ 総出荷数量（返品差引後）－ 販売予定として照合できた数量<br>
           販売予定は「同じ商品・同じ取引先・出荷日または出荷期間」が一致した実績と照合します。<br>
           取引先名の「株式会社」などの表記差や空白は無視して照合します。<br>
-          <strong>注意：</strong>過去の販売予定を削除すると、その予定分は通常出荷から除外できなくなるため、出荷済みの販売予定は残しておいてください。
+          <strong>月平均の計算：</strong>前月までの直近6か月の販売実績から「株式会社 後藤」「清水産業 株式会社」を除外し、残った数量 ÷ 6（端数切り上げ）です。<br>
+          <strong>注意：</strong>この画面の「通常出荷数量」は販売予定との照合結果を確認するための表示として残しています。
         </div>
 
         <p>
@@ -1577,7 +1578,7 @@
                 <th>6か月総出荷</th>
                 <th>販売予定分</th>
                 <th>6か月通常出荷</th>
-                <th>月平均通常出荷</th>
+                <th>月平均（後藤・清水除外）</th>
               </tr>
             </thead>
             <tbody id="normal-shipment-table-body"></tbody>
@@ -1599,9 +1600,9 @@
       <h2>発注が必要な商品一覧</h2>
 
       <p>
-        「前月までの直近6か月の月平均通常出荷数 × 3か月 ＋ 今後3か月の販売予定数」
+        「前月までの直近6か月の月平均販売数 × 3か月 ＋ 今後3か月の販売予定数」
         を必要数として、現在庫と発注残数を差し引いて追加発注が必要か判定します。<br>
-        月平均通常出荷数は、販売実績から販売予定として照合できた数量を除いて計算します。<br>
+        月平均販売数は、販売実績から「株式会社 後藤」「清水産業 株式会社」を除外して計算します。<br>
         現在庫だけでは不足する商品を「発注必要」「発注済み」に振り分けます。廃盤・廃盤予定・専用商品は対象外です。
       </p>
 
@@ -2113,9 +2114,9 @@
       <h2>出荷低迷商品の一覧</h2>
 
       <p>
-        前月までの直近6か月の販売実績から販売予定分を除いた「通常出荷数量」で月平均を計算し、
+        前月までの直近6か月の販売実績から「株式会社 後藤」「清水産業 株式会社」を除いて月平均を計算し、
         現在庫が24か月分以上ある商品を自動表示します。
-        6か月の月平均通常出荷数が0個で在庫が残っている商品は「販売実績なし」として表示します。
+        6か月の月平均販売数が0個で在庫が残っている商品は「販売実績なし」として表示します。
         廃盤商品は対象外です。
       </p>
 
@@ -2155,7 +2156,7 @@
                 <th>商品名</th>
                 <th>現在庫</th>
                 <th>6か月通常出荷</th>
-                <th>月平均通常出荷</th>
+                <th>月平均（後藤・清水除外）</th>
                 <th>在庫月数</th>
                 <th>保管場所</th>
                 <th>判定</th>
@@ -2288,6 +2289,7 @@
           <strong>専用商品は船積振り分け対象外のため、この一覧には表示しません。</strong><br>
           対象期間は「今回の倉庫到着日 ～ 次便の倉庫到着日前日」です。<br>
           期間販売見込 ＝ 直前6か月の月平均販売数 ÷ 30日 × 対象日数（小数切り上げ）。<br>
+          月平均販売数は「株式会社 後藤」「清水産業 株式会社」の販売実績を除外して計算します。<br>
           推奨数量 ＝ 「期間販売見込 ＋ 対象期間の販売予定数」－ 現在庫 － 前の船便への振分数量です。<br>
           <strong>未保存の商品は「今回の船便」を0個で表示します。実際に積む商品だけ数量を入力して保存してください。</strong><br>
           推奨数量をそのまま使う場合は、各商品の「推奨を入れる」ボタンを押せます。
@@ -4099,11 +4101,11 @@
   </main>
 
 <script src="storage.js?v=212"></script>
-<script src="normal-shipment.js?v=206"></script>
+<script src="normal-shipment.js?v=226"></script>
 <script src="manual.js?v=207"></script>
 <script src="backorder-list.js?v=216"></script>
 <script src="app.js?v=218"></script>
-<script src="natural-stock-search.js?v=206"></script>
+<script src="natural-stock-search.js?v=226"></script>
 <script src="product-history.js?v=107"></script>
 <script src="inventory.js?v=195"></script>
 <script src="transfer-list.js?v=195"></script>
@@ -4119,10 +4121,10 @@
 <script src="pwa.js?v=31"></script>
 <script src="sales-plan.js?v=225"></script>
 <script src="sales-actual.js?v=217"></script>
-<script src="purchase-required.js?v=206"></script>
+<script src="purchase-required.js?v=226"></script>
 <script src="order-remaining.js?v=120"></script>
-<script src="low-shipment.js?v=206"></script>
-<script src="shipping-schedule.js?v=208"></script>
+<script src="low-shipment.js?v=226"></script>
+<script src="shipping-schedule.js?v=226"></script>
 <script src="dedicated-product.js?v=215"></script>
 <script src="shipping-arrival.js?v=118"></script>
 <script src="barcode-print.js?v=142"></script>

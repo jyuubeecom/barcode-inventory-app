@@ -2370,7 +2370,7 @@ function printShippingAllocationList() {
     <div><strong>次便倉庫到着：</strong>${escapeShippingHtml(formatShippingDate(targetPeriod.nextSchedule.warehouseArrivalDate))}</div>
   </div>
   <div class="note">
-    月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の6か月平均。
+    月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の販売実績から「株式会社 後藤」「清水産業 株式会社」を除外した6か月平均。
     期間販売見込＝月平均÷30日×対象日数（小数切り上げ）。
     期間指定の販売予定は、対象期間と重なる日数分を按分して小数切り上げしています。
   </div>
@@ -2937,11 +2937,30 @@ function aggregateShippingActuals(monthKeys) {
     if (!monthSet.has(saleDate.slice(0, 7))) return;
     const code = String(record.internalCode || "").trim();
     if (!code) return;
+    if (isShippingAverageExcludedCustomer(record.customerName)) return;
     const quantity = Number(record.quantity || 0);
     if (!Number.isFinite(quantity)) return;
     result.set(code, (result.get(code) || 0) + quantity);
   });
   return result;
+}
+
+function isShippingAverageExcludedCustomer(value) {
+  if (
+    window.normalShipmentCalculator &&
+    typeof window.normalShipmentCalculator.isAverageExcludedCustomer === "function"
+  ) {
+    return window.normalShipmentCalculator.isAverageExcludedCustomer(value);
+  }
+
+  const normalized = String(value || "")
+    .normalize("NFKC")
+    .replace(/株式会社|有限会社|合同会社|合資会社|合名会社|㈱|㈲/g, "")
+    .replace(/[\s\u3000・･.,，。()（）\[\]［］【】「」『』'"’`]/g, "")
+    .trim()
+    .toLowerCase();
+
+  return normalized === "後藤" || normalized === "清水産業";
 }
 
 function aggregateShippingPlansForRange(startDate, endDate) {

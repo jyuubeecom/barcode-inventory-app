@@ -120,11 +120,11 @@ async function refreshPurchaseRequiredData() {
         const grossSixMonthSales = normalSummary
           ? Number(normalSummary.totalShipment || 0)
           : Number(actualByProduct.get(internalCode) || 0);
-        const plannedShipmentExcluded = normalSummary
-          ? Number(normalSummary.plannedShipment || 0)
+        const excludedCustomerSales = normalSummary
+          ? Number(normalSummary.excludedCustomerShipment || 0)
           : 0;
         const sixMonthSales = normalSummary
-          ? Math.max(0, Number(normalSummary.normalShipment || 0))
+          ? Math.max(0, Number(normalSummary.averageTargetShipment || 0))
           : Math.max(0, grossSixMonthSales);
         const monthlyAverage = Math.max(0, Math.ceil(sixMonthSales / 6));
         const threeMonthBase = monthlyAverage * 3;
@@ -156,7 +156,7 @@ async function refreshPurchaseRequiredData() {
             orderRemaining,
           currentShortage: currentShortage,
           grossSixMonthSales: grossSixMonthSales,
-          plannedShipmentExcluded: plannedShipmentExcluded,
+          excludedCustomerSales: excludedCustomerSales,
           sixMonthSales: sixMonthSales,
           monthlyAverage: monthlyAverage,
           threeMonthBase: threeMonthBase,
@@ -237,6 +237,11 @@ function aggregatePurchaseActuals(actuals, monthKeys) {
     if (!monthSet.has(saleDate.slice(0, 7))) return;
     const code = String(record.internalCode || "").trim();
     if (!code) return;
+    if (
+      window.normalShipmentCalculator &&
+      typeof window.normalShipmentCalculator.isAverageExcludedCustomer === "function" &&
+      window.normalShipmentCalculator.isAverageExcludedCustomer(record.customerName)
+    ) return;
     const quantity = Number(record.quantity || 0);
     if (!Number.isFinite(quantity)) return;
     result.set(code, (result.get(code) || 0) + quantity);
@@ -433,7 +438,7 @@ function renderPurchaseRequiredSummary() {
   const backorderCount = purchaseRequiredRows.filter(function (row) { return row.isBackorder; }).length;
   summary.innerHTML = `
     <strong>判定日：</strong>${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.evaluationDate))}<br>
-    <strong>平均通常出荷数：</strong>${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.actualStartDate))} ～ ${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.actualEndDate))} の通常出荷数量から6か月平均<br>
+    <strong>月平均販売数：</strong>${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.actualStartDate))} ～ ${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.actualEndDate))} の販売実績から「株式会社 後藤」「清水産業 株式会社」を除外して6か月平均<br>
     <strong>販売予定：</strong>${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.forecastStartDate))} ～ ${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.forecastEndDate))}<br>
     <strong>発注必要：</strong>${requiredRows.length.toLocaleString("ja-JP")}商品 /
     <strong>発注済み：</strong>${orderedRows.length.toLocaleString("ja-JP")}商品 /
@@ -669,7 +674,7 @@ function renderPurchaseRequiredTable() {
           </div>
 
           <div class="purchase-required-metric">
-            <span>月平均通常出荷</span>
+            <span>月平均販売数</span>
             <strong>
               ${formatPurchaseWholeNumber(item.monthlyAverage)}個
             </strong>
@@ -699,15 +704,15 @@ function renderPurchaseRequiredTable() {
 
         <div class="purchase-required-item-sub">
           <span>
-            6か月通常出荷：
+            6か月計算対象：
             <strong>${formatPurchaseQuantity(item.sixMonthSales)}個</strong>
           </span>
 
           <span>
             総出荷：
             <strong>${formatPurchaseQuantity(item.grossSixMonthSales)}個</strong>
-            / 販売予定分：
-            <strong>${formatPurchaseQuantity(item.plannedShipmentExcluded)}個</strong>
+            / 後藤・清水産業除外：
+            <strong>${formatPurchaseQuantity(item.excludedCustomerSales)}個</strong>
           </span>
 
           <span>

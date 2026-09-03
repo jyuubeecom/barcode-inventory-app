@@ -568,269 +568,82 @@ function calculateNaturalMonthlyAverage(
         ""
     ).trim();
 
-  if (
-    window.normalShipmentCalculator &&
-    typeof window.normalShipmentCalculator.calculateRange === "function" &&
-    displayContext.monthKeys.length > 0
-  ) {
-    const displayStartDate =
-      `${displayContext.monthKeys[0]}-01`;
-    const displayEndDate =
-      getNaturalMonthlyLastDate(
-        displayContext.monthKeys[
-          displayContext.monthKeys.length - 1
-        ]
-      );
-
-    const calculation =
-      window.normalShipmentCalculator.calculateRange(
-        actuals,
-        plans,
-        displayStartDate,
-        displayEndDate
-      );
-
-    const monthlyRows =
-      displayContext.monthKeys.map(
-        function (monthKey) {
-          const summary =
-            window.normalShipmentCalculator.getProductMonthSummary(
-              calculation,
-              internalCode,
-              monthKey
-            );
-
-          return {
-            monthKey: monthKey,
-            quantity: Math.max(
-              0,
-              Number(
-                summary.normalShipment ||
-                  0
-              )
-            ),
-            totalShipment: Number(
-              summary.totalShipment ||
-                0
-            ),
-            plannedShipment: Number(
-              summary.plannedShipment ||
-                0
-            )
-          };
-        }
-      );
-
-    const averageMonthKeySet =
-      new Set(
-        averageContext.monthKeys
-      );
-
-    const averageRows =
-      monthlyRows.filter(
-        function (row) {
-          return averageMonthKeySet.has(
-            row.monthKey
-          );
-        }
-      );
-
-    const sixMonthTotal =
-      averageRows.reduce(
-        function (sum, row) {
-          return sum +
-            Number(
-              row.quantity || 0
-            );
-        },
-        0
-      );
-
-    const grossSixMonthTotal =
-      averageRows.reduce(
-        function (sum, row) {
-          return sum +
-            Number(
-              row.totalShipment || 0
-            );
-        },
-        0
-      );
-
-    const excludedQuantity =
-      averageRows.reduce(
-        function (sum, row) {
-          return sum +
-            Number(
-              row.plannedShipment || 0
-            );
-        },
-        0
-      );
-
-    return {
-      startMonth:
-        averageContext.startMonth,
-      endMonth:
-        averageContext.endMonth,
-      displayStartMonth:
-        displayContext.startMonth,
-      displayEndMonth:
-        displayContext.endMonth,
-      monthlyRows: monthlyRows,
-      sixMonthTotal:
-        Math.max(
-          0,
-          sixMonthTotal
-        ),
-      grossSixMonthTotal:
-        grossSixMonthTotal,
-      monthlyAverage:
-        Math.max(
-          0,
-          Math.ceil(
-            sixMonthTotal / 6
-          )
-        ),
-      excludedCount:
-        excludedQuantity > 0
-          ? 1
-          : 0,
-      excludedQuantity:
-        excludedQuantity
-    };
-  }
-
-  const displayMonthTotals =
-    new Map(
-      displayContext.monthKeys.map(
-        function (key) {
-          return [key, 0];
-        }
-      )
-    );
-
-  (Array.isArray(actuals)
-    ? actuals
-    : []
-  ).forEach(
-    function (record) {
-      if (
-        String(
-          record &&
-            record.internalCode ||
-            ""
-        ).trim() !== internalCode
-      ) {
-        return;
-      }
-
-      const saleDate =
-        String(
-          record &&
-            record.saleDate ||
-            ""
-        );
-
-      if (
-        !/^\d{4}-\d{2}-\d{2}$/.test(
-          saleDate
-        )
-      ) {
-        return;
-      }
-
-      const monthKey =
-        saleDate.slice(0, 7);
-
-      if (
-        !displayMonthTotals.has(
-          monthKey
-        )
-      ) {
-        return;
-      }
-
-      const quantity =
-        Number(
-          record &&
-            record.quantity ||
-            0
-        );
-
-      if (
-        !Number.isFinite(
-          quantity
-        )
-      ) {
-        return;
-      }
-
-      displayMonthTotals.set(
-        monthKey,
-        (displayMonthTotals.get(
-          monthKey
-        ) || 0) + quantity
-      );
-    }
+  const displayGrossTotals = new Map(
+    displayContext.monthKeys.map(function (key) {
+      return [key, 0];
+    })
+  );
+  const displayTargetTotals = new Map(
+    displayContext.monthKeys.map(function (key) {
+      return [key, 0];
+    })
+  );
+  const displayExcludedTotals = new Map(
+    displayContext.monthKeys.map(function (key) {
+      return [key, 0];
+    })
   );
 
-  const monthlyRows =
-    displayContext.monthKeys.map(
-      function (monthKey) {
-        return {
-          monthKey: monthKey,
-          quantity:
-            Math.max(
-              0,
-              displayMonthTotals.get(
-                monthKey
-              ) || 0
-            ),
-          totalShipment:
-            displayMonthTotals.get(
-              monthKey
-            ) || 0,
-          plannedShipment: 0
-        };
-      }
-    );
+  (Array.isArray(actuals) ? actuals : []).forEach(function (record) {
+    if (String(record && record.internalCode || "").trim() !== internalCode) return;
 
-  const sixMonthTotal =
-    averageContext.monthKeys.reduce(
-      function (sum, monthKey) {
-        return sum +
-          Math.max(
-            0,
-            displayMonthTotals.get(
-              monthKey
-            ) || 0
-          );
-      },
-      0
-    );
+    const saleDate = String(record && record.saleDate || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(saleDate)) return;
+
+    const monthKey = saleDate.slice(0, 7);
+    if (!displayGrossTotals.has(monthKey)) return;
+
+    const quantity = Number(record && record.quantity || 0);
+    if (!Number.isFinite(quantity)) return;
+
+    displayGrossTotals.set(monthKey, (displayGrossTotals.get(monthKey) || 0) + quantity);
+
+    if (isNaturalMonthlyAverageExcludedCustomer(record && record.customerName)) {
+      displayExcludedTotals.set(monthKey, (displayExcludedTotals.get(monthKey) || 0) + quantity);
+    } else {
+      displayTargetTotals.set(monthKey, (displayTargetTotals.get(monthKey) || 0) + quantity);
+    }
+  });
+
+  const monthlyRows = displayContext.monthKeys.map(function (monthKey) {
+    return {
+      monthKey: monthKey,
+      quantity: displayGrossTotals.get(monthKey) || 0,
+      totalShipment: displayGrossTotals.get(monthKey) || 0,
+      averageTargetShipment: displayTargetTotals.get(monthKey) || 0,
+      excludedCustomerShipment: displayExcludedTotals.get(monthKey) || 0,
+      plannedShipment: 0
+    };
+  });
+
+  const averageMonthKeySet = new Set(averageContext.monthKeys);
+  const averageRows = monthlyRows.filter(function (row) {
+    return averageMonthKeySet.has(row.monthKey);
+  });
+
+  const grossSixMonthTotal = averageRows.reduce(function (sum, row) {
+    return sum + Number(row.totalShipment || 0);
+  }, 0);
+
+  const excludedQuantity = averageRows.reduce(function (sum, row) {
+    return sum + Number(row.excludedCustomerShipment || 0);
+  }, 0);
+
+  const sixMonthTotal = averageRows.reduce(function (sum, row) {
+    return sum + Number(row.averageTargetShipment || 0);
+  }, 0);
 
   return {
-    startMonth:
-      averageContext.startMonth,
-    endMonth:
-      averageContext.endMonth,
-    displayStartMonth:
-      displayContext.startMonth,
-    displayEndMonth:
-      displayContext.endMonth,
+    startMonth: averageContext.startMonth,
+    endMonth: averageContext.endMonth,
+    displayStartMonth: displayContext.startMonth,
+    displayEndMonth: displayContext.endMonth,
     monthlyRows: monthlyRows,
-    sixMonthTotal: sixMonthTotal,
-    grossSixMonthTotal: sixMonthTotal,
-    monthlyAverage:
-      Math.max(
-        0,
-        Math.ceil(
-          sixMonthTotal / 6
-        )
-      ),
-    excludedCount: 0,
-    excludedQuantity: 0
+    sixMonthTotal: Math.max(0, sixMonthTotal),
+    grossSixMonthTotal: grossSixMonthTotal,
+    monthlyAverage: Math.max(0, Math.ceil(Math.max(0, sixMonthTotal) / 6)),
+    excludedCount: excludedQuantity !== 0 ? 2 : 0,
+    excludedQuantity: excludedQuantity
   };
 }
 
@@ -949,7 +762,7 @@ function renderNaturalMonthlyAverageAnswer(
     "この商品";
 
   answer.textContent =
-    `${displayCode}の月平均通常出荷は${calculation.monthlyAverage.toLocaleString("ja-JP")}${unit}／月です。`;
+    `${displayCode}の月平均は${calculation.monthlyAverage.toLocaleString("ja-JP")}${unit}／月です。`;
 
   const summary =
     document.createElement("div");
@@ -969,11 +782,11 @@ function renderNaturalMonthlyAverageAnswer(
         "未登録"
     ],
     [
-      "月平均通常出荷",
+      "月平均",
       `${calculation.monthlyAverage.toLocaleString("ja-JP")}${unit}／月`
     ],
     [
-      "6か月通常出荷",
+      "6か月計算対象",
       `${calculation.sixMonthTotal.toLocaleString("ja-JP")}${unit}`
     ],
     [
@@ -981,7 +794,7 @@ function renderNaturalMonthlyAverageAnswer(
       `${Number(calculation.grossSixMonthTotal || 0).toLocaleString("ja-JP")}${unit}`
     ],
     [
-      "販売予定分を除外",
+      "後藤・清水産業を除外",
       `${Number(calculation.excludedQuantity || 0).toLocaleString("ja-JP")}${unit}`
     ]
   ].forEach(
@@ -1071,7 +884,7 @@ function renderNaturalMonthlyAverageAnswer(
     "natural-monthly-average-note";
 
   note.textContent =
-    "計算方法：前月までの直近6か月の販売実績から、同じ商品・取引先・出荷時期に登録されている販売予定分を除いた『通常出荷数量』÷ 6（端数切り上げ）です。";
+    "計算方法：前月までの直近6か月の販売実績から「株式会社 後藤」「清水産業 株式会社」の実績を除外し、残った数量 ÷ 6（端数切り上げ）です。返品は販売実績のマイナス数量として差し引きます。";
 
   if (
     calculation.excludedCount > 0
@@ -1083,7 +896,7 @@ function renderNaturalMonthlyAverageAnswer(
       "natural-monthly-average-excluded";
 
     excluded.textContent =
-      `今回の対象期間では、販売予定として照合できた ${calculation.excludedQuantity.toLocaleString("ja-JP")}${unit} を通常出荷数量から除外しました。`;
+      `今回の対象期間では、「株式会社 後藤」「清水産業 株式会社」の販売実績 ${calculation.excludedQuantity.toLocaleString("ja-JP")}${unit} を月平均の計算から除外しました。`;
 
     card.appendChild(heading);
     card.appendChild(answer);

@@ -125,11 +125,11 @@ async function refreshLowShipmentData() {
         const grossSixMonthSales = normalSummary
           ? Number(normalSummary.totalShipment || 0)
           : Number(actualByProduct.get(internalCode) || 0);
-        const plannedShipmentExcluded = normalSummary
-          ? Number(normalSummary.plannedShipment || 0)
+        const excludedCustomerSales = normalSummary
+          ? Number(normalSummary.excludedCustomerShipment || 0)
           : 0;
         const sixMonthSales = normalSummary
-          ? Math.max(0, Number(normalSummary.normalShipment || 0))
+          ? Math.max(0, Number(normalSummary.averageTargetShipment || 0))
           : Math.max(0, grossSixMonthSales);
         const monthlyAverage = Math.max(0, Math.ceil(sixMonthSales / 6));
         const currentStock = getLowShipmentStockNumber(product.stock);
@@ -144,7 +144,7 @@ async function refreshLowShipmentData() {
           productName: product.productName || "",
           currentStock: currentStock,
           grossSixMonthSales: grossSixMonthSales,
-          plannedShipmentExcluded: plannedShipmentExcluded,
+          excludedCustomerSales: excludedCustomerSales,
           sixMonthSales: sixMonthSales,
           monthlyAverage: monthlyAverage,
           stockMonths: stockMonths,
@@ -213,6 +213,11 @@ function aggregateLowShipmentActuals(actuals, monthKeys) {
 
     const code = String(record.internalCode || "").trim();
     if (!code) return;
+    if (
+      window.normalShipmentCalculator &&
+      typeof window.normalShipmentCalculator.isAverageExcludedCustomer === "function" &&
+      window.normalShipmentCalculator.isAverageExcludedCustomer(record.customerName)
+    ) return;
 
     const quantity = Number(record.quantity || 0);
     if (!Number.isFinite(quantity)) return;
@@ -272,7 +277,7 @@ function renderLowShipmentSummary() {
 
   summary.innerHTML = `
     <strong>判定日：</strong>${escapeLowShipmentHtml(formatLowShipmentDisplayDate(lowShipmentContext.evaluationDate))}<br>
-    <strong>平均通常出荷数：</strong>${escapeLowShipmentHtml(formatLowShipmentDisplayDate(lowShipmentContext.actualStartDate))} ～ ${escapeLowShipmentHtml(formatLowShipmentDisplayDate(lowShipmentContext.actualEndDate))} の6か月平均（販売予定分を除外・小数切り上げ）<br>
+    <strong>月平均販売数：</strong>${escapeLowShipmentHtml(formatLowShipmentDisplayDate(lowShipmentContext.actualStartDate))} ～ ${escapeLowShipmentHtml(formatLowShipmentDisplayDate(lowShipmentContext.actualEndDate))} の6か月平均（「株式会社 後藤」「清水産業 株式会社」を除外・小数切り上げ）<br>
     <strong>判定基準：</strong>現在庫が月平均販売数の24か月分以上<br>
     <strong>出荷低迷：</strong>${lowShipmentRows.length.toLocaleString("ja-JP")}商品
     （2年以上分 ${lowShipmentContext.overTwoYearsCount.toLocaleString("ja-JP")}商品 / 販売実績なし ${lowShipmentContext.noSalesCount.toLocaleString("ja-JP")}商品）

@@ -10,7 +10,8 @@ window.normalShipmentCalculator = {
   buildPreviousMonthsContext: buildNormalShipmentPreviousMonthsContext,
   getProductSummary: getNormalShipmentProductSummary,
   getProductMonthSummary: getNormalShipmentProductMonthSummary,
-  normalizeCustomer: normalizeNormalShipmentCustomer
+  normalizeCustomer: normalizeNormalShipmentCustomer,
+  isAverageExcludedCustomer: isNormalShipmentAverageExcludedCustomer
 };
 
 window.addEventListener("DOMContentLoaded", initializeNormalShipmentFeature);
@@ -121,7 +122,8 @@ async function refreshNormalShipmentData() {
         const internalCode = String(product.internalCode || "").trim();
         const item = getNormalShipmentProductSummary(calculation, internalCode);
         const normalQuantity = Math.max(0, Number(item.normalShipment || 0));
-        const monthlyAverage = Math.max(0, Math.ceil(normalQuantity / 6));
+        const averageTargetQuantity = Math.max(0, Number(item.averageTargetShipment || 0));
+        const monthlyAverage = Math.max(0, Math.ceil(averageTargetQuantity / 6));
 
         return {
           internalCode: internalCode,
@@ -130,6 +132,8 @@ async function refreshNormalShipmentData() {
           totalShipment: Number(item.totalShipment || 0),
           plannedShipment: Number(item.plannedShipment || 0),
           normalShipment: normalQuantity,
+          averageTargetShipment: averageTargetQuantity,
+          excludedCustomerShipment: Number(item.excludedCustomerShipment || 0),
           monthlyAverage: monthlyAverage,
           location: product.location || ""
         };
@@ -192,15 +196,18 @@ function calculateNormalShipmentRange(actuals, plans, startDate, endDate) {
     if (end && saleDate > end) return;
     if (!Number.isFinite(quantity)) return;
 
+    const customerName = String(record && record.customerName || "");
     const row = {
       index: index,
       internalCode: internalCode,
       saleDate: saleDate,
-      customerName: String(record && record.customerName || ""),
-      customerKey: normalizeNormalShipmentCustomer(record && record.customerName),
+      customerName: customerName,
+      customerKey: normalizeNormalShipmentCustomer(customerName),
       quantity: quantity,
       availableForPlan: Math.max(0, quantity),
-      plannedShipment: 0
+      plannedShipment: 0,
+      excludedCustomerShipment: isNormalShipmentAverageExcludedCustomer(customerName) ? quantity : 0,
+      averageTargetShipment: isNormalShipmentAverageExcludedCustomer(customerName) ? 0 : quantity
     };
 
     actualRows.push(row);
@@ -266,12 +273,16 @@ function calculateNormalShipmentRange(actuals, plans, startDate, endDate) {
     const productSummary = getOrCreateNormalShipmentSummary(byProduct, row.internalCode);
     productSummary.totalShipment += row.quantity;
     productSummary.plannedShipment += row.plannedShipment;
+    productSummary.excludedCustomerShipment += row.excludedCustomerShipment;
+    productSummary.averageTargetShipment += row.averageTargetShipment;
 
     const monthKey = row.saleDate.slice(0, 7);
     const monthMapKey = makeNormalShipmentMonthMapKey(row.internalCode, monthKey);
     const monthSummary = getOrCreateNormalShipmentSummary(byProductMonth, monthMapKey);
     monthSummary.totalShipment += row.quantity;
     monthSummary.plannedShipment += row.plannedShipment;
+    monthSummary.excludedCustomerShipment += row.excludedCustomerShipment;
+    monthSummary.averageTargetShipment += row.averageTargetShipment;
   });
 
   byProduct.forEach(finalizeNormalShipmentSummary);
@@ -309,7 +320,9 @@ function createEmptyNormalShipmentSummary() {
   return {
     totalShipment: 0,
     plannedShipment: 0,
-    normalShipment: 0
+    normalShipment: 0,
+    excludedCustomerShipment: 0,
+    averageTargetShipment: 0
   };
 }
 
@@ -322,6 +335,8 @@ function finalizeNormalShipmentSummary(item) {
   item.totalShipment = Number(item.totalShipment || 0);
   item.plannedShipment = Math.max(0, Number(item.plannedShipment || 0));
   item.normalShipment = Math.max(0, item.totalShipment - item.plannedShipment);
+  item.excludedCustomerShipment = Number(item.excludedCustomerShipment || 0);
+  item.averageTargetShipment = Math.max(0, Number(item.averageTargetShipment || 0));
 }
 
 function makeNormalShipmentMonthMapKey(internalCode, monthKey) {
@@ -377,6 +392,12 @@ function normalizeNormalShipmentCustomer(value) {
     .toLowerCase();
 }
 
+
+function isNormalShipmentAverageExcludedCustomer(value) {
+  const normalized = normalizeNormalShipmentCustomer(value);
+  return normalized === "後藤" || normalized === "清水産業";
+}
+
 function normalShipmentCustomersMatch(planCustomerKey, actualCustomerKey) {
   if (!planCustomerKey) return true;
   if (!actualCustomerKey) return false;
@@ -419,7 +440,8 @@ function renderNormalShipmentSummary() {
     <strong>対象期間：</strong>${escapeNormalShipmentHtml(formatNormalShipmentDisplayDate(normalShipmentContext.startDate))} ～ ${escapeNormalShipmentHtml(formatNormalShipmentDisplayDate(normalShipmentContext.endDate))}<br>
     <strong>総出荷数量：</strong>${formatNormalShipmentQuantity(totals.total)}個 /
     <strong>販売予定分：</strong>${formatNormalShipmentQuantity(totals.planned)}個 /
-    <strong>通常出荷数量：</strong>${formatNormalShipmentQuantity(totals.normal)}個
+    <strong>通常出荷数量：</strong>${formatNormalShipmentQuantity(totals.normal)}個<br>
+    <strong>月平均の計算：</strong>「株式会社 後藤」「清水産業 株式会社」を除いた販売実績 ÷ 6（端数切り上げ）
   `;
 }
 

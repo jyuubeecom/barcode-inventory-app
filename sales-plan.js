@@ -1729,6 +1729,49 @@ function normalizeSalesPlanPrintPaperSize(paperSize) {
     : "A3";
 }
 
+function getSalesPlanPrintFilterState() {
+  const searchInput = document.querySelector("#sales-plan-search");
+  const monthFilter = document.querySelector("#sales-plan-month-filter");
+
+  const keyword = searchInput
+    ? searchInput.value.trim()
+    : "";
+
+  const filterMonth = monthFilter
+    ? monthFilter.value
+    : "";
+
+  return {
+    keyword: keyword,
+    month: filterMonth,
+    active: Boolean(keyword || filterMonth)
+  };
+}
+
+function getSalesPlanCurrentFilteredPrintPlans() {
+  return getFilteredSalesPlans()
+    .slice()
+    .sort(compareSalesPlans);
+}
+
+function buildSalesPlanPrintFilterDescription(filterState) {
+  if (!filterState || !filterState.active) {
+    return "";
+  }
+
+  const parts = [];
+
+  if (filterState.keyword) {
+    parts.push(`検索「${filterState.keyword}」`);
+  }
+
+  if (filterState.month) {
+    parts.push(`出荷月 ${formatSalesPlanPrintMonth(filterState.month)}`);
+  }
+
+  return parts.join(" / ");
+}
+
 function printSalesPlanList(paperSize) {
   const printPaperSize =
     normalizeSalesPlanPrintPaperSize(
@@ -1769,20 +1812,25 @@ function printSalesPlanList(paperSize) {
     return;
   }
 
+  const printFilterState =
+    getSalesPlanPrintFilterState();
+
   const plans =
-    salesPlanRecords
-      .filter(
-        function (record) {
-          return salesPlanMatchesMonth(
-            record,
-            month
-          );
-        }
-      )
-      .slice()
-      .sort(
-        compareSalesPlans
-      );
+    (
+      printFilterState.active
+        ? getSalesPlanCurrentFilteredPrintPlans()
+        : salesPlanRecords
+            .filter(
+              function (record) {
+                return salesPlanMatchesMonth(
+                  record,
+                  month
+                );
+              }
+            )
+            .slice()
+            .sort(compareSalesPlans)
+    );
 
   if (
     plans.length === 0
@@ -1792,7 +1840,9 @@ function printSalesPlanList(paperSize) {
       icon: "📋",
       title: "販売予定がありません",
       message:
-        `${formatSalesPlanPrintMonth(month)}に該当する販売予定はありません。`,
+        printFilterState.active
+          ? "現在の検索・絞り込み条件に該当する販売予定はありません。"
+          : `${formatSalesPlanPrintMonth(month)}に該当する販売予定はありません。`,
       confirmText: "確認して閉じる"
     });
 
@@ -1837,6 +1887,25 @@ function printSalesPlanList(paperSize) {
     formatSalesPlanPrintMonth(
       month
     );
+
+  const printFilterDescription =
+    buildSalesPlanPrintFilterDescription(
+      printFilterState
+    );
+
+  const listHeading =
+    printFilterState.active
+      ? (
+          printFilterState.month
+            ? `${formatSalesPlanPrintMonth(printFilterState.month)} 販売予定一覧（絞り込み結果）`
+            : "販売予定一覧（検索結果）"
+        )
+      : `${monthLabel} 販売予定一覧`;
+
+  const listTargetNotice =
+    printFilterState.active
+      ? `印刷対象：現在の検索・絞り込み結果（${escapeSalesPlanHtml(printFilterDescription || "絞り込み中")}）`
+      : `印刷対象：${escapeSalesPlanHtml(monthLabel)}の全販売予定`;
 
   const printedAt =
     new Date().toLocaleString(
@@ -1907,7 +1976,7 @@ function printSalesPlanList(paperSize) {
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>販売予定一覧_${escapeSalesPlanHtml(month)}_${printPaperSize}</title>
+  <title>${escapeSalesPlanHtml(printFilterState.active ? "販売予定一覧_検索結果" : `販売予定一覧_${month}`)}_${printPaperSize}</title>
 
   <style>
     @page {
@@ -2038,7 +2107,7 @@ function printSalesPlanList(paperSize) {
 </head>
 
 <body>
-  <h1>${escapeSalesPlanHtml(monthLabel)} 販売予定一覧</h1>
+  <h1>${escapeSalesPlanHtml(listHeading)}</h1>
 
   <div class="summary">
     <div>販売予定：${plans.length.toLocaleString("ja-JP")}件</div>
@@ -2047,7 +2116,8 @@ function printSalesPlanList(paperSize) {
   </div>
 
   <div class="notice">
-    ※ 期間指定の販売予定は、選択した月と期間が重なる予定も一覧に含みます。登録した備考は備考欄へ印刷します。空欄は印刷後の手書きメモにも使用できます。
+    <div>${listTargetNotice}</div>
+    <div>※ 期間指定の販売予定は対象条件と期間が重なる予定も一覧に含みます。登録した備考は備考欄へ印刷します。空欄は印刷後の手書きメモにも使用できます。</div>
   </div>
 
   <table>
@@ -2157,8 +2227,16 @@ function printSalesPlanCalendar(paperSize) {
     return;
   }
 
+  const printFilterState =
+    getSalesPlanPrintFilterState();
+
+  const calendarSourcePlans =
+    printFilterState.active
+      ? getSalesPlanCurrentFilteredPrintPlans()
+      : salesPlanRecords;
+
   const plans =
-    salesPlanRecords.filter(
+    calendarSourcePlans.filter(
       function (record) {
         return salesPlanMatchesMonth(
           record,
@@ -2166,6 +2244,25 @@ function printSalesPlanCalendar(paperSize) {
         );
       }
     );
+
+  if (plans.length === 0) {
+    void showSalesPlanDialog({
+      type: "warning",
+      icon: "📅",
+      title: "販売予定がありません",
+      message:
+        printFilterState.active
+          ? `現在の検索・絞り込み結果の中に、${formatSalesPlanPrintMonth(month)}へ印刷できる販売予定がありません。`
+          : `${formatSalesPlanPrintMonth(month)}に該当する販売予定はありません。`,
+      notice:
+        printFilterState.active
+          ? "検索結果の商品をカレンダー印刷する場合は、その商品の出荷月に「印刷する月」を合わせてください。"
+          : "",
+      confirmText: "確認して閉じる"
+    });
+
+    return;
+  }
 
   const printWindow =
     window.open(
@@ -2199,6 +2296,21 @@ function printSalesPlanCalendar(paperSize) {
     formatSalesPlanPrintMonth(
       month
     );
+
+  const printFilterDescription =
+    buildSalesPlanPrintFilterDescription(
+      printFilterState
+    );
+
+  const calendarHeading =
+    printFilterState.active
+      ? `${monthLabel} 販売予定カレンダー（絞り込み結果）`
+      : `${monthLabel} 販売予定カレンダー`;
+
+  const calendarTargetLabel =
+    printFilterState.active
+      ? `対象：${printFilterDescription || "現在の絞り込み結果"}`
+      : `対象：${monthLabel}の全販売予定`;
 
   const totalQuantity =
     plans.reduce(
@@ -2708,7 +2820,7 @@ function printSalesPlanCalendar(paperSize) {
 </head>
 
 <body>
-  <h1>${escapeSalesPlanHtml(monthLabel)} 販売予定カレンダー</h1>
+  <h1>${escapeSalesPlanHtml(calendarHeading)}</h1>
 
   <div class="summary">
     <span>販売予定：${plans.length.toLocaleString("ja-JP")}件</span>
@@ -2727,6 +2839,7 @@ function printSalesPlanCalendar(paperSize) {
   </table>
 
   <div class="footer">
+    ${escapeSalesPlanHtml(calendarTargetLabel)}<br>
     ※ 出荷期間は色付きの帯で表示します。帯の先頭に取引先名・副題を表示し、詳細はリスト形式で確認してください。
   </div>
 </body>

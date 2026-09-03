@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "barcode-inventory-app-v224";
+const CACHE_NAME = "barcode-inventory-app-v225";
 const APP_FILES = [
   "./", "./index.html", "./style.css?v=108", "./storage.js?v=212",
   "./normal-shipment.js?v=206",
@@ -12,7 +12,7 @@ const APP_FILES = [
   "./scanner.js?v=126", "./stocktaking.js?v=202",
   "./stocktaking-history.js?v=35", "./stocktaking-transfer.js?v=201",
   "./csv.js?v=90", "./csv-import.js?v=215", "./csv-update.js?v=74",
-  "./sales-plan.js?v=223", "./sales-actual.js?v=210", "./purchase-required.js?v=206", "./order-remaining.js?v=120", "./low-shipment.js?v=206",
+  "./sales-plan.js?v=225", "./sales-actual.js?v=210", "./purchase-required.js?v=206", "./order-remaining.js?v=120", "./low-shipment.js?v=206",
   "./shipping-schedule.js?v=208", "./dedicated-product.js?v=215", "./shipping-arrival.js?v=118", "./barcode-print.js?v=142",
   "./backup.js?v=120", "./restore.js?v=120", "./location-management.js?v=100",
   "./processing-sheet.js?v=211",

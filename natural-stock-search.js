@@ -1,7 +1,7 @@
 "use strict";
 
 /* =========================================================
-   v227 自然文検索（「船」短縮キーワード対応）
+   v228 自然文検索（船積候補外の保存数量も検索対象）
    ・端末内の商品データだけを使用
    ・社内コード / 商品コード / JAN / 商品名に対応
    ・JANなどが重複した場合は候補を一覧表示
@@ -4028,6 +4028,91 @@ async function collectNaturalShippingAllocations(
         }
       }
     );
+
+    /*
+       v228:
+       船積候補外から手動追加した商品は、候補一覧のカードには表示されないため、
+       画面のカードだけを検索すると保存済み数量を拾えませんでした。
+       shippingScheduleApp の読取APIから保存済み振分データを直接取得し、
+       通常候補・候補外追加の区別なく検索対象にします。
+    */
+    if (
+      window.shippingScheduleApp &&
+      typeof window.shippingScheduleApp.getSearchRelationData === "function"
+    ) {
+      try {
+        const relationData =
+          await window.shippingScheduleApp.getSearchRelationData();
+
+        if (
+          relationData &&
+          Array.isArray(relationData.allocations)
+        ) {
+          const optionMap =
+            new Map(
+              options.map(
+                function (option) {
+                  return [
+                    String(option.value || ""),
+                    {
+                      label: String(option.textContent || "").trim(),
+                      order: option.index
+                    }
+                  ];
+                }
+              )
+            );
+
+          const merged = new Map();
+
+          relationData.allocations.forEach(
+            function (record) {
+              const scheduleId =
+                String(record && record.scheduleId || "").trim();
+              const internalCode =
+                String(record && record.internalCode || "").trim();
+              const quantity =
+                Math.max(0, Number(record && record.quantity || 0));
+
+              if (
+                !scheduleId ||
+                !internalCode ||
+                quantity <= 0 ||
+                !optionMap.has(scheduleId) ||
+                !productMap.has(internalCode)
+              ) {
+                return;
+              }
+
+              const optionInfo = optionMap.get(scheduleId);
+              const key = `${scheduleId}::${internalCode}`;
+              const current =
+                merged.get(key) || {
+                  scheduleId: scheduleId,
+                  scheduleLabel: optionInfo.label,
+                  scheduleOrder: optionInfo.order,
+                  internalCode: internalCode,
+                  product: productMap.get(internalCode),
+                  quantity: 0
+                };
+
+              current.quantity += quantity;
+              merged.set(key, current);
+            }
+          );
+
+          return {
+            available: true,
+            allocations: Array.from(merged.values())
+          };
+        }
+      } catch (error) {
+        console.warn(
+          "v228 船積保存データ直接検索に失敗したため画面検索へ切り替えます。",
+          error
+        );
+      }
+    }
 
     const allocations = [];
 

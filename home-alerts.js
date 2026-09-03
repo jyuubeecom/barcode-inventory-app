@@ -1,14 +1,15 @@
 "use strict";
 
 /* =========================================================
-   v208 PCホーム右側 要確認パネル + 注残優先表示 + 印刷 + 折りたたみ + 更新通知
+   v222 PCホーム右側 要確認パネル + 販売予定在庫不足 + 注残優先表示 + 印刷 + 折りたたみ + 更新通知
    ・発注必要商品
    ・次の未確定船便で船積みが必要な商品
+   ・今後の販売予定数量に対して「現在庫＋発注残」が不足する商品
    ・PC表示のみ
    ・通常は折りたたんでホーム画面を広く使う
-   ・発注 / 船積みの内容が変わったら画面上部へ通知
+   ・発注 / 船積み / 販売予定不足の内容が変わったら画面上部へ通知
    ・折りたたみ中は「更新あり」バッジを残す
-   ・要確認を「全部 / 発注のみ / 船積のみ」でA4印刷
+   ・要確認を「全部 / 発注のみ / 船積のみ / 販売予定不足のみ」でA4印刷
    ========================================================= */
 
 document.addEventListener(
@@ -18,6 +19,7 @@ document.addEventListener(
 
 let homeAlertLatestPurchaseData = null;
 let homeAlertLatestShippingData = null;
+let homeAlertLatestSalesPlanData = null;
 
 const HOME_ALERT_COLLAPSED_KEY =
   "barcode-inventory-home-alert-collapsed-v194";
@@ -159,6 +161,12 @@ function createHomeAlertPanel() {
         船積 --
       </span>
       <span
+        id="home-alert-compact-sales-plan"
+        class="home-alert-compact-count home-alert-compact-sales-plan"
+      >
+        予定 --
+      </span>
+      <span
         id="home-alert-unread-badge"
         class="home-alert-unread-badge"
         hidden
@@ -221,6 +229,11 @@ function createHomeAlertPanel() {
       <div
         id="home-alert-shipping"
         class="home-alert-card home-alert-shipping"
+      ></div>
+
+      <div
+        id="home-alert-sales-plan"
+        class="home-alert-card home-alert-sales-plan"
       ></div>
 
       <div
@@ -318,7 +331,8 @@ function loadHomeAlertUnreadState() {
     if (!raw) {
       return {
         purchase: false,
-        shipping: false
+        shipping: false,
+        salesPlan: false
       };
     }
 
@@ -331,12 +345,16 @@ function loadHomeAlertUnreadState() {
       ),
       shipping: Boolean(
         parsed && parsed.shipping
+      ),
+      salesPlan: Boolean(
+        parsed && parsed.salesPlan
       )
     };
   } catch (error) {
     return {
       purchase: false,
-      shipping: false
+      shipping: false,
+      salesPlan: false
     };
   }
 }
@@ -432,14 +450,16 @@ function applyHomeAlertCollapsedState() {
 function markHomeAlertUpdatesRead() {
   if (
     !homeAlertUnreadState.purchase &&
-    !homeAlertUnreadState.shipping
+    !homeAlertUnreadState.shipping &&
+    !homeAlertUnreadState.salesPlan
   ) {
     return;
   }
 
   homeAlertUnreadState = {
     purchase: false,
-    shipping: false
+    shipping: false,
+    salesPlan: false
   };
 
   saveHomeAlertUnreadState();
@@ -458,7 +478,8 @@ function updateHomeAlertUnreadBadge() {
 
   const hasUnread =
     homeAlertUnreadState.purchase ||
-    homeAlertUnreadState.shipping;
+    homeAlertUnreadState.shipping ||
+    homeAlertUnreadState.salesPlan;
 
   badge.hidden = !hasUnread;
 
@@ -472,6 +493,10 @@ function updateHomeAlertUnreadBadge() {
     labels.push("船積");
   }
 
+  if (homeAlertUnreadState.salesPlan) {
+    labels.push("販売予定");
+  }
+
   badge.textContent =
     hasUnread
       ? labels.join("・") + " 更新"
@@ -480,7 +505,8 @@ function updateHomeAlertUnreadBadge() {
 
 function updateHomeAlertCompactSummary(
   purchaseData,
-  shippingData
+  shippingData,
+  salesPlanData
 ) {
   const purchase =
     document.querySelector(
@@ -489,6 +515,10 @@ function updateHomeAlertCompactSummary(
   const shipping =
     document.querySelector(
       "#home-alert-compact-shipping"
+    );
+  const salesPlan =
+    document.querySelector(
+      "#home-alert-compact-sales-plan"
     );
 
   if (purchase) {
@@ -518,11 +548,22 @@ function updateHomeAlertCompactSummary(
         )
         : "船積 -";
   }
+
+  if (salesPlan) {
+    salesPlan.textContent =
+      "予定 " +
+      Number(
+        salesPlanData &&
+        salesPlanData.count ||
+        0
+      ).toLocaleString("ja-JP");
+  }
 }
 
 function createHomeAlertSnapshot(
   purchaseData,
-  shippingData
+  shippingData,
+  salesPlanData
 ) {
   const purchaseRows =
     Array.isArray(
@@ -536,6 +577,13 @@ function createHomeAlertSnapshot(
       shippingData && shippingData.rows
     )
       ? shippingData.rows
+      : [];
+
+  const salesPlanRows =
+    Array.isArray(
+      salesPlanData && salesPlanData.rows
+    )
+      ? salesPlanData.rows
       : [];
 
   return {
@@ -617,6 +665,34 @@ function createHomeAlertSnapshot(
           ];
         }
       )
+    },
+    salesPlan: {
+      count: Number(
+        salesPlanData &&
+        salesPlanData.count ||
+        0
+      ),
+      total: Number(
+        salesPlanData &&
+        salesPlanData.totalShortage ||
+        0
+      ),
+      rows: salesPlanRows.map(
+        function (row) {
+          return [
+            String(
+              row.internalCode ||
+              row.productCode ||
+              ""
+            ),
+            Number(row.plannedQuantity || 0),
+            Number(row.currentStock || 0),
+            Number(row.orderRemaining || 0),
+            Number(row.shortage || 0),
+            String(row.nextShippingDate || "")
+          ];
+        }
+      )
     }
   };
 }
@@ -631,12 +707,14 @@ function homeAlertSnapshotPartChanged(
 
 function handleHomeAlertSnapshotChange(
   purchaseData,
-  shippingData
+  shippingData,
+  salesPlanData
 ) {
   const nextSnapshot =
     createHomeAlertSnapshot(
       purchaseData,
-      shippingData
+      shippingData,
+      salesPlanData
     );
 
   const previousSnapshot =
@@ -660,10 +738,22 @@ function handleHomeAlertSnapshotChange(
       previousSnapshot.shipping,
       nextSnapshot.shipping
     );
+  const salesPlanChanged =
+    previousSnapshot.salesPlan
+      ? homeAlertSnapshotPartChanged(
+          previousSnapshot.salesPlan,
+          nextSnapshot.salesPlan
+        )
+      : Number(
+          nextSnapshot.salesPlan &&
+          nextSnapshot.salesPlan.count ||
+          0
+        ) > 0;
 
   if (
     !purchaseChanged &&
-    !shippingChanged
+    !shippingChanged &&
+    !salesPlanChanged
   ) {
     return;
   }
@@ -674,7 +764,10 @@ function handleHomeAlertSnapshotChange(
       purchaseChanged,
     shipping:
       homeAlertUnreadState.shipping ||
-      shippingChanged
+      shippingChanged,
+    salesPlan:
+      homeAlertUnreadState.salesPlan ||
+      salesPlanChanged
   };
 
   saveHomeAlertUnreadState();
@@ -683,6 +776,7 @@ function handleHomeAlertSnapshotChange(
   showHomeAlertUpdateToast({
     purchaseChanged: purchaseChanged,
     shippingChanged: shippingChanged,
+    salesPlanChanged: salesPlanChanged,
     previousSnapshot: previousSnapshot,
     nextSnapshot: nextSnapshot
   });
@@ -749,6 +843,27 @@ function showHomeAlertUpdateToast(change) {
 
     lines.push(
       "船積みが必要：" +
+      oldCount.toLocaleString("ja-JP") +
+      " → " +
+      newCount.toLocaleString("ja-JP") +
+      "商品"
+    );
+  }
+
+  if (change.salesPlanChanged) {
+    const oldCount = Number(
+      change.previousSnapshot &&
+      change.previousSnapshot.salesPlan &&
+      change.previousSnapshot.salesPlan.count ||
+      0
+    );
+    const newCount = Number(
+      change.nextSnapshot.salesPlan.count ||
+      0
+    );
+
+    lines.push(
+      "販売予定の在庫不足：" +
       oldCount.toLocaleString("ja-JP") +
       " → " +
       newCount.toLocaleString("ja-JP") +
@@ -924,6 +1039,11 @@ async function refreshHomeAlertPanel() {
       "#home-alert-shipping"
     );
 
+  const salesPlanBox =
+    panel.querySelector(
+      "#home-alert-sales-plan"
+    );
+
   const updated =
     panel.querySelector(
       "#home-alert-updated"
@@ -951,10 +1071,19 @@ async function refreshHomeAlertPanel() {
       );
   }
 
+  if (salesPlanBox) {
+    salesPlanBox.innerHTML =
+      createHomeAlertSkeleton(
+        "販売予定に対して在庫不足",
+        "📅"
+      );
+  }
+
   const results =
     await Promise.allSettled([
       getHomePurchaseAlertData(),
-      getHomeShippingAlertData()
+      getHomeShippingAlertData(),
+      getHomeSalesPlanStockAlertData()
     ]);
 
   if (loading) {
@@ -966,6 +1095,9 @@ async function refreshHomeAlertPanel() {
 
   const shippingResult =
     results[1];
+
+  const salesPlanResult =
+    results[2];
 
   if (
     purchaseResult.status ===
@@ -981,6 +1113,14 @@ async function refreshHomeAlertPanel() {
   ) {
     homeAlertLatestShippingData =
       shippingResult.value;
+  }
+
+  if (
+    salesPlanResult.status ===
+    "fulfilled"
+  ) {
+    homeAlertLatestSalesPlanData =
+      salesPlanResult.value;
   }
 
   if (purchaseBox) {
@@ -1019,6 +1159,24 @@ async function refreshHomeAlertPanel() {
     }
   }
 
+  if (salesPlanBox) {
+    if (
+      salesPlanResult.status ===
+      "fulfilled"
+    ) {
+      renderHomeSalesPlanStockAlert(
+        salesPlanBox,
+        salesPlanResult.value
+      );
+    } else {
+      renderHomeAlertError(
+        salesPlanBox,
+        "販売予定に対して在庫不足",
+        "📅"
+      );
+    }
+  }
+
   if (updated) {
     updated.textContent =
       "最終確認：" +
@@ -1037,16 +1195,21 @@ async function refreshHomeAlertPanel() {
       : homeAlertLatestPurchaseData,
     shippingResult.status === "fulfilled"
       ? shippingResult.value
-      : homeAlertLatestShippingData
+      : homeAlertLatestShippingData,
+    salesPlanResult.status === "fulfilled"
+      ? salesPlanResult.value
+      : homeAlertLatestSalesPlanData
   );
 
   if (
     purchaseResult.status === "fulfilled" &&
-    shippingResult.status === "fulfilled"
+    shippingResult.status === "fulfilled" &&
+    salesPlanResult.status === "fulfilled"
   ) {
     handleHomeAlertSnapshotChange(
       purchaseResult.value,
-      shippingResult.value
+      shippingResult.value,
+      salesPlanResult.value
     );
   }
 }
@@ -1085,6 +1248,167 @@ async function getHomeShippingAlertData() {
   return window
     .shippingScheduleApp
     .getHomeAlertData();
+}
+
+
+async function getHomeSalesPlanStockAlertData() {
+  if (
+    typeof getAllProducts !== "function" ||
+    typeof getAllSalesPlans !== "function"
+  ) {
+    throw new Error(
+      "販売予定または商品データを読み込めません。"
+    );
+  }
+
+  const results = await Promise.all([
+    getAllProducts(),
+    getAllSalesPlans()
+  ]);
+
+  const products = Array.isArray(results[0]) ? results[0] : [];
+  const plans = Array.isArray(results[1]) ? results[1] : [];
+  const today = formatHomeAlertIsoDate(new Date());
+  const productMap = new Map();
+  const planMap = new Map();
+
+  products.forEach(function (product) {
+    const code = String(product && product.internalCode || "").trim();
+    if (code) productMap.set(code, product);
+  });
+
+  plans.forEach(function (plan) {
+    if (!isHomeAlertFutureSalesPlan(plan, today)) return;
+
+    const code = String(plan && plan.internalCode || "").trim();
+    const quantity = Number(plan && plan.quantity || 0);
+    if (!code || !Number.isFinite(quantity) || quantity <= 0) return;
+
+    const current = planMap.get(code) || {
+      plannedQuantity: 0,
+      planCount: 0,
+      nextShippingDate: "",
+      customers: new Set()
+    };
+
+    current.plannedQuantity += quantity;
+    current.planCount += 1;
+
+    const startDate = getHomeAlertSalesPlanStartDate(plan);
+    if (
+      startDate &&
+      (!current.nextShippingDate || startDate < current.nextShippingDate)
+    ) {
+      current.nextShippingDate = startDate;
+    }
+
+    const customer = String(plan && plan.customerName || "").trim();
+    if (customer) current.customers.add(customer);
+
+    planMap.set(code, current);
+  });
+
+  const rows = [];
+
+  planMap.forEach(function (summary, internalCode) {
+    const product = productMap.get(internalCode);
+    if (!product) return;
+
+    const currentStock = getHomeAlertNonNegativeNumber(product.stock);
+    const orderRemaining = getHomeAlertNonNegativeInteger(product.orderRemaining);
+    const availableQuantity = currentStock + orderRemaining;
+    const plannedQuantity = Math.max(0, Number(summary.plannedQuantity || 0));
+    const shortage = Math.max(0, plannedQuantity - availableQuantity);
+
+    if (shortage <= 0) return;
+
+    rows.push({
+      internalCode: internalCode,
+      productCode: product.productCode || "",
+      productName: product.productName || "",
+      currentStock: currentStock,
+      orderRemaining: orderRemaining,
+      availableQuantity: availableQuantity,
+      plannedQuantity: plannedQuantity,
+      shortage: shortage,
+      planCount: Number(summary.planCount || 0),
+      nextShippingDate: summary.nextShippingDate || "",
+      customers: Array.from(summary.customers || []).slice(0, 3)
+    });
+  });
+
+  rows.sort(function (a, b) {
+    if (b.shortage !== a.shortage) return b.shortage - a.shortage;
+    if (a.nextShippingDate !== b.nextShippingDate) {
+      if (!a.nextShippingDate) return 1;
+      if (!b.nextShippingDate) return -1;
+      return a.nextShippingDate.localeCompare(b.nextShippingDate);
+    }
+    return String(a.internalCode).localeCompare(
+      String(b.internalCode),
+      "ja",
+      { numeric: true }
+    );
+  });
+
+  return {
+    count: rows.length,
+    totalShortage: rows.reduce(function (sum, row) {
+      return sum + Number(row.shortage || 0);
+    }, 0),
+    rows: rows,
+    evaluationDate: today
+  };
+}
+
+function isHomeAlertFutureSalesPlan(plan, today) {
+  if (!plan) return false;
+
+  const shippingDate = String(plan.shippingDate || "");
+  const startDate = String(plan.shippingStartDate || "");
+  const endDate = String(plan.shippingEndDate || "");
+
+  if (isHomeAlertIsoDate(shippingDate)) {
+    return shippingDate >= today;
+  }
+
+  if (isHomeAlertIsoDate(startDate) && isHomeAlertIsoDate(endDate)) {
+    return endDate >= today;
+  }
+
+  return false;
+}
+
+function getHomeAlertSalesPlanStartDate(plan) {
+  if (!plan) return "";
+  const shippingDate = String(plan.shippingDate || "");
+  const startDate = String(plan.shippingStartDate || "");
+
+  if (isHomeAlertIsoDate(shippingDate)) return shippingDate;
+  if (isHomeAlertIsoDate(startDate)) return startDate;
+  return "";
+}
+
+function isHomeAlertIsoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
+}
+
+function formatHomeAlertIsoDate(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0")
+  ].join("-");
+}
+
+function getHomeAlertNonNegativeNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function getHomeAlertNonNegativeInteger(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : 0;
 }
 
 function createHomeAlertSkeleton(
@@ -1444,6 +1768,84 @@ function renderHomeShippingAlert(
   );
 }
 
+
+function renderHomeSalesPlanStockAlert(box, data) {
+  const count = Number(data && data.count || 0);
+  const total = Number(data && data.totalShortage || 0);
+  const rows = Array.isArray(data && data.rows) ? data.rows : [];
+
+  box.className = "home-alert-card home-alert-sales-plan";
+
+  if (count <= 0) {
+    box.classList.add("home-alert-card-ok");
+    box.innerHTML = `
+      <div class="home-alert-card-title">
+        <span>📅</span>
+        <strong>販売予定の在庫確認</strong>
+      </div>
+      <div class="home-alert-zero">
+        <strong>0商品</strong>
+        <span>現在庫＋発注残で、登録済みの今後の販売予定数量をまかなえます。</span>
+      </div>
+      <button
+        type="button"
+        class="home-alert-open-button home-alert-open-sales-plan"
+        data-home-alert-action="sales-plan"
+      >
+        販売予定一覧を見る
+      </button>
+    `;
+    bindHomeAlertButtons(box);
+    return;
+  }
+
+  box.innerHTML = `
+    <div class="home-alert-card-title">
+      <span>📅</span>
+      <strong>販売予定に対して在庫不足</strong>
+    </div>
+    <div class="home-alert-count-row">
+      <strong>${count.toLocaleString("ja-JP")}商品</strong>
+      <span>不足合計 ${total.toLocaleString("ja-JP")}個</span>
+    </div>
+    <p class="home-alert-schedule-name">
+      判定：今後の販売予定合計 ＞ 現在庫＋発注残
+    </p>
+    <div class="home-alert-item-list">
+      ${rows.slice(0, 5).map(function (row) {
+        const code = row.productCode || row.internalCode || "-";
+        const nextDate = row.nextShippingDate
+          ? formatHomeAlertPrintDate(row.nextShippingDate)
+          : "日付未設定";
+        return `
+          <div class="home-alert-item home-alert-item-sales-plan">
+            <div>
+              <strong>${escapeHomeAlertHtml(code)}</strong>
+              <span>${escapeHomeAlertHtml(row.productName || "商品名未登録")}</span>
+              <small>
+                予定 ${Number(row.plannedQuantity || 0).toLocaleString("ja-JP")}個 / 在庫＋発注残 ${Number(row.availableQuantity || 0).toLocaleString("ja-JP")}個 / 最短 ${escapeHomeAlertHtml(nextDate)}
+              </small>
+            </div>
+            <b>不足 ${Number(row.shortage || 0).toLocaleString("ja-JP")}個</b>
+          </div>
+        `;
+      }).join("")}
+    </div>
+    ${rows.length > 5
+      ? `<p class="home-alert-more">ほか ${(rows.length - 5).toLocaleString("ja-JP")}商品</p>`
+      : ""}
+    <button
+      type="button"
+      class="home-alert-open-button home-alert-open-sales-plan"
+      data-home-alert-action="sales-plan"
+    >
+      販売予定一覧を見る
+    </button>
+  `;
+
+  bindHomeAlertButtons(box);
+}
+
 function renderHomeAlertError(
   box,
   title,
@@ -1498,6 +1900,24 @@ function bindHomeAlertButtons(
                 .shippingScheduleApp
                 ?.openAllocation?.();
             }
+
+            if (
+              action ===
+              "sales-plan"
+            ) {
+              const button =
+                document.querySelector(
+                  "#show-sales-plan-list-button"
+                );
+
+              if (button) {
+                button.click();
+              } else {
+                document.querySelector(
+                  "#show-sales-plan-button"
+                )?.click();
+              }
+            }
           }
         );
       }
@@ -1521,7 +1941,8 @@ async function openHomeAlertPrintChoice() {
     const results =
       await Promise.allSettled([
         getHomePurchaseAlertData(),
-        getHomeShippingAlertData()
+        getHomeShippingAlertData(),
+        getHomeSalesPlanStockAlertData()
       ]);
 
     if (
@@ -1541,8 +1962,17 @@ async function openHomeAlertPrintChoice() {
     }
 
     if (
+      results[2].status ===
+      "fulfilled"
+    ) {
+      homeAlertLatestSalesPlanData =
+        results[2].value;
+    }
+
+    if (
       !homeAlertLatestPurchaseData &&
-      !homeAlertLatestShippingData
+      !homeAlertLatestShippingData &&
+      !homeAlertLatestSalesPlanData
     ) {
       await showHomeAlertPrintNotice(
         "印刷データを確認できませんでした。更新してから、もう一度お試しください。"
@@ -1578,6 +2008,13 @@ function showHomeAlertPrintChoiceDialog() {
     Number(
       homeAlertLatestShippingData &&
       homeAlertLatestShippingData.count ||
+      0
+    );
+
+  const salesPlanCount =
+    Number(
+      homeAlertLatestSalesPlanData &&
+      homeAlertLatestSalesPlanData.count ||
       0
     );
 
@@ -1638,7 +2075,7 @@ function showHomeAlertPrintChoiceDialog() {
         >
           <strong>要確認を全部</strong>
           <span>
-            発注 ${purchaseCount.toLocaleString("ja-JP")}商品 / 船積 ${shippingCount.toLocaleString("ja-JP")}商品
+            発注 ${purchaseCount.toLocaleString("ja-JP")}商品 / 船積 ${shippingCount.toLocaleString("ja-JP")}商品 / 販売予定不足 ${salesPlanCount.toLocaleString("ja-JP")}商品
           </span>
         </button>
 
@@ -1663,6 +2100,17 @@ function showHomeAlertPrintChoiceDialog() {
             ${shippingCount.toLocaleString("ja-JP")}商品
           </span>
         </button>
+        <button
+          type="button"
+          class="home-alert-print-choice home-alert-print-choice-sales-plan"
+          data-home-alert-print-mode="sales-plan"
+        >
+          <strong>販売予定不足のみ</strong>
+          <span>
+            ${salesPlanCount.toLocaleString("ja-JP")}商品
+          </span>
+        </button>
+
       </div>
 
       <button
@@ -1770,7 +2218,8 @@ function printHomeAlertReport(mode) {
     [
       "all",
       "purchase",
-      "shipping"
+      "shipping",
+      "sales-plan"
     ].includes(mode)
       ? mode
       : "all";
@@ -1799,7 +2248,9 @@ function printHomeAlertReport(mode) {
       ? "発注が必要 一覧"
       : normalizedMode === "shipping"
         ? "船積みが必要 一覧"
-        : "要確認 一覧";
+        : normalizedMode === "sales-plan"
+          ? "販売予定 在庫不足 一覧"
+          : "要確認 一覧";
 
   const sections = [];
 
@@ -1821,6 +2272,18 @@ function printHomeAlertReport(mode) {
     sections.push(
       createHomeShippingPrintSection(
         homeAlertLatestShippingData,
+        normalizedMode === "all"
+      )
+    );
+  }
+
+  if (
+    normalizedMode === "all" ||
+    normalizedMode === "sales-plan"
+  ) {
+    sections.push(
+      createHomeSalesPlanPrintSection(
+        homeAlertLatestSalesPlanData,
         normalizedMode === "all"
       )
     );
@@ -1917,6 +2380,11 @@ function printHomeAlertReport(mode) {
     .print-section-shipping .print-section-title {
       background: #f3e5f5;
       border-left-color: #7b1fa2;
+    }
+
+    .print-section-sales-plan .print-section-title {
+      background: #e3f2fd;
+      border-left-color: #1976d2;
     }
 
     .print-section-title h2 {
@@ -2041,6 +2509,23 @@ function printHomeAlertReport(mode) {
     .shipping-table td:nth-child(6) { width: 12%; }
     .shipping-table th:nth-child(7),
     .shipping-table td:nth-child(7) { width: 12%; }
+
+    .sales-plan-alert-table th:nth-child(1),
+    .sales-plan-alert-table td:nth-child(1) { width: 5%; }
+    .sales-plan-alert-table th:nth-child(2),
+    .sales-plan-alert-table td:nth-child(2) { width: 10%; }
+    .sales-plan-alert-table th:nth-child(3),
+    .sales-plan-alert-table td:nth-child(3) { width: 12%; }
+    .sales-plan-alert-table th:nth-child(4),
+    .sales-plan-alert-table td:nth-child(4) { width: 25%; }
+    .sales-plan-alert-table th:nth-child(5),
+    .sales-plan-alert-table td:nth-child(5) { width: 12%; }
+    .sales-plan-alert-table th:nth-child(6),
+    .sales-plan-alert-table td:nth-child(6) { width: 12%; }
+    .sales-plan-alert-table th:nth-child(7),
+    .sales-plan-alert-table td:nth-child(7) { width: 12%; }
+    .sales-plan-alert-table th:nth-child(8),
+    .sales-plan-alert-table td:nth-child(8) { width: 12%; }
 
     .shortage {
       color: #d84315;
@@ -2272,6 +2757,69 @@ function createHomeShippingPrintSection(
   `;
 }
 
+
+function createHomeSalesPlanPrintSection(data, pageBreak) {
+  const safeData = data || {};
+  const rows = Array.isArray(safeData.rows) ? safeData.rows : [];
+  const count = Number(safeData.count || rows.length || 0);
+  const total = Number(safeData.totalShortage || 0);
+
+  const body = rows.length > 0
+    ? `
+      <table class="sales-plan-alert-table">
+        <thead>
+          <tr>
+            <th>No.</th>
+            <th>社内コード</th>
+            <th>商品コード</th>
+            <th>商品名</th>
+            <th>販売予定</th>
+            <th>現在庫</th>
+            <th>発注残</th>
+            <th>不足数</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(function (row, index) {
+            return `
+              <tr>
+                <td class="center">${index + 1}</td>
+                <td>${escapeHomeAlertHtml(row.internalCode || "-")}</td>
+                <td>${escapeHomeAlertHtml(row.productCode || "-")}</td>
+                <td>${escapeHomeAlertHtml(row.productName || "商品名未登録")}</td>
+                <td class="number">${formatHomeAlertPrintQuantity(row.plannedQuantity)}個</td>
+                <td class="number">${formatHomeAlertPrintQuantity(row.currentStock)}個</td>
+                <td class="number">${formatHomeAlertPrintQuantity(row.orderRemaining)}個</td>
+                <td class="number shortage">${formatHomeAlertPrintQuantity(row.shortage)}個</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    `
+    : `<div class="print-empty">現在、販売予定に対する在庫不足はありません。</div>`;
+
+  return `
+    <section class="print-section print-section-sales-plan${pageBreak ? " page-break" : ""}">
+      <div class="print-section-title">
+        <h2>📅 販売予定に対して在庫不足</h2>
+        <strong>${count.toLocaleString("ja-JP")}商品</strong>
+      </div>
+      <div class="print-summary">
+        <div class="print-summary-item">
+          <span>対象商品数</span>
+          <strong>${count.toLocaleString("ja-JP")}商品</strong>
+        </div>
+        <div class="print-summary-item">
+          <span>不足合計</span>
+          <strong>${total.toLocaleString("ja-JP")}個</strong>
+        </div>
+      </div>
+      ${body}
+    </section>
+  `;
+}
+
 function formatHomeAlertPrintQuantity(value) {
   const number = Number(value || 0);
 
@@ -2478,6 +3026,10 @@ function createHomeAlertPanelStyle() {
 
     .home-alert-compact-shipping {
       color: #6a1b9a;
+    }
+
+    .home-alert-compact-sales-plan {
+      color: #1565c0;
     }
 
     .home-alert-unread-badge {

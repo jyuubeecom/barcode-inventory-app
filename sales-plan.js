@@ -1132,6 +1132,11 @@ async function saveSalesPlanFromForm(event) {
       "#sales-plan-subtitle"
     ).value.trim();
 
+  const remarks =
+    document.querySelector(
+      "#sales-plan-remarks"
+    ).value.trim();
+
   if (!customerName) {
     await showSalesPlanDialog({
       type: "warning",
@@ -1235,6 +1240,8 @@ async function saveSalesPlanFromForm(event) {
         customerName,
       subtitle:
         subtitle,
+      remarks:
+        remarks,
       shippingType:
         shipping.shippingType,
       shippingDate:
@@ -1284,6 +1291,14 @@ async function saveSalesPlanFromForm(event) {
                 {
                   label: "副題",
                   value: subtitle
+                }
+              ]
+            : []),
+          ...(remarks
+            ? [
+                {
+                  label: "備考",
+                  value: remarks
                 }
               ]
             : []),
@@ -1395,6 +1410,14 @@ async function saveSalesPlanFromForm(event) {
               }
             ]
           : []),
+        ...(remarks
+          ? [
+              {
+                label: "備考",
+                value: remarks
+              }
+            ]
+          : []),
         {
           label: "出荷時期",
           value:
@@ -1414,7 +1437,7 @@ async function saveSalesPlanFromForm(event) {
         }
       ],
       notice:
-        "商品ごとに1件ずつ販売予定として保存します。取引先名・副題・出荷時期はすべて同じ内容になります。",
+        "商品ごとに1件ずつ販売予定として保存します。取引先名・副題・出荷時期・備考はすべて同じ内容になります。",
       isConfirm: true,
       cancelText: "戻る",
       confirmText: "まとめて登録する"
@@ -1441,6 +1464,8 @@ async function saveSalesPlanFromForm(event) {
         customerName,
       subtitle:
         subtitle,
+      remarks:
+        remarks,
       shippingType:
         shipping.shippingType,
       shippingDate:
@@ -1580,6 +1605,7 @@ async function editSalesPlan(id) {
   salesPlanEditingId = id;
   document.querySelector("#sales-plan-customer").value = record.customerName || "";
   document.querySelector("#sales-plan-subtitle").value = record.subtitle || "";
+  document.querySelector("#sales-plan-remarks").value = record.remarks || "";
   document.querySelector("#sales-plan-internal-code").value = record.internalCode || "";
   document.querySelector("#sales-plan-product-code").value = record.productCode || "";
   document.querySelector("#sales-plan-product-name").value = record.productName || "";
@@ -1637,6 +1663,9 @@ async function removeSalesPlan(id) {
       { label: "取引先", value: record.customerName || "未登録" },
       ...(record.subtitle
         ? [{ label: "副題", value: record.subtitle }]
+        : []),
+      ...(record.remarks
+        ? [{ label: "備考", value: record.remarks }]
         : []),
       { label: "商品", value: record.productName || record.internalCode },
       { label: "社内コード", value: record.internalCode || "未登録" },
@@ -3484,6 +3513,7 @@ function getFilteredSalesPlans() {
     return [
       record.customerName,
       record.subtitle,
+      record.remarks,
       record.internalCode,
       record.productCode,
       record.productName
@@ -3511,6 +3541,7 @@ function renderSalesPlanTable() {
       <td>${escapeSalesPlanHtml(formatSalesPlanShipping(record))}</td>
       <td>${escapeSalesPlanHtml(record.customerName)}</td>
       <td>${escapeSalesPlanHtml(record.subtitle || "－")}</td>
+      <td class="sales-plan-remarks-cell">${escapeSalesPlanHtml(record.remarks || "－")}</td>
       <td>${escapeSalesPlanHtml(record.internalCode)}</td>
       <td>${escapeSalesPlanHtml(record.productCode || "未登録")}</td>
       <td>${escapeSalesPlanHtml(record.productName)}</td>
@@ -3535,7 +3566,7 @@ function renderSalesPlanTable() {
   if (pageItems.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 8;
+    cell.colSpan = 9;
     cell.textContent = "条件に一致する販売予定はありません。";
     row.appendChild(cell);
     tbody.appendChild(row);

@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v222
+            画面版 v223
           </span>
         </div>
       </div>
@@ -1199,6 +1199,16 @@
             </p>
 
             <div class="sales-plan-full">
+              <label for="sales-plan-remarks">備考（任意）</label>
+              <textarea
+                id="sales-plan-remarks"
+                rows="3"
+                placeholder="例：午前着希望、先方へ事前連絡、分納予定など"
+              ></textarea>
+              <small>入力した備考は、登録済みの販売予定一覧で確認できます。</small>
+            </div>
+
+            <div class="sales-plan-full">
               <label for="sales-plan-internal-code">社内コード・商品コード・JANコード（必須）</label>
               <div class="sales-plan-product-search-wrap">
                 <div class="sales-plan-product-row">
@@ -1244,7 +1254,7 @@
                 この商品を追加する
               </button>
               <p class="sales-plan-add-item-note">
-                商品を追加しても、取引先名・副題・出荷日はそのまま残ります。続けて別の商品を追加できます。
+                商品を追加しても、取引先名・副題・出荷日・備考はそのまま残ります。続けて別の商品を追加できます。
               </p>
             </div>
 
@@ -1277,7 +1287,7 @@
         <div class="sales-plan-filter-row">
           <div>
             <label for="sales-plan-search">検索</label>
-            <input id="sales-plan-search" type="search" placeholder="取引先名・副題・社内コード・商品コード・商品名">
+            <input id="sales-plan-search" type="search" placeholder="取引先名・副題・備考・社内コード・商品コード・商品名">
           </div>
           <div>
             <label for="sales-plan-month-filter">出荷月で絞り込み</label>
@@ -1344,6 +1354,7 @@
                 <th>出荷時期</th>
                 <th>取引先名</th>
                 <th>副題</th>
+                <th>備考</th>
                 <th>社内コード</th>
                 <th>商品コード</th>
                 <th>商品名</th>
@@ -4104,7 +4115,7 @@
 <script src="csv-import.js?v=215"></script>
 <script src="csv-update.js?v=74"></script>
 <script src="pwa.js?v=31"></script>
-<script src="sales-plan.js?v=221"></script>
+<script src="sales-plan.js?v=223"></script>
 <script src="sales-actual.js?v=217"></script>
 <script src="purchase-required.js?v=206"></script>
 <script src="order-remaining.js?v=120"></script>

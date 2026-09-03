@@ -1895,7 +1895,7 @@ function printSalesPlanList(paperSize) {
               <td>${escapeSalesPlanHtml(record.internalCode || "未登録")}</td>
               <td>${escapeSalesPlanHtml(record.productCode || "未登録")}</td>
               <td class="number">${Number(record.quantity || 0).toLocaleString("ja-JP")}個</td>
-              <td class="remarks">&nbsp;</td>
+              <td class="remarks">${escapeSalesPlanHtml(record.remarks || "") || "&nbsp;"}</td>
             </tr>
           `;
         }
@@ -2016,6 +2016,7 @@ function printSalesPlanList(paperSize) {
 
     .remarks {
       min-height: ${listRemarksMinHeightMm}mm;
+      white-space: pre-wrap;
     }
 
     th:nth-child(1) { width: 4%; }
@@ -2046,7 +2047,7 @@ function printSalesPlanList(paperSize) {
   </div>
 
   <div class="notice">
-    ※ 期間指定の販売予定は、選択した月と期間が重なる予定も一覧に含みます。備考欄は印刷後の手書きメモに使用できます。
+    ※ 期間指定の販売予定は、選択した月と期間が重なる予定も一覧に含みます。登録した備考は備考欄へ印刷します。空欄は印刷後の手書きメモにも使用できます。
   </div>
 
   <table>

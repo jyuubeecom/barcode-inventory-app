@@ -2583,9 +2583,40 @@ async function getAllSalesPlans() {
 }
 
 async function getAllSalesActuals() {
-  return getAllRecordsFromStore(
+  const records = await getAllRecordsFromStore(
     SALES_ACTUAL_STORE_NAME
   );
+
+  const byLogicalId = new Map();
+
+  records.forEach(function (record) {
+    if (!record) return;
+
+    const rawId = String(record.id || "");
+    const logicalId = String(
+      record.logicalId ||
+      (
+        rawId.startsWith("analysis-")
+          ? rawId.slice("analysis-".length)
+          : rawId
+      )
+    );
+
+    if (!logicalId) return;
+
+    const existing = byLogicalId.get(logicalId);
+    const isAnalysis = record.importMode === "analysis" || record.analysisOnly === true;
+    const existingIsAnalysis = existing && (
+      existing.importMode === "analysis" ||
+      existing.analysisOnly === true
+    );
+
+    if (!existing || (existingIsAnalysis && !isAnalysis)) {
+      byLogicalId.set(logicalId, record);
+    }
+  });
+
+  return Array.from(byLogicalId.values());
 }
 
 async function getAllSalesImportBatches() {
@@ -2605,6 +2636,62 @@ function formatSalesActualLocationChanges(changes) {
     const sign = change.change > 0 ? "+" : "";
     return `${change.location} ${sign}${change.change}個`;
   }).join(" / ");
+}
+
+async function saveSalesActualAnalysisBatch(batchRecord, salesRecords) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      [
+        SALES_ACTUAL_STORE_NAME,
+        SALES_IMPORT_BATCH_STORE_NAME
+      ],
+      "readwrite"
+    );
+
+    const salesStore = transaction.objectStore(SALES_ACTUAL_STORE_NAME);
+    const batchStore = transaction.objectStore(SALES_IMPORT_BATCH_STORE_NAME);
+    let savedBatch = null;
+
+    savedBatch = {
+      ...batchRecord,
+      analysisOnly: true,
+      importMode: "analysis",
+      inventoryAppliedAt: "",
+      inventoryAdjustmentCount: 0,
+      inventoryAdjustments: [],
+      inventorySkippedCodes: [],
+      inventoryRule: "分析用（在庫変更なし）"
+    };
+
+    batchStore.add(savedBatch);
+
+    (Array.isArray(salesRecords) ? salesRecords : []).forEach(function (record) {
+      salesStore.add({
+        ...record,
+        analysisOnly: true,
+        importMode: "analysis",
+        inventoryApplied: false
+      });
+    });
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve({
+        batch: savedBatch,
+        products: []
+      });
+    };
+
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+
+    transaction.onabort = transaction.onerror;
+  });
 }
 
 async function saveSalesActualImportBatch(batchRecord, salesRecords) {

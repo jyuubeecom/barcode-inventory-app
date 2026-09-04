@@ -7,6 +7,7 @@ const SALES_ACTUAL_INVENTORY_LOCATION_PRIORITY = Object.freeze([
   "酒本倉庫2階"
 ]);
 let salesActualSelectedPreview = null;
+let salesActualAnalysisPreview = null;
 let salesActualImportHistory = [];
 let salesActualProducts = [];
 let salesActualHistoryPage = 1;
@@ -29,6 +30,9 @@ function initializeSalesActualFeature() {
   const historyPrev = document.querySelector("#sales-actual-history-prev");
   const historyNext = document.querySelector("#sales-actual-history-next");
   const historyLast = document.querySelector("#sales-actual-history-last");
+  const analysisFileInput = document.querySelector("#sales-actual-analysis-file");
+  const analysisImportButton = document.querySelector("#import-sales-actual-analysis-button");
+  const analysisClearButton = document.querySelector("#clear-sales-actual-analysis-preview-button");
 
   if (!showButton || !fileInput || !importButton) return;
 
@@ -37,6 +41,15 @@ function initializeSalesActualFeature() {
   if (backButton) backButton.addEventListener("click", closeSalesActualScreen);
   fileInput.addEventListener("change", handleSalesActualFileSelection);
   importButton.addEventListener("click", importSelectedSalesActualFile);
+  if (analysisFileInput) {
+    analysisFileInput.addEventListener("change", handleSalesActualAnalysisFileSelection);
+  }
+  if (analysisImportButton) {
+    analysisImportButton.addEventListener("click", importSelectedSalesActualAnalysisFile);
+  }
+  if (analysisClearButton) {
+    analysisClearButton.addEventListener("click", clearSalesActualAnalysisPreview);
+  }
   if (printErrorsButton) {
     printErrorsButton.addEventListener(
       "click",
@@ -194,7 +207,7 @@ async function handleSalesActualFileSelection(event) {
     const text = await readSalesActualCsvText(file);
     const fingerprint = await createSalesActualHash(text);
     const existingBatch = salesActualImportHistory.find(function (batch) {
-      return batch.fileFingerprint === fingerprint;
+      return batch.fileFingerprint === fingerprint && batch.analysisOnly !== true;
     });
 
     if (existingBatch) {
@@ -219,6 +232,356 @@ async function handleSalesActualFileSelection(event) {
       true
     );
   }
+}
+
+
+async function handleSalesActualAnalysisFileSelection(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) {
+    clearSalesActualAnalysisPreview();
+    return;
+  }
+
+  if (file.size > 30 * 1024 * 1024) {
+    await showAppDialog({
+      type: "warning",
+      icon: "📄",
+      title: "CSVファイルのサイズを確認してください",
+      message: "分析用の販売実績CSVは30MB以下のファイルを選んでください。",
+      details: [
+        { label: "選択したファイル", value: file.name || "CSVファイル" },
+        { label: "ファイルサイズ", value: `${(file.size / 1024 / 1024).toFixed(1)}MB` }
+      ],
+      confirmText: "確認して閉じる"
+    });
+    event.target.value = "";
+    clearSalesActualAnalysisPreview();
+    return;
+  }
+
+  setSalesActualAnalysisPreviewMessage("CSVを確認しています...");
+  setSalesActualAnalysisImportButtonEnabled(false);
+
+  try {
+    const text = await readSalesActualCsvText(file);
+    const fingerprint = await createSalesActualHash(text);
+    const existingBatch = salesActualImportHistory.find(function (batch) {
+      return batch.fileFingerprint === fingerprint;
+    });
+
+    if (existingBatch) {
+      salesActualAnalysisPreview = null;
+      renderSalesActualAnalysisDuplicateFileMessage(file, existingBatch);
+      return;
+    }
+
+    const parsed = parseSalesActualCsv(text);
+    const preview = await buildSalesActualImportPreview(
+      file,
+      fingerprint,
+      parsed,
+      { analysisOnly: true }
+    );
+
+    salesActualAnalysisPreview = preview;
+    renderSalesActualAnalysisPreview(preview);
+    setSalesActualAnalysisImportButtonEnabled(preview.importRecords.length > 0);
+  } catch (error) {
+    console.error("分析用販売実績CSV確認エラー", error);
+    salesActualAnalysisPreview = null;
+    setSalesActualAnalysisPreviewMessage(
+      "CSVを確認できませんでした。\n" +
+      (error.message || "ファイルの内容を確認してください。"),
+      true
+    );
+  }
+}
+
+function renderSalesActualAnalysisDuplicateFileMessage(file, batch) {
+  const summary = document.querySelector("#sales-actual-analysis-preview-summary");
+  const tableBody = document.querySelector("#sales-actual-analysis-preview-body");
+  const warnings = document.querySelector("#sales-actual-analysis-preview-warnings");
+
+  if (summary) {
+    const modeLabel = batch && batch.analysisOnly === true
+      ? "分析用として取込済み"
+      : "通常の販売実績として取込済み";
+    summary.innerHTML =
+      `<strong>このCSVはすでに取り込まれています。</strong><br>` +
+      `${escapeSalesActualHtml(file.name)}<br>` +
+      `取込種別：${escapeSalesActualHtml(modeLabel)}<br>` +
+      `取込日時：${escapeSalesActualHtml(formatSalesActualDateTime(batch && batch.importedAt))}`;
+  }
+  if (tableBody) tableBody.innerHTML = "";
+  if (warnings) {
+    warnings.textContent =
+      "同じCSVを二重に保存しないよう停止しました。分析には既に取り込まれている販売実績が使用されます。";
+  }
+  setSalesActualAnalysisImportButtonEnabled(false);
+}
+
+function renderSalesActualAnalysisPreview(preview) {
+  const summary = document.querySelector("#sales-actual-analysis-preview-summary");
+  const tableBody = document.querySelector("#sales-actual-analysis-preview-body");
+  const warnings = document.querySelector("#sales-actual-analysis-preview-warnings");
+  if (!summary || !tableBody || !warnings) return;
+
+  const rangeText = preview.reportStartDate && preview.reportEndDate
+    ? `${formatSalesActualDate(preview.reportStartDate)} ～ ${formatSalesActualDate(preview.reportEndDate)}`
+    : "CSV内の日付から判定";
+
+  summary.innerHTML = [
+    `<strong>ファイル：</strong>${escapeSalesActualHtml(preview.fileName)}`,
+    `<strong>帳票期間：</strong>${escapeSalesActualHtml(rangeText)}`,
+    `<strong>データ行：</strong>${preview.totalRows}件`,
+    `<strong>分析用に新規保存：</strong>${preview.importRecords.length}件`,
+    `<strong>重複スキップ：</strong>${preview.duplicateRecords.length}件`,
+    `<strong>対象外（値引など）：</strong>${preview.ignoredRecords.length}件`,
+    `<strong>廃盤商品エラー：</strong>${preview.discontinuedErrorRecords.length}件`,
+    `<strong>入力エラー：</strong>${preview.inputErrorRecords.length}件`
+  ].join("<br>");
+
+  tableBody.innerHTML = "";
+
+  preview.importRecords
+    .slice(0, SALES_ACTUAL_PREVIEW_LIMIT)
+    .forEach(function (record) {
+      const product = salesActualProducts.find(function (item) {
+        return normalizeSalesActualText(item.internalCode) === record.internalCode;
+      });
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${escapeSalesActualHtml(formatSalesActualDate(record.saleDate))}</td>
+        <td>${escapeSalesActualHtml(record.internalCode)}</td>
+        <td>${escapeSalesActualHtml(product ? (product.productCode || "未登録") : "商品マスタ未登録")}</td>
+        <td>${escapeSalesActualHtml(record.customerName)}</td>
+        <td>${formatSalesActualNumber(record.quantity)}</td>
+        <td><span class="sales-actual-analysis-badge">分析用</span></td>
+      `;
+      tableBody.appendChild(row);
+    });
+
+  preview.discontinuedErrorRecords
+    .slice(0, SALES_ACTUAL_PREVIEW_LIMIT)
+    .forEach(function (record) {
+      const row = document.createElement("tr");
+      row.classList.add("sales-actual-discontinued-row");
+      row.innerHTML = `
+        <td>${escapeSalesActualHtml(formatSalesActualDate(record.saleDate))}</td>
+        <td>${escapeSalesActualHtml(record.internalCode)}</td>
+        <td>${escapeSalesActualHtml(record.productCode || "未登録")}</td>
+        <td>${escapeSalesActualHtml(record.customerName || "")}</td>
+        <td>${formatSalesActualNumber(record.quantity)}</td>
+        <td><span class="sales-actual-error">廃盤商品エラー</span></td>
+      `;
+      tableBody.appendChild(row);
+    });
+
+  preview.inputErrorRecords
+    .slice(0, SALES_ACTUAL_PREVIEW_LIMIT)
+    .forEach(function (record) {
+      const row = document.createElement("tr");
+      row.classList.add("sales-actual-input-error-row");
+      row.innerHTML = `
+        <td>${escapeSalesActualHtml(formatSalesActualDate(record.saleDate))}</td>
+        <td>${escapeSalesActualHtml(record.internalCode || "未入力")}</td>
+        <td>${escapeSalesActualHtml(record.productCode || "未登録")}</td>
+        <td>${escapeSalesActualHtml(record.customerName || "")}</td>
+        <td>${escapeSalesActualHtml(formatSalesActualPrintQuantity(record.quantity))}</td>
+        <td><span class="sales-actual-error">入力エラー</span></td>
+      `;
+      tableBody.appendChild(row);
+    });
+
+  const messages = [];
+  messages.push("✅ この読込では現在庫を増減しません。入出庫履歴にも記録しません。");
+  messages.push("保存した実績は、月平均・季節変動商品一覧などの分析に使用します。");
+
+  if (preview.importRecords.length > SALES_ACTUAL_PREVIEW_LIMIT) {
+    messages.push(`プレビューは先頭${SALES_ACTUAL_PREVIEW_LIMIT}件を表示しています。`);
+  }
+  if (preview.unregisteredCodes.length > 0) {
+    messages.push(
+      `商品マスタ未登録の社内コード：${preview.unregisteredCodes.slice(0, 20).join("、")}` +
+      `${preview.unregisteredCodes.length > 20 ? " ほか" : ""}`
+    );
+    messages.push("未登録商品の実績も保存しますが、商品が登録されるまで商品別分析には使用されません。");
+  }
+  if (preview.discontinuedErrorRecords.length > 0) {
+    messages.push(
+      `⚠ 現在の商品状態が「廃盤」の明細${preview.discontinuedErrorRecords.length}件は保存しません。`
+    );
+  }
+  if (preview.inputErrorRecords.length > 0) {
+    messages.push(`⚠ 入力エラー${preview.inputErrorRecords.length}件は保存しません。`);
+  }
+  if (preview.duplicateRecords.length > 0) {
+    messages.push(
+      `すでに保存済みの同一明細${preview.duplicateRecords.length}件は重複スキップします。`
+    );
+  }
+  warnings.textContent = messages.join("\n");
+}
+
+async function importSelectedSalesActualAnalysisFile() {
+  const preview = salesActualAnalysisPreview;
+
+  if (!preview || preview.importRecords.length === 0) {
+    await showAppDialog({
+      type: "warning",
+      icon: "📊",
+      title: "分析用に保存できる販売実績がありません",
+      message: "CSVの内容を確認してください。既に取り込み済みの明細は重複スキップされます。",
+      confirmText: "確認して閉じる"
+    });
+    return;
+  }
+
+  const confirmed = await showAppDialog({
+    type: "info",
+    icon: "📈",
+    title: "過去の販売実績を分析用に保存しますか？",
+    message: "この読込では現在庫を変更しません。",
+    details: [
+      { label: "ファイル名", value: preview.fileName || "販売実績CSV" },
+      {
+        label: "帳票期間",
+        value: preview.reportStartDate && preview.reportEndDate
+          ? `${formatSalesActualDate(preview.reportStartDate)} ～ ${formatSalesActualDate(preview.reportEndDate)}`
+          : "不明"
+      },
+      { label: "分析用に新規保存", value: `${preview.importRecords.length}件` },
+      { label: "重複スキップ", value: `${preview.duplicateRecords.length}件` },
+      { label: "廃盤商品エラー", value: `${preview.discontinuedErrorRecords.length}件` },
+      { label: "入力エラー", value: `${preview.inputErrorRecords.length}件` }
+    ],
+    notice:
+      "現在庫・場所別在庫・入出庫履歴には一切反映しません。" +
+      " 月平均や季節変動分析など、販売実績を使う分析のためだけに保存します。",
+    isConfirm: true,
+    cancelText: "戻る",
+    confirmText: "分析用として保存する"
+  });
+  if (!confirmed) return;
+
+  const button = document.querySelector("#import-sales-actual-analysis-button");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "分析用に保存しています...";
+  }
+
+  try {
+    const importedAt = new Date().toISOString();
+    const batchId = `sales-analysis-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const records = preview.importRecords.map(function (record) {
+      const logicalId = record.logicalId || record.id;
+      return {
+        ...record,
+        id: `analysis-${logicalId}`,
+        logicalId: logicalId,
+        batchId: batchId,
+        importedAt: importedAt,
+        importMode: "analysis",
+        analysisOnly: true,
+        inventoryApplied: false
+      };
+    });
+
+    const batch = {
+      batchId: batchId,
+      fileName: preview.fileName,
+      fileFingerprint: preview.fileFingerprint,
+      importedAt: importedAt,
+      reportStartDate: preview.reportStartDate,
+      reportEndDate: preview.reportEndDate,
+      sourceRowCount: preview.totalRows,
+      saleRowCount: preview.saleRows,
+      returnRowCount: preview.returnRows,
+      targetRowCount: preview.targetRows,
+      importedCount: records.length,
+      duplicateCount: preview.duplicateRecords.length,
+      ignoredCount: preview.ignoredRecords.length,
+      errorCount: preview.errorRecords.length,
+      discontinuedErrorCount: preview.discontinuedErrorRecords.length,
+      unregisteredCodes: preview.unregisteredCodes,
+      importMode: "analysis",
+      analysisOnly: true
+    };
+
+    const saveResult = await saveSalesActualAnalysisBatch(batch, records);
+    const savedBatch = saveResult && saveResult.batch ? saveResult.batch : batch;
+
+    salesActualImportHistory.unshift(savedBatch);
+    salesActualHistoryPage = 1;
+    clearSalesActualAnalysisPreview();
+    renderSalesActualImportHistory();
+
+    await showAppDialog({
+      type: "success",
+      icon: "✅",
+      title: "過去の販売実績を分析用に保存しました",
+      message: "現在庫は変更していません。",
+      details: [
+        { label: "保存件数", value: `${records.length}件` },
+        { label: "在庫への反映", value: "なし" },
+        { label: "入出庫履歴への記録", value: "なし" }
+      ],
+      notice: "季節変動商品一覧や月平均などの分析で使用できます。",
+      confirmText: "確認して閉じる"
+    });
+  } catch (error) {
+    console.error("分析用販売実績取込エラー", error);
+    await showAppDialog({
+      type: "danger",
+      icon: "❌",
+      title: "分析用の販売実績を保存できませんでした",
+      message: error && error.name === "ConstraintError"
+        ? "同じ販売実績がすでに保存されています。二重登録を防ぐため停止しました。"
+        : (error.message || "CSVの内容を確認して、もう一度お試しください。"),
+      confirmText: "確認して閉じる"
+    });
+  } finally {
+    setSalesActualAnalysisImportButtonEnabled(Boolean(
+      salesActualAnalysisPreview &&
+      salesActualAnalysisPreview.importRecords.length > 0
+    ));
+    const currentButton = document.querySelector("#import-sales-actual-analysis-button");
+    if (currentButton) currentButton.textContent = "このCSVを分析用として保存する";
+  }
+}
+
+function clearSalesActualAnalysisPreview() {
+  salesActualAnalysisPreview = null;
+  const fileInput = document.querySelector("#sales-actual-analysis-file");
+  const summary = document.querySelector("#sales-actual-analysis-preview-summary");
+  const warnings = document.querySelector("#sales-actual-analysis-preview-warnings");
+  const tableBody = document.querySelector("#sales-actual-analysis-preview-body");
+
+  if (fileInput) fileInput.value = "";
+  if (summary) summary.textContent = "過去の販売実績CSVを選ぶと、分析用として保存する内容を確認できます。";
+  if (warnings) warnings.textContent = "";
+  if (tableBody) tableBody.innerHTML = "";
+  setSalesActualAnalysisImportButtonEnabled(false);
+}
+
+function setSalesActualAnalysisPreviewMessage(message, isError) {
+  const summary = document.querySelector("#sales-actual-analysis-preview-summary");
+  const warnings = document.querySelector("#sales-actual-analysis-preview-warnings");
+  const tableBody = document.querySelector("#sales-actual-analysis-preview-body");
+
+  if (summary) {
+    summary.textContent = message || "";
+    summary.classList.toggle("sales-actual-analysis-error", Boolean(isError));
+  }
+  if (warnings) warnings.textContent = "";
+  if (tableBody) tableBody.innerHTML = "";
+  setSalesActualAnalysisImportButtonEnabled(false);
+}
+
+function setSalesActualAnalysisImportButtonEnabled(enabled) {
+  const button = document.querySelector("#import-sales-actual-analysis-button");
+  if (!button) return;
+  button.disabled = !enabled;
 }
 
 async function readSalesActualCsvText(file) {
@@ -368,9 +731,35 @@ function parseSalesActualNumber(value) {
   return negative ? -number : number;
 }
 
-async function buildSalesActualImportPreview(file, fingerprint, parsed) {
+async function buildSalesActualImportPreview(file, fingerprint, parsed, options) {
+  const settings = options || {};
+  const analysisOnly = settings.analysisOnly === true;
   const existingActuals = await getAllSalesActuals();
-  const existingIds = new Set(existingActuals.map(function (record) { return record.id; }));
+  const existingRegularIds = new Set();
+  const existingLogicalIds = new Set();
+
+  existingActuals.forEach(function (record) {
+    const rawId = String(record && record.id || "");
+    const logicalId = String(
+      record && record.logicalId ||
+      (
+        rawId.startsWith("analysis-")
+          ? rawId.slice("analysis-".length)
+          : rawId
+      )
+    );
+    if (!logicalId) return;
+
+    existingLogicalIds.add(logicalId);
+
+    const isAnalysisRecord = record && (
+      record.importMode === "analysis" ||
+      record.analysisOnly === true
+    );
+    if (!isAnalysisRecord) {
+      existingRegularIds.add(logicalId);
+    }
+  });
   const productMap = new Map();
 
   salesActualProducts.forEach(function (product) {
@@ -570,17 +959,23 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
       unregisteredCodes.add(internalCode);
     }
 
-    if (existingIds.has(id)) {
+    const isDuplicate = analysisOnly
+      ? existingLogicalIds.has(id)
+      : existingRegularIds.has(id);
+
+    if (isDuplicate) {
       duplicateRecords.push(record);
     } else {
       importRecords.push(record);
     }
   }
 
-  const inventoryErrorRecords = buildSalesActualInventoryErrorRecords(
-    importRecords,
-    productMap
-  );
+  const inventoryErrorRecords = analysisOnly
+    ? []
+    : buildSalesActualInventoryErrorRecords(
+        importRecords,
+        productMap
+      );
 
   inventoryErrorRecords.forEach(function (record) {
     errorRecords.push(record);
@@ -611,7 +1006,8 @@ async function buildSalesActualImportPreview(file, fingerprint, parsed) {
     inventoryErrorRecords: inventoryErrorRecords,
     unregisteredCodes: Array.from(unregisteredCodes).sort(function (a, b) {
       return a.localeCompare(b, "ja", { numeric: true });
-    })
+    }),
+    analysisOnly: analysisOnly
   };
 }
 
@@ -1045,7 +1441,15 @@ async function importSelectedSalesActualFile() {
     const importedAt = new Date().toISOString();
     const batchId = `sales-batch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const records = preview.importRecords.map(function (record) {
-      return { ...record, batchId: batchId, importedAt: importedAt };
+      return {
+        ...record,
+        logicalId: record.logicalId || record.id,
+        batchId: batchId,
+        importedAt: importedAt,
+        importMode: "inventory",
+        analysisOnly: false,
+        inventoryApplied: true
+      };
     });
     const batch = {
       batchId: batchId,
@@ -1064,7 +1468,9 @@ async function importSelectedSalesActualFile() {
       errorCount: preview.errorRecords.length,
       discontinuedErrorCount:
         preview.discontinuedErrorRecords.length,
-      unregisteredCodes: preview.unregisteredCodes
+      unregisteredCodes: preview.unregisteredCodes,
+      importMode: "inventory",
+      analysisOnly: false
     };
 
     const saveResult = await saveSalesActualImportBatch(batch, records);
@@ -1617,7 +2023,8 @@ function getFilteredSalesActualImportHistory() {
       batch.reportStartDate,
       batch.reportEndDate,
       formatSalesActualDate(batch.reportStartDate),
-      formatSalesActualDate(batch.reportEndDate)
+      formatSalesActualDate(batch.reportEndDate),
+      batch && batch.analysisOnly === true ? "分析用" : "通常在庫反映"
     ];
 
     return values.some(function (value) {
@@ -1694,10 +2101,16 @@ function renderSalesActualImportHistory() {
     const range = batch.reportStartDate && batch.reportEndDate
       ? `${formatSalesActualDate(batch.reportStartDate)} ～ ${formatSalesActualDate(batch.reportEndDate)}`
       : "不明";
+    const isAnalysisBatch = batch && batch.analysisOnly === true;
+    const typeLabel = isAnalysisBatch
+      ? '<span class="sales-actual-history-type sales-actual-history-type-analysis">分析用</span>'
+      : '<span class="sales-actual-history-type sales-actual-history-type-inventory">通常</span>';
+
     row.innerHTML = `
       <td class="sales-actual-history-date">${escapeSalesActualHtml(formatSalesActualDateTime(batch.importedAt))}</td>
       <td class="sales-actual-history-file">${escapeSalesActualHtml(batch.fileName || "")}</td>
       <td class="sales-actual-history-period">${escapeSalesActualHtml(range)}</td>
+      <td class="sales-actual-history-mode">${typeLabel}</td>
       <td class="sales-actual-history-number">${Number(batch.importedCount || 0)}件</td>
       <td class="sales-actual-history-number">${Array.isArray(batch.unregisteredCodes) ? batch.unregisteredCodes.length : 0}件</td>
       <td class="sales-actual-history-action"><button type="button" class="sales-actual-delete-batch" data-batch-id="${escapeSalesActualHtml(batch.batchId)}">取込を取り消す</button></td>
@@ -1710,7 +2123,9 @@ function renderSalesActualImportHistory() {
       const batchId = button.dataset.batchId;
       const batch = salesActualImportHistory.find(function (item) { return item.batchId === batchId; });
       if (!batch) return;
-      const inventoryWasApplied = Array.isArray(batch.inventoryAdjustments) &&
+      const isAnalysisBatch = batch && batch.analysisOnly === true;
+      const inventoryWasApplied = !isAnalysisBatch &&
+        Array.isArray(batch.inventoryAdjustments) &&
         batch.inventoryAdjustments.length > 0;
       const inventoryMessage = inventoryWasApplied
         ? "このCSVで反映した在庫も、取込前の状態へ戻します。\n"
@@ -1723,6 +2138,10 @@ function renderSalesActualImportHistory() {
         message: "取り消すCSVと在庫への影響を確認してください。",
         details: [
           { label: "ファイル名", value: batch.fileName || "販売実績CSV" },
+          {
+            label: "取込種別",
+            value: isAnalysisBatch ? "分析用（在庫変更なし）" : "通常（在庫反映あり）"
+          },
           {
             label: "帳票期間",
             value:
@@ -1740,7 +2159,9 @@ function renderSalesActualImportHistory() {
         ],
         notice:
           "この操作は元に戻せません。商品マスタ・販売予定は削除されません。" +
-          " 修正版CSVへ差し替える場合などに使用してください。",
+          (isAnalysisBatch
+            ? " 分析用の過去実績だけを削除します。現在庫は変更しません。"
+            : " 修正版CSVへ差し替える場合などに使用してください。"),
         isConfirm: true,
         cancelText: "戻る",
         confirmText: "取込を取り消す"
@@ -1888,16 +2309,55 @@ function createSalesActualStyle() {
       padding: 8px 16px;
       background: #546e7a;
     }
+    #sales-actual-import .sales-actual-analysis-card {
+      border: 3px solid #2e7d32;
+      background: #f1fbf3;
+    }
+    #sales-actual-import .sales-actual-analysis-notice {
+      margin: 12px 0 16px;
+      padding: 14px 16px;
+      background: #e8f5e9;
+      border-left: 6px solid #2e7d32;
+      border-radius: 8px;
+      color: #1b5e20;
+      font-size: 1.05rem;
+      font-weight: 800;
+      line-height: 1.7;
+    }
+    #sales-actual-import .sales-actual-analysis-badge,
+    #sales-actual-import .sales-actual-history-type {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    #sales-actual-import .sales-actual-analysis-badge,
+    #sales-actual-import .sales-actual-history-type-analysis {
+      background: #e8f5e9;
+      color: #1b5e20;
+      border: 1px solid #81c784;
+    }
+    #sales-actual-import .sales-actual-history-type-inventory {
+      background: #e3f2fd;
+      color: #0d47a1;
+      border: 1px solid #90caf9;
+    }
+    #sales-actual-import .sales-actual-analysis-error {
+      color: #c62828;
+      background: #ffebee !important;
+    }
     #sales-actual-import .sales-actual-history-table-wrap table {
       table-layout: fixed;
       min-width: 900px;
     }
     #sales-actual-import .sales-actual-history-table-wrap th:nth-child(1) { width: 150px; }
-    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(2) { width: 330px; }
-    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(3) { width: 180px; }
-    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(4) { width: 90px; }
-    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(5) { width: 100px; }
-    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(6) { width: 150px; }
+    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(2) { width: 280px; }
+    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(3) { width: 170px; }
+    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(4) { width: 100px; }
+    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(5) { width: 90px; }
+    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(6) { width: 100px; }
+    #sales-actual-import .sales-actual-history-table-wrap th:nth-child(7) { width: 150px; }
     #sales-actual-import .sales-actual-history-table-wrap td {
       vertical-align: middle;
       padding-top: 10px;

@@ -1,8 +1,8 @@
 "use strict";
 
-const CACHE_NAME = "barcode-inventory-app-v230";
+const CACHE_NAME = "barcode-inventory-app-v231";
 const APP_FILES = [
-  "./", "./index.html", "./style.css?v=108", "./storage.js?v=212",
+  "./", "./index.html", "./style.css?v=108", "./storage.js?v=231",
   "./normal-shipment.js?v=226",
   "./manual.js?v=207",
   "./backorder-list.js?v=216",
@@ -12,7 +12,7 @@ const APP_FILES = [
   "./scanner.js?v=126", "./stocktaking.js?v=202",
   "./stocktaking-history.js?v=35", "./stocktaking-transfer.js?v=201",
   "./csv.js?v=90", "./csv-import.js?v=215", "./csv-update.js?v=74",
-  "./sales-plan.js?v=225", "./sales-actual.js?v=217", "./purchase-required.js?v=226", "./order-remaining.js?v=120", "./low-shipment.js?v=226", "./seasonal-trend.js?v=230",
+  "./sales-plan.js?v=225", "./sales-actual.js?v=231", "./purchase-required.js?v=226", "./order-remaining.js?v=120", "./low-shipment.js?v=226", "./seasonal-trend.js?v=230",
   "./shipping-schedule.js?v=229", "./dedicated-product.js?v=215", "./shipping-arrival.js?v=118", "./barcode-print.js?v=142",
   "./backup.js?v=120", "./restore.js?v=120", "./location-management.js?v=100",
   "./processing-sheet.js?v=211",

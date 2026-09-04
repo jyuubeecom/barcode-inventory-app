@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "barcode-inventory-app-v236";
+const CACHE_NAME = "barcode-inventory-app-v237";
 const APP_FILES = [
   "./", "./index.html", "./style.css?v=108", "./storage.js?v=231",
   "./normal-shipment.js?v=226",
@@ -17,7 +17,7 @@ const APP_FILES = [
   "./backup.js?v=120", "./restore.js?v=120", "./location-management.js?v=100",
   "./processing-sheet.js?v=211",
   "./processing-conversion.js?v=213",
-  "./home-dashboard.js?v=125", "./app-settings.js?v=230", "./home-alerts.js?v=236", "./pwa.js?v=31", "./manifest.json",
+  "./home-dashboard.js?v=125", "./app-settings.js?v=230", "./home-alerts.js?v=237", "./pwa.js?v=31", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png"
 ];
 

@@ -1645,9 +1645,6 @@ function renderHomeShippingAlert(
       <span>追加で入力が必要な数量 合計 ${total.toLocaleString("ja-JP")}個</span>
     </div>
 
-    <div class="home-alert-shipping-guide">
-      「あと」は <strong>推奨船積数量 − 保存済み数量</strong> です。販売予定と季節補正を含む推奨数量で確認します。
-    </div>
 
     <div class="home-alert-item-list">
       ${topRows.map(function (row) {

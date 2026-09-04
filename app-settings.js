@@ -23,6 +23,7 @@
     "show-camera-scanner-button",
     "show-list-button",
     "show-stocktaking-button",
+    "show-single-stock-check-button",
     "show-barcode-lookup-button",
     "show-history-button",
     "show-transfer-list-button",

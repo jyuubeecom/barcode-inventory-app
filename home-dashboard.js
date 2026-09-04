@@ -28,6 +28,7 @@ const HOME_DASHBOARD_GROUPS = Object.freeze({
     "show-shipping-allocation-button"
   ],
   "home-stocktaking-buttons": [
+    "show-single-stock-check-button",
     "show-stocktaking-history-button",
     "show-stocktaking-aggregation-button",
     "export-stocktaking-csv-button"
@@ -56,6 +57,7 @@ const HOME_DASHBOARD_ACTION_CLASSES = Object.freeze({
   "show-shipping-wish-list-button": "home-action-shipping-wish-list",
   "show-shipping-schedule-button": "home-action-shipping-schedule",
   "show-shipping-allocation-button": "home-action-shipping-allocation",
+  "show-single-stock-check-button": "home-action-stocktaking",
   "show-stocktaking-history-button": "home-action-stocktaking-history",
   "show-stocktaking-aggregation-button": "home-action-aggregation",
   "export-products-csv-button": "home-action-export",

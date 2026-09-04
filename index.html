@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v239
+            画面版 v240
           </span>
         </div>
       </div>
@@ -406,7 +406,7 @@
           </summary>
 
           <p class="home-panel-description">
-            棚卸履歴、提出データの集約、結果出力を行います。
+            商品単体の在庫確認、棚卸履歴、提出データの集約、結果出力を行います。
           </p>
 
           <div
@@ -708,7 +708,8 @@
           <summary>4. 棚卸をする</summary>
           <div class="manual-topic-body">
             <ol>
-              <li>ホームの「棚卸を開始する」を押します。</li>
+              <li>特定の商品だけ在庫を再確認するときは、ホームの「商品単体の在庫確認」を使います。当日の出荷終了後、販売実績CSVを反映してから数えるのがおすすめです。</li>
+              <li>通常の棚卸は、ホームの「棚卸を開始する」を押します。</li>
               <li>棚卸する場所と担当者などを設定します。</li>
               <li>バーコード読み取り、または手入力で商品を呼び出します。</li>
               <li>実際に数えた数量を入力します。</li>
@@ -4322,8 +4323,9 @@
 <script src="location-management.js?v=100"></script>
 <script src="processing-sheet.js?v=211"></script>
 <script src="processing-conversion.js?v=213"></script>
-<script src="home-dashboard.js?v=125"></script>
-<script src="app-settings.js?v=230"></script>
+<script src="single-stock-check.js?v=240"></script>
+<script src="home-dashboard.js?v=240"></script>
+<script src="app-settings.js?v=240"></script>
 <script src="home-alerts.js?v=238"></script>
 </body>
 </html>

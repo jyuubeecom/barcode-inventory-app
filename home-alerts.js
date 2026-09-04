@@ -609,7 +609,10 @@ function createHomeAlertSnapshot(
             Number(row.shortage || 0),
             Number(row.currentStock || 0),
             Number(row.orderRemaining || 0),
-            Number(row.requiredStock || 0)
+            Number(row.requiredStock || 0),
+            Number(row.threeMonthSalesForecast || 0),
+            Boolean(row.seasonalApplied),
+            String(row.seasonalSeasonLabel || "")
           ];
         }
       )
@@ -1489,6 +1492,9 @@ function renderHomePurchaseAlert(
 
   const topRows =
     rows.slice(0, 5);
+  const seasonalCount = rows.filter(function (row) {
+    return Boolean(row && row.seasonalApplied);
+  }).length;
 
   box.innerHTML = `
     <div class="home-alert-card-title">
@@ -1504,11 +1510,25 @@ function renderHomePurchaseAlert(
       </span>
     </div>
 
+    ${seasonalCount > 0 ? `
+      <div class="home-alert-purchase-seasonal-summary">
+        季節補正あり：${seasonalCount.toLocaleString("ja-JP")}商品
+      </div>
+    ` : ""}
+
     <div class="home-alert-item-list">
       ${topRows.map(
         function (row) {
+          const seasonal = row.seasonalApplied
+            ? `<em class="home-alert-seasonal-badge">${escapeHomeAlertHtml(row.seasonalSeasonIcon || "🍂")} ${escapeHomeAlertHtml(row.seasonalSeasonLabel || "季節")}補正</em>`
+            : "";
+          const available = Number(
+            row.stockWithOrderRemaining !== undefined
+              ? row.stockWithOrderRemaining
+              : Number(row.currentStock || 0) + Number(row.orderRemaining || 0)
+          );
           return `
-            <div class="home-alert-item">
+            <div class="home-alert-item home-alert-purchase-item">
               <div>
                 <strong>
                   ${escapeHomeAlertHtml(
@@ -1516,12 +1536,19 @@ function renderHomePurchaseAlert(
                     row.internalCode ||
                     "コード未登録"
                   )}
+                  ${seasonal}
                 </strong>
                 <span>
                   ${escapeHomeAlertHtml(
                     row.productName ||
                     "商品名未登録"
                   )}
+                </span>
+                <span class="home-alert-purchase-detail">
+                  通常見込 ${Number(row.threeMonthSalesForecast || 0).toLocaleString("ja-JP")}個 / 販売予定 ${Number(row.plannedQuantity || 0).toLocaleString("ja-JP")}個
+                </span>
+                <span class="home-alert-purchase-detail">
+                  在庫＋発注残 ${available.toLocaleString("ja-JP")}個
                 </span>
               </div>
 
@@ -2395,6 +2422,20 @@ function printHomeAlertReport(mode) {
       text-align: center;
     }
 
+    .print-seasonal-note {
+      margin-top: 2px;
+      color: #8a4b08;
+      font-size: 7pt;
+      font-weight: 800;
+    }
+
+    .print-purchase-detail {
+      margin-top: 2px;
+      color: #546e7a;
+      font-size: 6.7pt;
+      font-weight: 700;
+    }
+
     .purchase-table th:nth-child(1),
     .purchase-table td:nth-child(1) { width: 4%; }
     .purchase-table th:nth-child(2),
@@ -2521,7 +2562,11 @@ function createHomePurchasePrintSection(data) {
                     <td class="center">${index + 1}</td>
                     <td>${escapeHomeAlertHtml(row.internalCode || "-")}</td>
                     <td>${escapeHomeAlertHtml(row.productCode || "-")}</td>
-                    <td>${escapeHomeAlertHtml(row.productName || "商品名未登録")}</td>
+                    <td>
+                      ${escapeHomeAlertHtml(row.productName || "商品名未登録")}
+                      ${row.seasonalApplied ? `<div class="print-seasonal-note">${escapeHomeAlertHtml(row.seasonalSeasonIcon || "🍂")} ${escapeHomeAlertHtml(row.seasonalSeasonLabel || "季節")}補正 ${formatHomeAlertPrintQuantity(row.seasonalMonthlyAverage)}個/月</div>` : ""}
+                      <div class="print-purchase-detail">通常見込 ${formatHomeAlertPrintQuantity(row.threeMonthSalesForecast)}個 / 販売予定 ${formatHomeAlertPrintQuantity(row.plannedQuantity)}個</div>
+                    </td>
                     <td class="number">${formatHomeAlertPrintQuantity(row.currentStock)}個</td>
                     <td class="number">${formatHomeAlertPrintQuantity(row.orderRemaining)}個</td>
                     <td class="number">${formatHomeAlertPrintQuantity(row.requiredStock)}個</td>
@@ -3188,6 +3233,28 @@ function createHomeAlertPanelStyle() {
       font-style: normal;
       font-weight: 900;
       vertical-align: middle;
+    }
+
+    .home-alert-purchase-seasonal-summary {
+      margin: -2px 0 8px;
+      padding: 6px 8px;
+      border: 1px solid #f0b96a;
+      border-radius: 8px;
+      background: #fff8e8;
+      color: #8a4b08;
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .home-alert-purchase-detail {
+      display: block !important;
+      margin-top: 3px !important;
+      color: #6b5a45 !important;
+      font-size: 9px !important;
+      font-weight: 700;
+      white-space: normal !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
     }
 
     .home-alert-item-list {

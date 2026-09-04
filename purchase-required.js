@@ -1,6 +1,8 @@
 "use strict";
 
 const PURCHASE_REQUIRED_PAGE_SIZE = 20;
+const PURCHASE_SEASONAL_ANALYSIS_MONTHS = 24;
+const PURCHASE_SEASONAL_MIN_HISTORY_MONTHS = 12;
 let purchaseRequiredRows = [];
 let purchaseRequiredCurrentPage = 1;
 let purchaseRequiredContext = null;
@@ -109,6 +111,7 @@ async function refreshPurchaseRequiredData() {
       : aggregatePurchaseActuals(actuals, context.actualMonthKeys);
     const planByProduct = aggregatePurchasePlans(plans, context.forecastStartDate, context.forecastEndDate);
     const coverage = calculatePurchaseActualCoverage(batches, context.actualStartDate, context.actualEndDate);
+    const seasonalContext = buildPurchaseSeasonalAnalysisContext(products, actuals, context);
 
     purchaseRequiredRows = products
       .filter(function (product) { return !isPurchaseDiscontinuedProduct(product); })
@@ -128,8 +131,16 @@ async function refreshPurchaseRequiredData() {
           : Math.max(0, grossSixMonthSales);
         const monthlyAverage = Math.max(0, Math.ceil(sixMonthSales / 6));
         const threeMonthBase = monthlyAverage * 3;
+        const seasonalRow = seasonalContext.rowsByCode.get(internalCode) || null;
+        const seasonalForecast = calculatePurchaseSeasonalForecast(
+          monthlyAverage,
+          context,
+          seasonalRow,
+          seasonalContext
+        );
+        const threeMonthSalesForecast = seasonalForecast.salesForecast;
         const plannedQuantity = planByProduct.get(internalCode) || 0;
-        const requiredStockRaw = threeMonthBase + plannedQuantity;
+        const requiredStockRaw = threeMonthSalesForecast + plannedQuantity;
         const requiredStock = Math.ceil(requiredStockRaw);
         const currentStock = getPurchaseStockNumber(product.stock);
         const orderRemaining = getPurchaseOrderRemaining(product);
@@ -160,6 +171,17 @@ async function refreshPurchaseRequiredData() {
           sixMonthSales: sixMonthSales,
           monthlyAverage: monthlyAverage,
           threeMonthBase: threeMonthBase,
+          threeMonthSalesForecast: threeMonthSalesForecast,
+          seasonalApplied: seasonalForecast.applied,
+          seasonalTrendType: seasonalForecast.trendType,
+          seasonalSeasonKey: seasonalForecast.seasonKey,
+          seasonalSeasonLabel: seasonalForecast.seasonLabel,
+          seasonalSeasonIcon: seasonalForecast.seasonIcon,
+          seasonalMonthlyAverage: seasonalForecast.seasonalMonthlyAverage,
+          seasonalDays: seasonalForecast.seasonalDays,
+          seasonalHistoryMonths: seasonalContext.availableMonthCount,
+          seasonalHistoryStartMonth: seasonalContext.startMonth,
+          seasonalHistoryEndMonth: seasonalContext.endMonth,
           plannedQuantity: plannedQuantity,
           requiredStock: requiredStock,
           shortage: shortage,
@@ -182,7 +204,15 @@ async function refreshPurchaseRequiredData() {
         return a.internalCode.localeCompare(b.internalCode, "ja", { numeric: true });
       });
 
-    purchaseRequiredContext = { ...context, coverage: coverage, totalProducts: products.length };
+    purchaseRequiredContext = {
+      ...context,
+      coverage: coverage,
+      totalProducts: products.length,
+      seasonalAvailableMonthCount: seasonalContext.availableMonthCount,
+      seasonalEnoughHistory: seasonalContext.enoughHistory,
+      seasonalStartMonth: seasonalContext.startMonth,
+      seasonalEndMonth: seasonalContext.endMonth
+    };
     purchaseRequiredCurrentPage = 1;
     renderPurchaseRequiredSummary();
     renderPurchaseRequiredCoverageWarning();
@@ -222,6 +252,122 @@ function addPurchaseMonths(date, months) {
   const first = new Date(date.getFullYear(), date.getMonth() + months, 1);
   const lastDay = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
   return new Date(first.getFullYear(), first.getMonth(), Math.min(sourceDay, lastDay));
+}
+
+function buildPurchaseSeasonalAnalysisContext(products, actuals, context) {
+  const empty = {
+    availableMonthCount: 0,
+    enoughHistory: false,
+    rowsByCode: new Map(),
+    startMonth: "",
+    endMonth: ""
+  };
+
+  if (!context || !isPurchaseIsoDate(context.forecastStartDate)) return empty;
+
+  const calculator = window.seasonalTrendCalculator;
+  if (!calculator || typeof calculator.analyze !== "function") return empty;
+
+  const anchorDate = new Date(`${context.forecastStartDate}T12:00:00`);
+  if (Number.isNaN(anchorDate.getTime())) return empty;
+
+  try {
+    const analysis = calculator.analyze(
+      Array.isArray(products) ? products : [],
+      Array.isArray(actuals) ? actuals : [],
+      anchorDate,
+      PURCHASE_SEASONAL_ANALYSIS_MONTHS
+    );
+
+    const monthKeys = Array.isArray(analysis && analysis.availableMonthKeys)
+      ? analysis.availableMonthKeys.slice().sort()
+      : [];
+    const rows = Array.isArray(analysis && analysis.rows) ? analysis.rows : [];
+
+    return {
+      availableMonthCount: monthKeys.length,
+      enoughHistory: monthKeys.length >= PURCHASE_SEASONAL_MIN_HISTORY_MONTHS,
+      rowsByCode: new Map(rows.map(function (row) {
+        return [String(row && row.internalCode || "").trim(), row];
+      })),
+      startMonth: monthKeys[0] || "",
+      endMonth: monthKeys[monthKeys.length - 1] || ""
+    };
+  } catch (error) {
+    console.warn("発注の季節補正分析に失敗しました。従来の6か月月平均で計算します。", error);
+    return empty;
+  }
+}
+
+function calculatePurchaseSeasonalForecast(monthlyAverage, context, seasonalRow, seasonalContext) {
+  const baseAverage = Math.max(0, Number(monthlyAverage) || 0);
+  const baseForecast = Math.max(0, baseAverage * 3);
+  const fallback = {
+    applied: false,
+    salesForecast: baseForecast,
+    trendType: "",
+    seasonKey: "",
+    seasonLabel: "",
+    seasonIcon: "",
+    seasonalMonthlyAverage: baseAverage,
+    seasonalDays: 0
+  };
+
+  if (!seasonalContext || !seasonalContext.enoughHistory || !seasonalRow) return fallback;
+  if (!context || !isPurchaseIsoDate(context.forecastStartDate) || !isPurchaseIsoDate(context.forecastEndDate)) return fallback;
+
+  const calculator = window.seasonalTrendCalculator;
+  if (!calculator || typeof calculator.getSeasonForMonth !== "function") return fallback;
+
+  const start = parsePurchaseIsoDateUtc(context.forecastStartDate);
+  const end = parsePurchaseIsoDateUtc(context.forecastEndDate);
+  if (!start || !end || start.getTime() > end.getTime()) return fallback;
+
+  let seasonalDays = 0;
+  const cursor = new Date(start.getTime());
+  while (cursor.getTime() <= end.getTime()) {
+    const season = calculator.getSeasonForMonth(cursor.getUTCMonth() + 1);
+    if (season && season.key === seasonalRow.seasonKey) seasonalDays += 1;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  if (seasonalDays <= 0) return fallback;
+
+  const historicalSeasonAverage = Math.max(0, Number(seasonalRow.seasonAverage) || 0);
+  let seasonalMonthlyAverage = historicalSeasonAverage;
+
+  if (seasonalRow.trendType === "increase") {
+    seasonalMonthlyAverage = Math.max(baseAverage, historicalSeasonAverage);
+  } else if (seasonalRow.trendType === "decrease") {
+    seasonalMonthlyAverage = Math.min(baseAverage, historicalSeasonAverage);
+  } else {
+    return fallback;
+  }
+
+  // 従来の「月平均×3」を土台にし、対象季節の日数分だけ差分を加減する。
+  // 季節補正がない商品は、v237以前と同じ数量になる。
+  const seasonalAdjustment = ((seasonalMonthlyAverage - baseAverage) / 30) * seasonalDays;
+  const adjustedForecast = Math.max(0, Math.ceil(baseForecast + seasonalAdjustment));
+
+  if (adjustedForecast === baseForecast && seasonalMonthlyAverage === baseAverage) return fallback;
+
+  return {
+    applied: true,
+    salesForecast: adjustedForecast,
+    trendType: String(seasonalRow.trendType || ""),
+    seasonKey: String(seasonalRow.seasonKey || ""),
+    seasonLabel: String(seasonalRow.seasonLabel || ""),
+    seasonIcon: String(seasonalRow.seasonIcon || ""),
+    seasonalMonthlyAverage: seasonalMonthlyAverage,
+    seasonalDays: seasonalDays
+  };
+}
+
+function parsePurchaseIsoDateUtc(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+  if (!match) return null;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function formatPurchaseIso(date) {
@@ -436,9 +582,14 @@ function renderPurchaseRequiredSummary() {
     );
 
   const backorderCount = purchaseRequiredRows.filter(function (row) { return row.isBackorder; }).length;
+  const seasonalCount = purchaseRequiredRows.filter(function (row) { return row.seasonalApplied; }).length;
+  const seasonalHistoryText = purchaseRequiredContext.seasonalEnoughHistory
+    ? `${Number(purchaseRequiredContext.seasonalAvailableMonthCount || 0).toLocaleString("ja-JP")}か月分の実績を確認済み`
+    : `${Number(purchaseRequiredContext.seasonalAvailableMonthCount || 0).toLocaleString("ja-JP")}か月分（12か月未満のため補正なし）`;
   summary.innerHTML = `
     <strong>判定日：</strong>${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.evaluationDate))}<br>
-    <strong>月平均販売数：</strong>${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.actualStartDate))} ～ ${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.actualEndDate))} の販売実績から「株式会社 後藤」「清水産業 株式会社」を除外して6か月平均<br>
+    <strong>基本月平均：</strong>${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.actualStartDate))} ～ ${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.actualEndDate))} の販売実績から「株式会社 後藤」「清水産業 株式会社」を除外して6か月平均<br>
+    <strong>季節補正：</strong>過去24か月を分析し、実績12か月以上の商品は今後3か月の該当季節を補正（${escapePurchaseHtml(seasonalHistoryText)} / 補正対象 ${seasonalCount.toLocaleString("ja-JP")}商品）<br>
     <strong>販売予定：</strong>${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.forecastStartDate))} ～ ${escapePurchaseHtml(formatPurchaseDisplayDate(purchaseRequiredContext.forecastEndDate))}<br>
     <strong>発注必要：</strong>${requiredRows.length.toLocaleString("ja-JP")}商品 /
     <strong>発注済み：</strong>${orderedRows.length.toLocaleString("ja-JP")}商品 /
@@ -613,6 +764,20 @@ function renderPurchaseRequiredTable() {
           ? '<span class="purchase-required-backorder-badge">注残</span>'
           : "";
 
+      const seasonalBadge = item.seasonalApplied
+        ? `<span class="purchase-required-seasonal-badge">${escapePurchaseHtml(item.seasonalSeasonIcon || "🍂")} ${escapePurchaseHtml(item.seasonalSeasonLabel || "季節")}補正</span>`
+        : "";
+
+      const seasonalMetric = item.seasonalApplied
+        ? `
+          <div class="purchase-required-metric purchase-required-metric-seasonal">
+            <span>季節補正</span>
+            <strong>${escapePurchaseHtml(item.seasonalSeasonIcon || "🍂")} ${escapePurchaseHtml(item.seasonalSeasonLabel || "季節")} ${formatPurchaseWholeNumber(item.seasonalMonthlyAverage)}個/月</strong>
+            <small>${Number(item.seasonalDays || 0).toLocaleString("ja-JP")}日分を${item.seasonalTrendType === "increase" ? "増加" : "減少"}補正</small>
+          </div>
+        `
+        : "";
+
       const shortageClass =
         item.shortage > 0
           ? "purchase-required-number-danger"
@@ -624,6 +789,7 @@ function renderPurchaseRequiredTable() {
             <div class="purchase-required-item-badges">
               ${judgmentBadge}
               ${backorderBadge}
+              ${seasonalBadge}
             </div>
 
             <strong class="purchase-required-item-name">
@@ -674,16 +840,18 @@ function renderPurchaseRequiredTable() {
           </div>
 
           <div class="purchase-required-metric">
-            <span>月平均販売数</span>
+            <span>基本月平均</span>
             <strong>
-              ${formatPurchaseWholeNumber(item.monthlyAverage)}個
+              ${formatPurchaseWholeNumber(item.monthlyAverage)}個/月
             </strong>
           </div>
 
+          ${seasonalMetric}
+
           <div class="purchase-required-metric">
-            <span>月平均×3</span>
+            <span>今後3か月通常販売見込</span>
             <strong>
-              ${formatPurchaseWholeNumber(item.threeMonthBase)}個
+              ${formatPurchaseWholeNumber(item.threeMonthSalesForecast)}個
             </strong>
           </div>
 
@@ -714,6 +882,13 @@ function renderPurchaseRequiredTable() {
             / 後藤・清水産業除外：
             <strong>${formatPurchaseQuantity(item.excludedCustomerSales)}個</strong>
           </span>
+
+          ${item.seasonalApplied ? `
+            <span>
+              季節補正前3か月：
+              <strong>${formatPurchaseWholeNumber(item.threeMonthBase)}個</strong>
+            </span>
+          ` : ""}
 
           <span>
             保管場所：
@@ -825,6 +1000,10 @@ function createPurchaseRequiredStyle() {
     #purchase-required .purchase-required-badge { display: inline-block; background: #c62828; color: #fff; padding: 4px 10px; border-radius: 999px; font-weight: 800; white-space: nowrap; }
     #purchase-required .purchase-required-badge-ordered { background: #2e7d32; }
     #purchase-required .purchase-required-backorder-badge { display: inline-block; background: #f6c343; color: #5c3a00; padding: 4px 9px; border-radius: 999px; font-weight: 800; white-space: nowrap; border: 1px solid #d89b00; }
+    #purchase-required .purchase-required-seasonal-badge { display: inline-block; background: #fff3d8; color: #8a4b08; padding: 4px 9px; border-radius: 999px; font-weight: 800; white-space: nowrap; border: 1px solid #f0b96a; }
+    #purchase-required .purchase-required-metric-seasonal { background: #fff8e8; border-color: #f0b96a; }
+    #purchase-required .purchase-required-metric-seasonal strong { color: #8a4b08; }
+    #purchase-required .purchase-required-metric-seasonal small { display: block; margin-top: 4px; color: #8a4b08; font-size: 11px; font-weight: 700; line-height: 1.35; }
     #purchase-required .purchase-required-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 14px; }
     #purchase-required button:disabled { background-color: #b0bec5 !important; cursor: not-allowed; }
     @media (max-width: 900px) {
@@ -895,7 +1074,29 @@ window.purchaseRequiredApp.getHomeAlertData =
               requiredStock:
                 Number(
                   row.requiredStock || 0
-                )
+                ),
+              monthlyAverage:
+                Number(row.monthlyAverage || 0),
+              threeMonthBase:
+                Number(row.threeMonthBase || 0),
+              threeMonthSalesForecast:
+                Number(row.threeMonthSalesForecast || row.threeMonthBase || 0),
+              plannedQuantity:
+                Number(row.plannedQuantity || 0),
+              stockWithOrderRemaining:
+                Number(row.stockWithOrderRemaining || 0),
+              seasonalApplied:
+                Boolean(row.seasonalApplied),
+              seasonalTrendType:
+                String(row.seasonalTrendType || ""),
+              seasonalSeasonLabel:
+                String(row.seasonalSeasonLabel || ""),
+              seasonalSeasonIcon:
+                String(row.seasonalSeasonIcon || ""),
+              seasonalMonthlyAverage:
+                Number(row.seasonalMonthlyAverage || 0),
+              seasonalDays:
+                Number(row.seasonalDays || 0)
             };
           }
         );

@@ -2388,6 +2388,16 @@ function printShippingAllocationList() {
   .period-banner { margin: 7px 0 8px; padding: 6px 10px; border: 2px solid #1976d2; background: #e3f2fd; color: #0d47a1; font-size: 13pt; font-weight: 800; text-align: center; }
   .note { margin: 7px 0 9px; padding: 5px 7px; background: #f3f4f6; font-size: 8.5pt; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  thead { display: table-header-group; }
+  tbody { display: table-row-group; }
+  tr, th, td {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  tbody tr {
+    break-after: auto;
+    page-break-after: auto;
+  }
   th, td { border: 1px solid #777; padding: 3px 4px; vertical-align: middle; word-break: break-word; }
   th { background: #e8eef4; font-size: 7.6pt; }
   td { font-size: 7.8pt; }
@@ -4109,6 +4119,11 @@ window.shippingScheduleApp.getHomeAlertData =
     const schedule =
       actionableSchedules[0];
 
+    const targetPeriod =
+      getShippingTargetPeriod(
+        schedule
+      );
+
     const rows =
       getShippingAllocationRows(
         schedule
@@ -4155,6 +4170,22 @@ window.shippingScheduleApp.getHomeAlertData =
                 allocated,
               remainingQuantity:
                 remaining,
+              currentStock:
+                Math.max(0, Number(row.currentStock || 0)),
+              periodSalesEstimate:
+                Math.max(0, Number(row.periodSalesEstimate || 0)),
+              plannedQuantity:
+                Math.max(0, Number(row.plannedQuantity || 0)),
+              requiredQuantity:
+                Math.max(0, Number(row.requiredQuantity || 0)),
+              seasonalApplied:
+                Boolean(row.seasonalApplied),
+              seasonalSeasonLabel:
+                row.seasonalSeasonLabel || "",
+              seasonalSeasonIcon:
+                row.seasonalSeasonIcon || "",
+              seasonalMonthlyAverage:
+                Math.max(0, Number(row.seasonalMonthlyAverage || 0)),
               isBackorder:
                 Boolean(row.isBackorder)
             };
@@ -4233,6 +4264,14 @@ window.shippingScheduleApp.getHomeAlertData =
             .warehouseArrivalDate ||
           ""
       },
+      targetPeriod:
+        targetPeriod && targetPeriod.valid
+          ? {
+              startDate: targetPeriod.startDate || "",
+              endDate: targetPeriod.endDate || "",
+              days: Number(targetPeriod.days || 0)
+            }
+          : null,
       count:
         rows.length,
       totalRemaining:

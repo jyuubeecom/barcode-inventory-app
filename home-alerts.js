@@ -1568,123 +1568,65 @@ function renderHomeShippingAlert(
   box,
   data
 ) {
-  const hasSchedule =
-    Boolean(
-      data &&
-        data.hasSchedule
-    );
+  const hasSchedule = Boolean(data && data.hasSchedule);
+  const schedule = data && data.schedule ? data.schedule : null;
+  const targetPeriod = data && data.targetPeriod ? data.targetPeriod : null;
+  const count = Number(data && data.count || 0);
+  const total = Number(data && data.totalRemaining || 0);
+  const rows = Array.isArray(data && data.rows) ? data.rows : [];
 
-  const schedule =
-    data &&
-    data.schedule
-      ? data.schedule
-      : null;
-
-  const count =
-    Number(
-      data &&
-        data.count ||
-        0
-    );
-
-  const total =
-    Number(
-      data &&
-        data.totalRemaining ||
-        0
-    );
-
-  const rows =
-    Array.isArray(
-      data &&
-        data.rows
-    )
-      ? data.rows
-      : [];
-
-  box.className =
-    "home-alert-card home-alert-shipping";
+  box.className = "home-alert-card home-alert-shipping";
 
   if (!hasSchedule) {
-    box.classList.add(
-      "home-alert-card-neutral"
-    );
-
+    box.classList.add("home-alert-card-neutral");
     box.innerHTML = `
       <div class="home-alert-card-title">
         <span>🚢</span>
         <strong>船積みが必要</strong>
       </div>
-
       <div class="home-alert-zero">
         <strong>未確定船便なし</strong>
-        <span>
-          確認対象になる次の船便がありません。
-        </span>
+        <span>確認対象になる次の船便がありません。</span>
       </div>
-
-      <button
-        type="button"
-        class="home-alert-open-button home-alert-open-shipping"
-        data-home-alert-action="shipping"
-      >
+      <button type="button" class="home-alert-open-button home-alert-open-shipping" data-home-alert-action="shipping">
         船便振り分けを見る
       </button>
     `;
-
-    bindHomeAlertButtons(
-      box
-    );
-
+    bindHomeAlertButtons(box);
     return;
   }
 
-  const scheduleName =
-    schedule.name ||
-    "船便名未設定";
+  const scheduleName = schedule.name || "船便名未設定";
+  const warehouseDate = formatHomeAlertPrintDate(schedule.warehouseArrivalDate || "");
+  const periodText = targetPeriod && targetPeriod.startDate && targetPeriod.endDate
+    ? `${formatHomeAlertPrintDate(targetPeriod.startDate)} ～ ${formatHomeAlertPrintDate(targetPeriod.endDate)}`
+    : "対象期間未確定";
 
   if (count <= 0) {
-    box.classList.add(
-      "home-alert-card-ok"
-    );
-
+    box.classList.add("home-alert-card-ok");
     box.innerHTML = `
       <div class="home-alert-card-title">
         <span>🚢</span>
         <strong>船積みが必要</strong>
       </div>
-
-      <p class="home-alert-schedule-name">
-        ${escapeHomeAlertHtml(
-          scheduleName
-        )}
-      </p>
-
+      <div class="home-alert-shipping-summary">
+        <strong>${escapeHomeAlertHtml(scheduleName)}</strong>
+        <span>倉庫到着：${escapeHomeAlertHtml(warehouseDate || "-")}</span>
+        <span>在庫対象：${escapeHomeAlertHtml(periodText)}</span>
+      </div>
       <div class="home-alert-zero">
         <strong>0商品</strong>
-        <span>
-          この船便で追加の船積入力が必要な商品はありません。
-        </span>
+        <span>この船便で追加の船積入力が必要な商品はありません。</span>
       </div>
-
-      <button
-        type="button"
-        class="home-alert-open-button home-alert-open-shipping"
-        data-home-alert-action="shipping"
-      >
-        船便振り分けを見る
+      <button type="button" class="home-alert-open-button home-alert-open-shipping" data-home-alert-action="shipping">
+        船積み画面で確認する
       </button>
     `;
-
-    bindHomeAlertButtons(
-      box
-    );
-
+    bindHomeAlertButtons(box);
     return;
   }
 
-  const topRows =
-    rows.slice(0, 5);
+  const topRows = rows.slice(0, 5);
 
   box.innerHTML = `
     <div class="home-alert-card-title">
@@ -1692,80 +1634,58 @@ function renderHomeShippingAlert(
       <strong>船積みが必要</strong>
     </div>
 
-    <p class="home-alert-schedule-name">
-      ${escapeHomeAlertHtml(
-        scheduleName
-      )}
-    </p>
+    <div class="home-alert-shipping-summary">
+      <strong>${escapeHomeAlertHtml(scheduleName)}</strong>
+      <span>倉庫到着：${escapeHomeAlertHtml(warehouseDate || "-")}</span>
+      <span>📦 在庫対象：${escapeHomeAlertHtml(periodText)}</span>
+    </div>
 
     <div class="home-alert-count-row">
       <strong>${count.toLocaleString("ja-JP")}商品</strong>
-      <span>
-        未入力・不足
-        ${total.toLocaleString("ja-JP")}個
-      </span>
+      <span>追加で入力が必要な数量 合計 ${total.toLocaleString("ja-JP")}個</span>
+    </div>
+
+    <div class="home-alert-shipping-guide">
+      「あと」は <strong>推奨船積数量 − 保存済み数量</strong> です。販売予定と季節補正を含む推奨数量で確認します。
     </div>
 
     <div class="home-alert-item-list">
-      ${topRows.map(
-        function (row) {
-          return `
-            <div class="home-alert-item ${row.isBackorder ? "home-alert-item-backorder" : ""}">
-              <div>
-                <strong>
-                  ${escapeHomeAlertHtml(
-                    row.productCode ||
-                    row.internalCode ||
-                    "コード未登録"
-                  )}
-                  ${row.isBackorder ? '<em class="home-alert-backorder-badge">注残</em>' : ""}
-                </strong>
-                <span>
-                  ${escapeHomeAlertHtml(
-                    row.productName ||
-                    "商品名未登録"
-                  )}
-                </span>
-              </div>
-
-              <b>
-                あと
-                ${Number(
-                  row.remainingQuantity ||
-                  0
-                ).toLocaleString("ja-JP")}個
-              </b>
+      ${topRows.map(function (row) {
+        const seasonal = row.seasonalApplied
+          ? `<em class="home-alert-seasonal-badge">${escapeHomeAlertHtml(row.seasonalSeasonIcon || "🍂")} ${escapeHomeAlertHtml(row.seasonalSeasonLabel || "季節")}補正</em>`
+          : "";
+        const recommended = Number(row.recommendedQuantity || 0);
+        const saved = Number(row.currentAllocation || 0);
+        const remaining = Number(row.remainingQuantity || 0);
+        return `
+          <div class="home-alert-item ${row.isBackorder ? "home-alert-item-backorder" : ""}">
+            <div>
+              <strong>
+                ${escapeHomeAlertHtml(row.productCode || row.internalCode || "コード未登録")}
+                ${row.isBackorder ? '<em class="home-alert-backorder-badge">注残</em>' : ""}
+                ${seasonal}
+              </strong>
+              <span>${escapeHomeAlertHtml(row.productName || "商品名未登録")}</span>
+              <span class="home-alert-shipping-detail">
+                推奨 ${recommended.toLocaleString("ja-JP")}個 / 保存済 ${saved.toLocaleString("ja-JP")}個
+              </span>
             </div>
-          `;
-        }
-      ).join("")}
+            <b>あと ${remaining.toLocaleString("ja-JP")}個</b>
+          </div>
+        `;
+      }).join("")}
     </div>
 
-    ${
-      count > topRows.length
-        ? `
-          <p class="home-alert-more">
-            ほか
-            ${(count - topRows.length)
-              .toLocaleString("ja-JP")}
-            商品
-          </p>
-        `
-        : ""
-    }
+    ${count > topRows.length
+      ? `<p class="home-alert-more">ほか ${(count - topRows.length).toLocaleString("ja-JP")}商品</p>`
+      : ""}
 
-    <button
-      type="button"
-      class="home-alert-open-button home-alert-open-shipping"
-      data-home-alert-action="shipping"
-    >
-      船便振り分けを見る
+    <button type="button" class="home-alert-open-button home-alert-open-shipping" data-home-alert-action="shipping">
+      船積み画面で数量を確認する
     </button>
   `;
 
-  bindHomeAlertButtons(
-    box
-  );
+  bindHomeAlertButtons(box);
 }
 
 
@@ -3207,6 +3127,70 @@ function createHomeAlertPanelStyle() {
       font-size: 13px;
       font-weight: 800;
       line-height: 1.45;
+    }
+
+    .home-alert-shipping-summary {
+      display: grid;
+      gap: 3px;
+      margin: 0 0 9px;
+      padding: 8px 9px;
+      border: 1px solid #d1c4e9;
+      border-radius: 9px;
+      background: #ffffff;
+      color: #5e35b1;
+      line-height: 1.4;
+    }
+
+    .home-alert-shipping-summary strong {
+      font-size: 13px;
+    }
+
+    .home-alert-shipping-summary span {
+      color: #6d5a8c;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .home-alert-shipping-guide {
+      margin: -2px 0 9px;
+      padding: 7px 8px;
+      border-radius: 8px;
+      background: #f3edff;
+      color: #5e35b1;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
+    .home-alert-shipping .home-alert-item strong {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+    }
+
+    .home-alert-shipping-detail {
+      margin-top: 4px !important;
+      color: #6d5a8c !important;
+      font-size: 10px !important;
+      font-weight: 700;
+      white-space: normal !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
+    }
+
+    .home-alert-seasonal-badge {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 4px;
+      padding: 2px 5px;
+      border: 1px solid #f0b96a;
+      border-radius: 999px;
+      background: #fff3d8;
+      color: #8a4b08;
+      font-size: 9px;
+      font-style: normal;
+      font-weight: 900;
+      vertical-align: middle;
     }
 
     .home-alert-item-list {

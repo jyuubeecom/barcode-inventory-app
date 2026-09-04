@@ -205,7 +205,7 @@ function buildSeasonalTrendRows(products, actuals, context) {
   const rows = [];
 
   productMap.forEach(function (product, internalCode) {
-    if (isSeasonalTrendDiscontinuedProduct(product)) return;
+    if (isSeasonalTrendExcludedProduct(product)) return;
     if (monthKeys.length < 4) return;
 
     const source = monthlyByProduct.get(internalCode) || new Map();
@@ -409,7 +409,7 @@ function renderSeasonalTrendSummary() {
   coverage.innerHTML = `
     分析対象：<strong>${escapeSeasonalTrendHtml(first)} ～ ${escapeSeasonalTrendHtml(last)}</strong> のうち販売実績がある ${months.length}か月。<br>
     「株式会社 後藤」「清水産業 株式会社」は除外し、返品は同月の販売数量から差し引きます。<br>
-    廃盤商品は一覧から除外し、<strong>廃盤予定の商品は「廃盤予定」バッジを付けて分析対象に含めます。</strong>
+    廃盤商品・専用商品は一覧から除外し、<strong>廃盤予定の商品は「廃盤予定」バッジを付けて分析対象に含めます。</strong>
     ${months.length < 9 ? " データ月数が少ないため、現在の判定は参考値として確認してください。" : ""}
   `;
 }
@@ -507,8 +507,9 @@ function getSeasonalTrendLifecycleStatus(product) {
   return Boolean(product && product.discontinued === true) ? "廃盤" : "通常商品";
 }
 
-function isSeasonalTrendDiscontinuedProduct(product) {
-  return getSeasonalTrendLifecycleStatus(product) === "廃盤";
+function isSeasonalTrendExcludedProduct(product) {
+  const status = getSeasonalTrendLifecycleStatus(product);
+  return status === "廃盤" || status === "専用商品";
 }
 
 function formatSeasonalTrendChange(row) {

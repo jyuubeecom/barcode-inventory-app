@@ -14,6 +14,27 @@ let seasonalTrendRows = [];
 let seasonalTrendCurrentPage = 1;
 let seasonalTrendContext = null;
 
+// 季節変動の計算ルールを、船積みなど他機能からも同じ条件で利用できるように公開する。
+window.seasonalTrendCalculator = Object.freeze({
+  analyze: function (products, actuals, anchorDate, monthCount) {
+    const count = Math.max(12, Math.floor(Number(monthCount) || 24));
+    const context = buildSeasonalTrendDateContext(anchorDate, count);
+    const analysis = buildSeasonalTrendRows(products, actuals, context);
+    return {
+      ...analysis,
+      context: context
+    };
+  },
+  getSeasonForMonth: function (monthNumber) {
+    const month = Number(monthNumber);
+    return SEASONAL_TREND_SEASONS.find(function (season) {
+      return season.months.includes(month);
+    }) || null;
+  },
+  increaseRatio: SEASONAL_TREND_INCREASE_RATIO,
+  decreaseRatio: SEASONAL_TREND_DECREASE_RATIO
+});
+
 window.addEventListener("DOMContentLoaded", initializeSeasonalTrendFeature);
 
 function initializeSeasonalTrendFeature() {

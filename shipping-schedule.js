@@ -2,6 +2,8 @@
 
 const SHIPPING_SCHEDULE_PAGE_SIZE = 20;
 const SHIPPING_ALLOCATION_PAGE_SIZE = 20;
+const SHIPPING_SEASONAL_ANALYSIS_MONTHS = 24;
+const SHIPPING_SEASONAL_MIN_HISTORY_MONTHS = 12;
 const SHIPPING_DESTINATION_LOCATIONS = [
   "本社",
   "酒本倉庫1階",
@@ -727,6 +729,7 @@ function getShippingAllocationRows(schedule) {
   const monthKey = schedule.warehouseArrivalDate.slice(0, 7);
   const averageContext = buildShippingAverageContext(monthKey);
   const actualByProduct = aggregateShippingActuals(averageContext.monthKeys);
+  const seasonalContext = buildShippingSeasonalAnalysisContext(targetPeriod);
   const planByProduct = aggregateShippingPlansForRange(targetPeriod.startDate, targetPeriod.endDate);
   const priorScheduleIds = getPriorShippingScheduleIds(schedule);
   const periodDays = targetPeriod.days;
@@ -742,7 +745,14 @@ function getShippingAllocationRows(schedule) {
       const internalCode = String(product.internalCode || "").trim();
       const sixMonthSales = actualByProduct.get(internalCode) || 0;
       const monthlyAverage = Math.max(0, Math.ceil(sixMonthSales / 6));
-      const periodSalesEstimate = Math.max(0, Math.ceil((monthlyAverage / 30) * periodDays));
+      const seasonalRow = seasonalContext.rowsByCode.get(internalCode) || null;
+      const seasonalEstimate = calculateShippingSeasonalPeriodEstimate(
+        monthlyAverage,
+        targetPeriod,
+        seasonalRow,
+        seasonalContext
+      );
+      const periodSalesEstimate = seasonalEstimate.periodSalesEstimate;
       const plannedQuantity = planByProduct.get(internalCode) || 0;
       const requiredQuantity = Math.max(0, Math.ceil(periodSalesEstimate + plannedQuantity));
       const currentStock = getShippingNumber(product.stock);
@@ -772,6 +782,16 @@ function getShippingAllocationRows(schedule) {
         targetStartDate: targetPeriod.startDate,
         targetEndDate: targetPeriod.endDate,
         targetDays: targetPeriod.days,
+        seasonalApplied: seasonalEstimate.applied,
+        seasonalTrendType: seasonalEstimate.trendType,
+        seasonalSeasonKey: seasonalEstimate.seasonKey,
+        seasonalSeasonLabel: seasonalEstimate.seasonLabel,
+        seasonalSeasonIcon: seasonalEstimate.seasonIcon,
+        seasonalMonthlyAverage: seasonalEstimate.seasonalMonthlyAverage,
+        seasonalDays: seasonalEstimate.seasonalDays,
+        seasonalHistoryMonths: seasonalContext.availableMonthCount,
+        seasonalHistoryStartMonth: seasonalContext.startMonth,
+        seasonalHistoryEndMonth: seasonalContext.endMonth,
         nextScheduleId: targetPeriod.nextSchedule ? targetPeriod.nextSchedule.id : "",
         nextScheduleName: targetPeriod.nextSchedule ? targetPeriod.nextSchedule.name : ""
       };
@@ -934,7 +954,8 @@ function renderShippingAllocationTable() {
       `倉庫到着 ${escapeShippingHtml(formatShippingDate(schedule.warehouseArrivalDate))}<br>` +
       `対象期間：${escapeShippingHtml(formatShippingDate(targetPeriod.startDate))} ～ ${escapeShippingHtml(formatShippingDate(targetPeriod.endDate))}（${targetPeriod.days.toLocaleString("ja-JP")}日）<br>` +
       `次便：${escapeShippingHtml(targetPeriod.nextSchedule.name)} / 倉庫到着 ${escapeShippingHtml(formatShippingDate(targetPeriod.nextSchedule.warehouseArrivalDate))}<br>` +
-      `月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の6か月平均` +
+      `月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の6か月平均<br>` +
+      `季節補正：対象期間の前月まで直近${SHIPPING_SEASONAL_ANALYSIS_MONTHS}か月を参照（実績月が${SHIPPING_SEASONAL_MIN_HISTORY_MONTHS}か月未満の場合は補正なし）` +
       (scheduleReceived
         ? `<br><span class="shipping-received-note">この船便は入荷反映済みです。船積数量は履歴保護のため編集できません。</span>`
         : (scheduleConfirmed
@@ -997,6 +1018,10 @@ function renderShippingAllocationTable() {
         ? `<div class="shipping-allocation-locked-box"><span>今回の船便</span><strong class="shipping-allocation-readonly-quantity">${item.currentAllocation.toLocaleString("ja-JP")}個</strong></div>`
         : `<label class="shipping-allocation-input-box"><span>今回の船便</span><div class="shipping-allocation-input-row"><input type="number" min="0" step="1" value="${item.currentAllocation > 0 ? item.currentAllocation : 0}" class="shipping-allocation-quantity" data-internal-code="${escapeShippingHtml(item.internalCode)}" data-recommended-quantity="${item.recommendedQuantity}" inputmode="numeric"><strong>個</strong></div><div class="shipping-allocation-recommended-row"><small>推奨 ${item.recommendedQuantity.toLocaleString("ja-JP")}個</small><button type="button" class="shipping-allocation-apply-recommended">推奨を入れる</button></div></label>`;
 
+      const seasonalMetricHtml = item.seasonalApplied
+        ? `<div class="shipping-allocation-metric shipping-allocation-metric-seasonal"><span>季節補正</span><strong>${escapeShippingHtml(item.seasonalSeasonIcon)} ${escapeShippingHtml(item.seasonalSeasonLabel)} ${Math.ceil(item.seasonalMonthlyAverage).toLocaleString("ja-JP")}個/月</strong><small>${item.seasonalDays.toLocaleString("ja-JP")}日分を${item.seasonalTrendType === "increase" ? "増加" : "減少"}補正</small></div>`
+        : "";
+
       card.innerHTML = `
         <div class="shipping-allocation-item-head">
           <div class="shipping-allocation-item-title">
@@ -1011,7 +1036,8 @@ function renderShippingAllocationTable() {
         </div>
         <div class="shipping-allocation-metrics">
           <div class="shipping-allocation-metric"><span>現在庫</span><strong>${item.currentStock.toLocaleString("ja-JP")}個</strong></div>
-          <div class="shipping-allocation-metric"><span>月平均販売数</span><strong>${item.monthlyAverage.toLocaleString("ja-JP")}個</strong></div>
+          <div class="shipping-allocation-metric"><span>基本月平均</span><strong>${item.monthlyAverage.toLocaleString("ja-JP")}個</strong></div>
+          ${seasonalMetricHtml}
           <div class="shipping-allocation-metric"><span>期間販売見込</span><strong>${item.periodSalesEstimate.toLocaleString("ja-JP")}個</strong></div>
           <div class="shipping-allocation-metric"><span>期間販売予定</span><strong>${formatShippingQuantity(item.plannedQuantity)}個</strong></div>
           <div class="shipping-allocation-metric"><span>前便振分済</span><strong>${item.priorAllocated.toLocaleString("ja-JP")}個</strong></div>
@@ -2308,6 +2334,13 @@ function printShippingAllocationList() {
         priorAllocated: computed ? computed.priorAllocated : "",
         requiredQuantity: computed ? computed.requiredQuantity : "",
         recommendedQuantity: computed ? computed.recommendedQuantity : "",
+        seasonalApplied: Boolean(computed && computed.seasonalApplied),
+        seasonalTrendType: computed ? computed.seasonalTrendType : "",
+        seasonalSeasonLabel: computed ? computed.seasonalSeasonLabel : "",
+        seasonalSeasonIcon: computed ? computed.seasonalSeasonIcon : "",
+        seasonalMonthlyAverage: computed ? computed.seasonalMonthlyAverage : "",
+        seasonalDays: computed ? computed.seasonalDays : 0,
+        isBackorder: Boolean(computed && computed.isBackorder),
         quantity: Number(allocation.quantity) || 0,
         location: product.location || ""
       };
@@ -2327,7 +2360,7 @@ function printShippingAllocationList() {
         <td>${index + 1}</td>
         <td>${escapeShippingHtml(row.internalCode)}</td>
         <td>${escapeShippingHtml(row.productCode || "-")}</td>
-        <td>${row.isBackorder ? '<span class="backorder-badge">注残</span> ' : ''}${escapeShippingHtml(row.productName)}</td>
+        <td>${row.isBackorder ? '<span class="backorder-badge">注残</span> ' : ''}${escapeShippingHtml(row.productName)}${row.seasonalApplied ? `<div class="seasonal-note">${escapeShippingHtml(row.seasonalSeasonIcon)} ${escapeShippingHtml(row.seasonalSeasonLabel)}補正 ${Math.ceil(Number(row.seasonalMonthlyAverage) || 0).toLocaleString("ja-JP")}個/月（${Number(row.seasonalDays || 0).toLocaleString("ja-JP")}日）</div>` : ""}</td>
         <td class="num">${formatShippingPrintNumber(row.monthlyAverage)}</td>
         <td class="num">${formatShippingPrintNumber(row.periodSalesEstimate)}</td>
         <td class="num">${formatShippingPrintNumber(row.plannedQuantity)}</td>
@@ -2362,6 +2395,7 @@ function printShippingAllocationList() {
   .strong { font-weight: 700; font-size: 8.8pt; }
   .backorder-row { background:#fff8d6; }
   .backorder-badge { display:inline-block; padding:1px 4px; border:1px solid #c79200; background:#f6c343; color:#4f3500; font-weight:700; border-radius:3px; }
+  .seasonal-note { margin-top:2px; color:#8a4b08; font-size:6.8pt; font-weight:700; }
   .total { margin-top: 7px; text-align: right; font-size: 10.5pt; font-weight: 700; }
   .footer { margin-top: 7px; font-size: 7.5pt; color: #444; }
 </style>
@@ -2380,8 +2414,8 @@ function printShippingAllocationList() {
   </div>
   <div class="period-banner">📦 ${escapeShippingHtml(formatShippingInventoryPeriodLabel(targetPeriod.startDate, targetPeriod.endDate))}</div>
   <div class="note">
-    月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の販売実績から「株式会社 後藤」「清水産業 株式会社」を除外した6か月平均。
-    期間販売見込＝月平均÷30日×対象日数（小数切り上げ）。
+    基本月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の販売実績から「株式会社 後藤」「清水産業 株式会社」を除外した6か月平均。<br>
+    季節補正：対象期間の前月まで直近${SHIPPING_SEASONAL_ANALYSIS_MONTHS}か月の季節変動を参照し、実績月が${SHIPPING_SEASONAL_MIN_HISTORY_MONTHS}か月以上ある商品は、該当季節の日数分だけ季節平均で補正します。<br>
     期間指定の販売予定は、対象期間と重なる日数分を按分して小数切り上げしています。
   </div>
   <table>
@@ -2919,6 +2953,116 @@ function printShippingWarehouseList() {
     try { printWindow.focus(); printWindow.print(); }
     finally { window.setTimeout(function () { iframe.remove(); }, 1500); }
   }, 300);
+}
+
+function buildShippingSeasonalAnalysisContext(targetPeriod) {
+  const empty = {
+    availableMonthCount: 0,
+    enoughHistory: false,
+    rowsByCode: new Map(),
+    startMonth: "",
+    endMonth: ""
+  };
+
+  if (!targetPeriod || !isShippingIsoDate(targetPeriod.startDate)) return empty;
+  const calculator = window.seasonalTrendCalculator;
+  if (!calculator || typeof calculator.analyze !== "function") return empty;
+
+  const anchorDate = new Date(`${targetPeriod.startDate}T12:00:00`);
+  if (Number.isNaN(anchorDate.getTime())) return empty;
+
+  try {
+    const analysis = calculator.analyze(
+      shippingScheduleProducts,
+      shippingScheduleSalesActuals,
+      anchorDate,
+      SHIPPING_SEASONAL_ANALYSIS_MONTHS
+    );
+    const monthKeys = Array.isArray(analysis && analysis.availableMonthKeys)
+      ? analysis.availableMonthKeys.slice().sort()
+      : [];
+    const rows = Array.isArray(analysis && analysis.rows) ? analysis.rows : [];
+    return {
+      availableMonthCount: monthKeys.length,
+      enoughHistory: monthKeys.length >= SHIPPING_SEASONAL_MIN_HISTORY_MONTHS,
+      rowsByCode: new Map(rows.map(function (row) {
+        return [String(row.internalCode || "").trim(), row];
+      })),
+      startMonth: monthKeys[0] || "",
+      endMonth: monthKeys[monthKeys.length - 1] || ""
+    };
+  } catch (error) {
+    console.warn("船積み季節補正の分析に失敗しました。通常の月平均で計算します。", error);
+    return empty;
+  }
+}
+
+function calculateShippingSeasonalPeriodEstimate(monthlyAverage, targetPeriod, seasonalRow, seasonalContext) {
+  const baseAverage = Math.max(0, Number(monthlyAverage) || 0);
+  const days = Math.max(0, Number(targetPeriod && targetPeriod.days) || 0);
+  const baseEstimate = Math.max(0, Math.ceil((baseAverage / 30) * days));
+  const fallback = {
+    applied: false,
+    periodSalesEstimate: baseEstimate,
+    trendType: "",
+    seasonKey: "",
+    seasonLabel: "",
+    seasonIcon: "",
+    seasonalMonthlyAverage: baseAverage,
+    seasonalDays: 0
+  };
+
+  if (!seasonalContext || !seasonalContext.enoughHistory || !seasonalRow) return fallback;
+  if (!isShippingIsoDate(targetPeriod.startDate) || !isShippingIsoDate(targetPeriod.endDate)) return fallback;
+
+  const calculator = window.seasonalTrendCalculator;
+  if (!calculator || typeof calculator.getSeasonForMonth !== "function") return fallback;
+
+  const start = parseShippingIsoDate(targetPeriod.startDate);
+  const end = parseShippingIsoDate(targetPeriod.endDate);
+  if (!start || !end) return fallback;
+
+  let seasonalDays = 0;
+  const cursor = new Date(start.getTime());
+  while (cursor.getTime() <= end.getTime()) {
+    const season = calculator.getSeasonForMonth(cursor.getUTCMonth() + 1);
+    if (season && season.key === seasonalRow.seasonKey) seasonalDays += 1;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  if (seasonalDays <= 0) return fallback;
+
+  const historicalSeasonAverage = Math.max(0, Number(seasonalRow.seasonAverage) || 0);
+  let seasonalMonthlyAverage = historicalSeasonAverage;
+  if (seasonalRow.trendType === "increase") {
+    seasonalMonthlyAverage = Math.max(baseAverage, historicalSeasonAverage);
+  } else if (seasonalRow.trendType === "decrease") {
+    seasonalMonthlyAverage = Math.min(baseAverage, historicalSeasonAverage);
+  } else {
+    return fallback;
+  }
+
+  const normalDays = Math.max(0, days - seasonalDays);
+  const adjustedEstimate = Math.max(
+    0,
+    Math.ceil(
+      (baseAverage / 30) * normalDays +
+      (seasonalMonthlyAverage / 30) * seasonalDays
+    )
+  );
+
+  // 補正しても数量が変わらない場合は、画面を煩雑にしないため「補正なし」として扱う。
+  if (adjustedEstimate === baseEstimate && seasonalMonthlyAverage === baseAverage) return fallback;
+
+  return {
+    applied: true,
+    periodSalesEstimate: adjustedEstimate,
+    trendType: String(seasonalRow.trendType || ""),
+    seasonKey: String(seasonalRow.seasonKey || ""),
+    seasonLabel: String(seasonalRow.seasonLabel || ""),
+    seasonIcon: String(seasonalRow.seasonIcon || ""),
+    seasonalMonthlyAverage: seasonalMonthlyAverage,
+    seasonalDays: seasonalDays
+  };
 }
 
 function buildShippingAverageContext(targetMonth) {
@@ -3542,8 +3686,10 @@ function createShippingScheduleStyle() {
     #shipping-schedule .shipping-allocation-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
     #shipping-schedule .shipping-allocation-metric { min-width: 0; padding: 10px 11px; border: 1px solid #dfe6eb; border-radius: 10px; background: #f4f7f9; }
     #shipping-schedule .shipping-allocation-metric-recommended { border-color: #90caf9; background: #edf6ff; }
+    #shipping-schedule .shipping-allocation-metric-seasonal { border-color: #f0b96a; background: #fff7e8; }
     #shipping-schedule .shipping-allocation-metric span { display: block; margin-bottom: 4px; color: #607d8b; font-size: 12px; font-weight: 700; }
     #shipping-schedule .shipping-allocation-metric strong { display: block; color: #263238; font-size: 17px; line-height: 1.25; overflow-wrap: anywhere; }
+    #shipping-schedule .shipping-allocation-metric small { display:block; margin-top:4px; color:#795548; font-size:11px; font-weight:700; line-height:1.35; }
     #shipping-schedule .shipping-manual-addition-box {
       margin: 10px 0 12px;
       padding: 8px;

@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v233
+            画面版 v234
           </span>
         </div>
       </div>
@@ -2245,7 +2245,7 @@
       <p>
         販売実績から、春・夏・秋・冬に出荷数量が増えやすい商品と減りやすい商品を確認します。<br>
         春＝3～5月、夏＝6～8月、秋＝9～11月、冬＝12～2月です。
-        「株式会社 後藤」「清水産業 株式会社」の販売実績は除外し、廃盤商品は対象外です。
+        「株式会社 後藤」「清水産業 株式会社」の販売実績は除外し、廃盤商品・専用商品は対象外です。廃盤予定は分析対象に含めます。
       </p>
 
       <div class="seasonal-trend-card">
@@ -2299,6 +2299,33 @@
           </div>
           <div>
             <button id="refresh-seasonal-trend-button" type="button">最新データで再計算</button>
+          </div>
+        </div>
+
+        <div class="seasonal-trend-sort-print-row">
+          <div>
+            <label for="seasonal-trend-sort-key">並べ替える項目</label>
+            <select id="seasonal-trend-sort-key">
+              <option value="strength" selected>変動の大きさ</option>
+              <option value="internalCode">社内コード</option>
+              <option value="productCode">商品コード</option>
+              <option value="productName">商品名</option>
+              <option value="season">変動時期</option>
+              <option value="normalAverage">通常月平均</option>
+              <option value="seasonAverage">季節平均</option>
+              <option value="changeRate">増減率</option>
+            </select>
+          </div>
+          <div>
+            <label for="seasonal-trend-sort-order">並び順</label>
+            <select id="seasonal-trend-sort-order">
+              <option value="asc">小さい・早い順</option>
+              <option value="desc" selected>大きい・遅い順</option>
+            </select>
+          </div>
+          <div class="seasonal-trend-print-box">
+            <span class="seasonal-trend-print-note">現在の検索・絞り込み・並べ替え結果をすべて印刷します。</span>
+            <button id="print-seasonal-trend-button" type="button">A4横で一覧を印刷</button>
           </div>
         </div>
 
@@ -4285,7 +4312,7 @@
 <script src="purchase-required.js?v=226"></script>
 <script src="order-remaining.js?v=120"></script>
 <script src="low-shipment.js?v=226"></script>
-<script src="seasonal-trend.js?v=233"></script>
+<script src="seasonal-trend.js?v=234"></script>
 <script src="shipping-schedule.js?v=229"></script>
 <script src="dedicated-product.js?v=215"></script>
 <script src="shipping-arrival.js?v=118"></script>

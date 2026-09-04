@@ -25,6 +25,9 @@ function initializeSeasonalTrendFeature() {
   const seasonFilter = document.querySelector("#seasonal-trend-season-filter");
   const periodSelect = document.querySelector("#seasonal-trend-period");
   const minAverageInput = document.querySelector("#seasonal-trend-min-average");
+  const sortKeySelect = document.querySelector("#seasonal-trend-sort-key");
+  const sortOrderSelect = document.querySelector("#seasonal-trend-sort-order");
+  const printButton = document.querySelector("#print-seasonal-trend-button");
   const prevButton = document.querySelector("#seasonal-trend-prev-page");
   const nextButton = document.querySelector("#seasonal-trend-next-page");
 
@@ -49,6 +52,30 @@ function initializeSeasonalTrendFeature() {
       renderSeasonalTrendTable();
     });
   });
+
+  if (sortKeySelect) {
+    sortKeySelect.addEventListener("change", function () {
+      const key = String(sortKeySelect.value || "strength");
+      if (sortOrderSelect) {
+        sortOrderSelect.value = ["internalCode", "productCode", "productName", "season"].includes(key)
+          ? "asc"
+          : "desc";
+      }
+      seasonalTrendCurrentPage = 1;
+      renderSeasonalTrendTable();
+    });
+  }
+
+  if (sortOrderSelect) {
+    sortOrderSelect.addEventListener("change", function () {
+      seasonalTrendCurrentPage = 1;
+      renderSeasonalTrendTable();
+    });
+  }
+
+  if (printButton) {
+    printButton.addEventListener("click", printSeasonalTrendList);
+  }
 
   if (periodSelect) {
     periodSelect.addEventListener("change", function () {
@@ -358,7 +385,7 @@ function getFilteredSeasonalTrendRows() {
   const season = String(document.querySelector("#seasonal-trend-season-filter")?.value || "all");
   const minAverage = Math.max(0, Number(document.querySelector("#seasonal-trend-min-average")?.value || 0));
 
-  return seasonalTrendRows.filter(function (row) {
+  const filtered = seasonalTrendRows.filter(function (row) {
     if (trendType !== "all" && row.trendType !== trendType) return false;
     if (season !== "all" && row.seasonKey !== season) return false;
     if (Math.max(row.seasonAverage, row.normalAverage) < minAverage) return false;
@@ -375,6 +402,58 @@ function getFilteredSeasonalTrendRows() {
     ].join(" "));
     return haystack.includes(search);
   });
+
+  return sortSeasonalTrendRows(filtered);
+}
+
+function sortSeasonalTrendRows(rows) {
+  const list = Array.isArray(rows) ? rows.slice() : [];
+  const key = String(document.querySelector("#seasonal-trend-sort-key")?.value || "strength");
+  const order = String(document.querySelector("#seasonal-trend-sort-order")?.value || "desc");
+  const direction = order === "asc" ? 1 : -1;
+  const seasonOrder = { spring: 1, summer: 2, autumn: 3, winter: 4 };
+
+  list.sort(function (a, b) {
+    let result = 0;
+
+    if (key === "internalCode") {
+      result = compareSeasonalTrendText(a.internalCode, b.internalCode);
+    } else if (key === "productCode") {
+      result = compareSeasonalTrendText(a.productCode, b.productCode);
+    } else if (key === "productName") {
+      result = compareSeasonalTrendText(a.productName, b.productName);
+    } else if (key === "season") {
+      result = Number(seasonOrder[a.seasonKey] || 99) - Number(seasonOrder[b.seasonKey] || 99);
+    } else if (key === "normalAverage") {
+      result = Number(a.normalAverage || 0) - Number(b.normalAverage || 0);
+    } else if (key === "seasonAverage") {
+      result = Number(a.seasonAverage || 0) - Number(b.seasonAverage || 0);
+    } else if (key === "changeRate") {
+      result = getSeasonalTrendSignedChange(a) - getSeasonalTrendSignedChange(b);
+    } else {
+      result = getSeasonalTrendStrength(a) - getSeasonalTrendStrength(b);
+    }
+
+    if (result === 0) {
+      result = compareSeasonalTrendText(a.productCode || a.internalCode, b.productCode || b.internalCode);
+    }
+    return result * direction;
+  });
+
+  return list;
+}
+
+function compareSeasonalTrendText(left, right) {
+  return String(left || "").localeCompare(String(right || ""), "ja", {
+    numeric: true,
+    sensitivity: "base"
+  });
+}
+
+function getSeasonalTrendSignedChange(row) {
+  const ratio = Number(row && row.ratio);
+  if (!Number.isFinite(ratio)) return Number.MAX_SAFE_INTEGER;
+  return (ratio - 1) * 100;
 }
 
 function renderSeasonalTrendSummary() {
@@ -468,6 +547,157 @@ function renderSeasonalTrendTable() {
   if (status) status.textContent = `${seasonalTrendCurrentPage} / ${pages}ページ`;
   if (prev) prev.disabled = seasonalTrendCurrentPage <= 1;
   if (next) next.disabled = seasonalTrendCurrentPage >= pages;
+}
+
+async function printSeasonalTrendList() {
+  const rows = getFilteredSeasonalTrendRows();
+  if (rows.length === 0) {
+    if (typeof showAppDialog === "function") {
+      await showAppDialog({
+        type: "warning",
+        icon: "🖨️",
+        title: "印刷する商品がありません",
+        message: "現在の検索・絞り込み条件に該当する季節変動商品がありません。",
+        confirmText: "確認して閉じる"
+      });
+    } else {
+      alert("現在の条件では印刷する商品がありません。");
+    }
+    return;
+  }
+
+  const printWindow = window.open("", "_blank", "width=1300,height=900");
+  if (!printWindow) {
+    if (typeof showAppDialog === "function") {
+      await showAppDialog({
+        type: "warning",
+        icon: "⚠️",
+        title: "印刷画面を開けませんでした",
+        message: "ブラウザのポップアップがブロックされている可能性があります。ポップアップを許可して、もう一度お試しください。",
+        confirmText: "確認して閉じる"
+      });
+    }
+    return;
+  }
+
+  const months = seasonalTrendContext && Array.isArray(seasonalTrendContext.availableMonthKeys)
+    ? seasonalTrendContext.availableMonthKeys
+    : [];
+  const rangeText = months.length > 0
+    ? `${formatSeasonalTrendMonth(months[0])} ～ ${formatSeasonalTrendMonth(months[months.length - 1])}`
+    : "販売実績なし";
+  const trendText = getSeasonalTrendSelectedText("#seasonal-trend-type-filter", "すべて");
+  const seasonText = getSeasonalTrendSelectedText("#seasonal-trend-season-filter", "すべて");
+  const periodText = getSeasonalTrendSelectedText("#seasonal-trend-period", "-");
+  const sortText = getSeasonalTrendSelectedText("#seasonal-trend-sort-key", "変動の大きさ");
+  const orderText = getSeasonalTrendSelectedText("#seasonal-trend-sort-order", "-");
+  const searchText = String(document.querySelector("#seasonal-trend-search")?.value || "").trim();
+  const minAverage = Math.max(0, Number(document.querySelector("#seasonal-trend-min-average")?.value || 0));
+  const printedAt = new Date().toLocaleString("ja-JP");
+
+  const rowHtml = rows.map(function (row, index) {
+    return `
+      <tr class="${row.trendType === "increase" ? "increase" : "decrease"}">
+        <td class="center">${index + 1}</td>
+        <td class="center"><strong>${row.trendType === "increase" ? "増加" : "減少"}</strong></td>
+        <td>${escapeSeasonalTrendHtml(row.internalCode)}</td>
+        <td>${escapeSeasonalTrendHtml(row.productCode || "-")}</td>
+        <td class="product-name">
+          <strong>${escapeSeasonalTrendHtml(row.productName || "-")}</strong>
+          ${row.lifecycleStatus === "廃盤予定" ? '<span class="planned">廃盤予定</span>' : ''}
+        </td>
+        <td class="center">${escapeSeasonalTrendHtml(`${row.seasonIcon} ${row.seasonLabel}`)}</td>
+        <td class="number">${formatSeasonalTrendAverage(row.normalAverage)}個/月</td>
+        <td class="number"><strong>${formatSeasonalTrendAverage(row.seasonAverage)}個/月</strong></td>
+        <td class="number">${escapeSeasonalTrendHtml(getSeasonalTrendChangeText(row))}</td>
+        <td class="center">${row.seasonMonthCount}か月 / 比較${row.comparisonMonthCount}か月</td>
+      </tr>
+    `;
+  }).join("");
+
+  printWindow.document.open();
+  printWindow.document.write(`<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>季節変動商品一覧</title>
+<style>
+  @page { size: A4 landscape; margin: 8mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Yu Gothic", "Meiryo", sans-serif; margin: 0; color: #111; font-size: 10px; }
+  h1 { text-align: center; font-size: 20px; margin: 0 0 8px; }
+  .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 6px; }
+  .summary div { border: 1px solid #777; padding: 5px 7px; min-height: 30px; }
+  .note { border: 1px solid #777; padding: 5px 7px; margin-bottom: 7px; line-height: 1.45; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  th, td { border: 1px solid #666; padding: 4px 4px; vertical-align: middle; overflow-wrap: anywhere; }
+  th { background: #e7eef5; font-weight: 700; }
+  th:nth-child(1) { width: 4%; }
+  th:nth-child(2) { width: 6%; }
+  th:nth-child(3) { width: 8%; }
+  th:nth-child(4) { width: 10%; }
+  th:nth-child(5) { width: 23%; }
+  th:nth-child(6) { width: 8%; }
+  th:nth-child(7), th:nth-child(8) { width: 10%; }
+  th:nth-child(9) { width: 9%; }
+  th:nth-child(10) { width: 12%; }
+  .center { text-align: center; }
+  .number { text-align: right; white-space: nowrap; }
+  .product-name { font-size: 10px; }
+  .planned { display: inline-block; margin-left: 5px; border: 1px solid #b7791f; border-radius: 10px; padding: 1px 5px; font-size: 8px; }
+  .increase td:nth-child(2), .increase td:nth-child(9) { font-weight: 700; }
+  .decrease td:nth-child(2), .decrease td:nth-child(9) { font-weight: 700; }
+  .footer { text-align: right; margin-top: 4px; font-size: 8px; }
+</style>
+</head>
+<body>
+  <h1>季節変動商品一覧</h1>
+  <div class="summary">
+    <div><strong>印刷件数：</strong>${rows.length.toLocaleString("ja-JP")}商品</div>
+    <div><strong>分析対象：</strong>${escapeSeasonalTrendHtml(rangeText)}</div>
+    <div><strong>分析期間：</strong>${escapeSeasonalTrendHtml(periodText)}</div>
+    <div><strong>印刷日時：</strong>${escapeSeasonalTrendHtml(printedAt)}</div>
+  </div>
+  <div class="note">
+    <strong>現在の条件：</strong>
+    検索「${escapeSeasonalTrendHtml(searchText || "指定なし") }」 / 増減「${escapeSeasonalTrendHtml(trendText)}」 / 季節「${escapeSeasonalTrendHtml(seasonText)}」 /
+    最低月平均 ${minAverage.toLocaleString("ja-JP")}個 / 並べ替え「${escapeSeasonalTrendHtml(sortText)}・${escapeSeasonalTrendHtml(orderText)}」<br>
+    後藤・清水産業の実績は除外。廃盤商品・専用商品は対象外。廃盤予定は分析対象に含めます。
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>No.</th><th>判定</th><th>社内コード</th><th>商品コード</th><th>商品名</th>
+        <th>変動時期</th><th>通常月平均</th><th>季節平均</th><th>増減率</th><th>データ月数</th>
+      </tr>
+    </thead>
+    <tbody>${rowHtml}</tbody>
+  </table>
+  <div class="footer">季節変動商品一覧</div>
+  <script>setTimeout(function(){ window.print(); }, 250);<\/script>
+</body>
+</html>`);
+  printWindow.document.close();
+}
+
+function getSeasonalTrendSelectedText(selector, fallback) {
+  const select = document.querySelector(selector);
+  if (!select) return fallback;
+  const option = select.options && select.options[select.selectedIndex];
+  return String(option && option.textContent || fallback || "").trim();
+}
+
+function getSeasonalTrendChangeText(row) {
+  if (row && row.trendType === "increase" && !Number.isFinite(row.ratio)) {
+    return "通常0 → 増加";
+  }
+  const rate = (Number(row && row.ratio || 0) - 1) * 100;
+  const rounded = Math.round(Math.abs(rate));
+  return row && row.trendType === "increase"
+    ? `+${rounded.toLocaleString("ja-JP")}%`
+    : `-${rounded.toLocaleString("ja-JP")}%`;
 }
 
 function getSeasonalTrendTotalPages() {
@@ -703,11 +933,53 @@ function createSeasonalTrendStyle() {
       gap: 14px;
       margin-top: 14px;
     }
+    #seasonal-trend .seasonal-trend-sort-print-row {
+      display: grid;
+      grid-template-columns: minmax(180px, .8fr) minmax(160px, .7fr) minmax(320px, 1.7fr);
+      gap: 10px;
+      align-items: end;
+      margin: 14px 0 8px;
+      padding: 12px;
+      background: #f3f8fc;
+      border: 1px solid #cbd9e5;
+      border-radius: 10px;
+    }
+    #seasonal-trend .seasonal-trend-sort-print-row label {
+      display: block;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    #seasonal-trend .seasonal-trend-sort-print-row select {
+      width: 100%;
+    }
+    #seasonal-trend .seasonal-trend-print-box {
+      display: flex;
+      align-items: end;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    #seasonal-trend .seasonal-trend-print-note {
+      flex: 1;
+      color: #455a64;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    #seasonal-trend #print-seasonal-trend-button {
+      min-width: 180px;
+      white-space: nowrap;
+      background: #455a64;
+    }
     @media (max-width: 900px) {
       #seasonal-trend .seasonal-trend-filter-grid {
         grid-template-columns: 1fr 1fr;
       }
       #seasonal-trend .seasonal-trend-filter-grid > div:first-child {
+        grid-column: 1 / -1;
+      }
+      #seasonal-trend .seasonal-trend-sort-print-row {
+        grid-template-columns: 1fr 1fr;
+      }
+      #seasonal-trend .seasonal-trend-print-box {
         grid-column: 1 / -1;
       }
       #seasonal-trend .seasonal-trend-filter-grid button,
@@ -721,6 +993,17 @@ function createSeasonalTrendStyle() {
       }
       #seasonal-trend .seasonal-trend-filter-grid > div:first-child {
         grid-column: auto;
+      }
+      #seasonal-trend .seasonal-trend-sort-print-row {
+        grid-template-columns: 1fr;
+      }
+      #seasonal-trend .seasonal-trend-print-box {
+        grid-column: auto;
+        flex-direction: column;
+        align-items: stretch;
+      }
+      #seasonal-trend #print-seasonal-trend-button {
+        width: 100%;
       }
     }
   `;

@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v229
+            画面版 v230
           </span>
         </div>
       </div>
@@ -365,7 +365,15 @@
             >
               出荷低迷商品の一覧
             </button>
-<button
+
+            <button
+              id="show-seasonal-trend-button"
+              type="button"
+            >
+              季節変動商品一覧
+            </button>
+
+            <button
               id="show-shipping-schedule-button"
               type="button"
             >
@@ -732,6 +740,7 @@
               <li>「通常出荷数量を見る」を開くと、前月までの直近6か月を集計します。</li>
               <li>通常出荷数量の表示はこれまでどおり販売予定との照合結果を確認できます。</li>
               <li>発注判定・出荷低迷・船積・ホーム検索の月平均は、「株式会社 後藤」「清水産業 株式会社」の販売実績を除外して6か月平均を計算します。</li>
+              <li>「季節変動商品一覧」では、春・夏・秋・冬ごとの月平均を比較し、増えやすい商品・減りやすい商品を確認できます。</li>
             </ol>
             <p class="manual-note">出荷済みの販売予定を削除すると照合できなくなるため、基本的に履歴として残します。</p>
           </div>
@@ -2174,6 +2183,105 @@
       </div>
 
       <button id="back-home-from-low-shipment" type="button">ホームへ戻る</button>
+    </section>
+
+
+    <!-- 季節変動商品一覧 -->
+    <section id="seasonal-trend" hidden>
+      <h2>季節変動商品一覧</h2>
+
+      <p>
+        販売実績から、春・夏・秋・冬に出荷数量が増えやすい商品と減りやすい商品を確認します。<br>
+        春＝3～5月、夏＝6～8月、秋＝9～11月、冬＝12～2月です。
+        「株式会社 後藤」「清水産業 株式会社」の販売実績は除外し、廃盤商品は対象外です。
+      </p>
+
+      <div class="seasonal-trend-card">
+        <div id="seasonal-trend-summary" class="seasonal-trend-summary">
+          季節変動を分析します。
+        </div>
+        <div id="seasonal-trend-coverage" class="seasonal-trend-coverage"></div>
+        <div class="seasonal-trend-rule">
+          <strong>判定ルール</strong><br>
+          季節平均が、その季節以外の月平均の <strong>1.5倍以上</strong> → 「増加」。<br>
+          季節平均が、その季節以外の月平均の <strong>0.7倍以下</strong> → 「減少」。<br>
+          季節側2か月以上・比較側2か月以上のデータがある場合に判定します。
+        </div>
+      </div>
+
+      <div id="seasonal-trend-list-area" class="seasonal-trend-card">
+        <div class="seasonal-trend-filter-grid">
+          <div>
+            <label for="seasonal-trend-search">商品を検索</label>
+            <input id="seasonal-trend-search" type="search" placeholder="社内コード・商品コード・商品名・保管場所">
+          </div>
+          <div>
+            <label for="seasonal-trend-type-filter">増減で絞り込み</label>
+            <select id="seasonal-trend-type-filter">
+              <option value="all">すべて</option>
+              <option value="increase">増える商品</option>
+              <option value="decrease">減る商品</option>
+            </select>
+          </div>
+          <div>
+            <label for="seasonal-trend-season-filter">季節で絞り込み</label>
+            <select id="seasonal-trend-season-filter">
+              <option value="all">すべて</option>
+              <option value="spring">春（3～5月）</option>
+              <option value="summer">夏（6～8月）</option>
+              <option value="autumn">秋（9～11月）</option>
+              <option value="winter">冬（12～2月）</option>
+            </select>
+          </div>
+          <div>
+            <label for="seasonal-trend-period">分析期間</label>
+            <select id="seasonal-trend-period">
+              <option value="12">直近12か月</option>
+              <option value="24" selected>直近24か月</option>
+              <option value="36">直近36か月</option>
+            </select>
+          </div>
+          <div>
+            <label for="seasonal-trend-min-average">最低月平均</label>
+            <input id="seasonal-trend-min-average" type="number" min="0" step="1" value="10">
+          </div>
+          <div>
+            <button id="refresh-seasonal-trend-button" type="button">最新データで再計算</button>
+          </div>
+        </div>
+
+        <p>
+          <strong id="seasonal-trend-filter-count">表示：0件</strong>
+          <small>　※「最低月平均」は少量商品の偶然の増減を除くための目安です。0にすると全候補を表示します。</small>
+        </p>
+
+        <div class="seasonal-trend-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>判定</th>
+                <th>社内コード</th>
+                <th>商品コード</th>
+                <th>商品名</th>
+                <th>変動時期</th>
+                <th>通常月平均</th>
+                <th>季節平均</th>
+                <th>増減率</th>
+                <th>データ月数</th>
+              </tr>
+            </thead>
+            <tbody id="seasonal-trend-table-body"></tbody>
+          </table>
+        </div>
+
+        <div class="seasonal-trend-pager">
+          <button id="seasonal-trend-prev-page" type="button">前へ</button>
+          <strong id="seasonal-trend-page-status">1 / 1ページ</strong>
+          <button id="seasonal-trend-next-page" type="button">次へ</button>
+        </div>
+      </div>
+
+      <button id="back-home-from-seasonal-trend" type="button">ホームへ戻る</button>
     </section>
 
 
@@ -4125,6 +4233,7 @@
 <script src="purchase-required.js?v=226"></script>
 <script src="order-remaining.js?v=120"></script>
 <script src="low-shipment.js?v=226"></script>
+<script src="seasonal-trend.js?v=230"></script>
 <script src="shipping-schedule.js?v=229"></script>
 <script src="dedicated-product.js?v=215"></script>
 <script src="shipping-arrival.js?v=118"></script>
@@ -4135,7 +4244,7 @@
 <script src="processing-sheet.js?v=211"></script>
 <script src="processing-conversion.js?v=213"></script>
 <script src="home-dashboard.js?v=125"></script>
-<script src="app-settings.js?v=212"></script>
+<script src="app-settings.js?v=230"></script>
 <script src="home-alerts.js?v=222"></script>
 </body>
 </html>

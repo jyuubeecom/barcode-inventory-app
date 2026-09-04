@@ -30,6 +30,7 @@
     "show-sales-plan-list-button",
     "show-purchase-required-button",
     "show-low-shipment-button",
+    "show-seasonal-trend-button",
     "show-stocktaking-history-button",
     "show-manual-button"
   ]);

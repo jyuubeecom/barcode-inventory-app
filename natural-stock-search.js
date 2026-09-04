@@ -608,7 +608,8 @@ function calculateNaturalMonthlyAverage(
   const monthlyRows = displayContext.monthKeys.map(function (monthKey) {
     return {
       monthKey: monthKey,
-      quantity: displayGrossTotals.get(monthKey) || 0,
+      // v239: 月別表示も月平均と同じ条件（後藤・清水産業を除外）で表示する
+      quantity: displayTargetTotals.get(monthKey) || 0,
       totalShipment: displayGrossTotals.get(monthKey) || 0,
       averageTargetShipment: displayTargetTotals.get(monthKey) || 0,
       excludedCustomerShipment: displayExcludedTotals.get(monthKey) || 0,
@@ -836,7 +837,7 @@ function renderNaturalMonthlyAverageAnswer(
     document.createElement("h4");
 
   breakdownTitle.textContent =
-    "月別販売数（前月までの直近1年）";
+    "月別販売数（後藤・清水産業を除外／前月までの直近1年）";
 
   breakdown.appendChild(
     breakdownTitle
@@ -884,7 +885,7 @@ function renderNaturalMonthlyAverageAnswer(
     "natural-monthly-average-note";
 
   note.textContent =
-    "計算方法：前月までの直近6か月の販売実績から「株式会社 後藤」「清水産業 株式会社」の実績を除外し、残った数量 ÷ 6（端数切り上げ）です。返品は販売実績のマイナス数量として差し引きます。";
+    "計算方法：前月までの直近6か月の販売実績から「株式会社 後藤」「清水産業 株式会社」の実績を除外し、残った数量 ÷ 6（端数切り上げ）です。下の月別販売数も同じ2社を除外した数量です。返品は販売実績のマイナス数量として差し引きます。";
 
   if (
     calculation.excludedCount > 0

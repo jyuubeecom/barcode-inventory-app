@@ -328,6 +328,7 @@ function createSeasonalTrendRow(product, candidate, trendType) {
     productCode: String(product && product.productCode || ""),
     productName: String(product && product.productName || ""),
     location: String(product && product.location || ""),
+    lifecycleStatus: getSeasonalTrendLifecycleStatus(product),
     trendType: trendType,
     seasonKey: candidate.seasonKey,
     seasonLabel: candidate.seasonLabel,
@@ -368,6 +369,7 @@ function getFilteredSeasonalTrendRows() {
       row.productCode,
       row.productName,
       row.location,
+      row.lifecycleStatus,
       row.seasonLabel,
       row.trendType === "increase" ? "増加 増える" : "減少 減る 少なく"
     ].join(" "));
@@ -406,7 +408,8 @@ function renderSeasonalTrendSummary() {
     : "seasonal-trend-coverage seasonal-trend-coverage-warning";
   coverage.innerHTML = `
     分析対象：<strong>${escapeSeasonalTrendHtml(first)} ～ ${escapeSeasonalTrendHtml(last)}</strong> のうち販売実績がある ${months.length}か月。<br>
-    「株式会社 後藤」「清水産業 株式会社」は除外し、返品は同月の販売数量から差し引きます。
+    「株式会社 後藤」「清水産業 株式会社」は除外し、返品は同月の販売数量から差し引きます。<br>
+    廃盤商品は一覧から除外し、<strong>廃盤予定の商品は「廃盤予定」バッジを付けて分析対象に含めます。</strong>
     ${months.length < 9 ? " データ月数が少ないため、現在の判定は参考値として確認してください。" : ""}
   `;
 }
@@ -447,7 +450,10 @@ function renderSeasonalTrendTable() {
         <td><span class="seasonal-trend-badge ${row.trendType}">${row.trendType === "increase" ? "増加" : "減少"}</span></td>
         <td>${escapeSeasonalTrendHtml(row.internalCode)}</td>
         <td>${escapeSeasonalTrendHtml(row.productCode || "-")}</td>
-        <td class="seasonal-trend-product-name">${escapeSeasonalTrendHtml(row.productName || "-")}</td>
+        <td class="seasonal-trend-product-name">
+          <div>${escapeSeasonalTrendHtml(row.productName || "-")}</div>
+          ${row.lifecycleStatus === "廃盤予定" ? '<span class="seasonal-trend-lifecycle-badge planned">廃盤予定</span>' : ''}
+        </td>
         <td><strong>${escapeSeasonalTrendHtml(`${row.seasonIcon} ${row.seasonLabel}`)}</strong></td>
         <td class="number">${formatSeasonalTrendAverage(row.normalAverage)}個/月</td>
         <td class="number"><strong>${formatSeasonalTrendAverage(row.seasonAverage)}個/月</strong></td>
@@ -490,12 +496,19 @@ function isSeasonalTrendExcludedCustomer(value) {
   return normalized === "後藤" || normalized === "清水産業";
 }
 
-function isSeasonalTrendDiscontinuedProduct(product) {
+function getSeasonalTrendLifecycleStatus(product) {
   if (typeof getProductLifecycleStatus === "function") {
-    return getProductLifecycleStatus(product) === "廃盤";
+    const status = String(getProductLifecycleStatus(product) || "").normalize("NFKC").trim();
+    if (status) return status;
   }
+
   const status = String(product && product.productStatus || "").normalize("NFKC").trim();
-  return status === "廃盤" || Boolean(product && product.discontinued === true);
+  if (status) return status;
+  return Boolean(product && product.discontinued === true) ? "廃盤" : "通常商品";
+}
+
+function isSeasonalTrendDiscontinuedProduct(product) {
+  return getSeasonalTrendLifecycleStatus(product) === "廃盤";
 }
 
 function formatSeasonalTrendChange(row) {
@@ -635,6 +648,20 @@ function createSeasonalTrendStyle() {
     #seasonal-trend .seasonal-trend-product-name {
       min-width: 190px;
       font-weight: 700;
+    }
+    #seasonal-trend .seasonal-trend-lifecycle-badge {
+      display: inline-block;
+      margin-top: 6px;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    #seasonal-trend .seasonal-trend-lifecycle-badge.planned {
+      background: #fff3cd;
+      border: 1px solid #f0ad4e;
+      color: #8a4b00;
     }
     #seasonal-trend .seasonal-trend-row-increase {
       background: #fff8ee;

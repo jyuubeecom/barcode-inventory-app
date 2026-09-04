@@ -855,6 +855,7 @@ function renderShippingAllocationTable() {
   const list = document.querySelector("#shipping-allocation-card-list");
   const summary = document.querySelector("#shipping-allocation-summary");
   const info = document.querySelector("#shipping-allocation-schedule-info");
+  const inventoryPeriod = document.querySelector("#shipping-allocation-inventory-period");
   const pageStatus = document.querySelector("#shipping-allocation-page-status");
   const prev = document.querySelector("#shipping-allocation-prev-page");
   const next = document.querySelector("#shipping-allocation-next-page");
@@ -869,6 +870,7 @@ function renderShippingAllocationTable() {
   if (!schedule) {
     summary.textContent = "船便を選択すると、今回の倉庫到着日から次便の倉庫到着日前日までを自動計算します。";
     if (info) info.textContent = "";
+    if (inventoryPeriod) { inventoryPeriod.hidden = true; inventoryPeriod.textContent = ""; }
     if (saveButton) { saveButton.disabled = true; saveButton.hidden = false; }
     if (readOnlyMessage) readOnlyMessage.hidden = true;
     if (printButton) printButton.disabled = true;
@@ -910,6 +912,7 @@ function renderShippingAllocationTable() {
         `<span class="shipping-target-warning">次の船便が未登録のため、対象期間を確定できません。</span>`;
     }
     summary.textContent = "次の船便の倉庫到着日を登録すると、不足数量を自動計算できます。";
+    if (inventoryPeriod) { inventoryPeriod.hidden = true; inventoryPeriod.textContent = ""; }
     const message = document.createElement("div");
     message.className = "shipping-allocation-empty";
     message.textContent = "次の船便が未登録です。先に次便のスケジュールを登録してください。";
@@ -937,6 +940,11 @@ function renderShippingAllocationTable() {
         : (scheduleConfirmed
           ? `<br><span class="shipping-confirmed-note">この船便は船積内容を確定済みです。数量を変更する場合は、船便一覧で「確定を解除」してください。</span>`
           : `<br><span class="shipping-unconfirmed-note">船積数量を確認したら、船便一覧の「船積内容を確定」を押してください。未確定の船便は自動入荷されません。</span>`));
+  }
+
+  if (inventoryPeriod) {
+    inventoryPeriod.textContent = `📦 ${formatShippingInventoryPeriodLabel(targetPeriod.startDate, targetPeriod.endDate)}`;
+    inventoryPeriod.hidden = false;
   }
 
   const allRows = getShippingCandidateAllocationRows(schedule);
@@ -2344,6 +2352,7 @@ function printShippingAllocationList() {
   h1 { margin: 0 0 7px; font-size: 16pt; }
   .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px 10px; margin-bottom: 8px; }
   .meta div { border-bottom: 1px solid #aaa; padding: 3px 0; }
+  .period-banner { margin: 7px 0 8px; padding: 6px 10px; border: 2px solid #1976d2; background: #e3f2fd; color: #0d47a1; font-size: 13pt; font-weight: 800; text-align: center; }
   .note { margin: 7px 0 9px; padding: 5px 7px; background: #f3f4f6; font-size: 8.5pt; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   th, td { border: 1px solid #777; padding: 3px 4px; vertical-align: middle; word-break: break-word; }
@@ -2369,6 +2378,7 @@ function printShippingAllocationList() {
     <div><strong>次便：</strong>${escapeShippingHtml(targetPeriod.nextSchedule.name)}</div>
     <div><strong>次便倉庫到着：</strong>${escapeShippingHtml(formatShippingDate(targetPeriod.nextSchedule.warehouseArrivalDate))}</div>
   </div>
+  <div class="period-banner">📦 ${escapeShippingHtml(formatShippingInventoryPeriodLabel(targetPeriod.startDate, targetPeriod.endDate))}</div>
   <div class="note">
     月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の販売実績から「株式会社 後藤」「清水産業 株式会社」を除外した6か月平均。
     期間販売見込＝月平均÷30日×対象日数（小数切り上げ）。
@@ -3218,6 +3228,25 @@ function formatShippingDate(value) {
   return `${Number(parts[0])}/${Number(parts[1])}/${Number(parts[2])}`;
 }
 
+function formatShippingInventoryPeriodLabel(startDate, endDate) {
+  const startMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(startDate || ""));
+  const endMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(endDate || ""));
+  if (!startMatch || !endMatch) return "在庫対象期間を確認できません";
+
+  const startYear = Number(startMatch[1]);
+  const startMonth = Number(startMatch[2]);
+  const startDay = Number(startMatch[3]);
+  const endYear = Number(endMatch[1]);
+  const endMonth = Number(endMatch[2]);
+  const endDay = Number(endMatch[3]);
+
+  if (startYear === endYear) {
+    return `${startMonth}月${startDay}日から${endMonth}月${endDay}日在庫分`;
+  }
+
+  return `${startYear}年${startMonth}月${startDay}日から${endYear}年${endMonth}月${endDay}日在庫分`;
+}
+
 function formatShippingMonth(value) {
   const match = /^(\d{4})-(\d{2})$/.exec(String(value || ""));
   if (!match) return value || "";
@@ -3381,6 +3410,18 @@ function createShippingScheduleStyle() {
     #shipping-schedule .shipping-target-warning {
       color: #c62828;
       font-weight: 700;
+    }
+    #shipping-schedule .shipping-inventory-period {
+      margin: 12px 0 14px;
+      padding: 13px 16px;
+      border: 2px solid #1976d2;
+      border-radius: 10px;
+      background: #e3f2fd;
+      color: #0d47a1;
+      font-size: 19px;
+      font-weight: 900;
+      line-height: 1.4;
+      text-align: center;
     }
     #shipping-schedule .shipping-allocation-note {
       margin: 10px 0;

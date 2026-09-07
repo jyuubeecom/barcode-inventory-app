@@ -75,7 +75,9 @@
           <div class="single-check-search-row">
             <input id="single-check-search" type="search" autocomplete="off" placeholder="社内コード・商品コード・JANコード・商品名で検索">
             <button id="single-check-search-button" type="button">商品を検索</button>
+            <button id="single-check-camera-button" type="button" class="single-check-camera">📷 バーコードを読み取る</button>
           </div>
+          <p class="single-check-scan-help">JANコードまたは社内コードのバーコードをカメラで読み取れます。読み取れない場合は、今までどおり手入力検索を使えます。</p>
           <p id="single-check-search-status" class="single-check-status" aria-live="polite">商品を検索してください。</p>
           <div id="single-check-candidates" class="single-check-candidates" hidden></div>
         </section>
@@ -153,6 +155,7 @@
 
     section.querySelector("#single-check-back-home").addEventListener("click", closeSingleStockCheck);
     section.querySelector("#single-check-search-button").addEventListener("click", runProductSearch);
+    section.querySelector("#single-check-camera-button").addEventListener("click", openSingleCheckScanner);
     section.querySelector("#single-check-search").addEventListener("keydown", function (event) {
       if (event.key === "Enter") {
         event.preventDefault();
@@ -222,6 +225,141 @@
     document.querySelectorAll("main > section").forEach(function (section) {
       section.hidden = true;
     });
+  }
+
+  function openSingleCheckScanner() {
+    if (window.barcodeScanner && typeof window.barcodeScanner.openForSingleStockCheck === "function") {
+      window.barcodeScanner.openForSingleStockCheck();
+      return;
+    }
+
+    void showDialog({
+      type: "warning",
+      icon: "📷",
+      title: "バーコード読み取りを起動できません",
+      message: "バーコード読み取り機能を準備できませんでした。",
+      notice: "画面を更新してもう一度お試しいただくか、社内コード・商品コード・JANコード・商品名で検索してください。",
+      confirmText: "閉じる"
+    });
+  }
+
+  async function handleSingleCheckScannedBarcode(barcodeValue) {
+    const barcode = normalizeSearchText(barcodeValue);
+
+    if (!barcode) {
+      return {
+        success: false,
+        reason: "invalid",
+        message: "バーコード番号を確認できませんでした。",
+        manualMessage: "バーコードを読み取れなかったため、手入力検索へ切り替えました。社内コード・商品コード・JANコード・商品名で検索してください。"
+      };
+    }
+
+    if (!allProducts.length) {
+      try {
+        allProducts = typeof getAllProducts === "function" ? await getAllProducts() : [];
+        allProducts = Array.isArray(allProducts) ? allProducts : [];
+      } catch (error) {
+        console.error(error);
+        return {
+          success: false,
+          reason: "load-error",
+          message: "商品データを読み込めませんでした。",
+          manualMessage: "商品データを読み込めなかったため、手入力検索へ戻りました。画面を更新してもう一度お試しください。"
+        };
+      }
+    }
+
+    const internalMatches = allProducts.filter(function (product) {
+      return normalizeSearchText(product.internalCode) === barcode;
+    });
+
+    let matches = internalMatches;
+    let matchedCodeType = "社内コード";
+
+    if (matches.length === 0) {
+      matches = allProducts.filter(function (product) {
+        const jan = normalizeSearchText(product.janCode);
+        return jan !== "" && jan === barcode;
+      });
+      matchedCodeType = "JANコード";
+    }
+
+    if (matches.length === 0) {
+      matches = allProducts.filter(function (product) {
+        const productCode = normalizeSearchText(product.productCode);
+        return productCode !== "" && productCode === barcode;
+      });
+      matchedCodeType = "商品コード";
+    }
+
+    if (matches.length === 0) {
+      return {
+        success: false,
+        reason: "not-found",
+        message: `読み取ったコード「${barcodeValue}」に一致する登録商品が見つかりませんでした。`,
+        manualMessage: "バーコードで商品を特定できなかったため、手入力検索へ切り替えました。社内コード・商品コード・JANコード・商品名で検索してください。"
+      };
+    }
+
+    if (matches.length > 1) {
+      return {
+        success: false,
+        reason: "duplicate",
+        message: `同じ${matchedCodeType}の商品が${matches.length}件あります。自動で1商品に決められません。`,
+        manualMessage: "同じコードの商品が複数あります。商品名・社内コード・商品コードで検索して、確認する商品を選んでください。"
+      };
+    }
+
+    returnFromSingleCheckScanner(false);
+
+    const input = document.querySelector("#single-check-search");
+    if (input) input.value = String(barcodeValue || "");
+
+    selectProduct(matches[0]);
+
+    const status = document.querySelector("#single-check-search-status");
+    if (status) {
+      status.textContent = `読み取り成功：${matches[0].productName || "商品名未登録"}（${matchedCodeType}：${barcodeValue}）`;
+    }
+
+    const panel = document.querySelector("#single-check-product-panel");
+    if (panel) {
+      window.setTimeout(function () {
+        panel.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+    }
+
+    return {
+      success: true,
+      product: matches[0],
+      matchedCodeType: matchedCodeType
+    };
+  }
+
+  function returnFromSingleCheckScanner(focusSearch, manualMessage) {
+    hideAllMainSections();
+
+    const screen = document.querySelector(`#${SCREEN_ID}`);
+    if (!screen) return;
+    screen.hidden = false;
+
+    const search = document.querySelector("#single-check-search");
+    const status = document.querySelector("#single-check-search-status");
+
+    if (focusSearch) {
+      if (search) {
+        search.value = "";
+        window.setTimeout(function () { search.focus(); }, 100);
+      }
+      if (status) {
+        status.textContent = manualMessage || "社内コード・商品コード・JANコード・商品名で検索してください。";
+      }
+    }
+
+    window.setTimeout(function () {
+      screen.scrollIntoView({ behavior: "auto", block: "start" });
+    }, 30);
   }
 
   async function runProductSearch() {
@@ -758,7 +896,11 @@
       .single-check-notice { display:grid; gap:6px; padding:14px 16px; border-left:5px solid #ef8a00; background:#fff6e6; border-radius:8px; margin-bottom:18px; line-height:1.7; }
       .single-check-panel { border:1px solid #b9d9f6; border-radius:12px; padding:18px; margin-top:16px; }
       .single-check-panel h3 { margin:0 0 14px; color:#183a59; }
-      .single-check-search-row { display:grid; grid-template-columns:1fr auto; gap:10px; }
+      .single-check-search-row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:10px; align-items:center; }
+      .single-check-search-row input { min-width:0; }
+      .single-check-camera { background:#0277bd; color:#fff; border:0; border-radius:8px; padding:12px 16px; font-weight:800; white-space:nowrap; }
+      .single-check-scan-help { margin:10px 0 0; color:#546e7a; font-size:.94rem; line-height:1.6; }
+      .single-check-search-row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:10px; }
       .single-check-search-row input, .single-check-form-grid input, .single-check-actual { width:100%; min-height:46px; border:1px solid #9fb4c7; border-radius:8px; padding:9px 12px; font-size:1rem; box-sizing:border-box; }
       #single-check-search-button { min-width:150px; background:#176cc7; color:#fff; border:0; border-radius:8px; font-weight:800; padding:0 18px; }
       .single-check-status { margin:10px 0 0; padding:10px 12px; background:#eef6fd; border-radius:8px; }
@@ -797,6 +939,8 @@
       .single-check-primary { background:#148334; }
       .single-check-final-note { margin:16px 0 0; padding:12px 14px; background:#fff6e8; border-left:4px solid #ef8a00; border-radius:7px; line-height:1.65; }
       @media (max-width: 700px) {
+        .single-check-search-row { grid-template-columns:1fr; }
+        .single-check-search-row button { width:100%; }
         #${SCREEN_ID} { padding:12px 8px 40px; }
         .single-check-shell { padding:14px; border-radius:10px; }
         .single-check-heading { display:grid; }
@@ -808,4 +952,10 @@
     `;
     document.head.appendChild(style);
   }
+
+  window.singleStockCheckApp = {
+    handleBarcode: handleSingleCheckScannedBarcode,
+    returnFromScanner: returnFromSingleCheckScanner
+  };
+
 })();

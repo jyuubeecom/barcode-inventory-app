@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "barcode-inventory-app-v240";
+const CACHE_NAME = "barcode-inventory-app-v241";
 const APP_FILES = [
   "./", "./index.html", "./style.css?v=108", "./storage.js?v=231",
   "./normal-shipment.js?v=226",
@@ -9,7 +9,7 @@ const APP_FILES = [
   "./app.js?v=215", "./natural-stock-search.js?v=227", "./product-history.js?v=107", "./inventory.js?v=97", "./transfer-list.js?v=83", "./location-stock-report.js?v=185",
   "./libs/barcode-detector-zxing-adapter.js?v=31",
   "./libs/ZXING-LICENSE.txt",
-  "./scanner.js?v=126", "./stocktaking.js?v=202",
+  "./scanner.js?v=241", "./stocktaking.js?v=202",
   "./stocktaking-history.js?v=35", "./stocktaking-transfer.js?v=201",
   "./csv.js?v=90", "./csv-import.js?v=215", "./csv-update.js?v=74",
   "./sales-plan.js?v=225", "./sales-actual.js?v=231", "./purchase-required.js?v=238", "./order-remaining.js?v=120", "./low-shipment.js?v=226", "./seasonal-trend.js?v=235",
@@ -17,7 +17,7 @@ const APP_FILES = [
   "./backup.js?v=120", "./restore.js?v=120", "./location-management.js?v=100",
   "./processing-sheet.js?v=211",
   "./processing-conversion.js?v=213",
-  "./single-stock-check.js?v=240", "./home-dashboard.js?v=240", "./app-settings.js?v=240", "./home-alerts.js?v=238", "./pwa.js?v=31", "./manifest.json",
+  "./single-stock-check.js?v=241", "./home-dashboard.js?v=240", "./app-settings.js?v=240", "./home-alerts.js?v=238", "./pwa.js?v=31", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png"
 ];
 

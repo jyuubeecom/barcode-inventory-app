@@ -710,11 +710,19 @@ function openCameraScannerForStocktaking() {
   );
 }
 
+function openCameraScannerForSingleStockCheck() {
+  openCameraScanner(
+    "single-stock-check"
+  );
+}
+
 function openCameraScanner(mode) {
   cameraScannerMode =
     mode === "stocktaking"
       ? "stocktaking"
-      : "normal";
+      : mode === "single-stock-check"
+        ? "single-stock-check"
+        : "normal";
 
   stopCameraScan();
   hideAllMainScreens();
@@ -727,10 +735,16 @@ function openCameraScanner(mode) {
     cameraScannerMode ===
     "stocktaking";
 
+  const isSingleStockCheckMode =
+    cameraScannerMode ===
+    "single-stock-check";
+
   cameraScannerMessage.textContent =
     isStocktakingMode
       ? "棚卸用カメラを自動で起動しています。"
-      : "カメラを自動で起動しています。";
+      : isSingleStockCheckMode
+        ? "商品単体の在庫確認用カメラを自動で起動しています。"
+        : "カメラを自動で起動しています。";
 
   cameraTorchButton.disabled = true;
   cameraTorchButton.textContent =
@@ -745,12 +759,16 @@ function openCameraScanner(mode) {
   cameraManualButton.textContent =
     isStocktakingMode
       ? "棚卸商品を手入力で検索"
-      : "手入力に切り替える";
+      : isSingleStockCheckMode
+        ? "商品を手入力で検索"
+        : "手入力に切り替える";
 
   cameraCancelButton.textContent =
     isStocktakingMode
       ? "棚卸画面へ戻る"
-      : "キャンセル";
+      : isSingleStockCheckMode
+        ? "在庫確認画面へ戻る"
+        : "キャンセル";
 
   torchEnabled = false;
   barcodeDetected = false;
@@ -1106,6 +1124,19 @@ function closeCameraScannerScreen() {
     return;
   }
 
+  if (
+    returnMode === "single-stock-check" &&
+    window.singleStockCheckApp &&
+    typeof window.singleStockCheckApp.returnFromScanner ===
+      "function"
+  ) {
+    window.singleStockCheckApp.returnFromScanner(
+      false
+    );
+
+    return;
+  }
+
   window.inventoryApp.showScreen("home");
 }
 
@@ -1128,6 +1159,20 @@ function switchToManualLookup(
       "function"
   ) {
     window.stocktakingApp.returnFromScanner(
+      true,
+      manualMessage || ""
+    );
+
+    return;
+  }
+
+  if (
+    returnMode === "single-stock-check" &&
+    window.singleStockCheckApp &&
+    typeof window.singleStockCheckApp.returnFromScanner ===
+      "function"
+  ) {
+    window.singleStockCheckApp.returnFromScanner(
       true,
       manualMessage || ""
     );
@@ -1269,6 +1314,14 @@ async function processBarcodeValue(
     return;
   }
 
+  if (cameraScannerMode === "single-stock-check") {
+    await processSingleStockCheckBarcodeValue(
+      enteredCode
+    );
+
+    return;
+  }
+
   try {
     let savedProducts =
       await getAllProducts();
@@ -1384,6 +1437,89 @@ async function processBarcodeValue(
       notice: "画面を開き直して、もう一度お試しください。",
       confirmText: "閉じる"
     });
+  }
+}
+
+async function processSingleStockCheckBarcodeValue(
+  enteredCode
+) {
+  if (
+    !window.singleStockCheckApp ||
+    typeof window.singleStockCheckApp.handleBarcode !==
+      "function"
+  ) {
+    cameraScannerMessage.textContent =
+      "商品単体の在庫確認画面とバーコード読取を接続できませんでした。";
+
+    await showScannerDialog({
+      type: "danger",
+      icon: "📦",
+      title: "在庫確認画面と接続できませんでした",
+      message: "商品単体の在庫確認画面とバーコード読み取り機能を接続できませんでした。",
+      notice: "画面を更新して、もう一度商品単体の在庫確認を開いてください。",
+      confirmText: "閉じる"
+    });
+
+    return;
+  }
+
+  try {
+    const result =
+      await window.singleStockCheckApp.handleBarcode(
+        enteredCode
+      );
+
+    if (result && result.success) {
+      stopCameraScan();
+      cameraScannerScreen.hidden = true;
+      cameraScannerMode = "normal";
+      return;
+    }
+
+    const message =
+      result && result.message
+        ? result.message
+        : "商品を確認できませんでした。";
+
+    const manualMessage =
+      result && result.manualMessage
+        ? result.manualMessage
+        : "バーコードで商品を特定できなかったため、手入力検索へ切り替えました。社内コード・商品コード・JANコード・商品名で検索してください。";
+
+    cameraScannerMessage.textContent =
+      `${message} 手入力検索へ切り替えます。`;
+
+    await showScannerDialog({
+      type: "warning",
+      icon: "✏️",
+      title:
+        result && result.reason === "duplicate"
+          ? "同じコードの商品が複数あります"
+          : "手入力検索へ切り替えます",
+      message: message,
+      notice: "「手入力へ切り替える」を押すと、商品単体の在庫確認画面の検索欄へ戻ります。",
+      confirmText: "手入力へ切り替える"
+    });
+
+    switchToManualLookup(manualMessage);
+  } catch (error) {
+    console.error(error);
+
+    cameraScannerMessage.textContent =
+      "商品を確認できませんでした。手入力検索へ切り替えます。";
+
+    await showScannerDialog({
+      type: "danger",
+      icon: "✏️",
+      title: "手入力検索へ切り替えます",
+      message: "商品単体の在庫確認処理でエラーが発生しました。",
+      notice: "商品単体の在庫確認画面へ戻り、社内コード・商品コード・JANコード・商品名で検索してください。",
+      confirmText: "手入力へ切り替える"
+    });
+
+    switchToManualLookup(
+      "読取処理でエラーが発生したため、手入力検索へ切り替えました。社内コード・商品コード・JANコード・商品名で検索してください。"
+    );
   }
 }
 
@@ -1729,13 +1865,17 @@ function loadZxingLibrary() {
   );
 }
 
-function switchStocktakingCameraErrorToManual(
+function isDedicatedCameraMode() {
+  return (
+    cameraScannerMode === "stocktaking" ||
+    cameraScannerMode === "single-stock-check"
+  );
+}
+
+function switchDedicatedCameraErrorToManual(
   message
 ) {
-  if (
-    cameraScannerMode !==
-    "stocktaking"
-  ) {
+  if (!isDedicatedCameraMode()) {
     return;
   }
 
@@ -1770,12 +1910,12 @@ async function showCameraErrorMessage(error) {
       message: "カメラを使用できる方法でアプリが開かれていません。",
       notice: "index.htmlを直接開かず、GitHub PagesまたはLive Serverからアプリを開いてください。",
       confirmText:
-        cameraScannerMode === "stocktaking"
+        isDedicatedCameraMode()
           ? "手入力へ切り替える"
           : "閉じる"
     });
 
-    switchStocktakingCameraErrorToManual(
+    switchDedicatedCameraErrorToManual(
       "カメラを使用できないため、手入力検索へ切り替えました。商品名・社内コード・商品コード・JANコードで検索してください。"
     );
 
@@ -1796,12 +1936,12 @@ async function showCameraErrorMessage(error) {
       message: "ブラウザーのカメラ権限が許可されていません。",
       notice: `ブラウザーのカメラ許可を「許可」に変更してください。 ${getStocktakingManualGuidance()}`,
       confirmText:
-        cameraScannerMode === "stocktaking"
+        isDedicatedCameraMode()
           ? "手入力へ切り替える"
           : "閉じる"
     });
 
-    switchStocktakingCameraErrorToManual(
+    switchDedicatedCameraErrorToManual(
       "カメラの使用が許可されていないため、手入力検索へ切り替えました。"
     );
 
@@ -1822,12 +1962,12 @@ async function showCameraErrorMessage(error) {
       message: "この端末で使用できるカメラを確認できませんでした。",
       notice: "カメラ付きの端末で確認するか、手入力で商品を検索してください。",
       confirmText:
-        cameraScannerMode === "stocktaking"
+        isDedicatedCameraMode()
           ? "手入力へ切り替える"
           : "閉じる"
     });
 
-    switchStocktakingCameraErrorToManual(
+    switchDedicatedCameraErrorToManual(
       "使用できるカメラが見つからないため、手入力検索へ切り替えました。"
     );
 
@@ -1848,12 +1988,12 @@ async function showCameraErrorMessage(error) {
       message: "ほかのアプリがカメラを使用している可能性があります。",
       notice: "カメラアプリやビデオ会議アプリを閉じてから、もう一度お試しください。",
       confirmText:
-        cameraScannerMode === "stocktaking"
+        isDedicatedCameraMode()
           ? "手入力へ切り替える"
           : "閉じる"
     });
 
-    switchStocktakingCameraErrorToManual(
+    switchDedicatedCameraErrorToManual(
       "カメラを起動できないため、手入力検索へ切り替えました。"
     );
 
@@ -1876,12 +2016,12 @@ async function showCameraErrorMessage(error) {
       message: "バーコード読み取り用のプログラムを読み込めませんでした。",
       notice: "インターネット接続を確認して、もう一度お試しください。",
       confirmText:
-        cameraScannerMode === "stocktaking"
+        isDedicatedCameraMode()
           ? "手入力へ切り替える"
           : "閉じる"
     });
 
-    switchStocktakingCameraErrorToManual(
+    switchDedicatedCameraErrorToManual(
       "バーコード読み取り機能を読み込めないため、手入力検索へ切り替えました。"
     );
 
@@ -1898,24 +2038,28 @@ async function showCameraErrorMessage(error) {
     message: "カメラの起動処理でエラーが発生しました。",
     notice: `ブラウザーのカメラ設定を確認してください。 ${getStocktakingManualGuidance()}`,
     confirmText:
-      cameraScannerMode === "stocktaking"
+      isDedicatedCameraMode()
         ? "手入力へ切り替える"
         : "閉じる"
   });
 
-  switchStocktakingCameraErrorToManual(
+  switchDedicatedCameraErrorToManual(
     "カメラの起動でエラーが発生したため、手入力検索へ切り替えました。"
   );
 }
 
 function getStocktakingManualGuidance() {
-  if (
-    cameraScannerMode ===
-    "stocktaking"
-  ) {
+  if (cameraScannerMode === "stocktaking") {
     return (
       "読み取れない場合は、" +
       "「棚卸商品を手入力で検索」を押してください。"
+    );
+  }
+
+  if (cameraScannerMode === "single-stock-check") {
+    return (
+      "読み取れない場合は、" +
+      "「商品を手入力で検索」を押してください。"
     );
   }
 
@@ -1927,5 +2071,7 @@ function getStocktakingManualGuidance() {
 
 window.barcodeScanner = {
   openForStocktaking:
-    openCameraScannerForStocktaking
+    openCameraScannerForStocktaking,
+  openForSingleStockCheck:
+    openCameraScannerForSingleStockCheck
 };

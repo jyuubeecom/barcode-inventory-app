@@ -4,6 +4,7 @@ const SHIPPING_SCHEDULE_PAGE_SIZE = 20;
 const SHIPPING_ALLOCATION_PAGE_SIZE = 20;
 const SHIPPING_SEASONAL_ANALYSIS_MONTHS = 24;
 const SHIPPING_SEASONAL_MIN_HISTORY_MONTHS = 12;
+const SHIPPING_SALES_PLAN_PREPARATION_DAYS = 7;
 const SHIPPING_DESTINATION_LOCATIONS = [
   "本社",
   "酒本倉庫1階",
@@ -730,7 +731,7 @@ function getShippingAllocationRows(schedule) {
   const averageContext = buildShippingAverageContext(monthKey);
   const actualByProduct = aggregateShippingActuals(averageContext.monthKeys);
   const seasonalContext = buildShippingSeasonalAnalysisContext(targetPeriod);
-  const planByProduct = aggregateShippingPlansForRange(targetPeriod.startDate, targetPeriod.endDate);
+  const planByProduct = aggregateShippingPlansForPreparationRange(targetPeriod.startDate, targetPeriod.endDate);
   const priorScheduleIds = getPriorShippingScheduleIds(schedule);
   const periodDays = targetPeriod.days;
 
@@ -753,7 +754,8 @@ function getShippingAllocationRows(schedule) {
         seasonalContext
       );
       const periodSalesEstimate = seasonalEstimate.periodSalesEstimate;
-      const plannedQuantity = planByProduct.get(internalCode) || 0;
+      const planInfo = planByProduct.get(internalCode) || null;
+      const plannedQuantity = planInfo ? Math.max(0, Number(planInfo.quantity) || 0) : 0;
       const requiredQuantity = Math.max(0, Math.ceil(periodSalesEstimate + plannedQuantity));
       const currentStock = getShippingNumber(product.stock);
       const priorAllocated = getAllocatedQuantityForProductInSchedules(internalCode, priorScheduleIds);
@@ -770,6 +772,10 @@ function getShippingAllocationRows(schedule) {
         monthlyAverage: monthlyAverage,
         periodSalesEstimate: periodSalesEstimate,
         plannedQuantity: plannedQuantity,
+        plannedPreparationDeadline: planInfo ? String(planInfo.earliestPreparationDeadline || "") : "",
+        plannedPreparationDeadlineLatest: planInfo ? String(planInfo.latestPreparationDeadline || "") : "",
+        plannedPlanCount: planInfo ? Math.max(0, Number(planInfo.planCount) || 0) : 0,
+        plannedPreparationDays: SHIPPING_SALES_PLAN_PREPARATION_DAYS,
         requiredQuantity: requiredQuantity,
         priorAllocated: priorAllocated,
         recommendedQuantity: recommendedQuantity,
@@ -955,7 +961,8 @@ function renderShippingAllocationTable() {
       `対象期間：${escapeShippingHtml(formatShippingDate(targetPeriod.startDate))} ～ ${escapeShippingHtml(formatShippingDate(targetPeriod.endDate))}（${targetPeriod.days.toLocaleString("ja-JP")}日）<br>` +
       `次便：${escapeShippingHtml(targetPeriod.nextSchedule.name)} / 倉庫到着 ${escapeShippingHtml(formatShippingDate(targetPeriod.nextSchedule.warehouseArrivalDate))}<br>` +
       `月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の6か月平均<br>` +
-      `季節補正：対象期間の前月まで直近${SHIPPING_SEASONAL_ANALYSIS_MONTHS}か月を参照（実績月が${SHIPPING_SEASONAL_MIN_HISTORY_MONTHS}か月未満の場合は補正なし）` +
+      `季節補正：対象期間の前月まで直近${SHIPPING_SEASONAL_ANALYSIS_MONTHS}か月を参照（実績月が${SHIPPING_SEASONAL_MIN_HISTORY_MONTHS}か月未満の場合は補正なし）<br>` +
+      `販売予定：販売開始日の${SHIPPING_SALES_PLAN_PREPARATION_DAYS}日前を準備期限として、その期限に間に合う船便へ予定数量を一括計上` +
       (scheduleReceived
         ? `<br><span class="shipping-received-note">この船便は入荷反映済みです。船積数量は履歴保護のため編集できません。</span>`
         : (scheduleConfirmed
@@ -1039,7 +1046,7 @@ function renderShippingAllocationTable() {
           <div class="shipping-allocation-metric"><span>基本月平均</span><strong>${item.monthlyAverage.toLocaleString("ja-JP")}個</strong></div>
           ${seasonalMetricHtml}
           <div class="shipping-allocation-metric"><span>期間販売見込</span><strong>${item.periodSalesEstimate.toLocaleString("ja-JP")}個</strong></div>
-          <div class="shipping-allocation-metric"><span>期間販売予定</span><strong>${formatShippingQuantity(item.plannedQuantity)}個</strong></div>
+          <div class="shipping-allocation-metric"><span>${SHIPPING_SALES_PLAN_PREPARATION_DAYS}日前一括予定</span><strong>${formatShippingQuantity(item.plannedQuantity)}個</strong>${item.plannedQuantity > 0 && item.plannedPreparationDeadline ? `<small>${item.plannedPlanCount > 1 ? "最短" : ""}準備期限 ${escapeShippingHtml(formatShippingDate(item.plannedPreparationDeadline))}${item.plannedPlanCount > 1 ? `（${item.plannedPlanCount.toLocaleString("ja-JP")}件）` : ""}</small>` : ""}</div>
           <div class="shipping-allocation-metric"><span>前便振分済</span><strong>${item.priorAllocated.toLocaleString("ja-JP")}個</strong></div>
           <div class="shipping-allocation-metric"><span>必要数</span><strong>${item.requiredQuantity.toLocaleString("ja-JP")}個</strong></div>
           <div class="shipping-allocation-metric shipping-allocation-metric-recommended"><span>推奨数量</span><strong>${item.recommendedQuantity.toLocaleString("ja-JP")}個</strong></div>
@@ -2330,6 +2337,9 @@ function printShippingAllocationList() {
         monthlyAverage: computed ? computed.monthlyAverage : "",
         periodSalesEstimate: computed ? computed.periodSalesEstimate : "",
         plannedQuantity: computed ? computed.plannedQuantity : "",
+        plannedPreparationDeadline: computed ? computed.plannedPreparationDeadline : "",
+        plannedPreparationDeadlineLatest: computed ? computed.plannedPreparationDeadlineLatest : "",
+        plannedPlanCount: computed ? computed.plannedPlanCount : 0,
         currentStock: computed ? computed.currentStock : getShippingNumber(product.stock),
         priorAllocated: computed ? computed.priorAllocated : "",
         requiredQuantity: computed ? computed.requiredQuantity : "",
@@ -2363,7 +2373,7 @@ function printShippingAllocationList() {
         <td>${row.isBackorder ? '<span class="backorder-badge">注残</span> ' : ''}${escapeShippingHtml(row.productName)}${row.seasonalApplied ? `<div class="seasonal-note">${escapeShippingHtml(row.seasonalSeasonIcon)} ${escapeShippingHtml(row.seasonalSeasonLabel)}補正 ${Math.ceil(Number(row.seasonalMonthlyAverage) || 0).toLocaleString("ja-JP")}個/月（${Number(row.seasonalDays || 0).toLocaleString("ja-JP")}日）</div>` : ""}</td>
         <td class="num">${formatShippingPrintNumber(row.monthlyAverage)}</td>
         <td class="num">${formatShippingPrintNumber(row.periodSalesEstimate)}</td>
-        <td class="num">${formatShippingPrintNumber(row.plannedQuantity)}</td>
+        <td class="num">${formatShippingPrintNumber(row.plannedQuantity)}${Number(row.plannedQuantity || 0) > 0 && row.plannedPreparationDeadline ? `<div class="plan-prep-note">${Number(row.plannedPlanCount || 0) > 1 ? "最短" : ""}準備 ${escapeShippingHtml(formatShippingDate(row.plannedPreparationDeadline))}${Number(row.plannedPlanCount || 0) > 1 ? `（${Number(row.plannedPlanCount || 0).toLocaleString("ja-JP")}件）` : ""}</div>` : ""}</td>
         <td class="num">${formatShippingPrintNumber(row.currentStock)}</td>
         <td class="num">${formatShippingPrintNumber(row.priorAllocated)}</td>
         <td class="num">${formatShippingPrintNumber(row.requiredQuantity)}</td>
@@ -2406,6 +2416,7 @@ function printShippingAllocationList() {
   .backorder-row { background:#fff8d6; }
   .backorder-badge { display:inline-block; padding:1px 4px; border:1px solid #c79200; background:#f6c343; color:#4f3500; font-weight:700; border-radius:3px; }
   .seasonal-note { margin-top:2px; color:#8a4b08; font-size:6.8pt; font-weight:700; }
+  .plan-prep-note { margin-top:2px; color:#0d47a1; font-size:6.6pt; font-weight:700; line-height:1.2; }
   .total { margin-top: 7px; text-align: right; font-size: 10.5pt; font-weight: 700; }
   .footer { margin-top: 7px; font-size: 7.5pt; color: #444; }
 </style>
@@ -2426,7 +2437,7 @@ function printShippingAllocationList() {
   <div class="note">
     基本月平均：${escapeShippingHtml(formatShippingMonth(averageContext.startMonth))} ～ ${escapeShippingHtml(formatShippingMonth(averageContext.endMonth))} の販売実績から「株式会社 後藤」「清水産業 株式会社」を除外した6か月平均。<br>
     季節補正：対象期間の前月まで直近${SHIPPING_SEASONAL_ANALYSIS_MONTHS}か月の季節変動を参照し、実績月が${SHIPPING_SEASONAL_MIN_HISTORY_MONTHS}か月以上ある商品は、該当季節の日数分だけ季節平均で補正します。<br>
-    期間指定の販売予定は、対象期間と重なる日数分を按分して小数切り上げしています。
+    販売予定：販売開始日の${SHIPPING_SALES_PLAN_PREPARATION_DAYS}日前を準備期限として、その期限に間に合う船便へ予定数量を一括計上します。期間指定は開始日の${SHIPPING_SALES_PLAN_PREPARATION_DAYS}日前、月指定は月初日の${SHIPPING_SALES_PLAN_PREPARATION_DAYS}日前を準備期限にします。
   </div>
   <table>
     <thead>
@@ -2437,7 +2448,7 @@ function printShippingAllocationList() {
         <th style="width:15%">商品名</th>
         <th style="width:6%">月平均</th>
         <th style="width:7%">期間見込</th>
-        <th style="width:7%">期間予定</th>
+        <th style="width:7%">7日前一括予定</th>
         <th style="width:6%">現在庫</th>
         <th style="width:7%">前便振分</th>
         <th style="width:6%">必要数</th>
@@ -3127,39 +3138,62 @@ function isShippingAverageExcludedCustomer(value) {
   return normalized === "後藤" || normalized === "清水産業";
 }
 
-function aggregateShippingPlansForRange(startDate, endDate) {
-  const raw = new Map();
-  if (!isShippingIsoDate(startDate) || !isShippingIsoDate(endDate) || startDate > endDate) return new Map();
+function aggregateShippingPlansForPreparationRange(startDate, endDate) {
+  const result = new Map();
+  if (!isShippingIsoDate(startDate) || !isShippingIsoDate(endDate) || startDate > endDate) return result;
 
   shippingScheduleSalesPlans.forEach(function (plan) {
     const code = String(plan.internalCode || "").trim();
     if (!code) return;
+
     const quantity = Number(plan.quantity || 0);
-    if (!Number.isFinite(quantity) || quantity === 0) return;
+    if (!Number.isFinite(quantity) || quantity <= 0) return;
 
     const planRange = getShippingPlanDateRange(plan);
-    if (!planRange) return;
+    if (!planRange || !isShippingIsoDate(planRange.startDate)) return;
 
-    const overlapStart = planRange.startDate > startDate ? planRange.startDate : startDate;
-    const overlapEnd = planRange.endDate < endDate ? planRange.endDate : endDate;
-    if (overlapStart > overlapEnd) return;
+    // 販売予定は日割りせず、販売開始日の7日前までに全数量を用意する。
+    // その準備期限が「今回倉庫到着日 ～ 次便倉庫到着日前日」に入る船便へ一括計上することで、
+    // 同じ販売予定を複数の船便へ重複計上しない。
+    const preparationDeadline = addShippingDays(
+      planRange.startDate,
+      -SHIPPING_SALES_PLAN_PREPARATION_DAYS
+    );
+    if (!isShippingIsoDate(preparationDeadline)) return;
+    if (preparationDeadline < startDate || preparationDeadline > endDate) return;
 
-    let contribution = quantity;
-    if (planRange.startDate !== planRange.endDate) {
-      const totalDays = getShippingInclusiveDayCount(planRange.startDate, planRange.endDate);
-      const overlapDays = getShippingInclusiveDayCount(overlapStart, overlapEnd);
-      if (totalDays <= 0 || overlapDays <= 0) return;
-      contribution = quantity * (overlapDays / totalDays);
+    const current = result.get(code) || {
+      quantity: 0,
+      planCount: 0,
+      earliestPreparationDeadline: "",
+      latestPreparationDeadline: ""
+    };
+
+    current.quantity += quantity;
+    current.planCount += 1;
+
+    if (
+      !current.earliestPreparationDeadline ||
+      preparationDeadline < current.earliestPreparationDeadline
+    ) {
+      current.earliestPreparationDeadline = preparationDeadline;
     }
 
-    raw.set(code, (raw.get(code) || 0) + contribution);
+    if (
+      !current.latestPreparationDeadline ||
+      preparationDeadline > current.latestPreparationDeadline
+    ) {
+      current.latestPreparationDeadline = preparationDeadline;
+    }
+
+    result.set(code, current);
   });
 
-  const rounded = new Map();
-  raw.forEach(function (value, code) {
-    rounded.set(code, Math.ceil(value));
+  result.forEach(function (value) {
+    value.quantity = Math.max(0, Math.ceil(Number(value.quantity) || 0));
   });
-  return rounded;
+
+  return result;
 }
 
 function getShippingPlanDateRange(plan) {
@@ -4176,6 +4210,14 @@ window.shippingScheduleApp.getHomeAlertData =
                 Math.max(0, Number(row.periodSalesEstimate || 0)),
               plannedQuantity:
                 Math.max(0, Number(row.plannedQuantity || 0)),
+              plannedPreparationDeadline:
+                String(row.plannedPreparationDeadline || ""),
+              plannedPreparationDeadlineLatest:
+                String(row.plannedPreparationDeadlineLatest || ""),
+              plannedPlanCount:
+                Math.max(0, Number(row.plannedPlanCount || 0)),
+              plannedPreparationDays:
+                SHIPPING_SALES_PLAN_PREPARATION_DAYS,
               requiredQuantity:
                 Math.max(0, Number(row.requiredQuantity || 0)),
               seasonalApplied:

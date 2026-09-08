@@ -664,6 +664,8 @@ function createHomeAlertSnapshot(
               row.remainingQuantity ||
               0
             ),
+            Number(row.plannedQuantity || 0),
+            String(row.plannedPreparationDeadline || ""),
             Boolean(row.isBackorder)
           ];
         }
@@ -1690,6 +1692,7 @@ function renderHomeShippingAlert(
                 ${seasonal}
               </strong>
               <span>${escapeHomeAlertHtml(row.productName || "商品名未登録")}</span>
+              ${Number(row.plannedQuantity || 0) > 0 ? `<span class="home-alert-shipping-detail home-alert-shipping-plan-detail">販売予定 ${Number(row.plannedQuantity || 0).toLocaleString("ja-JP")}個を7日前に一括計上 / ${Number(row.plannedPlanCount || 0) > 1 ? "最短" : ""}準備期限 ${escapeHomeAlertHtml(formatHomeAlertPrintDate(row.plannedPreparationDeadline || ""))}${Number(row.plannedPlanCount || 0) > 1 ? `（${Number(row.plannedPlanCount || 0).toLocaleString("ja-JP")}件）` : ""}</span>` : ""}
               <span class="home-alert-shipping-detail">
                 推奨 ${recommended.toLocaleString("ja-JP")}個 / 保存済 ${saved.toLocaleString("ja-JP")}個
               </span>
@@ -2453,6 +2456,14 @@ function printHomeAlertReport(mode) {
     .purchase-table th:nth-child(8),
     .purchase-table td:nth-child(8) { width: 14%; }
 
+    .print-shipping-plan-note {
+      margin-top: 2px;
+      font-size: 7.5pt;
+      line-height: 1.25;
+      color: #0d47a1;
+      font-weight: 700;
+    }
+
     .shipping-table th:nth-child(1),
     .shipping-table td:nth-child(1) { width: 5%; }
     .shipping-table th:nth-child(2),
@@ -2657,7 +2668,7 @@ function createHomeShippingPrintSection(
                   <td class="center">${index + 1}</td>
                   <td>${escapeHomeAlertHtml(row.internalCode || "-")}</td>
                   <td>${escapeHomeAlertHtml(row.productCode || "-")}</td>
-                  <td>${escapeHomeAlertHtml(row.productName || "商品名未登録")}</td>
+                  <td>${escapeHomeAlertHtml(row.productName || "商品名未登録")}${Number(row.plannedQuantity || 0) > 0 ? `<div class="print-shipping-plan-note">販売予定 ${formatHomeAlertPrintQuantity(row.plannedQuantity)}個を7日前一括 / ${Number(row.plannedPlanCount || 0) > 1 ? "最短" : ""}準備 ${escapeHomeAlertHtml(formatHomeAlertPrintDate(row.plannedPreparationDeadline || ""))}${Number(row.plannedPlanCount || 0) > 1 ? `（${Number(row.plannedPlanCount || 0).toLocaleString("ja-JP")}件）` : ""}</div>` : ""}</td>
                   <td class="number">${formatHomeAlertPrintQuantity(row.recommendedQuantity)}個</td>
                   <td class="number">${formatHomeAlertPrintQuantity(row.currentAllocation)}個</td>
                   <td class="number remaining">${formatHomeAlertPrintQuantity(row.remainingQuantity)}個</td>
@@ -3218,6 +3229,11 @@ function createHomeAlertPanelStyle() {
       white-space: normal !important;
       overflow: visible !important;
       text-overflow: clip !important;
+    }
+
+    .home-alert-shipping-plan-detail {
+      color: #0d47a1;
+      font-weight: 700;
     }
 
     .home-alert-seasonal-badge {

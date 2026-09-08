@@ -4243,6 +4243,29 @@ window.shippingScheduleApp.getHomeAlertData =
         )
         .sort(
           function (a, b) {
+            /*
+             * v243
+             * 販売予定の7日前一括準備は作業期限があるため、
+             * ホームの「要確認」では最優先で表示する。
+             */
+            const aHasPlanned = Number(a.plannedQuantity || 0) > 0;
+            const bHasPlanned = Number(b.plannedQuantity || 0) > 0;
+
+            if (aHasPlanned !== bHasPlanned) {
+              return aHasPlanned ? -1 : 1;
+            }
+
+            if (aHasPlanned && bHasPlanned) {
+              const aDeadline = String(a.plannedPreparationDeadline || "");
+              const bDeadline = String(b.plannedPreparationDeadline || "");
+
+              if (aDeadline !== bDeadline) {
+                if (!aDeadline) return 1;
+                if (!bDeadline) return -1;
+                return aDeadline.localeCompare(bDeadline);
+              }
+            }
+
             if (
               Boolean(a.isBackorder) !==
               Boolean(b.isBackorder)

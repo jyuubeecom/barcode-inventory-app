@@ -1655,7 +1655,44 @@ function renderHomeShippingAlert(
     return;
   }
 
-  const topRows = rows.slice(0, 5);
+  /*
+   * v243
+   * 7日前一括の販売予定を含む商品を、ホームの要確認で最優先表示する。
+   * shipping-schedule.js 側でも同じ優先順にしているが、
+   * ここでも並べ直して表示順を確実にそろえる。
+   */
+  const priorityRows = rows
+    .filter(function (row) {
+      return Number(row && row.plannedQuantity || 0) > 0;
+    })
+    .slice()
+    .sort(function (a, b) {
+      const aDeadline = String(a.plannedPreparationDeadline || "");
+      const bDeadline = String(b.plannedPreparationDeadline || "");
+      if (aDeadline !== bDeadline) {
+        if (!aDeadline) return 1;
+        if (!bDeadline) return -1;
+        return aDeadline.localeCompare(bDeadline);
+      }
+      return Number(b.remainingQuantity || 0) - Number(a.remainingQuantity || 0);
+    });
+
+  const normalRows = rows.filter(function (row) {
+    return Number(row && row.plannedQuantity || 0) <= 0;
+  });
+
+  const displayRows = priorityRows.concat(normalRows);
+  const topRows = displayRows.slice(0, 5);
+  const priorityCount = priorityRows.length;
+  const priorityPlannedTotal = priorityRows.reduce(function (sum, row) {
+    return sum + Math.max(0, Number(row.plannedQuantity || 0));
+  }, 0);
+  const earliestPriorityDeadline = priorityRows.reduce(function (current, row) {
+    const deadline = String(row.plannedPreparationDeadline || "");
+    if (!deadline) return current;
+    if (!current || deadline < current) return deadline;
+    return current;
+  }, "");
 
   box.innerHTML = `
     <div class="home-alert-card-title">
@@ -1674,6 +1711,12 @@ function renderHomeShippingAlert(
       <span>追加で入力が必要な数量 合計 ${total.toLocaleString("ja-JP")}個</span>
     </div>
 
+    ${priorityCount > 0 ? `
+      <div class="home-alert-shipping-priority-summary">
+        <strong>📅 販売予定を優先表示：${priorityCount.toLocaleString("ja-JP")}商品</strong>
+        <span>7日前一括予定 合計 ${priorityPlannedTotal.toLocaleString("ja-JP")}個${earliestPriorityDeadline ? ` / 最短準備期限 ${escapeHomeAlertHtml(formatHomeAlertPrintDate(earliestPriorityDeadline))}` : ""}</span>
+      </div>
+    ` : ""}
 
     <div class="home-alert-item-list">
       ${topRows.map(function (row) {
@@ -1689,6 +1732,7 @@ function renderHomeShippingAlert(
               <strong>
                 ${escapeHomeAlertHtml(row.productCode || row.internalCode || "コード未登録")}
                 ${row.isBackorder ? '<em class="home-alert-backorder-badge">注残</em>' : ""}
+                ${Number(row.plannedQuantity || 0) > 0 ? '<em class="home-alert-shipping-priority-badge">販売予定優先</em>' : ""}
                 ${seasonal}
               </strong>
               <span>${escapeHomeAlertHtml(row.productName || "商品名未登録")}</span>
@@ -3202,6 +3246,42 @@ function createHomeAlertPanelStyle() {
       color: #6d5a8c;
       font-size: 11px;
       font-weight: 700;
+    }
+
+    .home-alert-shipping-priority-summary {
+      display: grid;
+      gap: 3px;
+      margin: 0 0 9px;
+      padding: 8px 9px;
+      border: 1px solid #f0b96a;
+      border-radius: 9px;
+      background: #fff8e8;
+      color: #8a4b08;
+      line-height: 1.4;
+    }
+
+    .home-alert-shipping-priority-summary strong {
+      font-size: 12px;
+    }
+
+    .home-alert-shipping-priority-summary span {
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .home-alert-shipping-priority-badge {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 4px;
+      padding: 2px 5px;
+      border: 1px solid #f0b96a;
+      border-radius: 999px;
+      background: #fff3d8;
+      color: #8a4b08;
+      font-size: 9px;
+      font-style: normal;
+      font-weight: 900;
+      white-space: nowrap;
     }
 
     .home-alert-shipping-guide {

@@ -95,7 +95,7 @@ async function exportFullBackup() {
     const backupData = {
       backupType: "barcode-inventory-app",
       backupVersion: 10,
-      appVersion: "v118",
+      appVersion: "v244",
       appName: "バーコード在庫・棚卸管理",
       exportedAt: exportedAt.toISOString(),
       counts: {
@@ -139,7 +139,7 @@ async function exportFullBackup() {
       }
     };
 
-    const jsonText = JSON.stringify(backupData, null, 2);
+    const jsonText = JSON.stringify(backupData);
     const fileName = createBackupFileName(exportedAt);
     downloadBackupFile(jsonText, fileName);
 
@@ -151,6 +151,7 @@ async function exportFullBackup() {
         message: "バックアップファイルを大切に保管してください。",
         details: [
           { label: "ファイル名", value: fileName },
+          { label: "ファイル容量", value: formatBackupFileSize(new Blob([jsonText]).size) },
           { label: "商品", value: `${productsData.length}件` },
           { label: "入出庫履歴", value: `${movements.length}件` },
           { label: "棚卸履歴", value: `${stocktakings.length}件` },
@@ -195,6 +196,13 @@ function collectAppSettingsForBackup() {
     }
   }
   return result;
+}
+
+function formatBackupFileSize(bytes) {
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) return `${mb.toFixed(1)}MB`;
+  const kb = bytes / 1024;
+  return `${Math.max(1, Math.round(kb))}KB`;
 }
 
 function createBackupFileName(date) {

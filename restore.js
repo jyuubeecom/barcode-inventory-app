@@ -48,16 +48,36 @@ async function handleRestoreFileSelection(event) {
   if (!file) return;
   const button = document.querySelector("#restore-full-backup-button");
 
-  if (file.size > 50 * 1024 * 1024) {
+  const fileSizeMb = file.size / (1024 * 1024);
+
+  if (file.size > 250 * 1024 * 1024) {
     await showRestoreDialog({
       type: "warning",
       icon: "⚠️",
       title: "バックアップファイルが大きすぎます",
-      message: "50MB以下のバックアップファイルを選んでください。",
+      message: `選択したファイルは ${fileSizeMb.toFixed(1)}MB あります。`,
+      notice: "安全のため、250MBを超えるバックアップはこの画面から復元できません。",
       confirmText: "確認して閉じる"
     });
     event.target.value = "";
     return;
+  }
+
+  if (file.size > 50 * 1024 * 1024) {
+    const continueLargeRestore = await showRestoreDialog({
+      type: "warning",
+      icon: "💾",
+      title: "大きいバックアップファイルです",
+      message: `選択したファイルは ${fileSizeMb.toFixed(1)}MB あります。`,
+      notice: "復元処理に時間がかかる場合があります。処理中はブラウザを閉じず、そのままお待ちください。",
+      isConfirm: true,
+      cancelText: "戻る",
+      confirmText: "このまま復元を確認する"
+    });
+    if (!continueLargeRestore) {
+      event.target.value = "";
+      return;
+    }
   }
 
   button.disabled = true;
@@ -76,6 +96,7 @@ async function handleRestoreFileSelection(event) {
       message: "復元するバックアップの内容を確認してください。",
       details: [
         { label: "ファイル名", value: file.name },
+        { label: "ファイル容量", value: formatRestoreFileSize(file.size) },
         { label: "作成日時", value: formatBackupDate(backup.exportedAt) },
         { label: "商品", value: `${c.products}件` },
         { label: "入出庫履歴", value: `${c.stockMovements}件` },
@@ -150,6 +171,13 @@ async function handleRestoreFileSelection(event) {
     button.disabled = false;
     button.textContent = "バックアップから復元する";
   }
+}
+
+function formatRestoreFileSize(bytes) {
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) return `${mb.toFixed(1)}MB`;
+  const kb = bytes / 1024;
+  return `${Math.max(1, Math.round(kb))}KB`;
 }
 
 function showRestoreDialog(options) {

@@ -1167,7 +1167,7 @@
       return;
     }
 
-    const ITEMS_PER_PAGE = 4;
+    const ITEMS_PER_PAGE = 5;
     const pageCount = Math.ceil(list.items.length / ITEMS_PER_PAGE);
     const statusText = list.status === STATUS_COMPLETED ? "在庫反映済み" : "下書き";
     const totalQty = getListTotalQuantity(list);
@@ -1242,13 +1242,13 @@
   .list th:nth-child(3) { width: 31%; }
   .list th:nth-child(4) { width: 12%; }
   .list th:nth-child(5) { width: 28%; }
-  .list td { height: 48mm; }
+  .list td { height: 39mm; }
   .list td strong { display: block; font-size: 11pt; overflow-wrap: anywhere; }
   .list td small { display: block; margin-top: 1.5mm; color: #444; font-size: 8pt; overflow-wrap: anywhere; }
   .qty { text-align: right; font-size: 14pt; font-weight: 800; white-space: nowrap; }
   .photo-cell { text-align: center; padding: 1.5mm !important; }
-  .photo { width: 42mm; height: 42mm; max-width: 100%; display: block; margin: 0 auto; object-fit: contain; object-position: center; }
-  .no-photo { width: 42mm; height: 42mm; max-width: 100%; margin: 0 auto; display: grid; place-items: center; border: .6pt dashed #999; color: #777; font-size: 8pt; }
+  .photo { width: 38mm; height: 38mm; max-width: 100%; display: block; margin: 0 auto; object-fit: contain; object-position: center; }
+  .no-photo { width: 38mm; height: 38mm; max-width: 100%; margin: 0 auto; display: grid; place-items: center; border: .6pt dashed #999; color: #777; font-size: 8pt; }
   .summary { display: flex; justify-content: space-between; align-items: center; gap: 8mm; margin-top: 4mm; font-weight: 800; font-size: 11pt; }
   @media print {
     html, body { background: #fff; }

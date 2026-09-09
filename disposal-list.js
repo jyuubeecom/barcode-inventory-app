@@ -1155,7 +1155,7 @@
   function printList(list) {
     if (!list || !Array.isArray(list.items) || !list.items.length) return;
 
-    const printWindow = window.open("", "_blank", "width=1000,height=1000");
+    const printWindow = window.open("", "_blank", "width=820,height=1000");
     if (!printWindow) {
       void showDisposalDialog({
         type: "warning",
@@ -1193,10 +1193,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>廃棄リスト_${escapeHtml(list.plannedDate || "")}</title>
 <style>
-  @page { size: A4 portrait; margin: 10mm; }
+  @page { size: 210mm 297mm; margin: 10mm; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; color: #111; background: #fff; font-family: "Yu Gothic", "Meiryo", sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body { font-size: 10pt; }
+  html, body { margin: 0; padding: 0; color: #111; font-family: "Yu Gothic", "Meiryo", sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-size: 10pt; background: #e7ebef; }
+  .print-sheet { width: 210mm; min-height: 297mm; margin: 10px auto; padding: 10mm; background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.16); }
   h1 { margin: 0; font-size: 20pt; letter-spacing: .08em; }
   .header { display: flex; justify-content: space-between; align-items: flex-end; gap: 10mm; padding-bottom: 4mm; border-bottom: 1.2pt solid #111; }
   .status { font-weight: 700; }
@@ -1208,21 +1209,29 @@
   .list th { background: #e9eef2; text-align: center; }
   .list tr { break-inside: avoid; page-break-inside: avoid; }
   .list .no { width: 8%; text-align: center; }
-  .list th:nth-child(2) { width: 22%; }
+  .list th:nth-child(2) { width: 21%; }
   .list th:nth-child(3) { width: 31%; }
-  .list th:nth-child(4) { width: 13%; }
-  .list th:nth-child(5) { width: 26%; }
-  .list td { height: 34mm; }
-  .list td strong { display: block; font-size: 11pt; }
-  .list td small { display: block; margin-top: 1.5mm; color: #444; font-size: 8pt; }
-  .qty { text-align: right; font-size: 14pt; font-weight: 800; }
+  .list th:nth-child(4) { width: 12%; }
+  .list th:nth-child(5) { width: 28%; }
+  .list td { height: 48mm; }
+  .list td strong { display: block; font-size: 11pt; overflow-wrap: anywhere; }
+  .list td small { display: block; margin-top: 1.5mm; color: #444; font-size: 8pt; overflow-wrap: anywhere; }
+  .qty { text-align: right; font-size: 14pt; font-weight: 800; white-space: nowrap; }
   .photo-cell { text-align: center; padding: 1.5mm !important; }
-  .photo { max-width: 34mm; max-height: 30mm; object-fit: contain; }
-  .no-photo { width: 34mm; height: 28mm; margin: 0 auto; display: grid; place-items: center; border: .6pt dashed #999; color: #777; font-size: 8pt; }
+  .photo { width: 42mm; height: 42mm; max-width: 100%; display: block; margin: 0 auto; object-fit: contain; object-position: center; }
+  .no-photo { width: 42mm; height: 42mm; max-width: 100%; margin: 0 auto; display: grid; place-items: center; border: .6pt dashed #999; color: #777; font-size: 8pt; }
   .summary { margin-top: 4mm; text-align: right; font-weight: 800; font-size: 11pt; }
+  @media print {
+    html, body { background: #fff; }
+    .print-sheet { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+  }
+  @media screen and (max-width: 820px) {
+    .print-sheet { width: calc(100% - 16px); min-height: auto; margin: 8px; padding: 8mm; }
+  }
 </style>
 </head>
 <body>
+<div class="print-sheet">
   <div class="header">
     <h1>廃棄リスト</h1>
     <div class="status">${escapeHtml(statusText)}</div>
@@ -1236,8 +1245,21 @@
     <tbody>${rows}</tbody>
   </table>
   <div class="summary">${list.items.length}商品 / 合計 ${totalQty.toLocaleString("ja-JP")}個</div>
+</div>
 <script>
-  window.addEventListener("load", function () { setTimeout(function () { window.print(); }, 250); });
+  window.addEventListener("load", function () {
+    const images = Array.from(document.images);
+    const waits = images.map(function (image) {
+      if (image.complete) return Promise.resolve();
+      return new Promise(function (resolve) {
+        image.addEventListener("load", resolve, { once: true });
+        image.addEventListener("error", resolve, { once: true });
+      });
+    });
+    Promise.all(waits).then(function () {
+      setTimeout(function () { window.print(); }, 300);
+    });
+  });
 <\/script>
 </body>
 </html>`);

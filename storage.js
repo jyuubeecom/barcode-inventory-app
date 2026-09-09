@@ -3,7 +3,7 @@
 const DATABASE_NAME =
   "barcodeInventoryDatabase";
 
-const DATABASE_VERSION = 15;
+const DATABASE_VERSION = 16;
 
 const PRODUCT_STORE_NAME =
   "products";
@@ -52,6 +52,9 @@ const TRANSFER_LIST_STORE_NAME =
 
 const ORDER_REMAINING_HISTORY_STORE_NAME =
   "orderRemainingHistories";
+
+const DISPOSAL_LIST_STORE_NAME =
+  "disposalLists";
 
 const LOCATION_STOCK_UNCONFIRMED_NAME =
   "未確認";
@@ -1144,6 +1147,36 @@ function openDatabase() {
           orderRemainingHistoryStore.createIndex(
             "source",
             "source",
+            { unique: false }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            DISPOSAL_LIST_STORE_NAME
+          )
+        ) {
+          const disposalListStore =
+            database.createObjectStore(
+              DISPOSAL_LIST_STORE_NAME,
+              { keyPath: "id" }
+            );
+
+          disposalListStore.createIndex(
+            "plannedDate",
+            "plannedDate",
+            { unique: false }
+          );
+
+          disposalListStore.createIndex(
+            "status",
+            "status",
+            { unique: false }
+          );
+
+          disposalListStore.createIndex(
+            "updatedAt",
+            "updatedAt",
             { unique: false }
           );
         }
@@ -4153,6 +4186,126 @@ async function deleteTransferList(id) {
       database.close();
       reject(error);
     };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function getAllDisposalLists() {
+  return getAllRecordsFromStore(
+    DISPOSAL_LIST_STORE_NAME
+  );
+}
+
+async function saveDisposalList(record) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      DISPOSAL_LIST_STORE_NAME,
+      "readwrite"
+    );
+
+    transaction.objectStore(
+      DISPOSAL_LIST_STORE_NAME
+    ).put(record);
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve(record);
+    };
+
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function deleteDisposalList(id) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      DISPOSAL_LIST_STORE_NAME,
+      "readwrite"
+    );
+
+    transaction.objectStore(
+      DISPOSAL_LIST_STORE_NAME
+    ).delete(id);
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve();
+    };
+
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function completeDisposalList(
+  completedList,
+  updatedProducts,
+  movements
+) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      [
+        DISPOSAL_LIST_STORE_NAME,
+        PRODUCT_STORE_NAME,
+        MOVEMENT_STORE_NAME
+      ],
+      "readwrite"
+    );
+
+    const disposalStore = transaction.objectStore(
+      DISPOSAL_LIST_STORE_NAME
+    );
+    const productStore = transaction.objectStore(
+      PRODUCT_STORE_NAME
+    );
+    const movementStore = transaction.objectStore(
+      MOVEMENT_STORE_NAME
+    );
+
+    updatedProducts.forEach(function (product) {
+      productStore.put(
+        normalizeProductLocationStocks(product)
+      );
+    });
+
+    movements.forEach(function (movement) {
+      movementStore.add(movement);
+    });
+
+    disposalStore.put(completedList);
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve({
+        list: completedList,
+        products: updatedProducts,
+        movements: movements
+      });
+    };
+
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+
     transaction.onabort = transaction.onerror;
   });
 }

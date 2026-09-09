@@ -37,7 +37,7 @@ async function exportFullBackup() {
   button.textContent = "バックアップ内容を確認しています...";
 
   try {
-    const [productsData, movements, stocktakings, submissions, reflections, salesPlans, salesActuals, salesImportBatches, shippingWishes, shippingSchedules, shippingAllocations, shippingWarehouseAllocations, shippingArrivalReceipts, transferLists, orderRemainingHistories, restoreLogs] =
+    const [productsData, movements, stocktakings, submissions, reflections, salesPlans, salesActuals, salesImportBatches, shippingWishes, shippingSchedules, shippingAllocations, shippingWarehouseAllocations, shippingArrivalReceipts, transferLists, orderRemainingHistories, disposalLists, restoreLogs] =
       await Promise.all([
         getAllProducts(),
         getAllStockMovements(),
@@ -54,6 +54,7 @@ async function exportFullBackup() {
         getAllShippingArrivalReceipts(),
         getAllTransferLists(),
         getAllOrderRemainingHistories(),
+        getAllDisposalLists(),
         getAllRestoreLogs()
       ]);
 
@@ -73,7 +74,8 @@ async function exportFullBackup() {
               { label: "販売実績CSV取込履歴", value: `${salesImportBatches.length}件` },
               { label: "船便スケジュール", value: `${shippingSchedules.length}件` },
               { label: "商品移動リスト", value: `${transferLists.length}件` },
-              { label: "発注残変更履歴", value: `${orderRemainingHistories.length}件` }
+              { label: "発注残変更履歴", value: `${orderRemainingHistories.length}件` },
+              { label: "廃棄リスト", value: `${disposalLists.length}件` }
             ],
             notice: "このバックアップには会社の在庫情報が含まれます。第三者が見られる場所や公開された場所には保存しないでください。",
             isConfirm: true,
@@ -94,8 +96,8 @@ async function exportFullBackup() {
     const appSettings = collectAppSettingsForBackup();
     const backupData = {
       backupType: "barcode-inventory-app",
-      backupVersion: 10,
-      appVersion: "v244",
+      backupVersion: 11,
+      appVersion: "v245",
       appName: "バーコード在庫・棚卸管理",
       exportedAt: exportedAt.toISOString(),
       counts: {
@@ -115,6 +117,7 @@ async function exportFullBackup() {
         transferLists: transferLists.length,
         orderRemainingHistories:
           orderRemainingHistories.length,
+        disposalLists: disposalLists.length,
         restoreLogs: restoreLogs.length
       },
       data: {
@@ -134,6 +137,7 @@ async function exportFullBackup() {
         transferLists: transferLists,
         orderRemainingHistories:
           orderRemainingHistories,
+        disposalLists: disposalLists,
         appSettings: appSettings,
         restoreLogs: restoreLogs
       }
@@ -157,7 +161,8 @@ async function exportFullBackup() {
           { label: "棚卸履歴", value: `${stocktakings.length}件` },
           { label: "販売実績", value: `${salesActuals.length}件` },
           { label: "商品移動リスト", value: `${transferLists.length}件` },
-          { label: "発注残変更履歴", value: `${orderRemainingHistories.length}件` }
+          { label: "発注残変更履歴", value: `${orderRemainingHistories.length}件` },
+          { label: "廃棄リスト", value: `${disposalLists.length}件` }
         ],
         notice: "会社の在庫情報を含むため、安全な場所に保存してください。",
         confirmText: "確認して閉じる"

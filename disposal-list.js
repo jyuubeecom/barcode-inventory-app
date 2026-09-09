@@ -1167,23 +1167,51 @@
       return;
     }
 
-    const rows = list.items.map(function (item, index) {
-      const image = item.photoDataUrl
-        ? `<img class="photo" src="${escapeAttribute(item.photoDataUrl)}" alt="商品写真">`
-        : '<div class="no-photo">写真なし</div>';
-      return `
-        <tr>
-          <td class="no">${index + 1}</td>
-          <td><strong>${escapeHtml(item.internalCode || "")}</strong><small>廃棄元：${escapeHtml(item.location || "")}</small></td>
-          <td><strong>${escapeHtml(item.productCode || "-")}</strong><small>${escapeHtml(item.productName || "")}</small></td>
-          <td class="qty">${normalizePositiveInteger(item.quantity).toLocaleString("ja-JP")}個</td>
-          <td class="photo-cell">${image}</td>
-        </tr>
-      `;
-    }).join("");
-
+    const ITEMS_PER_PAGE = 4;
+    const pageCount = Math.ceil(list.items.length / ITEMS_PER_PAGE);
     const statusText = list.status === STATUS_COMPLETED ? "在庫反映済み" : "下書き";
     const totalQty = getListTotalQuantity(list);
+
+    const pagesHtml = Array.from({ length: pageCount }, function (_, pageIndex) {
+      const startIndex = pageIndex * ITEMS_PER_PAGE;
+      const pageItems = list.items.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+      const rows = pageItems.map(function (item, itemIndex) {
+        const image = item.photoDataUrl
+          ? `<img class="photo" src="${escapeAttribute(item.photoDataUrl)}" alt="商品写真">`
+          : '<div class="no-photo">写真なし</div>';
+        return `
+          <tr>
+            <td class="no">${startIndex + itemIndex + 1}</td>
+            <td><strong>${escapeHtml(item.internalCode || "")}</strong><small>廃棄元：${escapeHtml(item.location || "")}</small></td>
+            <td><strong>${escapeHtml(item.productCode || "-")}</strong><small>${escapeHtml(item.productName || "")}</small></td>
+            <td class="qty">${normalizePositiveInteger(item.quantity).toLocaleString("ja-JP")}個</td>
+            <td class="photo-cell">${image}</td>
+          </tr>
+        `;
+      }).join("");
+
+      return `
+        <section class="print-sheet">
+          <div class="header">
+            <h1>廃棄リスト</h1>
+            <div class="status">${escapeHtml(statusText)}</div>
+          </div>
+          <table class="meta">
+            <tr><th>廃棄予定日</th><td>${escapeHtml(formatDate(list.plannedDate))}</td><th>担当者</th><td>${escapeHtml(list.person || "")}</td></tr>
+            <tr><th>メモ</th><td colspan="3">${escapeHtml(list.memo || "")}</td></tr>
+          </table>
+          <table class="list">
+            <thead><tr><th>No.</th><th>社内コード</th><th>商品コード</th><th>数量</th><th>商品写真</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <div class="summary">
+            <span>全${list.items.length}商品 / 合計 ${totalQty.toLocaleString("ja-JP")}個</span>
+            <span>${pageIndex + 1} / ${pageCount}ページ</span>
+          </div>
+        </section>
+      `;
+    }).join("");
 
     printWindow.document.open();
     printWindow.document.write(`<!DOCTYPE html>
@@ -1193,11 +1221,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>廃棄リスト_${escapeHtml(list.plannedDate || "")}</title>
 <style>
-  @page { size: 210mm 297mm; margin: 10mm; }
+  @page { size: A4 portrait; margin: 10mm; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; color: #111; font-family: "Yu Gothic", "Meiryo", sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { font-size: 10pt; background: #e7ebef; }
   .print-sheet { width: 210mm; min-height: 297mm; margin: 10px auto; padding: 10mm; background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.16); }
+  .print-sheet:not(:last-child) { break-after: page; page-break-after: always; }
   h1 { margin: 0; font-size: 20pt; letter-spacing: .08em; }
   .header { display: flex; justify-content: space-between; align-items: flex-end; gap: 10mm; padding-bottom: 4mm; border-bottom: 1.2pt solid #111; }
   .status { font-weight: 700; }
@@ -1220,10 +1249,11 @@
   .photo-cell { text-align: center; padding: 1.5mm !important; }
   .photo { width: 42mm; height: 42mm; max-width: 100%; display: block; margin: 0 auto; object-fit: contain; object-position: center; }
   .no-photo { width: 42mm; height: 42mm; max-width: 100%; margin: 0 auto; display: grid; place-items: center; border: .6pt dashed #999; color: #777; font-size: 8pt; }
-  .summary { margin-top: 4mm; text-align: right; font-weight: 800; font-size: 11pt; }
+  .summary { display: flex; justify-content: space-between; align-items: center; gap: 8mm; margin-top: 4mm; font-weight: 800; font-size: 11pt; }
   @media print {
     html, body { background: #fff; }
     .print-sheet { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+    .print-sheet:not(:last-child) { break-after: page; page-break-after: always; }
   }
   @media screen and (max-width: 820px) {
     .print-sheet { width: calc(100% - 16px); min-height: auto; margin: 8px; padding: 8mm; }
@@ -1231,21 +1261,7 @@
 </style>
 </head>
 <body>
-<div class="print-sheet">
-  <div class="header">
-    <h1>廃棄リスト</h1>
-    <div class="status">${escapeHtml(statusText)}</div>
-  </div>
-  <table class="meta">
-    <tr><th>廃棄予定日</th><td>${escapeHtml(formatDate(list.plannedDate))}</td><th>担当者</th><td>${escapeHtml(list.person || "")}</td></tr>
-    <tr><th>メモ</th><td colspan="3">${escapeHtml(list.memo || "")}</td></tr>
-  </table>
-  <table class="list">
-    <thead><tr><th>No.</th><th>社内コード</th><th>商品コード</th><th>数量</th><th>商品写真</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-  <div class="summary">${list.items.length}商品 / 合計 ${totalQty.toLocaleString("ja-JP")}個</div>
-</div>
+${pagesHtml}
 <script>
   window.addEventListener("load", function () {
     const images = Array.from(document.images);

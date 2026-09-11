@@ -666,7 +666,11 @@ function createHomeAlertSnapshot(
             ),
             Number(row.plannedQuantity || 0),
             String(row.plannedPreparationDeadline || ""),
-            Boolean(row.isBackorder)
+            Boolean(row.isBackorder),
+            Number(row.priorYearAdjustmentRatio || 1),
+            String(row.priorYearAdjustmentStatus || "insufficient-history"),
+            String(row.priorYearAdjustmentReason || ""),
+            Number(row.seasonalMonthlyAverage || 0)
           ];
         }
       )
@@ -1593,6 +1597,51 @@ function renderHomePurchaseAlert(
   );
 }
 
+function getHomeShippingPriorYearAdjustmentDisplay(row) {
+  const status = String(row && row.priorYearAdjustmentStatus || "insufficient-history");
+  const ratio = Math.max(0, Number(row && row.priorYearAdjustmentRatio || 1));
+  const monthlyEquivalent = Math.max(0, Math.ceil(Number(row && row.seasonalMonthlyAverage || 0)));
+  const reason = String(row && row.priorYearAdjustmentReason || "").trim();
+
+  if (status === "applied") {
+    return {
+      text: `📊 前年補正 ×${ratio.toFixed(2)}（${monthlyEquivalent.toLocaleString("ja-JP")}個/月相当）`,
+      cssClass: "home-alert-shipping-prior-year-applied",
+      title: reason || "前年同月の増減を現在の月平均へ反映しています"
+    };
+  }
+
+  if (status === "same") {
+    return {
+      text: `📊 前年補正 ×${ratio.toFixed(2)}（前年とほぼ同じ）`,
+      cssClass: "home-alert-shipping-prior-year-same",
+      title: reason || "前年とほぼ同じため補正量はありません"
+    };
+  }
+
+  if (status === "base-average-zero") {
+    return {
+      text: "📊 前年補正なし（基本月平均0個）",
+      cssClass: "home-alert-shipping-prior-year-none",
+      title: reason || "現在の6か月月平均が0個のため前年補正を行いません"
+    };
+  }
+
+  if (status === "baseline-zero") {
+    return {
+      text: "📊 前年補正なし（比較基準0個）",
+      cssClass: "home-alert-shipping-prior-year-none",
+      title: reason || "前年同月の直前6か月平均が0個のため増減率を計算できません"
+    };
+  }
+
+  return {
+    text: "📊 前年補正なし（実績不足）",
+    cssClass: "home-alert-shipping-prior-year-none",
+    title: reason || "前年補正に必要な販売実績が不足しています"
+  };
+}
+
 function renderHomeShippingAlert(
   box,
   data
@@ -1726,6 +1775,7 @@ function renderHomeShippingAlert(
         const recommended = Number(row.recommendedQuantity || 0);
         const saved = Number(row.currentAllocation || 0);
         const remaining = Number(row.remainingQuantity || 0);
+        const priorYear = getHomeShippingPriorYearAdjustmentDisplay(row);
         return `
           <div class="home-alert-item ${row.isBackorder ? "home-alert-item-backorder" : ""}">
             <div>
@@ -1736,6 +1786,7 @@ function renderHomeShippingAlert(
                 ${seasonal}
               </strong>
               <span>${escapeHomeAlertHtml(row.productName || "商品名未登録")}</span>
+              <span class="home-alert-shipping-prior-year ${priorYear.cssClass}" title="${escapeHomeAlertHtml(priorYear.title)}">${escapeHomeAlertHtml(priorYear.text)}</span>
               ${Number(row.plannedQuantity || 0) > 0 ? `<span class="home-alert-shipping-detail home-alert-shipping-plan-detail">販売予定 ${Number(row.plannedQuantity || 0).toLocaleString("ja-JP")}個を7日前に一括計上 / ${Number(row.plannedPlanCount || 0) > 1 ? "最短" : ""}準備期限 ${escapeHomeAlertHtml(formatHomeAlertPrintDate(row.plannedPreparationDeadline || ""))}${Number(row.plannedPlanCount || 0) > 1 ? `（${Number(row.plannedPlanCount || 0).toLocaleString("ja-JP")}件）` : ""}</span>` : ""}
               <span class="home-alert-shipping-detail">
                 推奨 ${recommended.toLocaleString("ja-JP")}個 / 保存済 ${saved.toLocaleString("ja-JP")}個
@@ -2469,6 +2520,13 @@ function printHomeAlertReport(mode) {
       text-align: center;
     }
 
+    .print-shipping-prior-year-note {
+      margin-top: 2px;
+      color: #8a4b08;
+      font-size: 6.8pt;
+      font-weight: 700;
+    }
+
     .print-seasonal-note {
       margin-top: 2px;
       color: #8a4b08;
@@ -2712,7 +2770,7 @@ function createHomeShippingPrintSection(
                   <td class="center">${index + 1}</td>
                   <td>${escapeHomeAlertHtml(row.internalCode || "-")}</td>
                   <td>${escapeHomeAlertHtml(row.productCode || "-")}</td>
-                  <td>${escapeHomeAlertHtml(row.productName || "商品名未登録")}${Number(row.plannedQuantity || 0) > 0 ? `<div class="print-shipping-plan-note">販売予定 ${formatHomeAlertPrintQuantity(row.plannedQuantity)}個を7日前一括 / ${Number(row.plannedPlanCount || 0) > 1 ? "最短" : ""}準備 ${escapeHomeAlertHtml(formatHomeAlertPrintDate(row.plannedPreparationDeadline || ""))}${Number(row.plannedPlanCount || 0) > 1 ? `（${Number(row.plannedPlanCount || 0).toLocaleString("ja-JP")}件）` : ""}</div>` : ""}</td>
+                  <td>${escapeHomeAlertHtml(row.productName || "商品名未登録")}<div class="print-shipping-prior-year-note">${escapeHomeAlertHtml(getHomeShippingPriorYearAdjustmentDisplay(row).text)}</div>${Number(row.plannedQuantity || 0) > 0 ? `<div class="print-shipping-plan-note">販売予定 ${formatHomeAlertPrintQuantity(row.plannedQuantity)}個を7日前一括 / ${Number(row.plannedPlanCount || 0) > 1 ? "最短" : ""}準備 ${escapeHomeAlertHtml(formatHomeAlertPrintDate(row.plannedPreparationDeadline || ""))}${Number(row.plannedPlanCount || 0) > 1 ? `（${Number(row.plannedPlanCount || 0).toLocaleString("ja-JP")}件）` : ""}</div>` : ""}</td>
                   <td class="number">${formatHomeAlertPrintQuantity(row.recommendedQuantity)}個</td>
                   <td class="number">${formatHomeAlertPrintQuantity(row.currentAllocation)}個</td>
                   <td class="number remaining">${formatHomeAlertPrintQuantity(row.remainingQuantity)}個</td>
@@ -3299,6 +3357,36 @@ function createHomeAlertPanelStyle() {
       white-space: normal;
       overflow: visible;
       text-overflow: clip;
+    }
+
+    .home-alert-shipping-prior-year {
+      display: block;
+      width: fit-content;
+      max-width: 100%;
+      margin-top: 4px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .home-alert-shipping-prior-year-applied {
+      color: #8a4b08;
+      background: #fff2d8;
+      border: 1px solid #efbd6b;
+    }
+
+    .home-alert-shipping-prior-year-same {
+      color: #36556c;
+      background: #edf6fb;
+      border: 1px solid #bdd8e8;
+    }
+
+    .home-alert-shipping-prior-year-none {
+      color: #626b73;
+      background: #f2f4f5;
+      border: 1px solid #d5dade;
     }
 
     .home-alert-shipping-detail {

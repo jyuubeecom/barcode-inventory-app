@@ -800,6 +800,8 @@ function getShippingAllocationRows(schedule) {
         seasonalHistoryEndMonth: priorYearContext.historyEndMonth,
         priorYearAdjustmentRatio: seasonalEstimate.priorYearRatio,
         priorYearMonthsUsed: seasonalEstimate.priorYearMonthsUsed,
+        priorYearAdjustmentStatus: seasonalEstimate.priorYearStatus,
+        priorYearAdjustmentReason: seasonalEstimate.priorYearReason,
         nextScheduleId: targetPeriod.nextSchedule ? targetPeriod.nextSchedule.id : "",
         nextScheduleName: targetPeriod.nextSchedule ? targetPeriod.nextSchedule.name : ""
       };
@@ -1027,9 +1029,8 @@ function renderShippingAllocationTable() {
         ? `<div class="shipping-allocation-locked-box"><span>今回の船便</span><strong class="shipping-allocation-readonly-quantity">${item.currentAllocation.toLocaleString("ja-JP")}個</strong></div>`
         : `<label class="shipping-allocation-input-box"><span>今回の船便</span><div class="shipping-allocation-input-row"><input type="number" min="0" step="1" value="${item.currentAllocation > 0 ? item.currentAllocation : 0}" class="shipping-allocation-quantity" data-internal-code="${escapeShippingHtml(item.internalCode)}" data-recommended-quantity="${item.recommendedQuantity}" inputmode="numeric"><strong>個</strong></div><div class="shipping-allocation-recommended-row"><small>推奨 ${item.recommendedQuantity.toLocaleString("ja-JP")}個</small><button type="button" class="shipping-allocation-apply-recommended">推奨を入れる</button></div></label>`;
 
-      const seasonalMetricHtml = item.seasonalApplied
-        ? `<div class="shipping-allocation-metric shipping-allocation-metric-seasonal"><span>前年実績補正</span><strong>📊 ×${Number(item.priorYearAdjustmentRatio || 1).toFixed(2)}（${Math.ceil(item.seasonalMonthlyAverage).toLocaleString("ja-JP")}個/月相当）</strong><small>前年同月の増減を${item.seasonalDays.toLocaleString("ja-JP")}日分に自動反映</small></div>`
-        : "";
+      const priorYearDisplay = getShippingPriorYearAdjustmentDisplay(item);
+      const seasonalMetricHtml = `<div class="shipping-allocation-metric shipping-allocation-metric-seasonal"><span>前年実績補正</span><strong>${priorYearDisplay.value}</strong><small>${priorYearDisplay.detail}</small></div>`;
 
       card.innerHTML = `
         <div class="shipping-allocation-item-head">
@@ -2354,6 +2355,8 @@ function printShippingAllocationList() {
         seasonalDays: computed ? computed.seasonalDays : 0,
         priorYearAdjustmentRatio: computed ? computed.priorYearAdjustmentRatio : 1,
         priorYearMonthsUsed: computed ? computed.priorYearMonthsUsed : 0,
+        priorYearAdjustmentStatus: computed ? computed.priorYearAdjustmentStatus : "insufficient-history",
+        priorYearAdjustmentReason: computed ? computed.priorYearAdjustmentReason : "必要な前年実績が不足しています",
         isBackorder: Boolean(computed && computed.isBackorder),
         quantity: Number(allocation.quantity) || 0,
         location: product.location || ""
@@ -2374,7 +2377,7 @@ function printShippingAllocationList() {
         <td>${index + 1}</td>
         <td>${escapeShippingHtml(row.internalCode)}</td>
         <td>${escapeShippingHtml(row.productCode || "-")}</td>
-        <td>${row.isBackorder ? '<span class="backorder-badge">注残</span> ' : ''}${escapeShippingHtml(row.productName)}${row.seasonalApplied ? `<div class="seasonal-note">📊 前年実績補正 ×${Number(row.priorYearAdjustmentRatio || 1).toFixed(2)} / ${Math.ceil(Number(row.seasonalMonthlyAverage) || 0).toLocaleString("ja-JP")}個/月相当（${Number(row.seasonalDays || 0).toLocaleString("ja-JP")}日）</div>` : ""}</td>
+        <td>${row.isBackorder ? '<span class="backorder-badge">注残</span> ' : ''}${escapeShippingHtml(row.productName)}<div class="seasonal-note">${getShippingPriorYearAdjustmentDisplay(row).print}</div></td>
         <td class="num">${formatShippingPrintNumber(row.monthlyAverage)}</td>
         <td class="num">${formatShippingPrintNumber(row.periodSalesEstimate)}</td>
         <td class="num">${formatShippingPrintNumber(row.plannedQuantity)}${Number(row.plannedQuantity || 0) > 0 && row.plannedPreparationDeadline ? `<div class="plan-prep-note">${Number(row.plannedPlanCount || 0) > 1 ? "最短" : ""}準備 ${escapeShippingHtml(formatShippingDate(row.plannedPreparationDeadline))}${Number(row.plannedPlanCount || 0) > 1 ? `（${Number(row.plannedPlanCount || 0).toLocaleString("ja-JP")}件）` : ""}</div>` : ""}</td>
@@ -3069,6 +3072,55 @@ function buildShippingPriorYearAdjustmentContext(targetPeriod) {
   };
 }
 
+function getShippingPriorYearAdjustmentDisplay(item) {
+  const status = String(item && item.priorYearAdjustmentStatus || "insufficient-history");
+  const ratio = Math.max(0, Number(item && item.priorYearAdjustmentRatio || 1));
+  const monthlyEquivalent = Math.max(
+    0,
+    Math.ceil(Number(item && item.seasonalMonthlyAverage || item && item.monthlyAverage || 0))
+  );
+  const reason = String(item && item.priorYearAdjustmentReason || "").trim();
+
+  if (status === "applied") {
+    const days = Math.max(0, Number(item && item.seasonalDays || 0));
+    return {
+      value: `📊 ×${ratio.toFixed(2)}（${monthlyEquivalent.toLocaleString("ja-JP")}個/月相当）`,
+      detail: `前年同月の増減を${days.toLocaleString("ja-JP")}日分に自動反映`,
+      print: `📊 前年実績補正 ×${ratio.toFixed(2)} / ${monthlyEquivalent.toLocaleString("ja-JP")}個/月相当`
+    };
+  }
+
+  if (status === "same") {
+    return {
+      value: `📊 ×${ratio.toFixed(2)}（${monthlyEquivalent.toLocaleString("ja-JP")}個/月相当）`,
+      detail: "前年とほぼ同じため、補正量はありません",
+      print: `📊 前年実績補正 ×${ratio.toFixed(2)} / 前年とほぼ同じ`
+    };
+  }
+
+  if (status === "base-average-zero") {
+    return {
+      value: "適用なし（基本月平均0個）",
+      detail: "現在の6か月月平均が0個のため、前年補正を行いません",
+      print: "前年実績補正：適用なし（基本月平均0個）"
+    };
+  }
+
+  if (status === "baseline-zero") {
+    return {
+      value: "適用なし（比較基準0個）",
+      detail: reason || "前年同月の直前6か月平均が0個のため、増減率を計算できません",
+      print: "前年実績補正：適用なし（前年の比較基準0個）"
+    };
+  }
+
+  return {
+    value: "適用なし（実績不足）",
+    detail: reason || "前年補正に必要な販売実績が不足しています",
+    print: "前年実績補正：適用なし（実績不足）"
+  };
+}
+
 function calculateShippingPriorYearPeriodEstimate(
   monthlyAverage,
   targetPeriod,
@@ -3078,22 +3130,36 @@ function calculateShippingPriorYearPeriodEstimate(
   const baseAverage = Math.max(0, Number(monthlyAverage) || 0);
   const days = Math.max(0, Number(targetPeriod && targetPeriod.days) || 0);
   const baseEstimate = Math.max(0, Math.ceil((baseAverage / 30) * days));
-  const fallback = {
-    applied: false,
-    periodSalesEstimate: baseEstimate,
-    trendType: "",
-    seasonKey: "",
-    seasonLabel: "",
-    seasonIcon: "",
-    seasonalMonthlyAverage: baseAverage,
-    seasonalDays: 0,
-    priorYearRatio: 1,
-    priorYearMonthsUsed: 0
-  };
 
-  if (baseAverage <= 0) return fallback;
-  if (!priorYearContext || !(priorYearContext.monthRules instanceof Map)) return fallback;
-  if (!isShippingIsoDate(targetPeriod.startDate) || !isShippingIsoDate(targetPeriod.endDate)) return fallback;
+  function createFallback(status, reason) {
+    return {
+      applied: false,
+      periodSalesEstimate: baseEstimate,
+      trendType: "",
+      seasonKey: "",
+      seasonLabel: "",
+      seasonIcon: "",
+      seasonalMonthlyAverage: baseAverage,
+      seasonalDays: 0,
+      priorYearRatio: 1,
+      priorYearMonthsUsed: 0,
+      priorYearStatus: status,
+      priorYearReason: reason || ""
+    };
+  }
+
+  if (baseAverage <= 0) {
+    return createFallback(
+      "base-average-zero",
+      "現在の6か月月平均が0個のため、前年補正を行いません"
+    );
+  }
+  if (!priorYearContext || !(priorYearContext.monthRules instanceof Map)) {
+    return createFallback("insufficient-history", "前年補正に必要な販売実績が不足しています");
+  }
+  if (!isShippingIsoDate(targetPeriod.startDate) || !isShippingIsoDate(targetPeriod.endDate)) {
+    return createFallback("insufficient-history", "対象期間を確認できないため、前年補正を行いません");
+  }
 
   const monthMap = priorYearContext.monthlyByProduct instanceof Map
     ? (priorYearContext.monthlyByProduct.get(String(internalCode || "").trim()) || new Map())
@@ -3101,12 +3167,16 @@ function calculateShippingPriorYearPeriodEstimate(
 
   const start = parseShippingIsoDate(targetPeriod.startDate);
   const end = parseShippingIsoDate(targetPeriod.endDate);
-  if (!start || !end) return fallback;
+  if (!start || !end) {
+    return createFallback("insufficient-history", "対象期間を確認できないため、前年補正を行いません");
+  }
 
   let adjustedRaw = 0;
   let appliedDays = 0;
   let ratioDays = 0;
   let ratioWeightedSum = 0;
+  let enoughHistoryRuleCount = 0;
+  let baselineZeroRuleCount = 0;
   const usedTargetMonths = new Set();
 
   const ratioByTargetMonth = new Map();
@@ -3116,6 +3186,7 @@ function calculateShippingPriorYearPeriodEstimate(
       return;
     }
 
+    enoughHistoryRuleCount += 1;
     const baselineTotal = rule.baselineMonthKeys.reduce(function (sum, monthKey) {
       return sum + Math.max(0, Number(monthMap.get(monthKey) || 0));
     }, 0);
@@ -3126,6 +3197,7 @@ function calculateShippingPriorYearPeriodEstimate(
     );
 
     if (!Number.isFinite(baselineAverage) || baselineAverage <= 0) {
+      baselineZeroRuleCount += 1;
       ratioByTargetMonth.set(targetMonthKey, 1);
       return;
     }
@@ -3160,10 +3232,43 @@ function calculateShippingPriorYearPeriodEstimate(
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 
+  if (usedTargetMonths.size === 0) {
+    if (enoughHistoryRuleCount === 0) {
+      return createFallback(
+        "insufficient-history",
+        "前年同月と、その直前6か月分の販売実績がそろっていません"
+      );
+    }
+    if (baselineZeroRuleCount >= enoughHistoryRuleCount) {
+      return createFallback(
+        "baseline-zero",
+        "前年同月の直前6か月平均が0個のため、増減率を計算できません"
+      );
+    }
+    return createFallback("insufficient-history", "前年補正に必要な販売実績が不足しています");
+  }
+
   const adjustedEstimate = Math.max(0, Math.ceil(adjustedRaw));
   const weightedRatio = ratioDays > 0 ? ratioWeightedSum / ratioDays : 1;
+  const adjustedMonthlyAverage = baseAverage * weightedRatio;
   const applied = appliedDays > 0 && Math.abs(weightedRatio - 1) >= 0.01;
-  if (!applied) return fallback;
+
+  if (!applied) {
+    return {
+      applied: false,
+      periodSalesEstimate: baseEstimate,
+      trendType: "",
+      seasonKey: "prior-year",
+      seasonLabel: "前年同月",
+      seasonIcon: "📊",
+      seasonalMonthlyAverage: adjustedMonthlyAverage,
+      seasonalDays: 0,
+      priorYearRatio: weightedRatio,
+      priorYearMonthsUsed: usedTargetMonths.size,
+      priorYearStatus: "same",
+      priorYearReason: "前年とほぼ同じため、補正量はありません"
+    };
+  }
 
   return {
     applied: true,
@@ -3172,10 +3277,12 @@ function calculateShippingPriorYearPeriodEstimate(
     seasonKey: "prior-year",
     seasonLabel: "前年同月",
     seasonIcon: "📊",
-    seasonalMonthlyAverage: baseAverage * weightedRatio,
+    seasonalMonthlyAverage: adjustedMonthlyAverage,
     seasonalDays: appliedDays,
     priorYearRatio: weightedRatio,
-    priorYearMonthsUsed: usedTargetMonths.size
+    priorYearMonthsUsed: usedTargetMonths.size,
+    priorYearStatus: "applied",
+    priorYearReason: "前年同月の増減を自動反映しています"
   };
 }
 
@@ -4353,6 +4460,10 @@ window.shippingScheduleApp.getHomeAlertData =
                 Math.max(0, Number(row.seasonalMonthlyAverage || 0)),
               priorYearAdjustmentRatio:
                 Math.max(0, Number(row.priorYearAdjustmentRatio || 1)),
+              priorYearAdjustmentStatus:
+                String(row.priorYearAdjustmentStatus || "insufficient-history"),
+              priorYearAdjustmentReason:
+                String(row.priorYearAdjustmentReason || ""),
               isBackorder:
                 Boolean(row.isBackorder)
             };

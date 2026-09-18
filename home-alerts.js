@@ -4,7 +4,7 @@
    v222 PCホーム右側 要確認パネル + 販売予定在庫不足 + 注残優先表示 + 印刷 + 折りたたみ + 更新通知
    ・発注必要商品
    ・次の未確定船便で船積みが必要な商品
-   ・直近の販売予定数量（一番近い予定と重なる予定を合算）に対して「現在庫」が不足する商品
+   ・直近の販売予定数量（一番近い予定と重なる予定を合算）に対して「現在庫＋直近の確定船便」が不足する商品
    ・PC表示のみ
    ・通常は折りたたんでホーム画面を広く使う
    ・発注 / 船積み / 販売予定不足の内容が変わったら画面上部へ通知
@@ -696,6 +696,10 @@ function createHomeAlertSnapshot(
             ),
             Number(row.plannedQuantity || 0),
             Number(row.currentStock || 0),
+            Number(row.nearestShippingQuantity || 0),
+            Number(row.nearestShippingScheduledQuantity || 0),
+            String(row.nearestShippingDate || ""),
+            Boolean(row.nearestShippingUsable),
             Number(row.orderRemaining || 0),
             Number(row.shortage || 0),
             String(row.nextShippingDate || "")
@@ -1260,6 +1264,22 @@ async function getHomeShippingAlertData() {
 }
 
 
+
+async function getHomeNearestIncomingShippingSupplyData() {
+  if (
+    !window.shippingScheduleApp ||
+    typeof window.shippingScheduleApp.getNextIncomingSupplyData !== "function"
+  ) {
+    return {
+      hasSchedule: false,
+      schedule: null,
+      rows: []
+    };
+  }
+
+  return window.shippingScheduleApp.getNextIncomingSupplyData();
+}
+
 async function getHomeSalesPlanStockAlertData() {
   if (
     typeof getAllProducts !== "function" ||
@@ -1272,11 +1292,32 @@ async function getHomeSalesPlanStockAlertData() {
 
   const results = await Promise.all([
     getAllProducts(),
-    getAllSalesPlans()
+    getAllSalesPlans(),
+    getHomeNearestIncomingShippingSupplyData()
   ]);
 
   const products = Array.isArray(results[0]) ? results[0] : [];
   const plans = Array.isArray(results[1]) ? results[1] : [];
+  const nearestShippingData = results[2] || { hasSchedule: false, schedule: null, rows: [] };
+  const nearestShippingSchedule = nearestShippingData && nearestShippingData.schedule || null;
+  const nearestShippingDate = String(
+    nearestShippingSchedule && nearestShippingSchedule.warehouseArrivalDate || ""
+  );
+  const nearestShippingName = String(
+    nearestShippingSchedule && nearestShippingSchedule.name || ""
+  );
+  const nearestShippingQuantityMap = new Map();
+
+  (Array.isArray(nearestShippingData && nearestShippingData.rows)
+    ? nearestShippingData.rows
+    : []
+  ).forEach(function (row) {
+    const code = String(row && row.internalCode || "").trim();
+    const quantity = getHomeAlertNonNegativeNumber(row && row.quantity);
+    if (code && quantity > 0) {
+      nearestShippingQuantityMap.set(code, quantity);
+    }
+  });
   const today = formatHomeAlertIsoDate(new Date());
   const productMap = new Map();
   const planMap = new Map();
@@ -1347,10 +1388,25 @@ async function getHomeSalesPlanStockAlertData() {
 
     const currentStock = getHomeAlertNonNegativeNumber(product.stock);
     const orderRemaining = getHomeAlertNonNegativeInteger(product.orderRemaining);
-    // 販売予定の在庫不足判定は「現在庫のみ」で行う。
-    // 発注残はこの判定には含めず、別の発注・入荷管理情報として扱う。
-    const availableQuantity = currentStock;
-    const shortage = Math.max(0, plannedQuantity - currentStock);
+    const nearestShippingScheduledQuantity = getHomeAlertNonNegativeNumber(
+      nearestShippingQuantityMap.get(internalCode)
+    );
+
+    // 直近の確定船便は、その商品が船積確定済みで、かつ販売予定の開始日までに
+    // 倉庫到着する場合だけ在庫として加算する。販売予定より後に到着する船便を
+    // 足してしまうと、実際には間に合わない商品を「不足なし」と判定するため。
+    const nearestShippingUsable = Boolean(
+      nearestShippingScheduledQuantity > 0 &&
+      isHomeAlertIsoDate(nearestShippingDate) &&
+      nearestShippingDate <= nearest.startDate
+    );
+    const nearestShippingQuantity = nearestShippingUsable
+      ? nearestShippingScheduledQuantity
+      : 0;
+
+    // 発注残はこの判定には含めない。
+    const availableQuantity = currentStock + nearestShippingQuantity;
+    const shortage = Math.max(0, plannedQuantity - availableQuantity);
 
     if (shortage <= 0) return;
 
@@ -1365,6 +1421,11 @@ async function getHomeSalesPlanStockAlertData() {
       productName: product.productName || "",
       currentStock: currentStock,
       orderRemaining: orderRemaining,
+      nearestShippingQuantity: nearestShippingQuantity,
+      nearestShippingScheduledQuantity: nearestShippingScheduledQuantity,
+      nearestShippingDate: nearestShippingDate,
+      nearestShippingName: nearestShippingName,
+      nearestShippingUsable: nearestShippingUsable,
       availableQuantity: availableQuantity,
       plannedQuantity: plannedQuantity,
       shortage: shortage,
@@ -1914,7 +1975,7 @@ function renderHomeSalesPlanStockAlert(box, data) {
       </div>
       <div class="home-alert-zero">
         <strong>0商品</strong>
-        <span>現在庫で、登録済みの直近の販売予定数量をまかなえます。</span>
+        <span>現在庫＋直近の確定船便で、登録済みの直近の販売予定数量をまかなえます。</span>
       </div>
       <button
         type="button"
@@ -1938,20 +1999,30 @@ function renderHomeSalesPlanStockAlert(box, data) {
       <span>不足合計 ${total.toLocaleString("ja-JP")}個</span>
     </div>
     <p class="home-alert-schedule-name">
-      判定：直近の販売予定合計 ＞ 現在庫
+      判定：直近の販売予定合計 ＞ 現在庫＋直近の確定船便
     </p>
     <div class="home-alert-item-list">
       ${rows.slice(0, 5).map(function (row) {
         const code = row.productCode || row.internalCode || "-";
         const targetRange = formatHomeAlertSalesPlanTargetRange(row);
         const planCount = Math.max(1, Number(row.planCount || 0));
+        const shipQty = Number(row.nearestShippingQuantity || 0);
+        const scheduledShipQty = Number(row.nearestShippingScheduledQuantity || 0);
+        const shipDateLabel = isHomeAlertIsoDate(row.nearestShippingDate)
+          ? formatHomeAlertPrintDate(row.nearestShippingDate)
+          : "";
+        const shipText = scheduledShipQty > 0
+          ? (row.nearestShippingUsable
+              ? `確定船便 ${shipQty.toLocaleString("ja-JP")}個${shipDateLabel ? `（倉庫 ${shipDateLabel}）` : ""}`
+              : `確定船便 ${scheduledShipQty.toLocaleString("ja-JP")}個${shipDateLabel ? `（倉庫 ${shipDateLabel}・対象開始後のため未加算）` : "（今回未加算）"}`)
+          : `確定船便 0個${shipDateLabel ? `（倉庫 ${shipDateLabel}）` : ""}`;
         return `
           <div class="home-alert-item home-alert-item-sales-plan">
             <div>
               <strong>${escapeHomeAlertHtml(code)}</strong>
               <span>${escapeHomeAlertHtml(row.productName || "商品名未登録")}</span>
               <small>
-                直近予定 ${Number(row.plannedQuantity || 0).toLocaleString("ja-JP")}個 / 現在庫 ${Number(row.currentStock || 0).toLocaleString("ja-JP")}個 / 対象 ${escapeHomeAlertHtml(targetRange)}（${planCount.toLocaleString("ja-JP")}件）
+                直近予定 ${Number(row.plannedQuantity || 0).toLocaleString("ja-JP")}個 / 現在庫 ${Number(row.currentStock || 0).toLocaleString("ja-JP")}個 + ${escapeHomeAlertHtml(shipText)} / 対象 ${escapeHomeAlertHtml(targetRange)}（${planCount.toLocaleString("ja-JP")}件）
               </small>
             </div>
             <b>不足 ${Number(row.shortage || 0).toLocaleString("ja-JP")}個</b>
@@ -2936,7 +3007,7 @@ function createHomeSalesPlanPrintSection(data, pageBreak) {
             <th>商品名</th>
             <th>直近販売予定</th>
             <th>対象日・期間</th>
-            <th>現在庫</th>
+            <th>現在庫＋直近の確定船便</th>
             <th>不足数</th>
           </tr>
         </thead>
@@ -2950,7 +3021,16 @@ function createHomeSalesPlanPrintSection(data, pageBreak) {
                 <td>${escapeHomeAlertHtml(row.productName || "商品名未登録")}</td>
                 <td class="number">${formatHomeAlertPrintQuantity(row.plannedQuantity)}個</td>
                 <td>${escapeHomeAlertHtml(formatHomeAlertSalesPlanTargetRange(row))}<div class="print-purchase-detail">${Math.max(1, Number(row.planCount || 0)).toLocaleString("ja-JP")}件を合算</div></td>
-                <td class="number">${formatHomeAlertPrintQuantity(row.currentStock)}個</td>
+                <td class="number">
+                  ${formatHomeAlertPrintQuantity(row.currentStock)}個 + ${formatHomeAlertPrintQuantity(row.nearestShippingQuantity)}個
+                  <div class="print-purchase-detail">${escapeHomeAlertHtml(
+                    Number(row.nearestShippingScheduledQuantity || 0) > 0 && !row.nearestShippingUsable
+                      ? `確定船便 ${formatHomeAlertPrintQuantity(row.nearestShippingScheduledQuantity)}個は対象開始後到着のため未加算`
+                      : (isHomeAlertIsoDate(row.nearestShippingDate)
+                          ? `確定船便 倉庫到着 ${formatHomeAlertPrintDate(row.nearestShippingDate)}`
+                          : "確定船便なし")
+                  )}</div>
+                </td>
                 <td class="number shortage">${formatHomeAlertPrintQuantity(row.shortage)}個</td>
               </tr>
             `;
@@ -2966,7 +3046,7 @@ function createHomeSalesPlanPrintSection(data, pageBreak) {
         <h2>📅 販売予定に対して在庫不足</h2>
         <strong>${count.toLocaleString("ja-JP")}商品</strong>
       </div>
-      <p class="print-purchase-detail">判定：直近の販売予定合計 ＞ 現在庫（一番近い予定と日付・期間が重なる予定を合算）</p>
+      <p class="print-purchase-detail">判定：直近の販売予定合計 ＞ 現在庫＋直近の確定船便（一番近い予定と重なる予定を合算。船積確定済みで、販売予定開始日までに倉庫到着する便だけ加算）</p>
       <div class="print-summary">
         <div class="print-summary-item">
           <span>対象商品数</span>

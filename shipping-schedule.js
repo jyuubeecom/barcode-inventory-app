@@ -4582,6 +4582,106 @@ window.shippingScheduleApp.getHomeAlertData =
     };
   };
 
+
+/* =========================================================
+   v255 販売予定の在庫不足判定用
+   直近の「船積確定済み・未入荷」船便と、確定済み船積数量を返す読み取り専用API
+   ※ 未確定船便は在庫不足判定へ加算しない。
+   ※ 倉庫到着日が今日以降の船便を対象にし、入荷反映済みは除外する。
+   ========================================================= */
+window.shippingScheduleApp.getNextIncomingSupplyData =
+  async function () {
+    await refreshShippingScheduleData();
+
+    const today =
+      getShippingTodayKeyForConfirmation();
+
+    const schedules =
+      shippingScheduleRecords
+        .filter(function (schedule) {
+          if (!schedule) return false;
+          if (isShippingScheduleReceived(schedule.id)) return false;
+          if (!isShippingScheduleConfirmed(schedule)) return false;
+
+          const warehouseDate = String(
+            schedule.warehouseArrivalDate || ""
+          );
+
+          return (
+            isShippingIsoDate(warehouseDate) &&
+            warehouseDate >= today
+          );
+        })
+        .sort(function (a, b) {
+          const aWarehouse = String(a.warehouseArrivalDate || "9999-99-99");
+          const bWarehouse = String(b.warehouseArrivalDate || "9999-99-99");
+          if (aWarehouse !== bWarehouse) {
+            return aWarehouse.localeCompare(bWarehouse);
+          }
+          return compareShippingSchedules(a, b);
+        });
+
+    if (!schedules.length) {
+      return {
+        hasSchedule: false,
+        schedule: null,
+        rows: []
+      };
+    }
+
+    const schedule = schedules[0];
+    const quantityMap = new Map();
+    const infoMap = new Map();
+
+    // 確定時に保存したスナップショットを優先する。
+    // 旧データなどでスナップショットが無い場合のみ、保存済み振分けを読み込む。
+    const confirmedItems =
+      Array.isArray(schedule.shipmentConfirmedItems) &&
+      schedule.shipmentConfirmedItems.length > 0
+        ? schedule.shipmentConfirmedItems
+        : getSavedAllocationsForSchedule(schedule.id);
+
+    confirmedItems.forEach(function (allocation) {
+      const code = String(allocation.internalCode || "").trim();
+      const quantity = Math.max(0, Number(allocation.quantity || 0));
+      if (!code || quantity <= 0) return;
+
+      quantityMap.set(
+        code,
+        Number(quantityMap.get(code) || 0) + quantity
+      );
+
+      if (!infoMap.has(code)) {
+        infoMap.set(code, allocation);
+      }
+    });
+
+    const rows = Array.from(quantityMap.entries())
+      .map(function (entry) {
+        const code = entry[0];
+        const allocation = infoMap.get(code) || {};
+        return {
+          internalCode: code,
+          productCode: allocation.productCode || "",
+          productName: allocation.productName || "",
+          quantity: Math.max(0, Number(entry[1] || 0))
+        };
+      });
+
+    return {
+      hasSchedule: true,
+      schedule: {
+        id: schedule.id || "",
+        name: schedule.name || "",
+        departureDate: schedule.departureDate || "",
+        arrivalDate: schedule.arrivalDate || "",
+        warehouseArrivalDate: schedule.warehouseArrivalDate || "",
+        shipmentConfirmed: true
+      },
+      rows: rows
+    };
+  };
+
 window.shippingScheduleApp.openAllocation =
   function () {
     const button =

@@ -1370,7 +1370,8 @@ async function getHomeSalesPlanStockAlertData() {
       return a.startDate.localeCompare(b.startDate);
     });
 
-    // 一番近い販売予定を基準にし、その予定の日付・期間と直接重なる予定だけを合算する。
+    // 現在進行中の販売予定は除外し、その次に始まる販売予定を基準にする。
+    // その次回予定の日付・期間と直接重なる予定だけを合算し、
     // 重なった予定同士をさらに連鎖させることはしない。
     const nearest = planItems[0];
     const targetItems = planItems.filter(function (item) {
@@ -1468,12 +1469,15 @@ function isHomeAlertFutureSalesPlan(plan, today) {
   const startDate = String(plan.shippingStartDate || "");
   const endDate = String(plan.shippingEndDate || "");
 
+  // ホームの「販売予定に対して在庫不足」では、すでに当日・期間中に
+  // 入っている販売予定は対象外とし、その次に始まる販売予定を基準にする。
+  // 単日の予定も「今日」は進行中扱いとして除外する。
   if (isHomeAlertIsoDate(shippingDate)) {
-    return shippingDate >= today;
+    return shippingDate > today;
   }
 
   if (isHomeAlertIsoDate(startDate) && isHomeAlertIsoDate(endDate)) {
-    return endDate >= today;
+    return startDate > today;
   }
 
   return false;
@@ -1975,7 +1979,7 @@ function renderHomeSalesPlanStockAlert(box, data) {
       </div>
       <div class="home-alert-zero">
         <strong>0商品</strong>
-        <span>現在庫＋直近の確定船便で、登録済みの直近の販売予定数量をまかなえます。</span>
+        <span>現在庫＋直近の確定船便で、現在進行中を除いた次回の販売予定数量をまかなえます。</span>
       </div>
       <button
         type="button"
@@ -1999,7 +2003,7 @@ function renderHomeSalesPlanStockAlert(box, data) {
       <span>不足合計 ${total.toLocaleString("ja-JP")}個</span>
     </div>
     <p class="home-alert-schedule-name">
-      判定：直近の販売予定合計 ＞ 現在庫＋直近の確定船便
+      判定：次回の販売予定合計 ＞ 現在庫＋直近の確定船便
     </p>
     <div class="home-alert-item-list">
       ${rows.slice(0, 5).map(function (row) {
@@ -2022,7 +2026,7 @@ function renderHomeSalesPlanStockAlert(box, data) {
               <strong>${escapeHomeAlertHtml(code)}</strong>
               <span>${escapeHomeAlertHtml(row.productName || "商品名未登録")}</span>
               <small>
-                直近予定 ${Number(row.plannedQuantity || 0).toLocaleString("ja-JP")}個 / 現在庫 ${Number(row.currentStock || 0).toLocaleString("ja-JP")}個 + ${escapeHomeAlertHtml(shipText)} / 対象 ${escapeHomeAlertHtml(targetRange)}（${planCount.toLocaleString("ja-JP")}件）
+                次回予定 ${Number(row.plannedQuantity || 0).toLocaleString("ja-JP")}個 / 現在庫 ${Number(row.currentStock || 0).toLocaleString("ja-JP")}個 + ${escapeHomeAlertHtml(shipText)} / 対象 ${escapeHomeAlertHtml(targetRange)}（${planCount.toLocaleString("ja-JP")}件）
               </small>
             </div>
             <b>不足 ${Number(row.shortage || 0).toLocaleString("ja-JP")}個</b>
@@ -3005,7 +3009,7 @@ function createHomeSalesPlanPrintSection(data, pageBreak) {
             <th>社内コード</th>
             <th>商品コード</th>
             <th>商品名</th>
-            <th>直近販売予定</th>
+            <th>次回販売予定</th>
             <th>対象日・期間</th>
             <th>現在庫＋直近の確定船便</th>
             <th>不足数</th>
@@ -3046,7 +3050,7 @@ function createHomeSalesPlanPrintSection(data, pageBreak) {
         <h2>📅 販売予定に対して在庫不足</h2>
         <strong>${count.toLocaleString("ja-JP")}商品</strong>
       </div>
-      <p class="print-purchase-detail">判定：直近の販売予定合計 ＞ 現在庫＋直近の確定船便（一番近い予定と重なる予定を合算。船積確定済みで、販売予定開始日までに倉庫到着する便だけ加算）</p>
+      <p class="print-purchase-detail">判定：次回の販売予定合計 ＞ 現在庫＋直近の確定船便（現在進行中の予定は除外し、その次に始まる予定と直接重なる予定を合算。船積確定済みで、販売予定開始日までに倉庫到着する便だけ加算）</p>
       <div class="print-summary">
         <div class="print-summary-item">
           <span>対象商品数</span>

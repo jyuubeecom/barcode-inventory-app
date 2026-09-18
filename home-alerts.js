@@ -4,7 +4,7 @@
    v222 PCホーム右側 要確認パネル + 販売予定在庫不足 + 注残優先表示 + 印刷 + 折りたたみ + 更新通知
    ・発注必要商品
    ・次の未確定船便で船積みが必要な商品
-   ・今後の販売予定数量に対して「現在庫＋発注残」が不足する商品
+   ・今後の販売予定数量に対して「現在庫」が不足する商品
    ・PC表示のみ
    ・通常は折りたたんでホーム画面を広く使う
    ・発注 / 船積み / 販売予定不足の内容が変わったら画面上部へ通知
@@ -1325,9 +1325,11 @@ async function getHomeSalesPlanStockAlertData() {
 
     const currentStock = getHomeAlertNonNegativeNumber(product.stock);
     const orderRemaining = getHomeAlertNonNegativeInteger(product.orderRemaining);
-    const availableQuantity = currentStock + orderRemaining;
+    // 販売予定の在庫不足判定は「現在庫のみ」で行う。
+    // 発注残はこの判定には含めず、別の発注・入荷管理情報として扱う。
+    const availableQuantity = currentStock;
     const plannedQuantity = Math.max(0, Number(summary.plannedQuantity || 0));
-    const shortage = Math.max(0, plannedQuantity - availableQuantity);
+    const shortage = Math.max(0, plannedQuantity - currentStock);
 
     if (shortage <= 0) return;
 
@@ -1827,7 +1829,7 @@ function renderHomeSalesPlanStockAlert(box, data) {
       </div>
       <div class="home-alert-zero">
         <strong>0商品</strong>
-        <span>現在庫＋発注残で、登録済みの今後の販売予定数量をまかなえます。</span>
+        <span>現在庫で、登録済みの今後の販売予定数量をまかなえます。</span>
       </div>
       <button
         type="button"
@@ -1851,7 +1853,7 @@ function renderHomeSalesPlanStockAlert(box, data) {
       <span>不足合計 ${total.toLocaleString("ja-JP")}個</span>
     </div>
     <p class="home-alert-schedule-name">
-      判定：今後の販売予定合計 ＞ 現在庫＋発注残
+      判定：今後の販売予定合計 ＞ 現在庫
     </p>
     <div class="home-alert-item-list">
       ${rows.slice(0, 5).map(function (row) {
@@ -1865,7 +1867,7 @@ function renderHomeSalesPlanStockAlert(box, data) {
               <strong>${escapeHomeAlertHtml(code)}</strong>
               <span>${escapeHomeAlertHtml(row.productName || "商品名未登録")}</span>
               <small>
-                予定 ${Number(row.plannedQuantity || 0).toLocaleString("ja-JP")}個 / 在庫＋発注残 ${Number(row.availableQuantity || 0).toLocaleString("ja-JP")}個 / 最短 ${escapeHomeAlertHtml(nextDate)}
+                予定 ${Number(row.plannedQuantity || 0).toLocaleString("ja-JP")}個 / 現在庫 ${Number(row.currentStock || 0).toLocaleString("ja-JP")}個 / 最短 ${escapeHomeAlertHtml(nextDate)}
               </small>
             </div>
             <b>不足 ${Number(row.shortage || 0).toLocaleString("ja-JP")}個</b>

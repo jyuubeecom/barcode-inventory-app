@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v259
+            画面版 v260
           </span>
         </div>
       </div>
@@ -216,14 +216,13 @@
         <details
           class="home-function-panel"
           data-home-panel="product"
-          open
         >
           <summary>
-            商品データ
+            商品・在庫
           </summary>
 
           <p class="home-panel-description">
-            手入力検索、商品CSVの出力・読込を行います。
+            商品検索、現在庫確認、バーコード印刷、商品データの入出力をまとめています。
           </p>
 
           <div
@@ -256,14 +255,13 @@
         <details
           class="home-function-panel"
           data-home-panel="inventory"
-          open
         >
           <summary>
-            入出庫・履歴
+            入出庫・移動
           </summary>
 
           <p class="home-panel-description">
-            在庫の動きと入出庫履歴を確認します。
+            入出庫履歴、商品移動、加工・商品切替、廃棄処理をまとめています。
           </p>
 
           <div
@@ -295,15 +293,32 @@
 
         <details
           class="home-function-panel"
+          data-home-panel="stocktaking"
+        >
+          <summary>
+            棚卸
+          </summary>
+
+          <p class="home-panel-description">
+            通常棚卸、単体確認、棚卸履歴、集約・反映をまとめています。
+          </p>
+
+          <div
+            id="home-stocktaking-buttons"
+            class="home-panel-buttons"
+          ></div>
+        </details>
+
+        <details
+          class="home-function-panel"
           data-home-panel="sales"
-          open
         >
           <summary>
             販売・発注
           </summary>
 
           <p class="home-panel-description">
-            販売予定、通常出荷数量、発注判定、発注残、出荷低迷、船便スケジュールを管理します。
+            販売予定、販売実績、発注判定、発注残、季節変動などをまとめています。
           </p>
 
           <div
@@ -372,7 +387,25 @@
             >
               季節変動商品一覧
             </button>
+          </div>
+        </details>
 
+        <details
+          class="home-function-panel"
+          data-home-panel="shipping"
+        >
+          <summary>
+            船便・入荷
+          </summary>
+
+          <p class="home-panel-description">
+            船便スケジュール、船積数量、倉庫振分け、入荷確認をまとめています。
+          </p>
+
+          <div
+            id="home-shipping-buttons"
+            class="home-panel-buttons"
+          >
             <button
               id="show-shipping-schedule-button"
               type="button"
@@ -398,46 +431,32 @@
 
         <details
           class="home-function-panel"
-          data-home-panel="stocktaking"
-          open
+          data-home-panel="data"
         >
           <summary>
-            棚卸・集約
+            設定・データ
           </summary>
 
           <p class="home-panel-description">
-            商品単体の在庫確認、棚卸履歴、提出データの集約、結果出力を行います。
+            CSV出力・読込、バックアップ・復元、アプリ設定をまとめています。
           </p>
 
           <div
-            id="home-stocktaking-buttons"
+            id="home-data-buttons"
             class="home-panel-buttons"
-          ></div>
-        </details>
-
-        <details
-          class="home-function-panel"
-          data-home-panel="backup"
-          open
-        >
-          <summary>
-            バックアップ・アプリ
-          </summary>
-
-          <p class="home-panel-description">
-            全データの保存・復元とアプリ追加を行います。
-          </p>
-
-          <div
-            id="home-backup-buttons"
-            class="home-panel-buttons"
-          ></div>
+          >
+            <button
+              id="home-open-app-settings-button"
+              type="button"
+            >
+              表示・権限設定を開く
+            </button>
+          </div>
         </details>
 
         <details
           class="home-function-panel"
           data-home-panel="manual"
-          open
         >
           <summary>
             マニュアル

@@ -11,22 +11,14 @@ const HOME_DASHBOARD_GROUPS = Object.freeze({
   "home-product-buttons": [
     "show-barcode-lookup-button",
     "show-unassigned-location-button",
-    "export-products-csv-button",
-    "show-csv-import-button"
+    "show-barcode-print-button"
   ],
   "home-inventory-buttons": [
     "show-history-button",
-    "export-movements-csv-button"
-  ],
-  "home-sales-buttons": [
-    "show-sales-plan-button",
-    "show-sales-plan-list-button",
-    "show-sales-actual-import-button",
-    "show-purchase-required-button",
-    "show-shipping-wish-button",
-    "show-shipping-wish-list-button",
-    "show-shipping-schedule-button",
-    "show-shipping-allocation-button"
+    "show-transfer-list-button",
+    "show-processing-sheet-button",
+    "show-processing-conversion-button",
+    "show-disposal-list-button"
   ],
   "home-stocktaking-buttons": [
     "show-single-stock-check-button",
@@ -34,10 +26,30 @@ const HOME_DASHBOARD_GROUPS = Object.freeze({
     "show-stocktaking-aggregation-button",
     "export-stocktaking-csv-button"
   ],
-  "home-backup-buttons": [
+  "home-sales-buttons": [
+    "show-sales-plan-button",
+    "show-sales-plan-list-button",
+    "show-sales-actual-import-button",
+    "show-normal-shipment-button",
+    "show-purchase-required-button",
+    "show-order-remaining-button",
+    "show-backorder-list-button",
+    "show-low-shipment-button",
+    "show-seasonal-trend-button"
+  ],
+  "home-shipping-buttons": [
+    "show-shipping-wish-button",
+    "show-shipping-wish-list-button",
+    "show-shipping-schedule-button",
+    "show-shipping-allocation-button",
+    "show-shipping-warehouse-allocation-button"
+  ],
+  "home-data-buttons": [
+    "export-products-csv-button",
+    "show-csv-import-button",
+    "export-movements-csv-button",
     "export-full-backup-button",
     "restore-full-backup-button",
-    "restore-backup-file",
     "pwa-install-button"
   ]
 });
@@ -50,15 +62,26 @@ const HOME_DASHBOARD_ACTION_CLASSES = Object.freeze({
   "show-register-button": "home-action-register",
   "show-barcode-lookup-button": "home-action-search",
   "show-unassigned-location-button": "home-action-location",
+  "show-barcode-print-button": "home-action-product",
   "show-history-button": "home-action-history",
+  "show-transfer-list-button": "home-action-inventory",
+  "show-processing-sheet-button": "home-action-inventory",
+  "show-processing-conversion-button": "home-action-inventory",
+  "show-disposal-list-button": "home-action-disposal",
   "show-sales-plan-button": "home-action-sales",
   "show-sales-plan-list-button": "home-action-sales-list",
   "show-sales-actual-import-button": "home-action-sales-import",
+  "show-normal-shipment-button": "home-action-sales",
   "show-purchase-required-button": "home-action-purchase-required",
+  "show-order-remaining-button": "home-action-purchase-required",
+  "show-backorder-list-button": "home-action-purchase-required",
+  "show-low-shipment-button": "home-action-sales",
+  "show-seasonal-trend-button": "home-action-sales",
   "show-shipping-wish-button": "home-action-shipping-wish",
   "show-shipping-wish-list-button": "home-action-shipping-wish-list",
   "show-shipping-schedule-button": "home-action-shipping-schedule",
   "show-shipping-allocation-button": "home-action-shipping-allocation",
+  "show-shipping-warehouse-allocation-button": "home-action-shipping-allocation",
   "show-single-stock-check-button": "home-action-stocktaking",
   "show-stocktaking-history-button": "home-action-stocktaking-history",
   "show-stocktaking-aggregation-button": "home-action-aggregation",
@@ -91,12 +114,42 @@ function initializeHomeDashboard() {
   }
 
   createHomeDashboardStyle();
+  bindHomeDashboardProxyActions(homeScreen);
   organizeHomeDashboardButtons();
   createMobileHomeControls(homeScreen);
   initializeHomeDashboardPanels();
   initializeMobileHomeLayout(homeScreen);
   watchHomeDashboardButtons(homeScreen);
   watchHomeDashboardVisibility(homeScreen);
+}
+
+function bindHomeDashboardProxyActions(homeScreen) {
+  const settingsButton =
+    homeScreen.querySelector(
+      "#home-open-app-settings-button"
+    );
+
+  if (
+    settingsButton &&
+    !settingsButton.dataset.homeProxyBound
+  ) {
+    settingsButton.dataset.homeProxyBound =
+      "true";
+    settingsButton.classList.add(
+      "home-dashboard-action",
+      "home-action-settings"
+    );
+    settingsButton.addEventListener(
+      "click",
+      function () {
+        const target =
+          document.querySelector(
+            "#show-app-settings-button"
+          );
+        if (target) target.click();
+      }
+    );
+  }
 }
 
 function organizeHomeDashboardButtons() {
@@ -383,7 +436,7 @@ function createMobileHomeControls(
   button.className =
     "mobile-home-more-button";
   button.textContent =
-    "その他の機能を表示";
+    "すべての機能を表示";
 
   const note =
     document.createElement("p");
@@ -391,7 +444,7 @@ function createMobileHomeControls(
   note.className =
     "mobile-home-more-note";
   note.textContent =
-    "入出庫履歴、販売・発注、バックアップなどを使う場合はこちら。";
+    "目的別に整理した詳細メニューを開きます。";
 
   button.addEventListener(
     "click",
@@ -570,8 +623,8 @@ function applyMobileExtrasState(
   if (button) {
     button.textContent =
       homeDashboardMobileExtrasOpen
-        ? "その他の機能を閉じる"
-        : "その他の機能を表示";
+        ? "すべての機能を閉じる"
+        : "すべての機能を表示";
 
     button.setAttribute(
       "aria-expanded",
@@ -677,7 +730,7 @@ function initializeHomeDashboardPanels() {
 
     panels.forEach(
       function (panel) {
-        panel.open = isDesktop;
+        panel.open = false;
       }
     );
   };
@@ -1033,6 +1086,47 @@ function createHomeDashboardStyle() {
 
     #home button.home-action-install {
       background-color: #37474f !important;
+    }
+
+    #home button.home-action-product,
+    #home button.home-action-inventory {
+      background-color: #1565c0 !important;
+    }
+
+    #home button.home-action-disposal {
+      background-color: #bf451b !important;
+    }
+
+    #home button.home-action-settings {
+      background-color: #455a64 !important;
+    }
+
+    #home .home-function-panel[data-home-panel="product"] > summary {
+      border-left: 5px solid #00796b;
+    }
+
+    #home .home-function-panel[data-home-panel="inventory"] > summary {
+      border-left: 5px solid #1565c0;
+    }
+
+    #home .home-function-panel[data-home-panel="stocktaking"] > summary {
+      border-left: 5px solid #6a1b9a;
+    }
+
+    #home .home-function-panel[data-home-panel="sales"] > summary {
+      border-left: 5px solid #ef6c00;
+    }
+
+    #home .home-function-panel[data-home-panel="shipping"] > summary {
+      border-left: 5px solid #5e35b1;
+    }
+
+    #home .home-function-panel[data-home-panel="data"] > summary {
+      border-left: 5px solid #546e7a;
+    }
+
+    #home .home-function-panel[data-home-panel="manual"] > summary {
+      border-left: 5px solid #455a64;
     }
 
     #home button.home-dashboard-action:focus-visible,

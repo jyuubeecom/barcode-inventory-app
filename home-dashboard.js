@@ -303,6 +303,24 @@ function createMobileHomeControls(
       }
     );
 
+    const cameraButton =
+      document.createElement("button");
+
+    cameraButton.type = "button";
+    cameraButton.className =
+      "mobile-home-primary-button mobile-home-camera-button";
+    cameraButton.textContent =
+      "カメラでバーコードを読み取る";
+
+    cameraButton.addEventListener(
+      "click",
+      function () {
+        triggerMobileHomeAction(
+          "show-camera-scanner-button"
+        );
+      }
+    );
+
     const stocktakingButton =
       document.createElement("button");
 
@@ -328,6 +346,10 @@ function createMobileHomeControls(
 
     primaryActions.appendChild(
       stockReportButton
+    );
+
+    primaryActions.appendChild(
+      cameraButton
     );
 
     primaryActions.appendChild(
@@ -488,7 +510,7 @@ function initializeMobileHomeLayout(
       if (quickDescription) {
         quickDescription.textContent =
           isMobile
-            ? "商品一覧・現在庫表・棚卸を大きなボタンからすぐ開けます。"
+            ? "商品一覧・現在庫表・バーコード読取・棚卸を大きなボタンからすぐ開けます。"
             : "日常作業はこちらから始めます。";
       }
 
@@ -1154,6 +1176,19 @@ function createHomeDashboardStyle() {
     body[data-resolved-display-mode="mobile"]
       #home.mobile-primary-mode
       .mobile-home-stock-report-button {
+      background: #1565c0;
+    }
+
+    body[data-resolved-display-mode="pc"]
+      #home
+      #show-camera-scanner-button {
+      display: none !important;
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
+      .mobile-home-camera-button {
+      grid-column: 1 / -1;
       background: #1565c0;
     }
 

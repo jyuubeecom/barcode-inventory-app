@@ -1,13 +1,12 @@
 "use strict";
 
 /*
-  v195 保管場所別在庫表 3拠点対応
-  ・保管場所ごとの在庫を画面で確認
-  ・画面では社内コード / 商品コード / 商品名 / 色 / 在庫数 / 商品状態を表示
-  ・選択中の保管場所、または全保管場所をA4縦向きで印刷
-  ・印刷表では「商品状態」「商品名」を外し、手書き用の「確認」「備考」欄を表示
-  ・備考欄は一番右端に配置し、商品名を削除した分だけ広く確保
-  ・画面上の一覧は商品名を残して検索・確認しやすさを維持
+  v257 現在庫表
+  ・現在庫を保管場所ごとに画面表示
+  ・社内コード / 商品コード / 商品名 / 在庫数 / 保管場所 / 商品状態を確認
+  ・保管場所と検索条件で絞り込み
+  ・A4横向きで印刷し、手書き用の確認欄を表示
+  ・同じ商品が複数の保管場所にある場合は、場所ごとの在庫数を別行で表示
   ・作業者モードでも閲覧・印刷可能
 */
 
@@ -15,6 +14,18 @@
   const ALL_LOCATIONS_VALUE = "__all__";
   const LOCATION_OPTIONS = [
     "本社",
+    "本社1階 A区",
+    "本社1階 B区",
+    "本社1階 C区",
+    "本社1階 D区",
+    "本社1階 E区",
+    "本社1階 F区",
+    "本社2階 A区",
+    "本社2階 B区",
+    "本社2階 C区",
+    "本社2階 D区",
+    "本社2階 E区",
+    "本社2階 F区",
     "酒本倉庫1階",
     "酒本倉庫2階"
   ];
@@ -62,7 +73,7 @@
       "show-location-stock-report-button";
     button.type = "button";
     button.textContent =
-      "保管場所別在庫表を見る";
+      "現在庫表を見る";
 
     container.appendChild(button);
   }
@@ -91,10 +102,10 @@
     section.innerHTML = `
       <div class="location-stock-report-heading">
         <div>
-          <span class="location-stock-report-kicker">場所ごとの在庫を確認</span>
-          <h2>保管場所別在庫表</h2>
+          <span class="location-stock-report-kicker">現在の在庫を場所ごとに確認</span>
+          <h2>現在庫表</h2>
           <p>
-            保管場所を選ぶと、その場所にある商品の在庫を一覧で確認できます。
+            現在庫と保管場所を一覧で確認できます。印刷すると確認欄へ手書きでチェックできます。
           </p>
         </div>
       </div>
@@ -129,8 +140,8 @@
           <strong id="location-stock-report-summary-location">全保管場所</strong>
         </article>
         <article>
-          <span>商品数</span>
-          <strong><span id="location-stock-report-product-count">0</span>商品</strong>
+          <span>表示件数</span>
+          <strong><span id="location-stock-report-product-count">0</span>件</strong>
         </article>
         <article>
           <span>在庫合計</span>
@@ -293,7 +304,7 @@
 
       .location-stock-report-table {
         width: 100%;
-        min-width: 960px;
+        min-width: 980px;
         border-collapse: collapse;
       }
 
@@ -507,9 +518,30 @@
       return;
     }
 
+    const previousValue = select.value || ALL_LOCATIONS_VALUE;
+    const rowLocations = Array.from(
+      new Set(
+        state.rows
+          .map(function (row) {
+            return normalizeLocationName(row.location);
+          })
+          .filter(Boolean)
+      )
+    ).sort(function (left, right) {
+      const orderDifference = getLocationOrder(left) - getLocationOrder(right);
+      if (orderDifference !== 0) {
+        return orderDifference;
+      }
+      return compareNatural(left, right);
+    });
+
+    const locations = rowLocations.length > 0
+      ? rowLocations
+      : LOCATION_OPTIONS.slice();
+
     select.innerHTML = [
       `<option value="${ALL_LOCATIONS_VALUE}">全保管場所</option>`,
-      ...LOCATION_OPTIONS.map(
+      ...locations.map(
         function (location) {
           return (
             `<option value="${escapeHtml(location)}">` +
@@ -518,6 +550,16 @@
         }
       )
     ].join("");
+
+    const hasPrevious = Array.from(select.options).some(
+      function (option) {
+        return option.value === previousValue;
+      }
+    );
+
+    select.value = hasPrevious
+      ? previousValue
+      : ALL_LOCATIONS_VALUE;
   }
 
   function bindEvents() {
@@ -588,6 +630,7 @@
         buildAllLocationRows(
           state.products
         );
+      populateLocationOptions();
       renderReport();
     } catch (error) {
       console.error(
@@ -914,14 +957,8 @@
 
   function renderReport() {
     const rows = getVisibleRows();
-    const selectedLocation =
-      getSelectedLocation();
-    const isAll =
-      selectedLocation ===
-      ALL_LOCATIONS_VALUE;
-
-    renderTableHeader(isAll);
-    renderTableBody(rows, isAll);
+    renderTableHeader();
+    renderTableBody(rows);
     renderSummary(rows);
 
     const empty =
@@ -943,12 +980,12 @@
 
     setStatus(
       rows.length > 0
-        ? `${getSelectedLocationLabel()}：${formatNumber(rows.length)}商品を表示しています。`
+        ? `${getSelectedLocationLabel()}：${formatNumber(rows.length)}行の在庫を表示しています。`
         : `${getSelectedLocationLabel()}：該当する在庫はありません。`
     );
   }
 
-  function renderTableHeader(isAll) {
+  function renderTableHeader() {
     const head =
       document.querySelector(
         "#location-stock-report-head"
@@ -961,18 +998,18 @@
     head.innerHTML = `
       <tr>
         <th>No</th>
-        ${isAll ? "<th>保管場所</th>" : ""}
+        <th>保管場所</th>
         <th>社内コード</th>
         <th>商品コード</th>
         <th>商品名</th>
         <th>色</th>
-        <th>在庫数</th>
+        <th>現在庫</th>
         <th>商品状態</th>
       </tr>
     `;
   }
 
-  function renderTableBody(rows, isAll) {
+  function renderTableBody(rows) {
     const body =
       document.querySelector(
         "#location-stock-report-body"
@@ -987,11 +1024,7 @@
         return `
           <tr>
             <td>${index + 1}</td>
-            ${
-              isAll
-                ? `<td class="location-stock-report-location-cell">${escapeHtml(row.location)}</td>`
-                : ""
-            }
+            <td class="location-stock-report-location-cell">${escapeHtml(row.location)}</td>
             <td>${escapeHtml(row.internalCode || "-")}</td>
             <td>${escapeHtml(row.productCode || "-")}</td>
             <td>${escapeHtml(row.productName || "-")}</td>
@@ -1075,63 +1108,30 @@
       )
       ?.remove();
 
-    const selectedLocation =
-      getSelectedLocation();
-    const selectedLabel =
-      getSelectedLocationLabel();
-    const visibleRows =
-      getVisibleRows();
+    const visibleRows = getVisibleRows();
 
-    if (
-      selectedLocation !==
-        ALL_LOCATIONS_VALUE &&
-      visibleRows.length === 0
-    ) {
+    if (visibleRows.length === 0) {
       showNoDataDialog();
       return;
     }
 
-    const overlay =
-      document.createElement("div");
+    const overlay = document.createElement("div");
 
-    overlay.id =
-      "location-stock-print-dialog";
-    overlay.className =
-      "location-stock-print-overlay";
-    overlay.setAttribute(
-      "role",
-      "dialog"
-    );
-    overlay.setAttribute(
-      "aria-modal",
-      "true"
-    );
+    overlay.id = "location-stock-print-dialog";
+    overlay.className = "location-stock-print-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
     overlay.setAttribute(
       "aria-labelledby",
       "location-stock-print-dialog-title"
     );
 
-    const currentChoice =
-      selectedLocation ===
-      ALL_LOCATIONS_VALUE
-        ? ""
-        : `
-          <button
-            type="button"
-            class="location-stock-print-choice"
-            data-location-stock-print-mode="current"
-          >
-            <strong>${escapeHtml(selectedLabel)}のみ</strong>
-            <span>${formatNumber(visibleRows.length)}商品 / 画面の検索条件を反映</span>
-          </button>
-        `;
-
     overlay.innerHTML = `
       <div class="location-stock-print-modal">
         <div class="location-stock-print-modal-head">
           <div>
-            <span class="location-stock-print-modal-kicker">A4縦向き</span>
-            <h3 id="location-stock-print-dialog-title">保管場所別在庫表を印刷</h3>
+            <span class="location-stock-print-modal-kicker">A4横向き</span>
+            <h3 id="location-stock-print-dialog-title">現在庫表を印刷</h3>
           </div>
           <button
             type="button"
@@ -1144,18 +1144,26 @@
         </div>
 
         <p class="location-stock-print-message">
-          印刷する範囲を選んでください。各保管場所は見出し付きの在庫表として印刷します。
+          印刷する範囲を選んでください。印刷表には保管場所・現在庫・商品状態と、手書き用の確認欄を表示します。
         </p>
 
         <div class="location-stock-print-choice-list">
-          ${currentChoice}
+          <button
+            type="button"
+            class="location-stock-print-choice"
+            data-location-stock-print-mode="visible"
+          >
+            <strong>現在の表示条件を印刷</strong>
+            <span>${escapeHtml(getSelectedLocationLabel())} / ${formatNumber(visibleRows.length)}行</span>
+          </button>
+
           <button
             type="button"
             class="location-stock-print-choice location-stock-print-choice-all"
             data-location-stock-print-mode="all"
           >
-            <strong>全保管場所</strong>
-            <span>すべての保管場所を場所ごとにまとめて印刷</span>
+            <strong>全保管場所を印刷</strong>
+            <span>検索条件を解除して、現在庫がある全保管場所を印刷</span>
           </button>
         </div>
 
@@ -1205,14 +1213,19 @@
         button.addEventListener(
           "click",
           function () {
-            const mode =
-              button.dataset
-                .locationStockPrintMode;
+            const mode = button.dataset.locationStockPrintMode;
+            const rows = mode === "all"
+              ? state.rows.slice()
+              : getVisibleRows();
+            const label = mode === "all"
+              ? "全保管場所"
+              : getSelectedLocationLabel();
 
-            const opened =
-              mode === "current"
-                ? printCurrentLocation()
-                : printAllLocations();
+            const opened = openPrintWindow(
+              "現在庫表",
+              rows,
+              label
+            );
 
             if (opened) {
               closeDialog();
@@ -1268,145 +1281,12 @@
     );
   }
 
-  function printCurrentLocation() {
-    const location =
-      getSelectedLocation();
-
-    if (
-      location === ALL_LOCATIONS_VALUE
-    ) {
-      return printAllLocations();
-    }
-
-    const rows = getVisibleRows();
-
-    if (rows.length === 0) {
+  function openPrintWindow(title, rows, filterLabel) {
+    if (!Array.isArray(rows) || rows.length === 0) {
       void showNoDataDialog();
       return false;
     }
 
-    return openPrintWindow(
-      `${location} 在庫表`,
-      [
-        createPrintLocationSection(
-          location,
-          rows,
-          false
-        )
-      ]
-    );
-  }
-
-  function printAllLocations() {
-    const sections = [];
-
-    LOCATION_OPTIONS.forEach(
-      function (location) {
-        const rows =
-          state.rows.filter(
-            function (row) {
-              return (
-                row.location ===
-                location
-              );
-            }
-          );
-
-        // 在庫がない保管場所まで1ページずつ印刷すると紙が増えるため、
-        // 全保管場所印刷では在庫がある場所だけを対象にします。
-        if (rows.length === 0) {
-          return;
-        }
-
-        sections.push(
-          createPrintLocationSection(
-            location,
-            rows,
-            true
-          )
-        );
-      }
-    );
-
-    if (sections.length === 0) {
-      void showNoDataDialog();
-      return false;
-    }
-
-    return openPrintWindow(
-      "保管場所別在庫表",
-      sections
-    );
-  }
-
-  function createPrintLocationSection(
-    location,
-    rows,
-    forcePageBreak
-  ) {
-    const totalStock =
-      rows.reduce(
-        function (sum, row) {
-          return sum + row.stock;
-        },
-        0
-      );
-
-    const body =
-      rows.length > 0
-        ? rows.map(
-            function (row, index) {
-              return `
-                <tr>
-                  <td class="print-no">${index + 1}</td>
-                  <td>${escapeHtml(row.internalCode || "-")}</td>
-                  <td>${escapeHtml(row.productCode || "-")}</td>
-                  <td class="print-color">${escapeHtml(row.productColor || "-")}</td>
-                  <td class="print-stock">${formatNumber(row.stock)}</td>
-                  <td class="print-check"><span class="print-check-box" aria-hidden="true"></span></td>
-                  <td class="print-note"></td>
-                </tr>
-              `;
-            }
-          ).join("")
-        : `
-            <tr>
-              <td colspan="7" class="print-empty">在庫はありません。</td>
-            </tr>
-          `;
-
-    return `
-      <section class="print-location-section ${forcePageBreak ? "print-location-page" : ""}">
-        <div class="print-location-title-row">
-          <div>
-            <div class="print-kicker">保管場所別在庫表</div>
-            <h1>${escapeHtml(location)}</h1>
-          </div>
-          <div class="print-summary-box">
-            <span>商品数 <strong>${formatNumber(rows.length)}商品</strong></span>
-            <span>在庫合計 <strong>${formatNumber(totalStock)}個</strong></span>
-          </div>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>No</th>
-              <th>社内コード</th>
-              <th>商品コード</th>
-              <th>色</th>
-              <th>在庫数</th>
-              <th>確認</th>
-              <th>備考</th>
-            </tr>
-          </thead>
-          <tbody>${body}</tbody>
-        </table>
-      </section>
-    `;
-  }
-
-  function openPrintWindow(title, sections) {
     const printWindow =
       window.open("", "_blank");
 
@@ -1437,6 +1317,30 @@
         minute: "2-digit"
       });
 
+    const totalStock = rows.reduce(
+      function (sum, row) {
+        return sum + normalizeQuantity(row.stock);
+      },
+      0
+    );
+
+    const bodyHtml = rows.map(
+      function (row, index) {
+        return `
+          <tr>
+            <td class="print-check"><span class="print-check-box" aria-hidden="true"></span></td>
+            <td class="print-no">${index + 1}</td>
+            <td class="print-location">${escapeHtml(row.location || "-")}</td>
+            <td>${escapeHtml(row.internalCode || "-")}</td>
+            <td>${escapeHtml(row.productCode || "-")}</td>
+            <td class="print-name">${escapeHtml(row.productName || "-")}</td>
+            <td class="print-stock">${formatNumber(row.stock)}</td>
+            <td>${escapeHtml(row.status || "-")}</td>
+          </tr>
+        `;
+      }
+    ).join("");
+
     printWindow.document.open();
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -1447,8 +1351,8 @@
         <title>${escapeHtml(title)}</title>
         <style>
           @page {
-            size: A4 portrait;
-            margin: 6mm 7mm;
+            size: A4 landscape;
+            margin: 7mm;
           }
 
           * {
@@ -1462,54 +1366,36 @@
             font-size: 8.7pt;
           }
 
-          .print-meta {
-            margin-bottom: 2.5mm;
-            text-align: right;
-            font-size: 7.2pt;
-            color: #444;
-          }
-
-          .print-location-section {
-            break-inside: auto;
-          }
-
-          .print-location-page:not(:first-of-type) {
-            break-before: page;
-            page-break-before: always;
-          }
-
-          .print-location-title-row {
+          .print-header {
             display: flex;
             align-items: flex-end;
             justify-content: space-between;
-            gap: 4mm;
-            margin-bottom: 2.5mm;
+            gap: 6mm;
+            margin-bottom: 3mm;
           }
 
           .print-kicker {
-            font-size: 7.2pt;
+            font-size: 7.5pt;
             font-weight: 700;
-            color: #333;
+            color: #444;
           }
 
           h1 {
-            margin: 0.5mm 0 0;
-            font-size: 15pt;
+            margin: 0.6mm 0 0;
+            font-size: 17pt;
             line-height: 1.15;
           }
 
-          .print-summary-box {
-            display: flex;
-            gap: 3mm;
-            padding: 1.5mm 2.5mm;
-            border: 1px solid #777;
-            border-radius: 2mm;
-            white-space: nowrap;
-            font-size: 7.8pt;
+          .print-info {
+            text-align: right;
+            font-size: 7.5pt;
+            line-height: 1.5;
           }
 
-          .print-summary-box strong {
-            font-size: 9.5pt;
+          .print-summary {
+            margin-top: 0.8mm;
+            font-weight: 800;
+            font-size: 8.5pt;
           }
 
           table {
@@ -1530,10 +1416,10 @@
           th,
           td {
             border: 1px solid #555;
-            padding: 1.05mm 1mm;
+            padding: 1.15mm 1.1mm;
             vertical-align: middle;
             overflow-wrap: anywhere;
-            line-height: 1.18;
+            line-height: 1.2;
           }
 
           th {
@@ -1543,52 +1429,41 @@
             white-space: nowrap;
           }
 
-          th:nth-child(1), td:nth-child(1) { width: 4%; }
-          th:nth-child(2), td:nth-child(2) { width: 13%; }
-          th:nth-child(3), td:nth-child(3) { width: 17%; }
+          th:nth-child(1), td:nth-child(1) { width: 5%; }
+          th:nth-child(2), td:nth-child(2) { width: 4%; }
+          th:nth-child(3), td:nth-child(3) { width: 15%; }
           th:nth-child(4), td:nth-child(4) { width: 12%; }
-          th:nth-child(5), td:nth-child(5) { width: 10%; }
-          th:nth-child(6), td:nth-child(6) { width: 7%; }
-          th:nth-child(7), td:nth-child(7) { width: 37%; }
+          th:nth-child(5), td:nth-child(5) { width: 15%; }
+          th:nth-child(6), td:nth-child(6) { width: 27%; }
+          th:nth-child(7), td:nth-child(7) { width: 9%; }
+          th:nth-child(8), td:nth-child(8) { width: 13%; }
 
+          .print-check,
           .print-no {
-            text-align: center;
-          }
-
-          .print-color {
-            white-space: normal;
-            overflow-wrap: anywhere;
-            line-height: 1.15;
-          }
-
-          .print-stock {
-            text-align: right;
-            font-size: 9.2pt;
-            font-weight: 800;
-            white-space: nowrap;
-          }
-
-          .print-check {
             text-align: center;
           }
 
           .print-check-box {
             display: inline-block;
-            width: 3.6mm;
-            height: 3.6mm;
-            border: 1.2px solid #222;
+            width: 4.5mm;
+            height: 4.5mm;
+            border: 1.3px solid #111;
             vertical-align: middle;
           }
 
-          .print-note {
-            min-height: 4.2mm;
-            white-space: normal;
+          .print-location {
+            font-weight: 700;
           }
 
-          .print-empty {
-            padding: 8mm;
-            text-align: center;
-            color: #555;
+          .print-name {
+            font-weight: 700;
+          }
+
+          .print-stock {
+            text-align: right;
+            font-size: 10pt;
+            font-weight: 900;
+            white-space: nowrap;
           }
 
           @media print {
@@ -1600,8 +1475,34 @@
         </style>
       </head>
       <body>
-        <div class="print-meta">印刷日時：${escapeHtml(printedAt)}</div>
-        ${sections.join("")}
+        <div class="print-header">
+          <div>
+            <div class="print-kicker">現在庫確認用</div>
+            <h1>現在庫表</h1>
+          </div>
+          <div class="print-info">
+            <div>対象：${escapeHtml(filterLabel || "全保管場所")}</div>
+            <div>印刷日時：${escapeHtml(printedAt)}</div>
+            <div class="print-summary">${formatNumber(rows.length)}行 / 在庫合計 ${formatNumber(totalStock)}個</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>確認</th>
+              <th>No</th>
+              <th>保管場所</th>
+              <th>社内コード</th>
+              <th>商品コード</th>
+              <th>商品名</th>
+              <th>現在庫</th>
+              <th>商品状態</th>
+            </tr>
+          </thead>
+          <tbody>${bodyHtml}</tbody>
+        </table>
+
         <script>
           window.addEventListener("load", function () {
             setTimeout(function () {

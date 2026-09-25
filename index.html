@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v260
+            画面版 v261
           </span>
         </div>
       </div>
@@ -261,7 +261,7 @@
           </summary>
 
           <p class="home-panel-description">
-            入出庫履歴、商品移動、加工・商品切替、廃棄処理をまとめています。
+            入出庫履歴と商品移動をまとめています。
           </p>
 
           <div
@@ -274,7 +274,25 @@
             >
               入出庫履歴を見る
             </button>
+          </div>
+        </details>
 
+        <details
+          class="home-function-panel"
+          data-home-panel="processing"
+        >
+          <summary>
+            加工・切替
+          </summary>
+
+          <p class="home-panel-description">
+            加工・商品切替の記入シートと、作業後の在庫反映をまとめています。
+          </p>
+
+          <div
+            id="home-processing-buttons"
+            class="home-panel-buttons"
+          >
             <button
               id="show-processing-sheet-button"
               type="button"
@@ -289,6 +307,24 @@
               加工・商品切替 在庫反映
             </button>
           </div>
+        </details>
+
+        <details
+          class="home-function-panel"
+          data-home-panel="disposal"
+        >
+          <summary>
+            廃棄
+          </summary>
+
+          <p class="home-panel-description">
+            廃棄予定の商品を事前に登録し、印刷・在庫反映を行います。
+          </p>
+
+          <div
+            id="home-disposal-buttons"
+            class="home-panel-buttons"
+          ></div>
         </details>
 
         <details
@@ -808,7 +844,7 @@
           <summary>10. 加工・商品切替の記入シートを印刷する</summary>
           <div class="manual-topic-body">
             <ol>
-              <li>ホームの「入出庫・履歴」から「加工・商品切替 記入シート」を開きます。</li>
+              <li>ホームの「加工・切替」から「加工・商品切替 記入シート」を開きます。</li>
               <li>画面で用紙の内容を確認し、「B5で印刷する」を押します。</li>
               <li>作業場では、加工元A・加工後B・使用数量・完成数量・担当者などを手書きします。</li>
               <li>作業後は用紙を在庫管理担当者へ提出し、在庫反映後に確認欄へ記入します。</li>

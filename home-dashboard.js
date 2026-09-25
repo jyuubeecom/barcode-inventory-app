@@ -15,9 +15,13 @@ const HOME_DASHBOARD_GROUPS = Object.freeze({
   ],
   "home-inventory-buttons": [
     "show-history-button",
-    "show-transfer-list-button",
+    "show-transfer-list-button"
+  ],
+  "home-processing-buttons": [
     "show-processing-sheet-button",
-    "show-processing-conversion-button",
+    "show-processing-conversion-button"
+  ],
+  "home-disposal-buttons": [
     "show-disposal-list-button"
   ],
   "home-stocktaking-buttons": [
@@ -65,8 +69,8 @@ const HOME_DASHBOARD_ACTION_CLASSES = Object.freeze({
   "show-barcode-print-button": "home-action-product",
   "show-history-button": "home-action-history",
   "show-transfer-list-button": "home-action-inventory",
-  "show-processing-sheet-button": "home-action-inventory",
-  "show-processing-conversion-button": "home-action-inventory",
+  "show-processing-sheet-button": "home-action-processing",
+  "show-processing-conversion-button": "home-action-processing",
   "show-disposal-list-button": "home-action-disposal",
   "show-sales-plan-button": "home-action-sales",
   "show-sales-plan-list-button": "home-action-sales-list",
@@ -1093,6 +1097,10 @@ function createHomeDashboardStyle() {
       background-color: #1565c0 !important;
     }
 
+    #home button.home-action-processing {
+      background-color: #7b1fa2 !important;
+    }
+
     #home button.home-action-disposal {
       background-color: #bf451b !important;
     }
@@ -1107,6 +1115,14 @@ function createHomeDashboardStyle() {
 
     #home .home-function-panel[data-home-panel="inventory"] > summary {
       border-left: 5px solid #1565c0;
+    }
+
+    #home .home-function-panel[data-home-panel="processing"] > summary {
+      border-left: 5px solid #7b1fa2;
+    }
+
+    #home .home-function-panel[data-home-panel="disposal"] > summary {
+      border-left: 5px solid #bf451b;
     }
 
     #home .home-function-panel[data-home-panel="stocktaking"] > summary {

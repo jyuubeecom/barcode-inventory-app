@@ -4,6 +4,7 @@ const HOME_DASHBOARD_GROUPS = Object.freeze({
   "home-quick-action-buttons": [
     "show-camera-scanner-button",
     "show-list-button",
+    "show-location-stock-report-button",
     "show-stocktaking-button",
     "show-register-button"
   ],
@@ -44,6 +45,7 @@ const HOME_DASHBOARD_GROUPS = Object.freeze({
 const HOME_DASHBOARD_ACTION_CLASSES = Object.freeze({
   "show-camera-scanner-button": "home-action-camera",
   "show-list-button": "home-action-list",
+  "show-location-stock-report-button": "home-action-list",
   "show-stocktaking-button": "home-action-stocktaking",
   "show-register-button": "home-action-register",
   "show-barcode-lookup-button": "home-action-search",
@@ -283,6 +285,24 @@ function createMobileHomeControls(
       }
     );
 
+    const stockReportButton =
+      document.createElement("button");
+
+    stockReportButton.type = "button";
+    stockReportButton.className =
+      "mobile-home-primary-button mobile-home-stock-report-button";
+    stockReportButton.textContent =
+      "現在庫表を見る";
+
+    stockReportButton.addEventListener(
+      "click",
+      function () {
+        triggerMobileHomeAction(
+          "show-location-stock-report-button"
+        );
+      }
+    );
+
     const stocktakingButton =
       document.createElement("button");
 
@@ -304,6 +324,10 @@ function createMobileHomeControls(
 
     primaryActions.appendChild(
       listButton
+    );
+
+    primaryActions.appendChild(
+      stockReportButton
     );
 
     primaryActions.appendChild(
@@ -464,7 +488,7 @@ function initializeMobileHomeLayout(
       if (quickDescription) {
         quickDescription.textContent =
           isMobile
-            ? "商品一覧と棚卸を大きなボタンからすぐ開けます。"
+            ? "商品一覧・現在庫表・棚卸を大きなボタンからすぐ開けます。"
             : "日常作業はこちらから始めます。";
       }
 
@@ -1129,7 +1153,14 @@ function createHomeDashboardStyle() {
 
     body[data-resolved-display-mode="mobile"]
       #home.mobile-primary-mode
+      .mobile-home-stock-report-button {
+      background: #1565c0;
+    }
+
+    body[data-resolved-display-mode="mobile"]
+      #home.mobile-primary-mode
       .mobile-home-stocktaking-button {
+      grid-column: 1 / -1;
       background: #6a1b9a;
     }
 

@@ -1,7 +1,7 @@
 "use strict";
 
 /*
-  v257 現在庫表
+  v258 現在庫表
   ・現在庫を保管場所ごとに画面表示
   ・社内コード / 商品コード / 商品名 / 在庫数 / 保管場所 / 商品状態を確認
   ・保管場所と検索条件で絞り込み
@@ -59,7 +59,7 @@
 
     const container =
       document.querySelector(
-        "#home-inventory-buttons"
+        "#home-quick-action-buttons"
       );
 
     if (!container) {
@@ -108,6 +108,14 @@
             現在庫と保管場所を一覧で確認できます。印刷すると確認欄へ手書きでチェックできます。
           </p>
         </div>
+
+        <button
+          id="back-home-from-location-stock-report-top"
+          type="button"
+          class="location-stock-report-back location-stock-report-back-top"
+        >
+          ホームへ戻る
+        </button>
       </div>
 
       <div class="location-stock-report-controls">
@@ -207,7 +215,17 @@
       }
 
       .location-stock-report-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
         margin-bottom: 16px;
+      }
+
+      .location-stock-report-back-top {
+        flex: 0 0 auto;
+        min-width: 140px;
+        margin-top: 2px;
       }
 
       .location-stock-report-heading h2 {
@@ -489,6 +507,14 @@
       }
 
       @media (max-width: 760px) {
+        .location-stock-report-heading {
+          display: block;
+        }
+
+        .location-stock-report-back-top {
+          margin-top: 10px;
+        }
+
         .location-stock-report-controls,
         .location-stock-report-summary {
           grid-template-columns: 1fr;
@@ -572,14 +598,17 @@
         openLocationStockReport
       );
 
-    document
-      .querySelector(
-        "#back-home-from-location-stock-report"
-      )
-      ?.addEventListener(
-        "click",
-        showHomeScreen
-      );
+    [
+      "#back-home-from-location-stock-report-top",
+      "#back-home-from-location-stock-report"
+    ].forEach(function (selector) {
+      document
+        .querySelector(selector)
+        ?.addEventListener(
+          "click",
+          showHomeScreen
+        );
+    });
 
     document
       .querySelector(

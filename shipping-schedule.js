@@ -1163,7 +1163,7 @@ function getShippingManualAdditionSearchMatches(schedule, query) {
 
   return shippingScheduleProducts
     .filter(function (product) {
-      if (!isShippingAllocationTargetProduct(product)) return false;
+      if (!isShippingManualAdditionEligibleProduct(product)) return false;
 
       const code = String(product.internalCode || "").trim();
       if (!code || manualCodes.has(code) || candidateCodes.has(code)) return false;
@@ -1326,7 +1326,7 @@ function getShippingManualAdditionRows(schedule) {
         return String(item.internalCode || "").trim() === internalCode;
       });
 
-      if (!product || !isShippingAllocationTargetProduct(product)) {
+      if (!product || !isShippingManualAdditionEligibleProduct(product)) {
         return null;
       }
 
@@ -1674,7 +1674,7 @@ function renderShippingManualAdditionSearchResults() {
       "shipping-manual-search-empty";
 
     empty.textContent =
-      "追加できる候補外商品が見つかりません。候補一覧に表示中の商品、廃盤商品、専用商品、対象仕入先外の商品は除外しています。";
+      "追加できる候補外商品が見つかりません。候補一覧に表示中の商品、廃盤商品、専用商品は除外しています。";
 
     results.appendChild(empty);
     return;
@@ -1695,6 +1695,7 @@ function renderShippingManualAdditionSearchResults() {
         <span>
           社内コード：${escapeShippingHtml(product.internalCode || "")}
           / 商品コード：${escapeShippingHtml(product.productCode || "未登録")}
+          / 仕入先：${escapeShippingHtml(product.supplier || product.supplierName || "未設定")}
         </span>
       </div>
 
@@ -3744,6 +3745,16 @@ function isShippingAllocationTargetProduct(product) {
     !isShippingDiscontinuedProduct(product) &&
     !isShippingDedicatedProduct(product) &&
     isShippingMobikSupplierProduct(product)
+  );
+}
+
+// 自動の船積候補は従来どおり株式会社モービックのみ。
+// 「候補外の商品を追加する」では、仕入先に関係なく
+// 廃盤・専用商品以外を手動で追加できるようにする。
+function isShippingManualAdditionEligibleProduct(product) {
+  return (
+    !isShippingDiscontinuedProduct(product) &&
+    !isShippingDedicatedProduct(product)
   );
 }
 

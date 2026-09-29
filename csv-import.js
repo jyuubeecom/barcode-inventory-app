@@ -47,7 +47,7 @@ function createCsvImportButton() {
   const button = document.createElement("button");
   button.id = "show-csv-import-button";
   button.type = "button";
-  button.textContent = "商品一覧CSVを読み込む";
+  button.textContent = "商品マスタCSVを読み込む";
   button.addEventListener("click", openCsvImportScreen);
   referenceButton.parentElement.appendChild(button);
 }
@@ -2126,14 +2126,14 @@ async function registerNewCsvProducts() {
     resultMessage +=
       "\n\n既存商品は「商品の色」と「商品状態」だけを更新しました。" +
       "\n在庫数や保管場所などは変更していません。" +
-      "\n\n商品一覧を更新します。";
+      "\n\n商品マスタを更新します。";
 
     await showAppDialog({
       type: "success",
       icon: "✅",
       title: "CSVの反映が完了しました",
       message: resultMessage,
-      confirmText: "商品一覧を更新する"
+      confirmText: "商品マスタを更新する"
     });
 
     window.location.reload();

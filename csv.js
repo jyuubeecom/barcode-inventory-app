@@ -82,7 +82,7 @@ function createProductsCsvButton() {
 
   if (!referenceButton) {
     console.error(
-      "商品一覧CSVボタンを追加する場所が見つかりません。"
+      "商品マスタCSVボタンを追加する場所が見つかりません。"
     );
 
     return;
@@ -98,7 +98,7 @@ function createProductsCsvButton() {
     "button";
 
   exportProductsCsvButton.textContent =
-    "商品一覧CSVを出力する";
+    "商品マスタCSVを出力する";
 
   exportProductsCsvButton.addEventListener(
     "click",
@@ -284,8 +284,8 @@ async function exportProductsCsv() {
         type: "warning",
         icon: "📦",
         title: "CSVへ出力する商品がありません",
-        message: "商品一覧CSVを作成するには、商品が1件以上登録されている必要があります。",
-        notice: "商品登録後に、もう一度「商品一覧CSVを出力する」をお試しください。",
+        message: "商品マスタCSVを作成するには、商品が1件以上登録されている必要があります。",
+        notice: "商品登録後に、もう一度「商品マスタCSVを出力する」をお試しください。",
         confirmText: "閉じる"
       });
 
@@ -387,7 +387,7 @@ async function exportProductsCsv() {
       );
 
     const fileName =
-      `商品一覧_${getCsvDateText()}.csv`;
+      `商品マスタ_${getCsvDateText()}.csv`;
 
     downloadCsvFile(
       csvText,
@@ -397,8 +397,8 @@ async function exportProductsCsv() {
     await showCsvDialog({
       type: "success",
       icon: "✅",
-      title: "商品一覧CSVを出力しました",
-      message: "商品一覧のCSVファイルを作成しました。",
+      title: "商品マスタCSVを出力しました",
+      message: "商品マスタのCSVファイルを作成しました。",
       details: [
         { label: "出力件数", value: `${sortedProducts.length}件` },
         { label: "ファイル名", value: fileName }
@@ -412,8 +412,8 @@ async function exportProductsCsv() {
     await showCsvDialog({
       type: "danger",
       icon: "⚠️",
-      title: "商品一覧CSVを作成できませんでした",
-      message: "商品一覧CSVの作成中にエラーが発生しました。",
+      title: "商品マスタCSVを作成できませんでした",
+      message: "商品マスタCSVの作成中にエラーが発生しました。",
       notice: "商品データを確認し、画面を開き直してからもう一度お試しください。",
       confirmText: "閉じる"
     });
@@ -422,7 +422,7 @@ async function exportProductsCsv() {
       false;
 
     exportProductsCsvButton.textContent =
-      "商品一覧CSVを出力する";
+      "商品マスタCSVを出力する";
   }
 }
 

@@ -35,10 +35,12 @@ const HOME_DASHBOARD_GROUPS = Object.freeze({
     "show-sales-plan-list-button",
     "show-sales-actual-import-button",
     "show-normal-shipment-button",
+    "show-low-shipment-button"
+  ],
+  "home-purchase-buttons": [
     "show-purchase-required-button",
     "show-order-remaining-button",
     "show-backorder-list-button",
-    "show-low-shipment-button",
     "show-seasonal-trend-button"
   ],
   "home-shipping-buttons": [
@@ -1130,6 +1132,10 @@ function createHomeDashboardStyle() {
     }
 
     #home .home-function-panel[data-home-panel="sales"] > summary {
+      border-left: 5px solid #00897b;
+    }
+
+    #home .home-function-panel[data-home-panel="purchase"] > summary {
       border-left: 5px solid #ef6c00;
     }
 

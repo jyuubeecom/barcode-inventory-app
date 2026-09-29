@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v263
+            画面版 v264
           </span>
         </div>
       </div>
@@ -350,11 +350,11 @@
           data-home-panel="sales"
         >
           <summary>
-            販売・発注
+            販売・実績
           </summary>
 
           <p class="home-panel-description">
-            販売予定、販売実績、発注判定、発注残、季節変動などをまとめています。
+            販売予定、販売実績、通常出荷、出荷が少ない商品をまとめています。
           </p>
 
           <div
@@ -386,9 +386,34 @@
               id="show-normal-shipment-button"
               type="button"
             >
-              通常出荷数量を見る
+              通常出荷商品を見る
             </button>
 
+            <button
+              id="show-low-shipment-button"
+              type="button"
+            >
+              出荷が少ない商品を見る
+            </button>
+          </div>
+        </details>
+
+        <details
+          class="home-function-panel"
+          data-home-panel="purchase"
+        >
+          <summary>
+            発注・分析
+          </summary>
+
+          <p class="home-panel-description">
+            発注判定、発注残、注残、季節変動の確認をまとめています。
+          </p>
+
+          <div
+            id="home-purchase-buttons"
+            class="home-panel-buttons"
+          >
             <button
               id="show-purchase-required-button"
               type="button"
@@ -408,13 +433,6 @@
               type="button"
             >
               注残リストを読み込む・見る
-            </button>
-
-            <button
-              id="show-low-shipment-button"
-              type="button"
-            >
-              出荷低迷商品の一覧
             </button>
 
             <button
@@ -793,7 +811,7 @@
           <div class="manual-topic-body">
             <ol>
               <li>ホームの「販売実績CSVを読み込む」から販売実績を取り込みます。</li>
-              <li>「通常出荷数量を見る」を開くと、前月までの直近6か月を集計します。</li>
+              <li>「通常出荷商品を見る」を開くと、前月までの直近6か月を集計します。</li>
               <li>通常出荷数量の表示はこれまでどおり販売予定との照合結果を確認できます。</li>
               <li>発注判定・出荷低迷・船積・ホーム検索の月平均は、「株式会社 後藤」「清水産業 株式会社」の販売実績を除外して6か月平均を計算します。</li>
               <li>「季節変動商品一覧」では、春・夏・秋・冬ごとの月平均を比較し、増えやすい商品・減りやすい商品を確認できます。</li>

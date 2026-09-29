@@ -743,7 +743,7 @@ function openCameraScanner(mode) {
     isStocktakingMode
       ? "棚卸用カメラを自動で起動しています。"
       : isSingleStockCheckMode
-        ? "商品単体の在庫確認用カメラを自動で起動しています。"
+        ? "商品単体の棚卸用カメラを自動で起動しています。"
         : "カメラを自動で起動しています。";
 
   cameraTorchButton.disabled = true;
@@ -1449,14 +1449,14 @@ async function processSingleStockCheckBarcodeValue(
       "function"
   ) {
     cameraScannerMessage.textContent =
-      "商品単体の在庫確認画面とバーコード読取を接続できませんでした。";
+      "商品単体の棚卸画面とバーコード読取を接続できませんでした。";
 
     await showScannerDialog({
       type: "danger",
       icon: "📦",
       title: "在庫確認画面と接続できませんでした",
-      message: "商品単体の在庫確認画面とバーコード読み取り機能を接続できませんでした。",
-      notice: "画面を更新して、もう一度商品単体の在庫確認を開いてください。",
+      message: "商品単体の棚卸画面とバーコード読み取り機能を接続できませんでした。",
+      notice: "画面を更新して、もう一度「商品単体を棚卸する」を開いてください。",
       confirmText: "閉じる"
     });
 
@@ -1497,7 +1497,7 @@ async function processSingleStockCheckBarcodeValue(
           ? "同じコードの商品が複数あります"
           : "手入力検索へ切り替えます",
       message: message,
-      notice: "「手入力へ切り替える」を押すと、商品単体の在庫確認画面の検索欄へ戻ります。",
+      notice: "「手入力へ切り替える」を押すと、商品単体の棚卸画面の検索欄へ戻ります。",
       confirmText: "手入力へ切り替える"
     });
 
@@ -1512,8 +1512,8 @@ async function processSingleStockCheckBarcodeValue(
       type: "danger",
       icon: "✏️",
       title: "手入力検索へ切り替えます",
-      message: "商品単体の在庫確認処理でエラーが発生しました。",
-      notice: "商品単体の在庫確認画面へ戻り、社内コード・商品コード・JANコード・商品名で検索してください。",
+      message: "商品単体の棚卸処理でエラーが発生しました。",
+      notice: "商品単体の棚卸画面へ戻り、社内コード・商品コード・JANコード・商品名で検索してください。",
       confirmText: "手入力へ切り替える"
     });
 

@@ -94,7 +94,7 @@ function createStocktakingAggregationButton() {
   button.type = "button";
 
   button.textContent =
-    "棚卸提出データを集約する";
+    "棚卸データを集約・反映する";
 
   button.addEventListener(
     "click",
@@ -126,7 +126,7 @@ function createStocktakingAggregationScreen() {
     true;
 
   stocktakingAggregationScreen.innerHTML = `
-    <h2>棚卸提出データの集約</h2>
+    <h2>棚卸データの集約・反映</h2>
 
     <p class="stocktaking-aggregation-notice">
       各スマホ・パソコンで出力した棚卸提出ファイルを、このパソコンへまとめて取り込みます。

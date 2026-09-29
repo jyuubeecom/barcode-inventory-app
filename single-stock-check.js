@@ -24,7 +24,7 @@
     const button = document.createElement("button");
     button.id = BUTTON_ID;
     button.type = "button";
-    button.textContent = "商品単体の在庫確認";
+    button.textContent = "商品単体を棚卸する";
     button.classList.add("home-action-stocktaking");
     button.addEventListener("click", openSingleStockCheck);
 
@@ -59,7 +59,7 @@
         <div class="single-check-heading">
           <div>
             <span class="single-check-kicker">在庫の再確認</span>
-            <h2>商品単体の在庫確認</h2>
+            <h2>商品単体を棚卸する</h2>
           </div>
           <button id="single-check-back-home" type="button">ホームへ戻る</button>
         </div>

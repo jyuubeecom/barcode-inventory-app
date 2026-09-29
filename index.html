@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v266
+            画面版 v267
           </span>
         </div>
       </div>
@@ -683,6 +683,36 @@
               >
             </div>
           </div>
+        </div>
+
+        <div class="app-settings-monitor-customers">
+          <strong>販売実績CSV 監視企業</strong>
+          <p>
+            ここに登録した企業名を取引先名に含む販売実績が取り込まれたとき、
+            出荷した商品と数量を警告表示します。
+            「清水産業」のように会社名の一部だけ登録しても判定できます。
+          </p>
+
+          <div class="app-settings-monitor-input-row">
+            <input
+              id="monitored-customer-input"
+              type="text"
+              placeholder="例：清水産業"
+              autocomplete="off"
+            >
+            <button
+              id="add-monitored-customer-button"
+              type="button"
+            >
+              企業を追加する
+            </button>
+          </div>
+
+          <div
+            id="monitored-customer-list"
+            class="app-settings-monitor-list"
+          ></div>
+          <small>初期設定：清水産業、後藤。削除・追加した内容は「設定を保存する」でこの端末に保存されます。</small>
         </div>
 
         <div class="app-settings-note">
@@ -4383,7 +4413,7 @@
 <script src="csv-update.js?v=74"></script>
 <script src="pwa.js?v=31"></script>
 <script src="sales-plan.js?v=225"></script>
-<script src="sales-actual.js?v=231"></script>
+<script src="sales-actual.js?v=267"></script>
 <script src="purchase-required.js?v=238"></script>
 <script src="order-remaining.js?v=120"></script>
 <script src="low-shipment.js?v=226"></script>
@@ -4400,7 +4430,7 @@
 <script src="processing-conversion.js?v=213"></script>
 <script src="single-stock-check.js?v=241"></script>
 <script src="home-dashboard.js?v=258"></script>
-<script src="app-settings.js?v=240"></script>
-<script src="home-alerts.js?v=243"></script>
+<script src="app-settings.js?v=267"></script>
+<script src="home-alerts.js?v=267"></script>
 </body>
 </html>

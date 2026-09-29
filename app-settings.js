@@ -7,6 +7,14 @@
     "barcodeInventoryRoleMode";
   const ADMIN_PIN_HASH_KEY =
     "barcodeInventoryAdminPinHash";
+  const MONITORED_CUSTOMERS_KEY =
+    "barcodeInventoryMonitoredCustomers";
+  const DEFAULT_MONITORED_CUSTOMERS = [
+    "清水産業",
+    "後藤"
+  ];
+
+  let monitoredCustomersDraft = [];
 
   const DISPLAY_MODES = new Set([
     "auto",
@@ -68,6 +76,10 @@
         handleAutoDisplayModeChange
       );
     }
+
+    monitoredCustomersDraft =
+      loadMonitoredCustomers();
+    renderMonitoredCustomerList();
 
     applySavedAppSettings();
     updatePinSettingsArea();
@@ -344,6 +356,28 @@
 
     document
       .querySelector(
+        "#add-monitored-customer-button"
+      )
+      ?.addEventListener(
+        "click",
+        addMonitoredCustomerFromInput
+      );
+
+    document
+      .querySelector(
+        "#monitored-customer-input"
+      )
+      ?.addEventListener(
+        "keydown",
+        function (event) {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          addMonitoredCustomerFromInput();
+        }
+      );
+
+    document
+      .querySelector(
         "#app-role-mode"
       )
       ?.addEventListener(
@@ -366,6 +400,10 @@
       getSavedDisplayMode(),
       getSavedRoleMode()
     );
+
+    monitoredCustomersDraft =
+      loadMonitoredCustomers();
+    renderMonitoredCustomerList();
 
     document
       .querySelectorAll(
@@ -530,6 +568,10 @@
       roleMode
     );
 
+    saveMonitoredCustomers(
+      monitoredCustomersDraft
+    );
+
     applyDisplayMode(displayMode);
     applyRoleMode(roleMode);
     syncSettingsInputs(
@@ -566,6 +608,12 @@
         {
           label: "権限モード",
           value: roleText
+        },
+        {
+          label: "販売実績の監視企業",
+          value: monitoredCustomersDraft.length
+            ? `${monitoredCustomersDraft.length}社`
+            : "なし"
         }
       ],
       notice:
@@ -574,6 +622,164 @@
           : "管理者モードでは、管理操作を使用できます。",
       confirmText: "閉じる"
     });
+  }
+
+  function normalizeMonitoredCustomerName(value) {
+    return String(value || "")
+      .replace(/\u3000/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function loadMonitoredCustomers() {
+    const raw = localStorage.getItem(
+      MONITORED_CUSTOMERS_KEY
+    );
+
+    if (raw === null) {
+      return DEFAULT_MONITORED_CUSTOMERS.slice();
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        return DEFAULT_MONITORED_CUSTOMERS.slice();
+      }
+
+      return parsed
+        .map(normalizeMonitoredCustomerName)
+        .filter(Boolean)
+        .filter(function (name, index, list) {
+          return list.indexOf(name) === index;
+        });
+    } catch (error) {
+      return DEFAULT_MONITORED_CUSTOMERS.slice();
+    }
+  }
+
+  function saveMonitoredCustomers(customers) {
+    const normalized = Array.isArray(customers)
+      ? customers
+          .map(normalizeMonitoredCustomerName)
+          .filter(Boolean)
+          .filter(function (name, index, list) {
+            return list.indexOf(name) === index;
+          })
+      : [];
+
+    localStorage.setItem(
+      MONITORED_CUSTOMERS_KEY,
+      JSON.stringify(normalized)
+    );
+
+    monitoredCustomersDraft = normalized.slice();
+
+    window.dispatchEvent(
+      new CustomEvent(
+        "inventory-monitored-customers-change",
+        { detail: { customers: normalized.slice() } }
+      )
+    );
+  }
+
+  function addMonitoredCustomerFromInput() {
+    const input = document.querySelector(
+      "#monitored-customer-input"
+    );
+    if (!input) return;
+
+    const name = normalizeMonitoredCustomerName(
+      input.value
+    );
+    if (!name) {
+      input.focus();
+      return;
+    }
+
+    const duplicate = monitoredCustomersDraft.some(
+      function (current) {
+        return current === name;
+      }
+    );
+
+    if (!duplicate) {
+      monitoredCustomersDraft.push(name);
+      renderMonitoredCustomerList();
+    }
+
+    input.value = "";
+    input.focus();
+  }
+
+  function removeMonitoredCustomer(index) {
+    if (
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= monitoredCustomersDraft.length
+    ) {
+      return;
+    }
+
+    monitoredCustomersDraft.splice(index, 1);
+    renderMonitoredCustomerList();
+  }
+
+  function renderMonitoredCustomerList() {
+    const list = document.querySelector(
+      "#monitored-customer-list"
+    );
+    if (!list) return;
+
+    if (!monitoredCustomersDraft.length) {
+      list.innerHTML = `
+        <div class="app-settings-monitor-empty">
+          監視企業は登録されていません。
+        </div>
+      `;
+      return;
+    }
+
+    list.innerHTML = monitoredCustomersDraft
+      .map(function (name, index) {
+        return `
+          <span class="app-settings-monitor-chip">
+            <strong>${escapeAppSettingsHtml(name)}</strong>
+            <button
+              type="button"
+              data-monitor-customer-remove="${index}"
+              aria-label="${escapeAppSettingsHtml(name)}を削除"
+            >×</button>
+          </span>
+        `;
+      })
+      .join("");
+
+    list
+      .querySelectorAll(
+        "[data-monitor-customer-remove]"
+      )
+      .forEach(function (button) {
+        button.addEventListener(
+          "click",
+          function () {
+            removeMonitoredCustomer(
+              Number(
+                button.dataset
+                  .monitorCustomerRemove
+              )
+            );
+          }
+        );
+      });
+  }
+
+  function escapeAppSettingsHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   async function saveAdminPinIfEntered() {
@@ -1370,6 +1576,79 @@
         font-weight: 800;
       }
 
+      .app-settings-monitor-customers {
+        margin: 16px 0 0;
+        padding: 16px;
+        border: 2px solid #80cbc4;
+        border-radius: 14px;
+        background: #f1fbfa;
+      }
+
+      .app-settings-monitor-customers > strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 18px;
+      }
+
+      .app-settings-monitor-customers p {
+        margin: 0 0 12px;
+        line-height: 1.7;
+      }
+
+      .app-settings-monitor-input-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        align-items: stretch;
+      }
+
+      .app-settings-monitor-input-row input {
+        min-height: 50px;
+        margin: 0;
+        font-size: 17px;
+      }
+
+      .app-settings-monitor-input-row button {
+        width: auto;
+        min-width: 150px;
+        margin: 0;
+        padding: 8px 16px;
+        background: #00897b;
+      }
+
+      .app-settings-monitor-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 12px 0 8px;
+      }
+
+      .app-settings-monitor-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 8px 7px 12px;
+        border: 1px solid #80cbc4;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #00695c;
+      }
+
+      .app-settings-monitor-chip button {
+        width: 28px;
+        min-height: 28px;
+        margin: 0;
+        padding: 0;
+        border-radius: 50%;
+        background: #607d8b;
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .app-settings-monitor-empty {
+        color: #607d8b;
+      }
+
       .app-settings-note {
         margin: 14px 0 0;
         padding: 14px;
@@ -1406,6 +1685,16 @@
 
       #save-app-settings-button {
         background: #1565c0;
+      }
+
+      body[data-resolved-display-mode="mobile"]
+        .app-settings-monitor-input-row {
+        grid-template-columns: 1fr;
+      }
+
+      body[data-resolved-display-mode="mobile"]
+        .app-settings-monitor-input-row button {
+        width: 100%;
       }
 
       body[data-resolved-display-mode="mobile"]

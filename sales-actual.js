@@ -6,6 +6,14 @@ const SALES_ACTUAL_INVENTORY_LOCATION_PRIORITY = Object.freeze([
   "酒本倉庫1階",
   "酒本倉庫2階"
 ]);
+const SALES_ACTUAL_MONITORED_CUSTOMERS_KEY =
+  "barcodeInventoryMonitoredCustomers";
+const SALES_ACTUAL_MONITORED_ALERTS_KEY =
+  "barcodeInventoryMonitoredShipmentAlertsV1";
+const SALES_ACTUAL_DEFAULT_MONITORED_CUSTOMERS = Object.freeze([
+  "清水産業",
+  "後藤"
+]);
 let salesActualSelectedPreview = null;
 let salesActualAnalysisPreview = null;
 let salesActualImportHistory = [];
@@ -1378,6 +1386,245 @@ function renderSalesActualPreview(preview) {
   warnings.textContent = messages.join("\n");
 }
 
+function getSalesActualMonitoredCustomers() {
+  const raw = localStorage.getItem(
+    SALES_ACTUAL_MONITORED_CUSTOMERS_KEY
+  );
+
+  if (raw === null) {
+    return SALES_ACTUAL_DEFAULT_MONITORED_CUSTOMERS.slice();
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return SALES_ACTUAL_DEFAULT_MONITORED_CUSTOMERS.slice();
+    }
+
+    return parsed
+      .map(function (name) {
+        return normalizeSalesActualText(name);
+      })
+      .filter(Boolean)
+      .filter(function (name, index, list) {
+        return list.indexOf(name) === index;
+      });
+  } catch (error) {
+    return SALES_ACTUAL_DEFAULT_MONITORED_CUSTOMERS.slice();
+  }
+}
+
+function normalizeSalesActualCustomerMatchText(value) {
+  return normalizeSalesActualText(value)
+    .replace(/[\s\u3000]+/g, "")
+    .toLocaleLowerCase("ja-JP");
+}
+
+function findSalesActualMonitoredCustomer(customerName, monitoredCustomers) {
+  const normalizedCustomer = normalizeSalesActualCustomerMatchText(customerName);
+  if (!normalizedCustomer) return "";
+
+  const sorted = monitoredCustomers
+    .slice()
+    .sort(function (left, right) {
+      return normalizeSalesActualCustomerMatchText(right).length -
+        normalizeSalesActualCustomerMatchText(left).length;
+    });
+
+  return sorted.find(function (keyword) {
+    const normalizedKeyword = normalizeSalesActualCustomerMatchText(keyword);
+    return normalizedKeyword && normalizedCustomer.includes(normalizedKeyword);
+  }) || "";
+}
+
+function buildSalesActualMonitoredShipmentAlert(records, batch) {
+  const monitoredCustomers = getSalesActualMonitoredCustomers();
+  if (!monitoredCustomers.length || !Array.isArray(records) || !records.length) {
+    return null;
+  }
+
+  const productMap = new Map();
+  salesActualProducts.forEach(function (product) {
+    const code = normalizeSalesActualText(product && product.internalCode);
+    if (code) productMap.set(code, product);
+  });
+
+  const groupMap = new Map();
+
+  records.forEach(function (record) {
+    const monitoredName = findSalesActualMonitoredCustomer(
+      record && record.customerName,
+      monitoredCustomers
+    );
+    if (!monitoredName) return;
+
+    const quantity = Number(record && record.quantity);
+    if (!Number.isFinite(quantity) || quantity === 0) return;
+
+    if (!groupMap.has(monitoredName)) {
+      groupMap.set(monitoredName, new Map());
+    }
+
+    const internalCode = normalizeSalesActualText(record && record.internalCode);
+    const product = productMap.get(internalCode);
+    const productCode = normalizeSalesActualText(
+      product && product.productCode
+    );
+    const productName = normalizeSalesActualText(
+      product && product.productName
+    ) || [
+      normalizeSalesActualText(record && record.sourceProductName1),
+      normalizeSalesActualText(record && record.sourceProductName2)
+    ].filter(Boolean).join(" ");
+
+    const itemKey = internalCode || productCode || productName || "未登録商品";
+    const itemMap = groupMap.get(monitoredName);
+
+    if (!itemMap.has(itemKey)) {
+      itemMap.set(itemKey, {
+        internalCode: internalCode,
+        productCode: productCode,
+        productName: productName,
+        quantity: 0,
+        customerNames: new Set()
+      });
+    }
+
+    const item = itemMap.get(itemKey);
+    item.quantity += quantity;
+    const actualCustomer = normalizeSalesActualText(record && record.customerName);
+    if (actualCustomer) item.customerNames.add(actualCustomer);
+  });
+
+  const groups = [];
+  groupMap.forEach(function (itemMap, monitoredName) {
+    const items = Array.from(itemMap.values())
+      .filter(function (item) {
+        return Number(item.quantity || 0) > 0;
+      })
+      .map(function (item) {
+        return {
+          internalCode: item.internalCode,
+          productCode: item.productCode,
+          productName: item.productName,
+          quantity: Number(item.quantity || 0),
+          customerNames: Array.from(item.customerNames)
+        };
+      })
+      .sort(function (left, right) {
+        if (right.quantity !== left.quantity) return right.quantity - left.quantity;
+        return String(left.internalCode || "").localeCompare(
+          String(right.internalCode || ""),
+          "ja",
+          { numeric: true }
+        );
+      });
+
+    if (!items.length) return;
+
+    groups.push({
+      monitoredName: monitoredName,
+      itemCount: items.length,
+      totalQuantity: items.reduce(function (sum, item) {
+        return sum + Number(item.quantity || 0);
+      }, 0),
+      items: items
+    });
+  });
+
+  if (!groups.length) return null;
+
+  groups.sort(function (left, right) {
+    return String(left.monitoredName).localeCompare(String(right.monitoredName), "ja");
+  });
+
+  return {
+    id: `monitored-shipment-${String(batch && batch.batchId || Date.now())}`,
+    batchId: String(batch && batch.batchId || ""),
+    fileName: String(batch && batch.fileName || ""),
+    importedAt: String(batch && batch.importedAt || new Date().toISOString()),
+    reportStartDate: String(batch && batch.reportStartDate || ""),
+    reportEndDate: String(batch && batch.reportEndDate || ""),
+    groups: groups,
+    totalCompanies: groups.length,
+    totalProducts: groups.reduce(function (sum, group) {
+      return sum + Number(group.itemCount || 0);
+    }, 0),
+    totalQuantity: groups.reduce(function (sum, group) {
+      return sum + Number(group.totalQuantity || 0);
+    }, 0)
+  };
+}
+
+function saveSalesActualMonitoredShipmentAlert(alertData) {
+  if (!alertData) return;
+
+  let alerts = [];
+  try {
+    const raw = localStorage.getItem(SALES_ACTUAL_MONITORED_ALERTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(parsed)) alerts = parsed;
+  } catch (error) {
+    alerts = [];
+  }
+
+  alerts = alerts.filter(function (alert) {
+    return String(alert && alert.batchId || "") !== String(alertData.batchId || "");
+  });
+  alerts.unshift(alertData);
+  alerts = alerts.slice(0, 20);
+
+  localStorage.setItem(
+    SALES_ACTUAL_MONITORED_ALERTS_KEY,
+    JSON.stringify(alerts)
+  );
+
+  window.dispatchEvent(
+    new CustomEvent("monitored-sales-customer-alert-updated")
+  );
+}
+
+async function showSalesActualMonitoredShipmentWarning(alertData) {
+  if (!alertData) return;
+
+  const details = [];
+  alertData.groups.forEach(function (group) {
+    details.push({
+      label: `${group.monitoredName}（${group.itemCount}商品）`,
+      value: `合計 ${formatSalesActualNumber(group.totalQuantity)}個`
+    });
+
+    group.items.slice(0, 12).forEach(function (item) {
+      const code = item.productCode || item.internalCode || "商品コードなし";
+      details.push({
+        label: `${group.monitoredName} / ${code}`,
+        value: `${item.productName || "商品名なし"} / ${formatSalesActualNumber(item.quantity)}個`
+      });
+    });
+
+    if (group.items.length > 12) {
+      details.push({
+        label: group.monitoredName,
+        value: `ほか ${group.items.length - 12}商品`
+      });
+    }
+  });
+
+  await showAppDialog({
+    type: "warning",
+    icon: "⚠️",
+    title: "指定企業への出荷があります",
+    message:
+      `監視企業 ${alertData.totalCompanies}社で、` +
+      `${alertData.totalProducts}商品・合計 ${formatSalesActualNumber(alertData.totalQuantity)}個の出荷を確認しました。`,
+    details: details,
+    notice:
+      "同じ商品が複数行ある場合は数量を合計し、返品数量は差し引いています。" +
+      " この内容はホームの「要確認」にも残ります。",
+    confirmText: "確認して閉じる"
+  });
+}
+
 async function importSelectedSalesActualFile() {
   const preview = salesActualSelectedPreview;
 
@@ -1484,6 +1731,17 @@ async function importSelectedSalesActualFile() {
     applySalesActualUpdatedProducts(updatedProducts);
     salesActualImportHistory.unshift(savedBatch);
 
+    const monitoredShipmentAlert =
+      buildSalesActualMonitoredShipmentAlert(
+        records,
+        savedBatch
+      );
+    if (monitoredShipmentAlert) {
+      saveSalesActualMonitoredShipmentAlert(
+        monitoredShipmentAlert
+      );
+    }
+
     const appliedCount = Number(savedBatch.inventoryAdjustmentCount || 0);
     const skippedCount = Array.isArray(savedBatch.inventorySkippedCodes)
       ? savedBatch.inventorySkippedCodes.length
@@ -1497,10 +1755,23 @@ async function importSelectedSalesActualFile() {
       details: [
         { label: "取込件数", value: `${records.length}件` },
         { label: "在庫へ反映", value: `${appliedCount}商品` },
-        { label: "商品未登録で未反映", value: `${skippedCount}商品` }
+        { label: "商品未登録で未反映", value: `${skippedCount}商品` },
+        {
+          label: "監視企業への出荷",
+          value: monitoredShipmentAlert
+            ? `${monitoredShipmentAlert.totalProducts}商品 / ${formatSalesActualNumber(monitoredShipmentAlert.totalQuantity)}個`
+            : "なし"
+        }
       ],
       confirmText: "確認して閉じる"
     });
+
+    if (monitoredShipmentAlert) {
+      await showSalesActualMonitoredShipmentWarning(
+        monitoredShipmentAlert
+      );
+    }
+
     clearSalesActualPreview();
     document.querySelector("#sales-actual-file").value = "";
     renderSalesActualImportHistory();

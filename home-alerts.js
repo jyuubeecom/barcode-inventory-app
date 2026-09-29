@@ -27,6 +27,8 @@ const HOME_ALERT_SNAPSHOT_KEY =
   "barcode-inventory-home-alert-snapshot-v194";
 const HOME_ALERT_UNREAD_KEY =
   "barcode-inventory-home-alert-unread-v194";
+const HOME_ALERT_MONITORED_SHIPMENTS_KEY =
+  "barcodeInventoryMonitoredShipmentAlertsV1";
 
 let homeAlertCollapsed =
   loadHomeAlertCollapsedState();
@@ -82,6 +84,15 @@ function initializeHomeAlertPanel() {
   window.addEventListener(
     "resize",
     updateHomeAlertPanelVisibility
+  );
+
+  window.addEventListener(
+    "monitored-sales-customer-alert-updated",
+    function () {
+      if (isHomeAlertPanelUsable()) {
+        void refreshHomeAlertPanel();
+      }
+    }
   );
 
   window.addEventListener(
@@ -234,6 +245,11 @@ function createHomeAlertPanel() {
       <div
         id="home-alert-sales-plan"
         class="home-alert-card home-alert-sales-plan"
+      ></div>
+
+      <div
+        id="home-alert-monitored-sales"
+        class="home-alert-card home-alert-monitored-sales"
       ></div>
 
       <div
@@ -1057,6 +1073,11 @@ async function refreshHomeAlertPanel() {
       "#home-alert-sales-plan"
     );
 
+  const monitoredSalesBox =
+    panel.querySelector(
+      "#home-alert-monitored-sales"
+    );
+
   const updated =
     panel.querySelector(
       "#home-alert-updated"
@@ -1090,6 +1111,12 @@ async function refreshHomeAlertPanel() {
         "販売予定に対して在庫不足",
         "📅"
       );
+  }
+
+  if (monitoredSalesBox) {
+    renderHomeMonitoredSalesAlert(
+      monitoredSalesBox
+    );
   }
 
   const results =
@@ -2070,6 +2097,163 @@ function renderHomeAlertError(
   `;
 }
 
+function loadHomeMonitoredShipmentAlerts() {
+  try {
+    const raw = window.localStorage.getItem(
+      HOME_ALERT_MONITORED_SHIPMENTS_KEY
+    );
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function clearHomeMonitoredShipmentAlerts() {
+  window.localStorage.setItem(
+    HOME_ALERT_MONITORED_SHIPMENTS_KEY,
+    JSON.stringify([])
+  );
+  window.dispatchEvent(
+    new CustomEvent("monitored-sales-customer-alert-updated")
+  );
+}
+
+function getHomeMonitoredShipmentSummary(alerts) {
+  const groupMap = new Map();
+
+  alerts.forEach(function (alert) {
+    const groups = Array.isArray(alert && alert.groups)
+      ? alert.groups
+      : [];
+
+    groups.forEach(function (group) {
+      const monitoredName = String(group && group.monitoredName || "").trim() || "指定企業";
+      const items = Array.isArray(group && group.items)
+        ? group.items
+        : [];
+
+      items.forEach(function (item) {
+        const quantity = Number(item && item.quantity || 0);
+        if (!Number.isFinite(quantity) || quantity <= 0) return;
+
+        const internalCode = String(item && item.internalCode || "").trim();
+        const productCode = String(item && item.productCode || "").trim();
+        const productName = String(item && item.productName || "").trim();
+        const key = [monitoredName, internalCode || productCode || productName].join("::");
+
+        if (!groupMap.has(key)) {
+          groupMap.set(key, {
+            monitoredName: monitoredName,
+            internalCode: internalCode,
+            productCode: productCode,
+            productName: productName,
+            quantity: 0
+          });
+        }
+
+        groupMap.get(key).quantity += quantity;
+      });
+    });
+  });
+
+  const rows = Array.from(groupMap.values())
+    .filter(function (row) {
+      return row.quantity > 0;
+    })
+    .sort(function (left, right) {
+      if (right.quantity !== left.quantity) return right.quantity - left.quantity;
+      return String(left.productCode || left.internalCode || "").localeCompare(
+        String(right.productCode || right.internalCode || ""),
+        "ja",
+        { numeric: true }
+      );
+    });
+
+  return {
+    alertCount: alerts.length,
+    count: rows.length,
+    totalQuantity: rows.reduce(function (sum, row) {
+      return sum + Number(row.quantity || 0);
+    }, 0),
+    rows: rows
+  };
+}
+
+function renderHomeMonitoredSalesAlert(box) {
+  const alerts = loadHomeMonitoredShipmentAlerts();
+  const data = getHomeMonitoredShipmentSummary(alerts);
+
+  box.className = "home-alert-card home-alert-monitored-sales";
+
+  if (!data.count) {
+    box.classList.add("home-alert-card-ok");
+    box.innerHTML = `
+      <div class="home-alert-card-title">
+        <span>🏢</span>
+        <strong>指定企業への出荷</strong>
+      </div>
+      <div class="home-alert-zero">
+        <strong>未確認の出荷なし</strong>
+        <span>販売実績CSVの監視企業に該当する未確認データはありません。</span>
+      </div>
+    `;
+    return;
+  }
+
+  const topRows = data.rows.slice(0, 5);
+  box.innerHTML = `
+    <div class="home-alert-card-title">
+      <span>🏢</span>
+      <strong>指定企業への出荷</strong>
+    </div>
+    <div class="home-alert-count-row">
+      <strong>${Number(data.count).toLocaleString("ja-JP")}商品</strong>
+      <span>合計 ${Number(data.totalQuantity).toLocaleString("ja-JP")}個</span>
+    </div>
+    <div class="home-alert-item-list">
+      ${topRows.map(function (row) {
+        const code = row.productCode || row.internalCode || "商品コードなし";
+        return `
+          <div class="home-alert-item home-alert-monitored-sales-item">
+            <div>
+              <strong>${escapeHomeAlertHtml(code)}</strong>
+              <span>${escapeHomeAlertHtml(row.productName || "商品名なし")}</span>
+              <span>${escapeHomeAlertHtml(row.monitoredName)}</span>
+            </div>
+            <b>${Number(row.quantity).toLocaleString("ja-JP")}個</b>
+          </div>
+        `;
+      }).join("")}
+    </div>
+    ${data.count > topRows.length
+      ? `<p class="home-alert-more">ほか ${(data.count - topRows.length).toLocaleString("ja-JP")}商品</p>`
+      : ""}
+    <div class="home-alert-monitored-actions">
+      <button
+        type="button"
+        class="home-alert-open-button"
+        data-home-alert-action="monitored-sales"
+      >
+        販売実績を確認する
+      </button>
+      <button
+        type="button"
+        class="home-alert-monitored-clear"
+      >
+        確認済みにする
+      </button>
+    </div>
+  `;
+
+  bindHomeAlertButtons(box);
+  box.querySelector(".home-alert-monitored-clear")
+    ?.addEventListener("click", function () {
+      clearHomeMonitoredShipmentAlerts();
+      renderHomeMonitoredSalesAlert(box);
+    });
+}
+
 function bindHomeAlertButtons(
   box
 ) {
@@ -2120,6 +2304,15 @@ function bindHomeAlertButtons(
                   "#show-sales-plan-button"
                 )?.click();
               }
+            }
+
+            if (
+              action ===
+              "monitored-sales"
+            ) {
+              document.querySelector(
+                "#show-sales-actual-import-button"
+              )?.click();
             }
           }
         );
@@ -3725,6 +3918,34 @@ function createHomeAlertPanelStyle() {
     #home-alert-panel
       .home-alert-open-shipping {
       background: #6a1b9a;
+    }
+
+    .home-alert-monitored-sales {
+      border-color: #ffb74d;
+      background: #fffaf2;
+    }
+
+    .home-alert-monitored-sales-item {
+      border-left: 4px solid #fb8c00;
+    }
+
+    .home-alert-monitored-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    #home-alert-panel .home-alert-monitored-clear {
+      margin: 0;
+      min-height: 38px;
+      padding: 7px 10px;
+      border: 0;
+      border-radius: 8px;
+      background: #757575;
+      color: #fff;
+      font-weight: 800;
+      cursor: pointer;
     }
 
     .home-alert-card-message {

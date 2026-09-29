@@ -617,7 +617,7 @@ async function confirmShippingSchedule(id) {
 
   const items = getSavedAllocationsForSchedule(id);
   if (items.length === 0) {
-    alert("船積商品がまだ保存されていません。先に「船便別に商品を振り分ける」で数量を保存してください。");
+    alert("船積商品がまだ保存されていません。先に「船積商品を船便に振り分ける」で数量を保存してください。");
     return;
   }
 
@@ -2613,7 +2613,7 @@ function renderShippingWarehouseProductTable() {
     const cell = document.createElement("td");
     cell.colSpan = 8;
     cell.textContent = saved.length === 0
-      ? "この船便には保存済みの船積商品がありません。先に「船便別に商品を振り分ける」で数量を保存してください。"
+      ? "この船便には保存済みの船積商品がありません。先に「船積商品を船便に振り分ける」で数量を保存してください。"
       : "検索条件に一致する商品はありません。";
     row.appendChild(cell);
     body.appendChild(row);

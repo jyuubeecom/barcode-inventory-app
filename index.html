@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v264
+            画面版 v265
           </span>
         </div>
       </div>
@@ -453,7 +453,7 @@
           </summary>
 
           <p class="home-panel-description">
-            船便スケジュール、船積数量、倉庫振分け、入荷確認をまとめています。
+            船便登録 → 船積商品振分け → 倉庫振分けの順に操作します。
           </p>
 
           <div
@@ -471,14 +471,14 @@
               id="show-shipping-allocation-button"
               type="button"
             >
-              船便別に商品を振り分ける
+              船積商品を船便に振り分ける
             </button>
 
             <button
               id="show-shipping-warehouse-allocation-button"
               type="button"
             >
-              船積リストを倉庫へ振り分ける
+              船積商品を倉庫へ振り分ける
             </button>
           </div>
         </details>
@@ -839,8 +839,8 @@
           <div class="manual-topic-body">
             <ol>
               <li>「船便スケジュールを登録する」から出港日・入港日・倉庫到着日などを登録します。</li>
-              <li>「船便別に商品を振り分ける」で、対象商品と船積数量を設定します。</li>
-              <li>「船積リストを倉庫へ振り分ける」で、各倉庫への数量を編集します。</li>
+              <li>「船積商品を船便に振り分ける」で、対象商品と船積数量を設定します。</li>
+              <li>「船積商品を倉庫へ振り分ける」で、各倉庫への数量を編集します。</li>
               <li>必要に応じて船積リストや倉庫振分け内容を印刷します。</li>
               <li>船便の入荷反映は、倉庫到着日を基準に処理します。</li>
             </ol>
@@ -2449,7 +2449,7 @@
 
       <div class="shipping-schedule-shortcuts">
         <button id="jump-shipping-schedule-form-button" type="button">船便スケジュールを登録する</button>
-        <button id="jump-shipping-allocation-button" type="button">船便別に商品を振り分ける</button>
+        <button id="jump-shipping-allocation-button" type="button">船積商品を船便に振り分ける</button>
         <button id="jump-shipping-warehouse-button" type="button">倉庫別に振り分ける</button>
       </div>
 
@@ -2527,7 +2527,7 @@
       </div>
 
       <div id="shipping-allocation-area" class="shipping-schedule-card">
-        <h3>船便別に商品を振り分ける</h3>
+        <h3>船積商品を船便に振り分ける</h3>
 
         <div class="shipping-allocation-controls">
           <div>

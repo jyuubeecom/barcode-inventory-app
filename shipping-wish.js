@@ -310,7 +310,7 @@ async function removeShippingWish(id) {
     alert(
       "この船積希望は船便へ振り分け済みのため削除できません。\n\n" +
       `振分済み：${allocatedTotal.toLocaleString("ja-JP")}個\n\n` +
-      "先に「船便別に商品を振り分ける」で振分数量を0にしてください。"
+      "先に「船積商品を船便に振り分ける」で振分数量を0にしてください。"
     );
     return;
   }

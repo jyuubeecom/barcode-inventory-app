@@ -29,6 +29,8 @@ const HOME_ALERT_UNREAD_KEY =
   "barcode-inventory-home-alert-unread-v194";
 const HOME_ALERT_MONITORED_SHIPMENTS_KEY =
   "barcodeInventoryMonitoredShipmentAlertsV1";
+const HOME_ALERT_MONITORED_SHIPMENTS_HISTORY_KEY =
+  "barcodeInventoryMonitoredShipmentConfirmedHistoryV1";
 
 let homeAlertCollapsed =
   loadHomeAlertCollapsedState();
@@ -2109,7 +2111,48 @@ function loadHomeMonitoredShipmentAlerts() {
   }
 }
 
-function clearHomeMonitoredShipmentAlerts() {
+function loadHomeMonitoredShipmentHistory() {
+  try {
+    const raw = window.localStorage.getItem(
+      HOME_ALERT_MONITORED_SHIPMENTS_HISTORY_KEY
+    );
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveHomeMonitoredShipmentHistory(alerts) {
+  const normalized = Array.isArray(alerts) ? alerts : [];
+  window.localStorage.setItem(
+    HOME_ALERT_MONITORED_SHIPMENTS_HISTORY_KEY,
+    JSON.stringify(normalized.slice(0, 100))
+  );
+}
+
+function confirmHomeMonitoredShipmentAlerts() {
+  const pending = loadHomeMonitoredShipmentAlerts();
+
+  if (pending.length) {
+    const confirmedAt = new Date().toISOString();
+    const history = loadHomeMonitoredShipmentHistory();
+    const merged = pending.map(function (alert) {
+      return Object.assign({}, alert, { confirmedAt: confirmedAt });
+    }).concat(history);
+
+    const seen = new Set();
+    const unique = merged.filter(function (alert) {
+      const key = String(alert && (alert.id || alert.batchId) || "");
+      if (!key) return true;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    saveHomeMonitoredShipmentHistory(unique);
+  }
+
   window.localStorage.setItem(
     HOME_ALERT_MONITORED_SHIPMENTS_KEY,
     JSON.stringify([])
@@ -2117,6 +2160,97 @@ function clearHomeMonitoredShipmentAlerts() {
   window.dispatchEvent(
     new CustomEvent("monitored-sales-customer-alert-updated")
   );
+}
+
+function formatHomeMonitoredHistoryDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || "-");
+  return date.toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+async function showHomeMonitoredShipmentHistory() {
+  const history = loadHomeMonitoredShipmentHistory();
+
+  if (!history.length) {
+    if (window.inventoryApp && typeof window.inventoryApp.showAppDialog === "function") {
+      await window.inventoryApp.showAppDialog({
+        type: "info",
+        icon: "📚",
+        title: "指定企業への出荷履歴",
+        message: "確認済みの履歴はまだありません。",
+        notice: "今後「確認済みにする」を押した内容は、ここに残ります。",
+        confirmText: "閉じる"
+      });
+    } else {
+      window.alert("確認済みの指定企業への出荷履歴はまだありません。");
+    }
+    return;
+  }
+
+  const details = [];
+  history.slice(0, 20).forEach(function (alert) {
+    const confirmedAt = formatHomeMonitoredHistoryDate(alert && alert.confirmedAt);
+    const range = [alert && alert.reportStartDate, alert && alert.reportEndDate]
+      .filter(Boolean)
+      .join(" ～ ");
+    const groups = Array.isArray(alert && alert.groups) ? alert.groups : [];
+
+    details.push({
+      label: confirmedAt,
+      value:
+        `${Number(alert && alert.totalProducts || 0).toLocaleString("ja-JP")}商品 / ` +
+        `${Number(alert && alert.totalQuantity || 0).toLocaleString("ja-JP")}個` +
+        (range ? ` / ${range}` : "")
+    });
+
+    groups.forEach(function (group) {
+      const items = Array.isArray(group && group.items) ? group.items : [];
+      details.push({
+        label: String(group && group.monitoredName || "指定企業"),
+        value:
+          `${Number(group && group.itemCount || items.length || 0).toLocaleString("ja-JP")}商品 / ` +
+          `${Number(group && group.totalQuantity || 0).toLocaleString("ja-JP")}個`
+      });
+
+      items.slice(0, 12).forEach(function (item) {
+        const code = String(item && (item.productCode || item.internalCode) || "商品コードなし");
+        details.push({
+          label: `└ ${code}`,
+          value:
+            `${String(item && item.productName || "商品名なし")} / ` +
+            `${Number(item && item.quantity || 0).toLocaleString("ja-JP")}個`
+        });
+      });
+
+      if (items.length > 12) {
+        details.push({
+          label: "└ その他",
+          value: `ほか ${(items.length - 12).toLocaleString("ja-JP")}商品`
+        });
+      }
+    });
+  });
+
+  if (window.inventoryApp && typeof window.inventoryApp.showAppDialog === "function") {
+    await window.inventoryApp.showAppDialog({
+      type: "info",
+      icon: "📚",
+      title: "指定企業への出荷履歴",
+      message: `確認済み履歴 ${history.length.toLocaleString("ja-JP")}件を保存しています。`,
+      details: details,
+      notice:
+        history.length > 20
+          ? "新しい20件を表示しています。履歴は最大100件保存します。"
+          : "「確認済みにする」を押しても、この履歴には内容が残ります。",
+      confirmText: "閉じる"
+    });
+  }
 }
 
 function getHomeMonitoredShipmentSummary(alerts) {
@@ -2197,7 +2331,17 @@ function renderHomeMonitoredSalesAlert(box) {
         <strong>未確認の出荷なし</strong>
         <span>販売実績CSVの監視企業に該当する未確認データはありません。</span>
       </div>
+      <div class="home-alert-monitored-actions">
+        <button
+          type="button"
+          class="home-alert-open-button home-alert-monitored-history"
+        >
+          確認済み履歴を見る
+        </button>
+      </div>
     `;
+    box.querySelector(".home-alert-monitored-history")
+      ?.addEventListener("click", showHomeMonitoredShipmentHistory);
     return;
   }
 
@@ -2239,6 +2383,12 @@ function renderHomeMonitoredSalesAlert(box) {
       </button>
       <button
         type="button"
+        class="home-alert-open-button home-alert-monitored-history"
+      >
+        確認済み履歴を見る
+      </button>
+      <button
+        type="button"
         class="home-alert-monitored-clear"
       >
         確認済みにする
@@ -2247,9 +2397,12 @@ function renderHomeMonitoredSalesAlert(box) {
   `;
 
   bindHomeAlertButtons(box);
+  box.querySelector(".home-alert-monitored-history")
+    ?.addEventListener("click", showHomeMonitoredShipmentHistory);
+
   box.querySelector(".home-alert-monitored-clear")
     ?.addEventListener("click", function () {
-      clearHomeMonitoredShipmentAlerts();
+      confirmHomeMonitoredShipmentAlerts();
       renderHomeMonitoredSalesAlert(box);
     });
 }
@@ -3931,7 +4084,7 @@ function createHomeAlertPanelStyle() {
 
     .home-alert-monitored-actions {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr;
       gap: 8px;
       margin-top: 10px;
     }

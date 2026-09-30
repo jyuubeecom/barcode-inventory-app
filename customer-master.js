@@ -76,23 +76,39 @@
     document
       .querySelector("#customer-master-product-search")
       ?.addEventListener("input", renderProductSearchResults);
+
+    document
+      .querySelector("#customer-master-view-close-button")
+      ?.addEventListener("click", closeCustomerViewer);
+
+    document
+      .querySelector("#customer-master-view-edit-button")
+      ?.addEventListener("click", function () {
+        const id = normalizeText(
+          document
+            .querySelector("#customer-master-viewer")
+            ?.getAttribute("data-customer-id")
+        );
+        if (id) openExistingCustomerEditor(id);
+      });
+
+    window.addEventListener(
+      "inventory-role-mode-change",
+      function (event) {
+        applyCustomerMasterRoleMode(
+          normalizeText(event?.detail?.roleMode) ||
+            document.body.dataset.roleMode ||
+            "admin"
+        );
+      }
+    );
+
+    applyCustomerMasterRoleMode(
+      document.body.dataset.roleMode || "admin"
+    );
   }
 
   async function openCustomerMasterScreen() {
-    if (
-      document.body.dataset.roleMode === "worker"
-    ) {
-      await showCustomerMasterDialog({
-        type: "warning",
-        icon: "🔒",
-        title: "管理者向けの機能です",
-        message:
-          "取引先の担当者名や連絡先を扱うため、管理者モードで使用してください。",
-        confirmText: "閉じる"
-      });
-      return;
-    }
-
     try {
       const results = await Promise.all([
         getAllCustomers(),
@@ -104,6 +120,10 @@
         : [];
       sortCustomers();
       closeCustomerEditor();
+      closeCustomerViewer();
+      applyCustomerMasterRoleMode(
+        document.body.dataset.roleMode || "admin"
+      );
       renderCustomerList();
       showExclusiveScreen();
     } catch (error) {
@@ -141,6 +161,7 @@
 
   function closeCustomerMasterScreen() {
     closeCustomerEditor();
+    closeCustomerViewer();
 
     const screen = document.querySelector(
       "#customer-master-screen"
@@ -275,7 +296,7 @@
           <td>${escapeHtml(customer.phone || "-")}</td>
           <td class="customer-master-monitor-cell">${monitor}</td>
           <td>
-            <button type="button" class="customer-master-edit-button" data-customer-id="${escapeAttribute(customer.id)}">編集する</button>
+            <button type="button" class="customer-master-view-button" data-customer-id="${escapeAttribute(customer.id)}">見る</button>
           </td>
         </tr>
       `;
@@ -285,14 +306,142 @@
       .querySelectorAll("[data-customer-id]")
       .forEach(function (button) {
         button.addEventListener("click", function () {
-          openExistingCustomerEditor(
+          openExistingCustomerViewer(
             button.getAttribute("data-customer-id") || ""
           );
         });
       });
   }
 
+  function isCustomerMasterAdmin() {
+    return document.body.dataset.roleMode !== "worker";
+  }
+
+  function applyCustomerMasterRoleMode(roleMode) {
+    const isWorker = roleMode === "worker";
+    const newButton = document.querySelector(
+      "#customer-master-new-button"
+    );
+    const editButton = document.querySelector(
+      "#customer-master-view-edit-button"
+    );
+
+    if (newButton) newButton.hidden = isWorker;
+    if (editButton) editButton.hidden = isWorker;
+
+    if (isWorker) {
+      const editor = document.querySelector(
+        "#customer-master-editor"
+      );
+      if (editor && !editor.hidden) {
+        const currentId = editingCustomerId;
+        closeCustomerEditor();
+        if (currentId) openExistingCustomerViewer(currentId);
+      }
+    }
+  }
+
+  function openExistingCustomerViewer(id) {
+    const customer = customers.find(function (item) {
+      return item.id === id;
+    });
+    if (!customer) return;
+
+    closeCustomerEditor();
+
+    const viewer = document.querySelector(
+      "#customer-master-viewer"
+    );
+    if (!viewer) return;
+
+    viewer.setAttribute("data-customer-id", customer.id);
+    setText("#customer-master-view-name", customer.customerName || "-");
+    setText("#customer-master-view-code", customer.customerCode || "-");
+    setText("#customer-master-view-contact", customer.contactPerson || "-");
+    setText("#customer-master-view-phone", customer.phone || "-");
+    setText("#customer-master-view-email", customer.email || "-");
+    setText("#customer-master-view-address", customer.address || "-");
+    setText(
+      "#customer-master-view-shipping-address",
+      customer.shippingAddress || customer.address || "-"
+    );
+    setText(
+      "#customer-master-view-monitor",
+      customer.monitorSalesActual ? "対象" : "対象外"
+    );
+    setText(
+      "#customer-master-view-monitor-keyword",
+      customer.monitorSalesActual
+        ? customer.monitorKeyword || customer.customerName
+        : "-"
+    );
+    setText(
+      "#customer-master-view-shipping-note",
+      customer.shippingNote || "注意事項はありません。"
+    );
+    setText("#customer-master-view-memo", customer.memo || "-");
+
+    renderCustomerViewerProductNotes(customer.productNotes);
+    viewer.hidden = false;
+    applyCustomerMasterRoleMode(
+      document.body.dataset.roleMode || "admin"
+    );
+    viewer.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function renderCustomerViewerProductNotes(notes) {
+    const container = document.querySelector(
+      "#customer-master-view-product-notes-list"
+    );
+    if (!container) return;
+
+    const normalized = normalizeProductNotes(notes);
+    if (!normalized.length) {
+      container.innerHTML =
+        '<p class="customer-master-view-empty">商品別の注意事項はありません。</p>';
+      return;
+    }
+
+    container.innerHTML = normalized.map(function (item) {
+      return `
+        <div class="customer-master-view-product-card">
+          <div>
+            <strong>${escapeHtml(item.productCode || item.internalCode)}</strong>
+            <small>${escapeHtml(item.productName || "")} / 社内コード：${escapeHtml(item.internalCode)}</small>
+          </div>
+          <p>${escapeHtml(item.note || "注意事項なし")}</p>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function closeCustomerViewer() {
+    const viewer = document.querySelector(
+      "#customer-master-viewer"
+    );
+    if (!viewer) return;
+    viewer.hidden = true;
+    viewer.removeAttribute("data-customer-id");
+  }
+
+  async function showCustomerMasterAdminOnly(actionName) {
+    await showCustomerMasterDialog({
+      type: "warning",
+      icon: "🔒",
+      title: "管理者専用の操作です",
+      message: `作業者モードでは「${actionName}」はできません。`,
+      notice:
+        "編集する場合は「表示・権限設定」で管理者モードへ切り替えてください。",
+      confirmText: "閉じる"
+    });
+  }
+
   function openNewCustomerEditor() {
+    if (!isCustomerMasterAdmin()) {
+      void showCustomerMasterAdminOnly("新しい取引先の登録");
+      return;
+    }
+    closeCustomerViewer();
     editingCustomerId = "";
     originalMonitorKeyword = "";
     draftProductNotes = [];
@@ -309,6 +458,11 @@
   }
 
   function openExistingCustomerEditor(id) {
+    if (!isCustomerMasterAdmin()) {
+      void showCustomerMasterAdminOnly("取引先情報の編集");
+      return;
+    }
+    closeCustomerViewer();
     const customer = customers.find(function (item) {
       return item.id === id;
     });
@@ -434,6 +588,10 @@
   }
 
   async function saveCurrentCustomer() {
+    if (!isCustomerMasterAdmin()) {
+      await showCustomerMasterAdminOnly("取引先情報の保存");
+      return;
+    }
     const record = collectEditorRecord();
     if (!record) return;
 
@@ -582,6 +740,10 @@
   }
 
   async function deleteCurrentCustomer() {
+    if (!isCustomerMasterAdmin()) {
+      await showCustomerMasterAdminOnly("取引先の削除");
+      return;
+    }
     const customer = customers.find(function (item) {
       return item.id === editingCustomerId;
     });
@@ -1017,7 +1179,7 @@
       .customer-master-table td { border: 1px solid #d6dee5; padding: 10px; vertical-align: middle; }
       .customer-master-table th { background: #eaf2f8; white-space: nowrap; }
       .customer-master-table td strong { color: #183d5a; }
-      .customer-master-edit-button { background: #176dcc; white-space: nowrap; }
+      .customer-master-view-button { background: #176dcc; white-space: nowrap; }
       .customer-master-monitor-cell small { display: block; margin-top: 3px; color: #617180; }
       .customer-master-monitor-on,
       .customer-master-monitor-off {
@@ -1030,6 +1192,77 @@
       .customer-master-monitor-on { background: #dff3e3; color: #16722b; }
       .customer-master-monitor-off { background: #eceff1; color: #607078; }
       .customer-master-empty { padding: 20px; text-align: center; color: #6d7f8a; }
+      .customer-master-viewer {
+        margin-top: 18px;
+        padding: 16px;
+        border: 2px solid #63a9ee;
+        border-radius: 14px;
+        background: #fbfdff;
+      }
+      .customer-master-viewer-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #d7e4ef;
+      }
+      .customer-master-viewer-heading h3 { margin: 2px 0 0; color: #125d9e; font-size: 1.35rem; }
+      .customer-master-viewer-heading > span {
+        padding: 5px 11px;
+        border-radius: 999px;
+        background: #e6f1fc;
+        color: #125d9e;
+        font-weight: 800;
+      }
+      .customer-master-viewer-kicker { margin: 0; color: #668197; font-size: .85rem; font-weight: 700; }
+      .customer-master-view-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+      }
+      .customer-master-view-grid > div {
+        padding: 11px 12px;
+        border: 1px solid #d6e0e8;
+        border-radius: 9px;
+        background: #fff;
+      }
+      .customer-master-view-grid span { display: block; color: #607889; font-size: .82rem; font-weight: 700; margin-bottom: 4px; }
+      .customer-master-view-grid strong { display: block; white-space: pre-wrap; overflow-wrap: anywhere; color: #213b50; }
+      .customer-master-view-wide { grid-column: 1 / -1; }
+      .customer-master-view-notice,
+      .customer-master-view-memo,
+      .customer-master-view-product-notes {
+        margin-top: 14px;
+        padding: 13px 14px;
+        border-radius: 10px;
+      }
+      .customer-master-view-notice { border: 1px solid #efb34d; background: #fff7e4; }
+      .customer-master-view-memo,
+      .customer-master-view-product-notes { border: 1px solid #d6e0e8; background: #fff; }
+      .customer-master-view-notice h4,
+      .customer-master-view-memo h4,
+      .customer-master-view-product-notes h4 { margin: 0 0 7px; }
+      .customer-master-view-notice p,
+      .customer-master-view-memo p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+      .customer-master-view-product-notes-list { display: grid; gap: 9px; }
+      .customer-master-view-product-card {
+        display: grid;
+        grid-template-columns: minmax(180px, .8fr) minmax(0, 1.2fr);
+        gap: 12px;
+        align-items: start;
+        padding: 10px;
+        border: 1px solid #d9e1e7;
+        border-radius: 8px;
+        background: #fafafa;
+      }
+      .customer-master-view-product-card small { display: block; margin-top: 3px; color: #607889; }
+      .customer-master-view-product-card p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+      .customer-master-view-empty { margin: 0; color: #71818d; }
+      .customer-master-view-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+      #customer-master-view-close-button { background: #607d8b; }
+      #customer-master-view-edit-button { background: #176dcc; }
       .customer-master-editor {
         margin-top: 18px;
         padding: 16px;
@@ -1145,7 +1378,10 @@
         .customer-master-product-note-heading { align-items: stretch; flex-direction: column; }
         .customer-master-toolbar,
         .customer-master-form-grid,
-        .customer-master-summary { grid-template-columns: 1fr; }
+        .customer-master-summary,
+        .customer-master-view-grid,
+        .customer-master-view-product-card { grid-template-columns: 1fr; }
+        .customer-master-view-wide { grid-column: auto; }
         .customer-master-table th:nth-child(1),
         .customer-master-table td:nth-child(1),
         .customer-master-table th:nth-child(4),

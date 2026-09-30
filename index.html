@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v269
+            画面版 v270
           </span>
         </div>
       </div>
@@ -1706,8 +1706,8 @@
         取引先ごとの担当者・連絡先・出荷時の注意事項を保存できます。商品ごとの注意事項も登録できます。
       </p>
       <div class="customer-master-security-note">
-        <strong>開発・試験中は架空の担当者名・連絡先を使用してください。</strong>
-        実際の個人情報は、サーバー側のアクセス制限を整えてから登録する運用を推奨します。
+        <strong>作業者モードでは閲覧のみ、管理者モードでは登録・編集・削除ができます。</strong>
+        開発・試験中は架空の担当者名・連絡先を使用してください。
       </div>
 
       <div class="customer-master-toolbar">
@@ -1739,6 +1739,47 @@
             </thead>
             <tbody id="customer-master-list-body"></tbody>
           </table>
+        </div>
+      </div>
+
+      <div id="customer-master-viewer" class="customer-master-viewer" hidden>
+        <div class="customer-master-viewer-heading">
+          <div>
+            <p class="customer-master-viewer-kicker">取引先情報</p>
+            <h3 id="customer-master-view-name">-</h3>
+          </div>
+          <span>閲覧</span>
+        </div>
+
+        <div class="customer-master-view-grid">
+          <div><span>取引先コード</span><strong id="customer-master-view-code">-</strong></div>
+          <div><span>担当者名</span><strong id="customer-master-view-contact">-</strong></div>
+          <div><span>電話番号</span><strong id="customer-master-view-phone">-</strong></div>
+          <div><span>メールアドレス</span><strong id="customer-master-view-email">-</strong></div>
+          <div class="customer-master-view-wide"><span>住所</span><strong id="customer-master-view-address">-</strong></div>
+          <div class="customer-master-view-wide"><span>出荷先住所</span><strong id="customer-master-view-shipping-address">-</strong></div>
+          <div><span>販売実績CSV監視</span><strong id="customer-master-view-monitor">対象外</strong></div>
+          <div><span>監視キーワード</span><strong id="customer-master-view-monitor-keyword">-</strong></div>
+        </div>
+
+        <div class="customer-master-view-notice">
+          <h4>⚠ 出荷時の共通注意事項</h4>
+          <p id="customer-master-view-shipping-note">注意事項はありません。</p>
+        </div>
+
+        <div class="customer-master-view-memo">
+          <h4>メモ</h4>
+          <p id="customer-master-view-memo">-</p>
+        </div>
+
+        <div class="customer-master-view-product-notes">
+          <h4>商品ごとの出荷注意事項</h4>
+          <div id="customer-master-view-product-notes-list"></div>
+        </div>
+
+        <div class="customer-master-view-actions">
+          <button id="customer-master-view-close-button" type="button">一覧へ戻る</button>
+          <button id="customer-master-view-edit-button" type="button">取引先情報を編集する</button>
         </div>
       </div>
 
@@ -4564,9 +4605,9 @@
 <script src="processing-sheet.js?v=211"></script>
 <script src="processing-conversion.js?v=213"></script>
 <script src="single-stock-check.js?v=241"></script>
-<script src="customer-master.js?v=269"></script>
+<script src="customer-master.js?v=270"></script>
 <script src="home-dashboard.js?v=269"></script>
-<script src="app-settings.js?v=267"></script>
+<script src="app-settings.js?v=270"></script>
 <script src="home-alerts.js?v=267"></script>
 </body>
 </html>

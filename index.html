@@ -59,7 +59,7 @@
           </button>
 
           <span class="home-version-badge">
-            画面版 v268
+            画面版 v269
           </span>
         </div>
       </div>
@@ -380,6 +380,13 @@
               type="button"
             >
               販売実績CSVを読み込む
+            </button>
+
+            <button
+              id="show-customer-master-button"
+              type="button"
+            >
+              取引先マスタを見る
             </button>
 
             <button
@@ -1683,6 +1690,134 @@
       </div>
 
       <button id="back-home-from-sales-actual" type="button">ホームへ戻る</button>
+    </section>
+
+    <!-- 取引先マスタ -->
+    <section id="customer-master-screen" hidden>
+      <div class="customer-master-title-row">
+        <div>
+          <p class="customer-master-kicker">取引先情報をまとめて管理</p>
+          <h2>取引先マスタ</h2>
+        </div>
+        <button id="back-home-from-customer-master" type="button">ホームへ戻る</button>
+      </div>
+
+      <p class="customer-master-intro">
+        取引先ごとの担当者・連絡先・出荷時の注意事項を保存できます。商品ごとの注意事項も登録できます。
+      </p>
+      <div class="customer-master-security-note">
+        <strong>開発・試験中は架空の担当者名・連絡先を使用してください。</strong>
+        実際の個人情報は、サーバー側のアクセス制限を整えてから登録する運用を推奨します。
+      </div>
+
+      <div class="customer-master-toolbar">
+        <label>
+          取引先を検索
+          <input id="customer-master-search" type="search" placeholder="取引先名・取引先コード・担当者名">
+        </label>
+        <button id="customer-master-new-button" type="button">＋ 新しい取引先を登録</button>
+      </div>
+
+      <div class="customer-master-summary">
+        <div><span>登録取引先</span><strong id="customer-master-count">0社</strong></div>
+        <div><span>販売実績監視</span><strong id="customer-master-monitor-count">0社</strong></div>
+      </div>
+
+      <div id="customer-master-list-area">
+        <p id="customer-master-empty" class="customer-master-empty">まだ取引先が登録されていません。</p>
+        <div class="customer-master-table-wrap">
+          <table class="customer-master-table">
+            <thead>
+              <tr>
+                <th>取引先コード</th>
+                <th>取引先名</th>
+                <th>担当者</th>
+                <th>電話番号</th>
+                <th>販売実績監視</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="customer-master-list-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="customer-master-editor" class="customer-master-editor" hidden>
+        <div class="customer-master-editor-heading">
+          <h3 id="customer-master-editor-title">取引先を登録</h3>
+          <span id="customer-master-editor-status">新規</span>
+        </div>
+
+        <div class="customer-master-form-grid">
+          <label>
+            取引先名 <strong class="required">必須</strong>
+            <input id="customer-master-name" type="text" autocomplete="organization">
+          </label>
+          <label>
+            取引先コード
+            <input id="customer-master-code" type="text" placeholder="例：C001">
+          </label>
+          <label>
+            担当者名
+            <input id="customer-master-contact" type="text" autocomplete="name" placeholder="試験中は架空名を使用">
+          </label>
+          <label>
+            電話番号
+            <input id="customer-master-phone" type="tel" autocomplete="tel" placeholder="試験中は架空番号を使用">
+          </label>
+          <label>
+            メールアドレス
+            <input id="customer-master-email" type="email" autocomplete="email" placeholder="試験中は架空アドレスを使用">
+          </label>
+        </div>
+
+        <div class="customer-master-form-grid customer-master-wide-fields">
+          <label>
+            住所
+            <textarea id="customer-master-address" rows="2"></textarea>
+          </label>
+          <label>
+            出荷先住所
+            <textarea id="customer-master-shipping-address" rows="2" placeholder="住所と同じ場合は空欄でも可"></textarea>
+          </label>
+          <label>
+            出荷時の共通注意事項
+            <textarea id="customer-master-shipping-note" rows="3" placeholder="例：出荷前に連絡、納品時間指定など"></textarea>
+          </label>
+          <label>
+            メモ
+            <textarea id="customer-master-memo" rows="3"></textarea>
+          </label>
+        </div>
+
+        <div class="customer-master-monitor-box">
+          <label class="customer-master-check-label">
+            <input id="customer-master-monitor" type="checkbox">
+            この取引先の販売実績CSVを警告対象にする
+          </label>
+          <label>
+            監視キーワード
+            <input id="customer-master-monitor-keyword" type="text" placeholder="例：清水産業">
+          </label>
+          <p>会社名の一部を登録できます。保存すると「販売実績CSV 監視企業」の設定にも反映します。</p>
+        </div>
+
+        <div class="customer-master-product-notes">
+          <h4>商品ごとの出荷注意事項</h4>
+          <p>この取引先へ出荷するときだけ必要な、商品別の注意事項を登録できます。</p>
+          <div class="customer-master-product-search-row">
+            <input id="customer-master-product-search" type="search" placeholder="社内コード・商品コード・商品名で検索">
+          </div>
+          <div id="customer-master-product-search-results" class="customer-master-product-search-results"></div>
+          <div id="customer-master-product-notes-list" class="customer-master-product-notes-list"></div>
+        </div>
+
+        <div class="customer-master-actions">
+          <button id="customer-master-save-button" type="button">保存する</button>
+          <button id="customer-master-cancel-button" type="button">編集をやめる</button>
+          <button id="customer-master-delete-button" type="button" hidden>この取引先を削除</button>
+        </div>
+      </div>
     </section>
 
     <!-- 通常出荷数量 -->
@@ -4393,7 +4528,7 @@
 
   </main>
 
-<script src="storage.js?v=245"></script>
+<script src="storage.js?v=269"></script>
 <script src="normal-shipment.js?v=226"></script>
 <script src="manual.js?v=207"></script>
 <script src="backorder-list.js?v=216"></script>
@@ -4423,13 +4558,14 @@
 <script src="shipping-arrival.js?v=118"></script>
 <script src="barcode-print.js?v=142"></script>
 <script src="disposal-list.js?v=246"></script>
-<script src="backup.js?v=245"></script>
-<script src="restore.js?v=245"></script>
+<script src="backup.js?v=269"></script>
+<script src="restore.js?v=269"></script>
 <script src="location-management.js?v=100"></script>
 <script src="processing-sheet.js?v=211"></script>
 <script src="processing-conversion.js?v=213"></script>
 <script src="single-stock-check.js?v=241"></script>
-<script src="home-dashboard.js?v=258"></script>
+<script src="customer-master.js?v=269"></script>
+<script src="home-dashboard.js?v=269"></script>
 <script src="app-settings.js?v=267"></script>
 <script src="home-alerts.js?v=267"></script>
 </body>

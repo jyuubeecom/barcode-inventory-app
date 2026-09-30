@@ -3,7 +3,7 @@
 const DATABASE_NAME =
   "barcodeInventoryDatabase";
 
-const DATABASE_VERSION = 16;
+const DATABASE_VERSION = 17;
 
 const PRODUCT_STORE_NAME =
   "products";
@@ -55,6 +55,9 @@ const ORDER_REMAINING_HISTORY_STORE_NAME =
 
 const DISPOSAL_LIST_STORE_NAME =
   "disposalLists";
+
+const CUSTOMER_STORE_NAME =
+  "customers";
 
 const LOCATION_STOCK_UNCONFIRMED_NAME =
   "未確認";
@@ -1175,6 +1178,36 @@ function openDatabase() {
           );
 
           disposalListStore.createIndex(
+            "updatedAt",
+            "updatedAt",
+            { unique: false }
+          );
+        }
+
+        if (
+          !database.objectStoreNames.contains(
+            CUSTOMER_STORE_NAME
+          )
+        ) {
+          const customerStore =
+            database.createObjectStore(
+              CUSTOMER_STORE_NAME,
+              { keyPath: "id" }
+            );
+
+          customerStore.createIndex(
+            "customerName",
+            "customerName",
+            { unique: false }
+          );
+
+          customerStore.createIndex(
+            "customerCode",
+            "customerCode",
+            { unique: false }
+          );
+
+          customerStore.createIndex(
             "updatedAt",
             "updatedAt",
             { unique: false }
@@ -2519,6 +2552,65 @@ async function updateProductsInBatch(updatedProducts) {
         )
       );
     });
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+
+async function getAllCustomers() {
+  return getAllRecordsFromStore(
+    CUSTOMER_STORE_NAME
+  );
+}
+
+async function saveCustomer(record) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      CUSTOMER_STORE_NAME,
+      "readwrite"
+    );
+
+    transaction.objectStore(
+      CUSTOMER_STORE_NAME
+    ).put(record);
+
+    transaction.oncomplete = function () {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = function () {
+      const error = transaction.error;
+      database.close();
+      reject(error);
+    };
+    transaction.onabort = transaction.onerror;
+  });
+}
+
+async function deleteCustomer(id) {
+  const database = await openDatabase();
+
+  return new Promise(function (resolve, reject) {
+    const transaction = database.transaction(
+      CUSTOMER_STORE_NAME,
+      "readwrite"
+    );
+
+    transaction.objectStore(
+      CUSTOMER_STORE_NAME
+    ).delete(id);
 
     transaction.oncomplete = function () {
       database.close();

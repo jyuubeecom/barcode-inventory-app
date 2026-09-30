@@ -34,6 +34,7 @@ const HOME_DASHBOARD_GROUPS = Object.freeze({
     "show-sales-plan-button",
     "show-sales-plan-list-button",
     "show-sales-actual-import-button",
+    "show-customer-master-button",
     "show-normal-shipment-button",
     "show-low-shipment-button"
   ],
@@ -77,6 +78,7 @@ const HOME_DASHBOARD_ACTION_CLASSES = Object.freeze({
   "show-sales-plan-button": "home-action-sales",
   "show-sales-plan-list-button": "home-action-sales-list",
   "show-sales-actual-import-button": "home-action-sales-import",
+  "show-customer-master-button": "home-action-sales",
   "show-normal-shipment-button": "home-action-sales",
   "show-purchase-required-button": "home-action-purchase-required",
   "show-order-remaining-button": "home-action-purchase-required",

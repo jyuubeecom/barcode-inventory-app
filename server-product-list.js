@@ -11,6 +11,11 @@
   let listScreen = null;
   let lastKeyword = "";
   let isLoading = false;
+  let lastItems = [];
+  let lastResponseData = null;
+  let lastStockFilter = "all";
+  let lastProductStatusFilter = "all";
+  let lastSort = "internal_asc";
 
   document.addEventListener(
     "DOMContentLoaded",
@@ -256,16 +261,40 @@
       return;
     }
 
-    const count = Number.isFinite(Number(data && data.count))
-      ? Number(data.count)
-      : items.length;
+    lastItems = Array.isArray(items) ? items.slice() : [];
+    lastResponseData = data || {};
 
-    const cards = items.length
-      ? items.map(createProductCardHtml).join("")
+    const serverCount = Number.isFinite(Number(data && data.count))
+      ? Number(data.count)
+      : lastItems.length;
+
+    const productStatuses = Array.from(
+      new Set(
+        lastItems
+          .map(function (item) {
+            return String(item.product_status || "通常商品").trim();
+          })
+          .filter(Boolean)
+      )
+    ).sort(function (a, b) {
+      return a.localeCompare(b, "ja");
+    });
+
+    if (
+      lastProductStatusFilter !== "all" &&
+      !productStatuses.includes(lastProductStatusFilter)
+    ) {
+      lastProductStatusFilter = "all";
+    }
+
+    const filteredItems = applyLocalFiltersAndSort(lastItems);
+
+    const cards = filteredItems.length
+      ? filteredItems.map(createProductCardHtml).join("")
       : `
           <div class="server-product-list-empty">
-            ${lastKeyword
-              ? `「${escapeHtml(lastKeyword)}」に一致するサーバー商品はありません。`
+            ${lastKeyword || lastStockFilter !== "all" || lastProductStatusFilter !== "all"
+              ? "条件に一致するサーバー商品はありません。"
               : "サーバーに登録されている商品はありません。"}
           </div>
         `;
@@ -274,7 +303,7 @@
       <div class="server-product-list-notice server-product-list-success">
         <strong>✓ サーバー商品一覧を取得しました</strong>
         <span>
-          ${escapeHtml(String(count))}件を表示しています。
+          サーバー検索結果 ${escapeHtml(String(serverCount))}件 / 現在表示 ${escapeHtml(String(filteredItems.length))}件。
           現在は閲覧専用です。
         </span>
       </div>
@@ -305,13 +334,45 @@
         </div>
       </form>
 
+      <div class="server-product-list-filter-box">
+        <div class="server-product-list-filter-field">
+          <label for="server-product-list-stock-filter">在庫状態</label>
+          <select id="server-product-list-stock-filter">
+            <option value="all"${lastStockFilter === "all" ? " selected" : ""}>すべて</option>
+            <option value="normal"${lastStockFilter === "normal" ? " selected" : ""}>通常</option>
+            <option value="low"${lastStockFilter === "low" ? " selected" : ""}>要補充</option>
+            <option value="out"${lastStockFilter === "out" ? " selected" : ""}>在庫切れ</option>
+          </select>
+        </div>
+
+        <div class="server-product-list-filter-field">
+          <label for="server-product-list-status-filter">商品状態</label>
+          <select id="server-product-list-status-filter">
+            <option value="all"${lastProductStatusFilter === "all" ? " selected" : ""}>すべて</option>
+            ${productStatuses.map(function (status) {
+              return `<option value="${escapeHtml(status)}"${lastProductStatusFilter === status ? " selected" : ""}>${escapeHtml(status)}</option>`;
+            }).join("")}
+          </select>
+        </div>
+
+        <div class="server-product-list-filter-field">
+          <label for="server-product-list-sort">並べ替え</label>
+          <select id="server-product-list-sort">
+            <option value="internal_asc"${lastSort === "internal_asc" ? " selected" : ""}>社内コード順</option>
+            <option value="name_asc"${lastSort === "name_asc" ? " selected" : ""}>商品名順</option>
+            <option value="stock_desc"${lastSort === "stock_desc" ? " selected" : ""}>在庫数が多い順</option>
+            <option value="stock_asc"${lastSort === "stock_asc" ? " selected" : ""}>在庫数が少ない順</option>
+          </select>
+        </div>
+      </div>
+
       <div class="server-product-list-actions">
         <button
           id="server-product-list-clear-button"
           type="button"
           class="server-product-list-secondary-button"
         >
-          全件表示
+          条件を解除
         </button>
 
         <button
@@ -328,7 +389,8 @@
       </div>
 
       <p class="server-product-list-footnote">
-        ※ 詳細を開くときは、最新の商品情報をサーバーからもう一度取得します。
+        ※ 絞り込み・並べ替えは、取得したサーバー商品に対してこの画面上で行います。
+        詳細を開くときは、最新の商品情報をサーバーからもう一度取得します。
       </p>
     `;
 
@@ -337,6 +399,15 @@
     );
     const searchInput = content.querySelector(
       "#server-product-list-search-input"
+    );
+    const stockFilter = content.querySelector(
+      "#server-product-list-stock-filter"
+    );
+    const statusFilter = content.querySelector(
+      "#server-product-list-status-filter"
+    );
+    const sortSelect = content.querySelector(
+      "#server-product-list-sort"
     );
     const clearButton = content.querySelector(
       "#server-product-list-clear-button"
@@ -354,9 +425,33 @@
       });
     }
 
+    if (stockFilter) {
+      stockFilter.addEventListener("change", function () {
+        lastStockFilter = stockFilter.value || "all";
+        renderServerProducts(lastItems, lastResponseData);
+      });
+    }
+
+    if (statusFilter) {
+      statusFilter.addEventListener("change", function () {
+        lastProductStatusFilter = statusFilter.value || "all";
+        renderServerProducts(lastItems, lastResponseData);
+      });
+    }
+
+    if (sortSelect) {
+      sortSelect.addEventListener("change", function () {
+        lastSort = sortSelect.value || "internal_asc";
+        renderServerProducts(lastItems, lastResponseData);
+      });
+    }
+
     if (clearButton) {
       clearButton.addEventListener("click", function () {
         lastKeyword = "";
+        lastStockFilter = "all";
+        lastProductStatusFilter = "all";
+        lastSort = "internal_asc";
         loadServerProducts("");
       });
     }
@@ -377,6 +472,62 @@
         );
       });
     });
+  }
+
+  function applyLocalFiltersAndSort(items) {
+    const filtered = items.filter(function (item) {
+      const totalStock = toNumber(item.total_stock);
+      const minStock = toNumber(item.min_stock);
+      const stockStatus = getStockStatus(
+        item.product_status,
+        totalStock,
+        minStock
+      );
+
+      if (lastStockFilter === "normal" && stockStatus !== "通常") {
+        return false;
+      }
+      if (lastStockFilter === "low" && stockStatus !== "要補充") {
+        return false;
+      }
+      if (lastStockFilter === "out" && stockStatus !== "在庫切れ") {
+        return false;
+      }
+
+      if (
+        lastProductStatusFilter !== "all" &&
+        String(item.product_status || "通常商品") !== lastProductStatusFilter
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    filtered.sort(function (a, b) {
+      if (lastSort === "name_asc") {
+        return String(a.product_name || "").localeCompare(
+          String(b.product_name || ""),
+          "ja"
+        );
+      }
+
+      if (lastSort === "stock_desc") {
+        return toNumber(b.total_stock) - toNumber(a.total_stock);
+      }
+
+      if (lastSort === "stock_asc") {
+        return toNumber(a.total_stock) - toNumber(b.total_stock);
+      }
+
+      return String(a.internal_code || "").localeCompare(
+        String(b.internal_code || ""),
+        "ja",
+        { numeric: true, sensitivity: "base" }
+      );
+    });
+
+    return filtered;
   }
 
   function createProductCardHtml(item) {
@@ -724,6 +875,38 @@
         font: inherit;
       }
 
+      .server-product-list-filter-box {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        padding: 14px;
+        border: 1px solid #d7e2eb;
+        border-radius: 12px;
+        background: #ffffff;
+      }
+
+      .server-product-list-filter-field {
+        display: grid;
+        gap: 6px;
+      }
+
+      .server-product-list-filter-field label {
+        color: #173b58;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .server-product-list-filter-field select {
+        width: 100%;
+        min-height: 46px;
+        padding: 8px 10px;
+        border: 1px solid #aebfcd;
+        border-radius: 9px;
+        background: #ffffff;
+        color: #173b58;
+        font: inherit;
+      }
+
       .server-product-list-actions {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -837,6 +1020,7 @@
         }
 
         .server-product-list-search-row,
+        .server-product-list-filter-box,
         .server-product-list-actions,
         .server-product-list-grid {
           grid-template-columns: 1fr;

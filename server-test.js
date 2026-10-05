@@ -1,20 +1,33 @@
 "use strict";
 
 (function () {
-  const SERVER_TEST_ENDPOINT =
-    "https://jyuubee.sakura.ne.jp/inventory/app-server-test.php";
+  const SERVER_LOGIN_ENDPOINT =
+    "https://jyuubee.sakura.ne.jp/inventory/login.php";
 
-  let serverTestOverlay = null;
-  let serverTestResult = null;
-  let serverTestRetryButton = null;
+  const SERVER_PRODUCT_ENDPOINT =
+    "https://jyuubee.sakura.ne.jp/inventory/get-product-auth.php";
+
+  const TEST_INTERNAL_CODE = "TEST001";
+
+  const TOKEN_STORAGE_KEY =
+    "barcodeInventoryServerAccessToken";
+
+  const EXPIRES_STORAGE_KEY =
+    "barcodeInventoryServerAccessExpiresAt";
+
+  const USER_STORAGE_KEY =
+    "barcodeInventoryServerUser";
+
+  let overlay = null;
+  let content = null;
 
   document.addEventListener(
     "DOMContentLoaded",
-    initializeServerConnectionTest
+    initializeServerAuthTest
   );
 
-  function initializeServerConnectionTest() {
-    createServerTestStyle();
+  function initializeServerAuthTest() {
+    createStyles();
 
     const button = document.querySelector(
       "#server-connection-test-button"
@@ -26,11 +39,11 @@
 
     button.addEventListener(
       "click",
-      openServerConnectionTest
+      openDialog
     );
   }
 
-  async function openServerConnectionTest() {
+  async function openDialog() {
     if (
       window.inventoryPermissions &&
       typeof window.inventoryPermissions.isAdmin === "function" &&
@@ -41,137 +54,96 @@
         "function"
       ) {
         await window.inventoryPermissions.showWorkerRestriction(
-          "サーバー接続テスト"
+          "サーバーログイン・接続確認"
         );
       }
       return;
     }
 
-    ensureServerTestDialog();
-    serverTestOverlay.hidden = false;
-    document.body.classList.add(
-      "server-test-dialog-open"
-    );
+    ensureDialog();
+    overlay.hidden = false;
+    document.body.classList.add("server-auth-dialog-open");
 
-    await runServerConnectionTest();
+    renderCurrentState();
   }
 
-  function closeServerConnectionTest() {
-    if (!serverTestOverlay) {
+  function closeDialog() {
+    if (!overlay) {
       return;
     }
 
-    serverTestOverlay.hidden = true;
-    document.body.classList.remove(
-      "server-test-dialog-open"
-    );
+    overlay.hidden = true;
+    document.body.classList.remove("server-auth-dialog-open");
   }
 
-  function ensureServerTestDialog() {
-    if (serverTestOverlay) {
+  function ensureDialog() {
+    if (overlay) {
       return;
     }
 
-    serverTestOverlay = document.createElement("div");
-    serverTestOverlay.id = "server-connection-test-dialog";
-    serverTestOverlay.className = "server-test-overlay";
-    serverTestOverlay.hidden = true;
+    overlay = document.createElement("div");
+    overlay.id = "server-auth-dialog";
+    overlay.className = "server-auth-overlay";
+    overlay.hidden = true;
 
-    serverTestOverlay.innerHTML = `
+    overlay.innerHTML = `
       <section
-        class="server-test-card"
+        class="server-auth-card"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="server-test-title"
+        aria-labelledby="server-auth-title"
       >
-        <div class="server-test-heading">
+        <div class="server-auth-heading">
           <div>
-            <span class="server-test-kicker">さくらサーバー</span>
-            <h2 id="server-test-title">サーバー接続テスト</h2>
+            <span class="server-auth-kicker">さくらサーバー</span>
+            <h2 id="server-auth-title">サーバーログイン・接続確認</h2>
           </div>
 
           <button
-            id="server-test-close-button"
+            id="server-auth-close-button"
             type="button"
-            class="server-test-close-button"
+            class="server-auth-close-button"
           >
             閉じる
           </button>
         </div>
 
-        <p class="server-test-description">
-          架空商品「TEST001」をサーバーから読み込みます。
-          このテストでは実際の会社データは使用しません。
+        <p class="server-auth-description">
+          テスト用アカウントでログインし、ログイン済みの人だけが
+          架空商品「TEST001」を取得できることを確認します。
+          実際の会社データはまだ使用しません。
         </p>
 
         <div
-          id="server-test-result"
-          class="server-test-result"
+          id="server-auth-content"
+          class="server-auth-content"
           aria-live="polite"
         ></div>
-
-        <div class="server-test-actions">
-          <button
-            id="server-test-retry-button"
-            type="button"
-          >
-            もう一度確認する
-          </button>
-
-          <button
-            id="server-test-bottom-close-button"
-            type="button"
-            class="server-test-secondary-button"
-          >
-            閉じる
-          </button>
-        </div>
       </section>
     `;
 
-    document.body.appendChild(
-      serverTestOverlay
+    document.body.appendChild(overlay);
+
+    content = overlay.querySelector(
+      "#server-auth-content"
     );
 
-    serverTestResult =
-      serverTestOverlay.querySelector(
-        "#server-test-result"
-      );
+    const closeButton = overlay.querySelector(
+      "#server-auth-close-button"
+    );
 
-    serverTestRetryButton =
-      serverTestOverlay.querySelector(
-        "#server-test-retry-button"
-      );
-
-    const closeButtons = [
-      serverTestOverlay.querySelector(
-        "#server-test-close-button"
-      ),
-      serverTestOverlay.querySelector(
-        "#server-test-bottom-close-button"
-      )
-    ];
-
-    closeButtons.forEach(function (button) {
-      if (!button) return;
-      button.addEventListener(
+    if (closeButton) {
+      closeButton.addEventListener(
         "click",
-        closeServerConnectionTest
-      );
-    });
-
-    if (serverTestRetryButton) {
-      serverTestRetryButton.addEventListener(
-        "click",
-        runServerConnectionTest
+        closeDialog
       );
     }
 
-    serverTestOverlay.addEventListener(
+    overlay.addEventListener(
       "click",
       function (event) {
-        if (event.target === serverTestOverlay) {
-          closeServerConnectionTest();
+        if (event.target === overlay) {
+          closeDialog();
         }
       }
     );
@@ -181,52 +153,356 @@
       function (event) {
         if (
           event.key === "Escape" &&
-          serverTestOverlay &&
-          !serverTestOverlay.hidden
+          overlay &&
+          !overlay.hidden
         ) {
-          closeServerConnectionTest();
+          closeDialog();
         }
       }
     );
   }
 
-  async function runServerConnectionTest() {
-    if (!serverTestResult) {
+  function renderCurrentState() {
+    const session = getStoredSession();
+
+    if (session) {
+      renderLoggedInState(session);
       return;
     }
 
-    serverTestResult.innerHTML = `
-      <div class="server-test-status server-test-loading">
-        <strong>接続確認中...</strong>
-        <span>さくらサーバーからTEST001を読み込んでいます。</span>
-      </div>
+    renderLoginForm();
+  }
+
+  function renderLoginForm(message = "") {
+    if (!content) {
+      return;
+    }
+
+    const messageHtml = message
+      ? `
+          <div class="server-auth-status server-auth-error">
+            <strong>ログインできませんでした</strong>
+            <span>${escapeHtml(message)}</span>
+          </div>
+        `
+      : `
+          <div class="server-auth-status server-auth-info">
+            <strong>🔐 サーバーログインが必要です</strong>
+            <span>テスト用のログインIDとパスワードを入力してください。</span>
+          </div>
+        `;
+
+    content.innerHTML = `
+      ${messageHtml}
+
+      <form id="server-auth-login-form" class="server-auth-login-form">
+        <label>
+          <span>ログインID</span>
+          <input
+            id="server-auth-username"
+            type="text"
+            autocomplete="username"
+            maxlength="50"
+            placeholder="例：test-admin"
+            required
+          >
+        </label>
+
+        <label>
+          <span>パスワード</span>
+          <input
+            id="server-auth-password"
+            type="password"
+            autocomplete="current-password"
+            maxlength="200"
+            placeholder="パスワードを入力"
+            required
+          >
+        </label>
+
+        <button
+          id="server-auth-login-button"
+          type="submit"
+          class="server-auth-primary-button"
+        >
+          ログインしてTEST001を確認する
+        </button>
+      </form>
+
+      <p class="server-auth-note">
+        パスワードはこの画面やブラウザー保存領域には保存しません。
+        ログイン成功後の一時的なトークンだけを、このタブを閉じるまで保持します。
+      </p>
     `;
 
-    if (serverTestRetryButton) {
-      serverTestRetryButton.disabled = true;
+    const form = content.querySelector(
+      "#server-auth-login-form"
+    );
+
+    const usernameInput = content.querySelector(
+      "#server-auth-username"
+    );
+
+    if (usernameInput) {
+      usernameInput.focus();
+    }
+
+    if (form) {
+      form.addEventListener(
+        "submit",
+        handleLogin
+      );
+    }
+  }
+
+  async function handleLogin(event) {
+    event.preventDefault();
+
+    const usernameInput = content.querySelector(
+      "#server-auth-username"
+    );
+
+    const passwordInput = content.querySelector(
+      "#server-auth-password"
+    );
+
+    const loginButton = content.querySelector(
+      "#server-auth-login-button"
+    );
+
+    const username = usernameInput
+      ? usernameInput.value.trim()
+      : "";
+
+    const password = passwordInput
+      ? passwordInput.value
+      : "";
+
+    if (!username || !password) {
+      renderLoginForm(
+        "ログインIDとパスワードを入力してください。"
+      );
+      return;
+    }
+
+    if (loginButton) {
+      loginButton.disabled = true;
+      loginButton.textContent = "ログイン確認中...";
     }
 
     try {
       const response = await fetch(
-        SERVER_TEST_ENDPOINT,
+        SERVER_LOGIN_ENDPOINT,
+        {
+          method: "POST",
+          mode: "cors",
+          cache: "no-store",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json"
+          },
+          body: JSON.stringify({
+            username,
+            password
+          })
+        }
+      );
+
+      const data = await readJsonResponse(response);
+
+      if (
+        !response.ok ||
+        !data ||
+        data.success !== true ||
+        !data.token
+      ) {
+        throw new Error(
+          data && data.message
+            ? data.message
+            : "ログインに失敗しました。"
+        );
+      }
+
+      const expiresIn = Number(data.expires_in);
+      const expiresAt =
+        Date.now() +
+        (Number.isFinite(expiresIn) ? expiresIn : 28800) * 1000;
+
+      storeSession({
+        token: data.token,
+        expiresAt,
+        user: data.user || {
+          username,
+          display_name: username,
+          role: ""
+        }
+      });
+
+      if (passwordInput) {
+        passwordInput.value = "";
+      }
+
+      const session = getStoredSession();
+
+      if (!session) {
+        throw new Error(
+          "ログイン情報を保存できませんでした。"
+        );
+      }
+
+      renderLoggedInState(session);
+      await loadProtectedProduct(session);
+    } catch (error) {
+      clearStoredSession();
+      renderLoginForm(
+        getErrorMessage(
+          error,
+          "ログイン処理に失敗しました。"
+        )
+      );
+    }
+  }
+
+  function renderLoggedInState(session) {
+    if (!content) {
+      return;
+    }
+
+    const user = session.user || {};
+    const displayName =
+      user.display_name ||
+      user.username ||
+      "ログインユーザー";
+
+    const roleText =
+      user.role === "admin"
+        ? "管理者"
+        : user.role === "worker"
+          ? "作業者"
+          : user.role || "-";
+
+    content.innerHTML = `
+      <div class="server-auth-status server-auth-success">
+        <strong>✓ サーバーログイン済み</strong>
+        <span>
+          ${escapeHtml(displayName)} / ${escapeHtml(roleText)}
+        </span>
+      </div>
+
+      <div class="server-auth-session-actions">
+        <button
+          id="server-auth-product-button"
+          type="button"
+          class="server-auth-primary-button"
+        >
+          TEST001をサーバーから取得する
+        </button>
+
+        <button
+          id="server-auth-logout-button"
+          type="button"
+          class="server-auth-secondary-button"
+        >
+          この端末のログインを解除
+        </button>
+      </div>
+
+      <div
+        id="server-auth-product-result"
+        class="server-auth-product-result"
+      ></div>
+
+      <p class="server-auth-note">
+        ログイン情報はこのブラウザータブ内だけに保持します。
+        現段階では架空商品「TEST001」だけで確認します。
+      </p>
+    `;
+
+    const productButton = content.querySelector(
+      "#server-auth-product-button"
+    );
+
+    const logoutButton = content.querySelector(
+      "#server-auth-logout-button"
+    );
+
+    if (productButton) {
+      productButton.addEventListener(
+        "click",
+        function () {
+          const latestSession = getStoredSession();
+
+          if (!latestSession) {
+            renderLoginForm(
+              "ログインの有効期限が切れました。もう一度ログインしてください。"
+            );
+            return;
+          }
+
+          loadProtectedProduct(latestSession);
+        }
+      );
+    }
+
+    if (logoutButton) {
+      logoutButton.addEventListener(
+        "click",
+        function () {
+          clearStoredSession();
+          renderLoginForm();
+        }
+      );
+    }
+  }
+
+  async function loadProtectedProduct(session) {
+    const result = content.querySelector(
+      "#server-auth-product-result"
+    );
+
+    const productButton = content.querySelector(
+      "#server-auth-product-button"
+    );
+
+    if (!result) {
+      return;
+    }
+
+    result.innerHTML = `
+      <div class="server-auth-status server-auth-loading">
+        <strong>商品データを確認中...</strong>
+        <span>ログイン情報を付けてTEST001を取得しています。</span>
+      </div>
+    `;
+
+    if (productButton) {
+      productButton.disabled = true;
+    }
+
+    try {
+      const response = await fetch(
+        SERVER_PRODUCT_ENDPOINT +
+          "?code=" +
+          encodeURIComponent(TEST_INTERNAL_CODE),
         {
           method: "GET",
           mode: "cors",
           cache: "no-store",
           headers: {
-            Accept: "application/json"
+            Accept: "application/json",
+            Authorization: "Bearer " + session.token
           }
         }
       );
 
-      let data = null;
+      const data = await readJsonResponse(response);
 
-      try {
-        data = await response.json();
-      } catch (jsonError) {
-        throw new Error(
-          "サーバーから正しい形式の応答がありません。"
+      if (response.status === 401) {
+        clearStoredSession();
+        renderLoginForm(
+          "ログインの有効期限が切れたか、ログイン情報を確認できませんでした。"
         );
+        return;
       }
 
       if (
@@ -237,21 +513,26 @@
         throw new Error(
           data && data.message
             ? data.message
-            : "サーバー接続テストに失敗しました。"
+            : "商品データの取得に失敗しました。"
         );
       }
 
-      renderServerTestSuccess(data);
+      renderProductSuccess(result, data);
     } catch (error) {
-      renderServerTestError(error);
+      result.innerHTML = `
+        <div class="server-auth-status server-auth-error">
+          <strong>⚠ 商品データを取得できませんでした</strong>
+          <span>${escapeHtml(getErrorMessage(error, "サーバー通信に失敗しました。"))}</span>
+        </div>
+      `;
     } finally {
-      if (serverTestRetryButton) {
-        serverTestRetryButton.disabled = false;
+      if (productButton && document.body.contains(productButton)) {
+        productButton.disabled = false;
       }
     }
   }
 
-  function renderServerTestSuccess(data) {
+  function renderProductSuccess(result, data) {
     const product = data.product || {};
     const stocks = Array.isArray(data.stocks)
       ? data.stocks
@@ -260,74 +541,149 @@
     const stockRows = stocks.length
       ? stocks.map(function (stock) {
           return `
-            <div class="server-test-stock-row">
-              <span>${escapeServerTestHtml(stock.location_name || "-")}</span>
-              <strong>${formatServerTestNumber(stock.quantity)}個</strong>
+            <div class="server-auth-stock-row">
+              <span>${escapeHtml(stock.location_name || "-")}</span>
+              <strong>${formatNumber(stock.quantity)}個</strong>
             </div>
           `;
         }).join("")
       : `
-          <div class="server-test-empty-stock">
+          <div class="server-auth-empty-stock">
             場所別在庫はありません。
           </div>
         `;
 
-    serverTestResult.innerHTML = `
-      <div class="server-test-status server-test-success">
-        <strong>✓ サーバー接続成功</strong>
-        <span>PC・スマホから同じMySQLデータを取得できています。</span>
+    result.innerHTML = `
+      <div class="server-auth-status server-auth-success">
+        <strong>✓ 認証付き商品取得に成功</strong>
+        <span>ログイン済みの状態でMySQLの商品データを取得できました。</span>
       </div>
 
-      <div class="server-test-product">
-        <span class="server-test-product-label">商品名</span>
-        <strong class="server-test-product-name">
-          ${escapeServerTestHtml(product.product_name || "-")}
+      <div class="server-auth-product">
+        <span class="server-auth-product-label">商品名</span>
+        <strong class="server-auth-product-name">
+          ${escapeHtml(product.product_name || "-")}
         </strong>
 
-        <div class="server-test-code-row">
-          <span>社内コード：${escapeServerTestHtml(product.internal_code || "-")}</span>
-          <span>商品コード：${escapeServerTestHtml(product.product_code || "-")}</span>
+        <div class="server-auth-code-row">
+          <span>社内コード：${escapeHtml(product.internal_code || "-")}</span>
+          <span>商品コード：${escapeHtml(product.product_code || "-")}</span>
         </div>
       </div>
 
-      <div class="server-test-total-stock">
+      <div class="server-auth-total-stock">
         <span>現在庫合計</span>
-        <strong>${formatServerTestNumber(data.total_stock)}個</strong>
+        <strong>${formatNumber(data.total_stock)}個</strong>
       </div>
 
-      <div class="server-test-stock-list">
+      <div class="server-auth-stock-list">
         <h3>保管場所別在庫</h3>
         ${stockRows}
       </div>
 
-      <p class="server-test-endpoint-note">
-        接続先：jyuubee.sakura.ne.jp / TEST001（架空データ）
+      <p class="server-auth-endpoint-note">
+        保護された接続先：get-product-auth.php / TEST001（架空データ）
       </p>
     `;
   }
 
-  function renderServerTestError(error) {
-    const message =
-      error && error.message
-        ? error.message
-        : "サーバーへ接続できませんでした。";
-
-    serverTestResult.innerHTML = `
-      <div class="server-test-status server-test-error">
-        <strong>⚠ サーバー接続に失敗しました</strong>
-        <span>${escapeServerTestHtml(message)}</span>
-      </div>
-
-      <div class="server-test-help">
-        <p>次の3点を確認してください。</p>
-        <p>① インターネットに接続されているか</p>
-        <p>② さくらサーバーが利用できる状態か</p>
-        <p>③ app-server-test.php がサーバーに置かれているか</p>
-      </div>
-    `;
+  async function readJsonResponse(response) {
+    try {
+      return await response.json();
+    } catch (error) {
+      throw new Error(
+        "サーバーから正しい形式の応答がありません。"
+      );
+    }
   }
 
-  function formatServerTestNumber(value) {
+  function storeSession(session) {
+    try {
+      sessionStorage.setItem(
+        TOKEN_STORAGE_KEY,
+        session.token
+      );
+
+      sessionStorage.setItem(
+        EXPIRES_STORAGE_KEY,
+        String(session.expiresAt)
+      );
+
+      sessionStorage.setItem(
+        USER_STORAGE_KEY,
+        JSON.stringify(session.user || {})
+      );
+    } catch (error) {
+      clearStoredSession();
+      throw new Error(
+        "ブラウザーにログイン情報を保持できませんでした。"
+      );
+    }
+  }
+
+  function getStoredSession() {
+    try {
+      const token = sessionStorage.getItem(
+        TOKEN_STORAGE_KEY
+      );
+
+      const expiresAt = Number(
+        sessionStorage.getItem(
+          EXPIRES_STORAGE_KEY
+        )
+      );
+
+      if (
+        !token ||
+        !Number.isFinite(expiresAt) ||
+        Date.now() >= expiresAt
+      ) {
+        clearStoredSession();
+        return null;
+      }
+
+      let user = {};
+
+      const userText = sessionStorage.getItem(
+        USER_STORAGE_KEY
+      );
+
+      if (userText) {
+        try {
+          user = JSON.parse(userText);
+        } catch (error) {
+          user = {};
+        }
+      }
+
+      return {
+        token,
+        expiresAt,
+        user
+      };
+    } catch (error) {
+      clearStoredSession();
+      return null;
+    }
+  }
+
+  function clearStoredSession() {
+    try {
+      sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+      sessionStorage.removeItem(EXPIRES_STORAGE_KEY);
+      sessionStorage.removeItem(USER_STORAGE_KEY);
+    } catch (error) {
+      // sessionStorageが利用できない場合も画面操作は継続する。
+    }
+  }
+
+  function getErrorMessage(error, fallback) {
+    return error && error.message
+      ? error.message
+      : fallback;
+  }
+
+  function formatNumber(value) {
     const number = Number(value);
 
     if (!Number.isFinite(number)) {
@@ -337,7 +693,7 @@
     return number.toLocaleString("ja-JP");
   }
 
-  function escapeServerTestHtml(value) {
+  function escapeHtml(value) {
     return String(value ?? "")
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
@@ -346,23 +702,19 @@
       .replaceAll("'", "&#039;");
   }
 
-  function createServerTestStyle() {
-    if (
-      document.querySelector(
-        "#server-test-style"
-      )
-    ) {
+  function createStyles() {
+    if (document.querySelector("#server-auth-style")) {
       return;
     }
 
     const style = document.createElement("style");
-    style.id = "server-test-style";
+    style.id = "server-auth-style";
     style.textContent = `
-      body.server-test-dialog-open {
+      body.server-auth-dialog-open {
         overflow: hidden;
       }
 
-      .server-test-overlay {
+      .server-auth-overlay {
         position: fixed;
         inset: 0;
         z-index: 100000;
@@ -373,13 +725,13 @@
         background: rgba(15, 33, 48, 0.62);
       }
 
-      .server-test-overlay[hidden] {
+      .server-auth-overlay[hidden] {
         display: none !important;
       }
 
-      .server-test-card {
-        width: min(680px, 100%);
-        max-height: min(760px, calc(100vh - 36px));
+      .server-auth-card {
+        width: min(700px, 100%);
+        max-height: min(820px, calc(100vh - 36px));
         overflow: auto;
         padding: 24px;
         border: 2px solid #1565c0;
@@ -388,7 +740,7 @@
         box-shadow: 0 18px 45px rgba(0, 0, 0, 0.24);
       }
 
-      .server-test-heading {
+      .server-auth-heading {
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
@@ -397,7 +749,7 @@
         border-bottom: 1px solid #cfe0ef;
       }
 
-      .server-test-kicker {
+      .server-auth-kicker {
         display: block;
         margin-bottom: 4px;
         color: #1565c0;
@@ -405,74 +757,127 @@
         font-weight: 700;
       }
 
-      .server-test-heading h2 {
+      .server-auth-heading h2 {
         margin: 0;
         color: #123a5a;
         font-size: 24px;
       }
 
-      .server-test-close-button,
-      .server-test-secondary-button {
+      .server-auth-close-button,
+      .server-auth-secondary-button {
         background: #546e7a !important;
       }
 
-      .server-test-description {
+      .server-auth-description {
         margin: 16px 0;
         color: #536b7d;
         line-height: 1.7;
       }
 
-      .server-test-status {
+      .server-auth-content {
+        display: grid;
+        gap: 16px;
+      }
+
+      .server-auth-status {
         display: grid;
         gap: 5px;
-        margin-bottom: 16px;
         padding: 16px;
         border-radius: 12px;
       }
 
-      .server-test-status strong {
+      .server-auth-status strong {
         font-size: 19px;
       }
 
-      .server-test-loading {
+      .server-auth-info,
+      .server-auth-loading {
         border: 1px solid #90caf9;
         background: #eaf5ff;
         color: #0d5da8;
       }
 
-      .server-test-success {
+      .server-auth-success {
         border: 1px solid #81c784;
         background: #eefaf0;
         color: #1b6e2e;
       }
 
-      .server-test-error {
+      .server-auth-error {
         border: 1px solid #ef9a9a;
         background: #fff0f0;
         color: #b42318;
       }
 
-      .server-test-product {
+      .server-auth-login-form {
+        display: grid;
+        gap: 14px;
+        padding: 18px;
+        border: 1px solid #d7e2eb;
+        border-radius: 12px;
+        background: #fafcfe;
+      }
+
+      .server-auth-login-form label {
+        display: grid;
+        gap: 7px;
+        color: #173b58;
+        font-weight: 700;
+      }
+
+      .server-auth-login-form input {
+        width: 100%;
+        min-height: 48px;
+        padding: 10px 12px;
+        border: 1px solid #aebfcd;
+        border-radius: 9px;
+        background: #ffffff;
+        color: #173b58;
+        font: inherit;
+        font-weight: 400;
+      }
+
+      .server-auth-login-form input:focus {
+        outline: 3px solid rgba(21, 101, 192, 0.18);
+        border-color: #1565c0;
+      }
+
+      .server-auth-primary-button {
+        background: #1565c0 !important;
+      }
+
+      .server-auth-session-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .server-auth-product-result {
+        display: grid;
+        gap: 16px;
+      }
+
+      .server-auth-product {
         padding: 16px;
         border: 1px solid #d7e2eb;
         border-radius: 12px;
         background: #fafcfe;
       }
 
-      .server-test-product-label {
+      .server-auth-product-label {
         display: block;
         margin-bottom: 4px;
         color: #60788b;
         font-size: 13px;
       }
 
-      .server-test-product-name {
+      .server-auth-product-name {
         display: block;
         color: #173b58;
         font-size: 22px;
       }
 
-      .server-test-code-row {
+      .server-auth-code-row {
         display: flex;
         flex-wrap: wrap;
         gap: 6px 18px;
@@ -481,10 +886,9 @@
         font-size: 14px;
       }
 
-      .server-test-total-stock {
+      .server-auth-total-stock {
         display: grid;
         gap: 4px;
-        margin: 16px 0;
         padding: 18px;
         border: 2px solid #2e8b3c;
         border-radius: 12px;
@@ -492,22 +896,22 @@
         text-align: center;
       }
 
-      .server-test-total-stock span {
+      .server-auth-total-stock span {
         color: #557164;
       }
 
-      .server-test-total-stock strong {
+      .server-auth-total-stock strong {
         color: #1f7b31;
         font-size: 36px;
       }
 
-      .server-test-stock-list h3 {
+      .server-auth-stock-list h3 {
         margin: 0 0 10px;
         color: #173b58;
         font-size: 18px;
       }
 
-      .server-test-stock-row {
+      .server-auth-stock-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -519,80 +923,49 @@
         background: #ffffff;
       }
 
-      .server-test-stock-row strong {
+      .server-auth-stock-row strong {
         color: #1565c0;
         font-size: 19px;
       }
 
-      .server-test-empty-stock,
-      .server-test-help {
+      .server-auth-empty-stock {
         padding: 14px;
         border-radius: 10px;
         background: #f4f7f9;
-        color: #526878;
+        color: #60788b;
       }
 
-      .server-test-help p {
-        margin: 5px 0;
+      .server-auth-note,
+      .server-auth-endpoint-note {
+        margin: 0;
+        color: #60788b;
+        font-size: 13px;
+        line-height: 1.7;
       }
 
-      .server-test-endpoint-note {
-        margin: 16px 0 0;
-        color: #718696;
-        font-size: 12px;
-      }
-
-      .server-test-actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-        margin-top: 20px;
-      }
-
-      .server-test-actions button,
-      .server-test-close-button {
-        min-height: 46px;
-        padding: 10px 16px;
-        border: 0;
-        border-radius: 9px;
-        background: #1565c0;
-        color: #ffffff;
-        font-size: 15px;
-        font-weight: 700;
-        cursor: pointer;
-      }
-
-      .server-test-actions button:disabled {
-        cursor: wait;
-        opacity: 0.58;
-      }
-
-      @media (max-width: 640px) {
-        .server-test-overlay {
-          align-items: stretch;
-          padding: 8px;
+      @media (max-width: 600px) {
+        .server-auth-overlay {
+          padding: 10px;
         }
 
-        .server-test-card {
-          max-height: calc(100vh - 16px);
+        .server-auth-card {
+          max-height: calc(100vh - 20px);
           padding: 18px;
-          border-radius: 14px;
         }
 
-        .server-test-heading h2 {
-          font-size: 21px;
+        .server-auth-heading h2 {
+          font-size: 22px;
         }
 
-        .server-test-heading {
-          gap: 8px;
-        }
-
-        .server-test-close-button {
-          min-width: 74px;
-        }
-
-        .server-test-actions {
+        .server-auth-session-actions {
           grid-template-columns: 1fr;
+        }
+
+        .server-auth-close-button,
+        .server-auth-primary-button,
+        .server-auth-secondary-button {
+          min-height: 52px;
+          font-size: 17px;
         }
       }
     `;

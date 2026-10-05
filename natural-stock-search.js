@@ -297,6 +297,17 @@ async function searchStockByNaturalText(
       );
 
     if (matches.length === 0) {
+      const handledByServer =
+        await tryNaturalServerProductSearch(
+          productQuery || query,
+          status,
+          result
+        );
+
+      if (handledByServer) {
+        return;
+      }
+
       status.textContent =
         "該当する商品が見つかりませんでした。";
       status.className =
@@ -340,6 +351,375 @@ async function searchStockByNaturalText(
     status.className =
       "natural-stock-search-status natural-stock-search-error";
   }
+}
+
+async function tryNaturalServerProductSearch(
+  rawQuery,
+  status,
+  result
+) {
+  const internalCode =
+    getNaturalServerInternalCodeCandidate(
+      rawQuery
+    );
+
+  const serverApi =
+    window.inventoryServerSearch;
+
+  if (
+    !internalCode ||
+    !serverApi ||
+    typeof serverApi.searchProduct !== "function"
+  ) {
+    return false;
+  }
+
+  if (
+    typeof serverApi.hasSession === "function" &&
+    !serverApi.hasSession()
+  ) {
+    status.textContent =
+      "端末内では見つかりませんでした。サーバー検索にはログインが必要です。";
+    status.className =
+      "natural-stock-search-status natural-stock-search-warning";
+
+    renderNaturalServerLoginPrompt(
+      result,
+      internalCode,
+      serverApi
+    );
+
+    return true;
+  }
+
+  status.textContent =
+    "端末内では見つからなかったため、サーバーを検索しています…";
+  status.className =
+    "natural-stock-search-status";
+
+  try {
+    const data =
+      await serverApi.searchProduct(
+        internalCode
+      );
+
+    status.textContent =
+      "サーバーで1商品見つかりました。";
+    status.className =
+      "natural-stock-search-status natural-stock-search-success";
+
+    renderNaturalServerProductAnswer(
+      result,
+      data,
+      internalCode,
+      serverApi
+    );
+
+    return true;
+  } catch (error) {
+    if (
+      error &&
+      error.code === "SERVER_LOGIN_REQUIRED"
+    ) {
+      status.textContent =
+        "サーバーログインが必要です。";
+      status.className =
+        "natural-stock-search-status natural-stock-search-warning";
+
+      renderNaturalServerLoginPrompt(
+        result,
+        internalCode,
+        serverApi
+      );
+
+      return true;
+    }
+
+    if (
+      error &&
+      error.code === "SERVER_PRODUCT_NOT_FOUND"
+    ) {
+      status.textContent =
+        "端末内・サーバーともに商品が見つかりませんでした。";
+      status.className =
+        "natural-stock-search-status natural-stock-search-warning";
+
+      renderNaturalStockNoMatch(
+        result,
+        internalCode
+      );
+
+      return true;
+    }
+
+    console.error(error);
+
+    status.textContent =
+      "サーバーの商品検索に失敗しました。";
+    status.className =
+      "natural-stock-search-status natural-stock-search-error";
+
+    renderNaturalServerError(
+      result,
+      error
+    );
+
+    return true;
+  }
+}
+
+function getNaturalServerInternalCodeCandidate(
+  rawQuery
+) {
+  const query = String(rawQuery || "")
+    .normalize("NFKC")
+    .trim()
+    .toUpperCase();
+
+  if (!query || query.length > 50) {
+    return "";
+  }
+
+  if (/\s/.test(query)) {
+    return "";
+  }
+
+  if (!/^[A-Z0-9._-]+$/.test(query)) {
+    return "";
+  }
+
+  return query;
+}
+
+function renderNaturalServerLoginPrompt(
+  container,
+  internalCode,
+  serverApi
+) {
+  container.innerHTML = "";
+
+  const card =
+    document.createElement("article");
+
+  card.className =
+    "natural-stock-answer-card natural-server-answer-card";
+
+  const badge =
+    document.createElement("div");
+
+  badge.className =
+    "natural-server-badge";
+  badge.textContent =
+    "☁ サーバー検索";
+
+  const title =
+    document.createElement("h3");
+
+  title.textContent =
+    "サーバーログインが必要です";
+
+  const text =
+    document.createElement("p");
+
+  text.className =
+    "natural-stock-answer-text";
+  text.textContent =
+    `「${internalCode}」をサーバーで検索するにはログインしてください。`;
+
+  const button =
+    document.createElement("button");
+
+  button.type = "button";
+  button.className =
+    "natural-stock-detail-button";
+  button.textContent =
+    "サーバーログインして検索する";
+
+  button.addEventListener(
+    "click",
+    function () {
+      if (
+        serverApi &&
+        typeof serverApi.openLogin === "function"
+      ) {
+        serverApi.openLogin(
+          internalCode
+        );
+      }
+    }
+  );
+
+  card.appendChild(badge);
+  card.appendChild(title);
+  card.appendChild(text);
+  card.appendChild(button);
+  container.appendChild(card);
+}
+
+function renderNaturalServerProductAnswer(
+  container,
+  data,
+  internalCode,
+  serverApi
+) {
+  container.innerHTML = "";
+
+  const rawProduct =
+    data && data.product
+      ? data.product
+      : {};
+
+  const stocks =
+    data && Array.isArray(data.stocks)
+      ? data.stocks
+      : [];
+
+  const product = {
+    internalCode:
+      rawProduct.internal_code ||
+      internalCode,
+    productCode:
+      rawProduct.product_code || "",
+    productName:
+      rawProduct.product_name ||
+      "商品名未登録",
+    unit:
+      rawProduct.unit || "個",
+    stock:
+      data && data.total_stock,
+    locationStocks:
+      stocks.map(
+        function (stock) {
+          return {
+            location:
+              stock.location_name ||
+              "未確認",
+            stock:
+              stock.quantity
+          };
+        }
+      )
+  };
+
+  const unit =
+    getNaturalStockUnit(product);
+
+  const total =
+    getNaturalStockNumber(
+      product.stock
+    );
+
+  const locations =
+    getNaturalStockLocations(
+      product
+    );
+
+  const card =
+    document.createElement("article");
+
+  card.className =
+    "natural-stock-answer-card natural-server-answer-card";
+
+  const badge =
+    document.createElement("div");
+
+  badge.className =
+    "natural-server-badge";
+  badge.textContent =
+    "☁ サーバー商品・閲覧専用";
+
+  const heading =
+    document.createElement("h3");
+
+  heading.textContent =
+    product.productName;
+
+  const answer =
+    document.createElement("p");
+
+  answer.className =
+    "natural-stock-answer-text";
+  answer.textContent =
+    buildNaturalStockAnswerText(
+      product,
+      total,
+      unit,
+      locations
+    );
+
+  const button =
+    document.createElement("button");
+
+  button.type = "button";
+  button.className =
+    "natural-stock-detail-button";
+  button.textContent =
+    "サーバーの商品詳細を見る";
+
+  button.addEventListener(
+    "click",
+    function () {
+      if (
+        serverApi &&
+        typeof serverApi.openProductDetail === "function"
+      ) {
+        serverApi.openProductDetail(
+          data,
+          internalCode
+        );
+      }
+    }
+  );
+
+  card.appendChild(badge);
+  card.appendChild(heading);
+  card.appendChild(answer);
+  card.appendChild(
+    createNaturalStockSummary(
+      product,
+      total,
+      unit
+    )
+  );
+  card.appendChild(
+    createNaturalStockLocationList(
+      locations,
+      unit
+    )
+  );
+  card.appendChild(button);
+  container.appendChild(card);
+}
+
+function renderNaturalServerError(
+  container,
+  error
+) {
+  container.innerHTML = "";
+
+  const box =
+    document.createElement("div");
+
+  box.className =
+    "natural-stock-no-match";
+
+  const title =
+    document.createElement("strong");
+
+  title.textContent =
+    "サーバー検索でエラーが発生しました";
+
+  const text =
+    document.createElement("p");
+
+  text.textContent =
+    error && error.message
+      ? error.message
+      : "時間をおいて、もう一度お試しください。";
+
+  box.appendChild(title);
+  box.appendChild(text);
+  container.appendChild(box);
 }
 
 function isNaturalMonthlyAverageQuery(
@@ -7237,6 +7617,23 @@ function createNaturalStockSearchStyle() {
       margin: 12px 0 0;
       color: #607d8b;
       font-weight: 700;
+    }
+
+    .natural-server-answer-card {
+      border-color: #90caf9;
+      background: #f7fbff;
+    }
+
+    .natural-server-badge {
+      display: inline-flex;
+      width: fit-content;
+      margin-bottom: 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #e3f2fd;
+      color: #0d5da8;
+      font-size: 13px;
+      font-weight: 800;
     }
 
     .natural-stock-answer-card {

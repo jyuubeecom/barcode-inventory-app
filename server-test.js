@@ -1214,6 +1214,98 @@
       .replaceAll("'", "&#039;");
   }
 
+  function hasServerSession() {
+    return Boolean(getStoredSession());
+  }
+
+  async function searchServerProductForApp(internalCode) {
+    const code = String(internalCode || "").trim();
+
+    if (!code) {
+      const error = new Error("社内コードを入力してください。");
+      error.code = "SERVER_CODE_REQUIRED";
+      throw error;
+    }
+
+    const session = getStoredSession();
+
+    if (!session) {
+      const error = new Error("サーバーログインが必要です。");
+      error.code = "SERVER_LOGIN_REQUIRED";
+      throw error;
+    }
+
+    const response = await fetch(
+      SERVER_PRODUCT_ENDPOINT +
+        "?code=" +
+        encodeURIComponent(code),
+      {
+        method: "GET",
+        mode: "cors",
+        cache: "no-store",
+        headers: {
+          Accept: "application/json",
+          Authorization: "Bearer " + session.token
+        }
+      }
+    );
+
+    const data = await readJsonResponse(response);
+
+    if (response.status === 401) {
+      clearStoredSession();
+
+      const error = new Error(
+        "ログインの有効期限が切れました。もう一度ログインしてください。"
+      );
+      error.code = "SERVER_LOGIN_REQUIRED";
+      error.status = 401;
+      throw error;
+    }
+
+    if (!response.ok || !data || data.success !== true) {
+      const error = new Error(
+        data && data.message
+          ? data.message
+          : "商品データの取得に失敗しました。"
+      );
+      error.code = response.status === 404
+        ? "SERVER_PRODUCT_NOT_FOUND"
+        : "SERVER_PRODUCT_ERROR";
+      error.status = response.status;
+      throw error;
+    }
+
+    lastServerProductData = data;
+    lastServerRequestedCode = code;
+
+    return data;
+  }
+
+  function openServerLoginForCode(internalCode) {
+    const code = String(internalCode || "").trim();
+
+    if (code) {
+      lastServerRequestedCode = code;
+    }
+
+    openDialog();
+  }
+
+  function openServerProductDetailForApp(data, internalCode) {
+    openServerProductDetail(
+      data,
+      internalCode
+    );
+  }
+
+  window.inventoryServerSearch = {
+    hasSession: hasServerSession,
+    searchProduct: searchServerProductForApp,
+    openLogin: openServerLoginForCode,
+    openProductDetail: openServerProductDetailForApp
+  };
+
   function createStyles() {
     if (document.querySelector("#server-auth-style")) {
       return;
@@ -1278,6 +1370,14 @@
       .server-auth-close-button,
       .server-auth-secondary-button {
         background: #546e7a !important;
+      }
+
+      .server-auth-close-button {
+        flex: 0 0 auto;
+        min-width: 92px;
+        padding-left: 16px;
+        padding-right: 16px;
+        white-space: nowrap;
       }
 
       .server-auth-description {

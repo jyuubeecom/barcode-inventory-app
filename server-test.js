@@ -342,6 +342,8 @@
         }
       });
 
+      notifyServerAuthChanged("login");
+
       if (passwordInput) {
         passwordInput.value = "";
       }
@@ -496,6 +498,7 @@
         "click",
         function () {
           clearStoredSession();
+          notifyServerAuthChanged("logout");
           renderLoginForm();
         }
       );
@@ -546,6 +549,7 @@
 
       if (response.status === 401) {
         clearStoredSession();
+        notifyServerAuthChanged("expired");
         renderLoginForm(
           "ログインの有効期限が切れたか、ログイン情報を確認できませんでした。"
         );
@@ -1195,6 +1199,21 @@
       : fallback;
   }
 
+  function notifyServerAuthChanged(reason) {
+    try {
+      window.dispatchEvent(
+        new CustomEvent("inventory-server-auth-changed", {
+          detail: {
+            reason: String(reason || "changed"),
+            loggedIn: hasServerSession()
+          }
+        })
+      );
+    } catch (error) {
+      // 通知できない環境でもログイン処理自体は継続する。
+    }
+  }
+
   function formatNumber(value) {
     const number = Number(value);
 
@@ -1254,6 +1273,7 @@
 
     if (response.status === 401) {
       clearStoredSession();
+      notifyServerAuthChanged("expired");
 
       const error = new Error(
         "ログインの有効期限が切れました。もう一度ログインしてください。"

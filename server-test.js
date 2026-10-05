@@ -20,6 +20,9 @@
 
   let overlay = null;
   let content = null;
+  let serverDetailMode = false;
+  let lastServerProductData = null;
+  let lastServerRequestedCode = DEFAULT_TEST_INTERNAL_CODE;
 
   document.addEventListener(
     "DOMContentLoaded",
@@ -28,6 +31,7 @@
 
   function initializeServerAuthTest() {
     createStyles();
+    initializeServerProductDetailBridge();
 
     const button = document.querySelector(
       "#server-connection-test-button"
@@ -54,7 +58,7 @@
         "function"
       ) {
         await window.inventoryPermissions.showWorkerRestriction(
-          "サーバーログイン・接続確認"
+          "サーバーログイン・商品検索"
         );
       }
       return;
@@ -96,7 +100,7 @@
         <div class="server-auth-heading">
           <div>
             <span class="server-auth-kicker">さくらサーバー</span>
-            <h2 id="server-auth-title">サーバーログイン・接続確認</h2>
+            <h2 id="server-auth-title">サーバーログイン・商品検索</h2>
           </div>
 
           <button
@@ -402,7 +406,7 @@
             id="server-auth-product-code"
             type="text"
             maxlength="50"
-            value="${DEFAULT_TEST_INTERNAL_CODE}"
+            value="${escapeHtml(lastServerRequestedCode)}"
             placeholder="例：TEST001"
             autocomplete="off"
             required
@@ -560,6 +564,8 @@
         );
       }
 
+      lastServerProductData = data;
+      lastServerRequestedCode = internalCode;
       renderProductSuccess(result, data, internalCode);
     } catch (error) {
       result.innerHTML = `
@@ -624,10 +630,473 @@
         ${stockRows}
       </div>
 
+      <button
+        id="server-auth-open-detail-button"
+        type="button"
+        class="server-auth-primary-button server-auth-open-detail-button"
+      >
+        いつもの商品詳細画面で見る
+      </button>
+
+      <p class="server-auth-readonly-note">
+        ※ サーバー商品は現在「閲覧専用」です。入庫・出庫・編集などはまだ行いません。
+      </p>
+
       <p class="server-auth-endpoint-note">
         保護された接続先：get-product-auth.php / ${escapeHtml(requestedCode)}
       </p>
     `;
+
+    const openDetailButton = result.querySelector(
+      "#server-auth-open-detail-button"
+    );
+
+    if (openDetailButton) {
+      openDetailButton.addEventListener(
+        "click",
+        function () {
+          openServerProductDetail(
+            data,
+            requestedCode
+          );
+        }
+      );
+    }
+  }
+
+  function initializeServerProductDetailBridge() {
+    const backButton = document.querySelector(
+      "#back-list-from-detail"
+    );
+
+    if (!backButton) {
+      return;
+    }
+
+    backButton.addEventListener(
+      "click",
+      function (event) {
+        if (!serverDetailMode) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        restoreNormalProductDetailLayout();
+
+        if (
+          window.inventoryApp &&
+          typeof window.inventoryApp.showScreen === "function"
+        ) {
+          window.inventoryApp.showScreen("home");
+        }
+
+        openDialog();
+
+        const session = getStoredSession();
+
+        if (session && lastServerRequestedCode) {
+          window.setTimeout(
+            function () {
+              loadProtectedProduct(
+                session,
+                lastServerRequestedCode
+              );
+            },
+            0
+          );
+        }
+      },
+      true
+    );
+  }
+
+  function openServerProductDetail(data, requestedCode) {
+    if (
+      !window.inventoryApp ||
+      typeof window.inventoryApp.showScreen !== "function"
+    ) {
+      return;
+    }
+
+    const product = data && data.product
+      ? data.product
+      : {};
+
+    const stocks = data && Array.isArray(data.stocks)
+      ? data.stocks
+      : [];
+
+    const totalStock = toStockNumber(
+      data ? data.total_stock : 0
+    );
+
+    const minStock = toStockNumber(
+      product.min_stock
+    );
+
+    lastServerProductData = data;
+    lastServerRequestedCode =
+      requestedCode ||
+      product.internal_code ||
+      DEFAULT_TEST_INTERNAL_CODE;
+
+    serverDetailMode = true;
+    closeDialog();
+
+    setDetailText(
+      "#detail-internal-code",
+      product.internal_code || "未登録"
+    );
+    setDetailText(
+      "#detail-product-code",
+      product.product_code || "未登録"
+    );
+    setDetailText(
+      "#detail-product-name",
+      product.product_name || "商品名未登録"
+    );
+    setDetailText(
+      "#detail-product-color",
+      product.color || "未登録"
+    );
+    setDetailText(
+      "#detail-jan-code",
+      product.jan_code || "未登録"
+    );
+    setDetailText(
+      "#detail-stock",
+      `${formatNumber(totalStock)}個`
+    );
+    setDetailText(
+      "#detail-min-stock",
+      `${formatNumber(minStock)}個`
+    );
+
+    const stockStatus = getServerStockStatus(
+      product,
+      totalStock,
+      minStock
+    );
+
+    setDetailStatus(
+      "#detail-stock-status",
+      stockStatus
+    );
+
+    setDetailText(
+      "#detail-category",
+      product.category || "未登録"
+    );
+
+    setDetailText(
+      "#detail-location",
+      getServerPrimaryLocation(stocks)
+    );
+
+    renderServerLocationStocks(stocks);
+
+    setDetailText(
+      "#detail-supplier",
+      product.supplier_name || "未登録"
+    );
+    setDetailText(
+      "#detail-order-remaining",
+      "未登録"
+    );
+
+    setServerLifecycleStatus(
+      product.product_status || "通常商品"
+    );
+
+    setDetailText(
+      "#detail-updated-at",
+      "サーバーから取得した最新表示"
+    );
+
+    prepareServerProductDetailLayout();
+    window.inventoryApp.showScreen("detail");
+
+    const detailScreen = document.querySelector(
+      "#product-detail"
+    );
+
+    if (detailScreen) {
+      window.requestAnimationFrame(
+        function () {
+          detailScreen.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+          });
+        }
+      );
+    }
+  }
+
+  function prepareServerProductDetailLayout() {
+    const detailScreen = document.querySelector(
+      "#product-detail"
+    );
+
+    if (!detailScreen) {
+      return;
+    }
+
+    const heading = detailScreen.querySelector("h2");
+
+    if (heading) {
+      if (!heading.dataset.normalTitle) {
+        heading.dataset.normalTitle =
+          heading.textContent || "商品詳細画面";
+      }
+
+      heading.textContent =
+        "商品詳細画面（サーバー）";
+    }
+
+    let notice = detailScreen.querySelector(
+      "#server-product-detail-notice"
+    );
+
+    if (!notice) {
+      notice = document.createElement("div");
+      notice.id = "server-product-detail-notice";
+      notice.className =
+        "server-product-detail-notice";
+
+      const strong = document.createElement("strong");
+      strong.textContent =
+        "☁ サーバー商品・閲覧専用";
+
+      const span = document.createElement("span");
+      span.textContent =
+        "現在はサーバーの商品情報を確認する段階です。" +
+        "入庫・出庫・編集・削除などの操作はまだ行いません。";
+
+      notice.appendChild(strong);
+      notice.appendChild(span);
+
+      const table = detailScreen.querySelector("table");
+
+      if (table) {
+        detailScreen.insertBefore(
+          notice,
+          table
+        );
+      }
+    }
+
+    notice.hidden = false;
+
+    [
+      ".product-detail-action-group-main",
+      "#product-detail-order-actions",
+      "#product-detail-admin-actions"
+    ].forEach(function (selector) {
+      const element =
+        detailScreen.querySelector(selector);
+
+      if (element) {
+        element.hidden = true;
+      }
+    });
+
+    const workerNotice = document.querySelector(
+      "#product-detail-worker-notice"
+    );
+
+    if (workerNotice) {
+      workerNotice.hidden = true;
+    }
+
+    const backButton = document.querySelector(
+      "#back-list-from-detail"
+    );
+
+    if (backButton) {
+      backButton.textContent =
+        "サーバー商品検索へ戻る";
+    }
+  }
+
+  function restoreNormalProductDetailLayout() {
+    serverDetailMode = false;
+
+    const detailScreen = document.querySelector(
+      "#product-detail"
+    );
+
+    if (!detailScreen) {
+      return;
+    }
+
+    const heading = detailScreen.querySelector("h2");
+
+    if (heading) {
+      heading.textContent =
+        heading.dataset.normalTitle ||
+        "商品詳細画面";
+    }
+
+    const notice = detailScreen.querySelector(
+      "#server-product-detail-notice"
+    );
+
+    if (notice) {
+      notice.hidden = true;
+    }
+
+    [
+      ".product-detail-action-group-main",
+      "#product-detail-order-actions",
+      "#product-detail-admin-actions"
+    ].forEach(function (selector) {
+      const element =
+        detailScreen.querySelector(selector);
+
+      if (element) {
+        element.hidden = false;
+      }
+    });
+
+    const backButton = document.querySelector(
+      "#back-list-from-detail"
+    );
+
+    if (backButton) {
+      backButton.textContent =
+        "商品一覧へ戻る";
+    }
+  }
+
+  function setDetailText(selector, value) {
+    const element = document.querySelector(selector);
+
+    if (element) {
+      element.textContent = String(value ?? "");
+    }
+  }
+
+  function setDetailStatus(selector, status) {
+    const element = document.querySelector(selector);
+
+    if (!element) {
+      return;
+    }
+
+    element.textContent = status;
+    element.className = "";
+
+    if (status === "廃盤") {
+      element.classList.add(
+        "detail-status-discontinued"
+      );
+    } else if (status === "在庫切れ") {
+      element.classList.add("detail-status-out");
+    } else if (status === "要補充") {
+      element.classList.add("detail-status-low");
+    } else {
+      element.classList.add("detail-status-normal");
+    }
+  }
+
+  function setServerLifecycleStatus(status) {
+    const element = document.querySelector(
+      "#detail-product-status"
+    );
+
+    if (!element) {
+      return;
+    }
+
+    const normalized = String(
+      status || "通常商品"
+    );
+
+    element.textContent = normalized;
+    element.className =
+      normalized === "廃盤"
+        ? "detail-product-discontinued"
+        : normalized === "廃盤予定"
+          ? "detail-product-planned"
+          : normalized === "専用商品"
+            ? "detail-product-dedicated"
+            : "detail-product-active";
+  }
+
+  function renderServerLocationStocks(stocks) {
+    const container = document.querySelector(
+      "#detail-location-stocks"
+    );
+
+    if (!container) {
+      return;
+    }
+
+    container.innerHTML = "";
+
+    if (!stocks.length) {
+      container.textContent =
+        "場所別在庫はありません。";
+      return;
+    }
+
+    stocks.forEach(function (stock) {
+      const line = document.createElement("div");
+      line.textContent =
+        `${stock.location_name || "未登録"}：` +
+        `${formatNumber(stock.quantity)}個`;
+      container.appendChild(line);
+    });
+  }
+
+  function getServerPrimaryLocation(stocks) {
+    if (!stocks.length) {
+      return "未登録";
+    }
+
+    if (stocks.length === 1) {
+      return stocks[0].location_name || "未登録";
+    }
+
+    return "複数保管場所";
+  }
+
+  function getServerStockStatus(
+    product,
+    totalStock,
+    minStock
+  ) {
+    if (
+      String(product.product_status || "") ===
+      "廃盤"
+    ) {
+      return "廃盤";
+    }
+
+    if (totalStock <= 0) {
+      return "在庫切れ";
+    }
+
+    if (
+      minStock > 0 &&
+      totalStock <= minStock
+    ) {
+      return "要補充";
+    }
+
+    return "通常";
+  }
+
+  function toStockNumber(value) {
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+      return 0;
+    }
+
+    return Math.max(0, Math.trunc(number));
   }
 
   async function readJsonResponse(response) {
@@ -1022,6 +1491,37 @@
         border-radius: 10px;
         background: #f4f7f9;
         color: #60788b;
+      }
+
+      .server-auth-open-detail-button {
+        width: 100%;
+        margin-top: 2px;
+      }
+
+      .server-auth-readonly-note {
+        margin: 0;
+        color: #60788b;
+        font-size: 13px;
+        line-height: 1.7;
+      }
+
+      .server-product-detail-notice {
+        display: grid;
+        gap: 6px;
+        margin: 0 0 16px;
+        padding: 14px 16px;
+        border: 2px solid #1976d2;
+        border-radius: 12px;
+        background: #eaf4ff;
+        color: #0d477a;
+      }
+
+      .server-product-detail-notice strong {
+        font-size: 18px;
+      }
+
+      .server-product-detail-notice span {
+        line-height: 1.6;
       }
 
       .server-auth-note,

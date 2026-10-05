@@ -7,7 +7,7 @@
   const SERVER_PRODUCT_ENDPOINT =
     "https://jyuubee.sakura.ne.jp/inventory/get-product-auth.php";
 
-  const TEST_INTERNAL_CODE = "TEST001";
+  const DEFAULT_TEST_INTERNAL_CODE = "TEST001";
 
   const TOKEN_STORAGE_KEY =
     "barcodeInventoryServerAccessToken";
@@ -109,9 +109,9 @@
         </div>
 
         <p class="server-auth-description">
-          テスト用アカウントでログインし、ログイン済みの人だけが
-          架空商品「TEST001」を取得できることを確認します。
-          実際の会社データはまだ使用しません。
+          テスト用アカウントでログインし、社内コードを入力して
+          サーバーの商品データを検索できることを確認します。
+          現段階では架空データだけを使用します。
         </p>
 
         <div
@@ -225,7 +225,7 @@
           type="submit"
           class="server-auth-primary-button"
         >
-          ログインしてTEST001を確認する
+          ログインして商品検索へ進む
         </button>
       </form>
 
@@ -351,7 +351,7 @@
       }
 
       renderLoggedInState(session);
-      await loadProtectedProduct(session);
+      await loadProtectedProduct(session, DEFAULT_TEST_INTERNAL_CODE);
     } catch (error) {
       clearStoredSession();
       renderLoginForm(
@@ -389,23 +389,46 @@
         </span>
       </div>
 
-      <div class="server-auth-session-actions">
-        <button
-          id="server-auth-product-button"
-          type="button"
-          class="server-auth-primary-button"
-        >
-          TEST001をサーバーから取得する
-        </button>
+      <form
+        id="server-auth-product-search-form"
+        class="server-auth-product-search-form"
+      >
+        <label for="server-auth-product-code">
+          <span>社内コードで商品を検索</span>
+        </label>
 
-        <button
-          id="server-auth-logout-button"
-          type="button"
-          class="server-auth-secondary-button"
-        >
-          この端末のログインを解除
-        </button>
-      </div>
+        <div class="server-auth-product-search-row">
+          <input
+            id="server-auth-product-code"
+            type="text"
+            maxlength="50"
+            value="${DEFAULT_TEST_INTERNAL_CODE}"
+            placeholder="例：TEST001"
+            autocomplete="off"
+            required
+          >
+
+          <button
+            id="server-auth-product-button"
+            type="submit"
+            class="server-auth-primary-button"
+          >
+            商品を検索する
+          </button>
+        </div>
+
+        <span class="server-auth-search-guide">
+          現段階では架空商品「TEST001」で動作確認します。
+        </span>
+      </form>
+
+      <button
+        id="server-auth-logout-button"
+        type="button"
+        class="server-auth-secondary-button server-auth-logout-wide"
+      >
+        この端末のログインを解除
+      </button>
 
       <div
         id="server-auth-product-result"
@@ -414,22 +437,28 @@
 
       <p class="server-auth-note">
         ログイン情報はこのブラウザータブ内だけに保持します。
-        現段階では架空商品「TEST001」だけで確認します。
+        実際の会社データはまだサーバーへ登録しません。
       </p>
     `;
 
-    const productButton = content.querySelector(
-      "#server-auth-product-button"
+    const searchForm = content.querySelector(
+      "#server-auth-product-search-form"
+    );
+
+    const productCodeInput = content.querySelector(
+      "#server-auth-product-code"
     );
 
     const logoutButton = content.querySelector(
       "#server-auth-logout-button"
     );
 
-    if (productButton) {
-      productButton.addEventListener(
-        "click",
-        function () {
+    if (searchForm) {
+      searchForm.addEventListener(
+        "submit",
+        function (event) {
+          event.preventDefault();
+
           const latestSession = getStoredSession();
 
           if (!latestSession) {
@@ -439,7 +468,21 @@
             return;
           }
 
-          loadProtectedProduct(latestSession);
+          const internalCode = productCodeInput
+            ? productCodeInput.value.trim()
+            : "";
+
+          if (!internalCode) {
+            if (productCodeInput) {
+              productCodeInput.focus();
+            }
+            return;
+          }
+
+          loadProtectedProduct(
+            latestSession,
+            internalCode
+          );
         }
       );
     }
@@ -455,7 +498,7 @@
     }
   }
 
-  async function loadProtectedProduct(session) {
+  async function loadProtectedProduct(session, internalCode) {
     const result = content.querySelector(
       "#server-auth-product-result"
     );
@@ -471,7 +514,7 @@
     result.innerHTML = `
       <div class="server-auth-status server-auth-loading">
         <strong>商品データを確認中...</strong>
-        <span>ログイン情報を付けてTEST001を取得しています。</span>
+        <span>ログイン情報を付けて「${escapeHtml(internalCode)}」を検索しています。</span>
       </div>
     `;
 
@@ -483,7 +526,7 @@
       const response = await fetch(
         SERVER_PRODUCT_ENDPOINT +
           "?code=" +
-          encodeURIComponent(TEST_INTERNAL_CODE),
+          encodeURIComponent(internalCode),
         {
           method: "GET",
           mode: "cors",
@@ -517,7 +560,7 @@
         );
       }
 
-      renderProductSuccess(result, data);
+      renderProductSuccess(result, data, internalCode);
     } catch (error) {
       result.innerHTML = `
         <div class="server-auth-status server-auth-error">
@@ -532,7 +575,7 @@
     }
   }
 
-  function renderProductSuccess(result, data) {
+  function renderProductSuccess(result, data, requestedCode) {
     const product = data.product || {};
     const stocks = Array.isArray(data.stocks)
       ? data.stocks
@@ -582,7 +625,7 @@
       </div>
 
       <p class="server-auth-endpoint-note">
-        保護された接続先：get-product-auth.php / TEST001（架空データ）
+        保護された接続先：get-product-auth.php / ${escapeHtml(requestedCode)}
       </p>
     `;
   }
@@ -852,6 +895,52 @@
         gap: 10px;
       }
 
+      .server-auth-product-search-form {
+        display: grid;
+        gap: 9px;
+        padding: 16px;
+        border: 1px solid #d7e2eb;
+        border-radius: 12px;
+        background: #fafcfe;
+      }
+
+      .server-auth-product-search-form label {
+        color: #173b58;
+        font-weight: 700;
+      }
+
+      .server-auth-product-search-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+      }
+
+      .server-auth-product-search-row input {
+        width: 100%;
+        min-height: 48px;
+        padding: 10px 12px;
+        border: 1px solid #aebfcd;
+        border-radius: 9px;
+        background: #ffffff;
+        color: #173b58;
+        font: inherit;
+      }
+
+      .server-auth-product-search-row input:focus {
+        outline: 3px solid rgba(21, 101, 192, 0.18);
+        border-color: #1565c0;
+      }
+
+      .server-auth-search-guide {
+        color: #60788b;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .server-auth-logout-wide {
+        width: 100%;
+      }
+
       .server-auth-product-result {
         display: grid;
         gap: 16px;
@@ -958,6 +1047,10 @@
         }
 
         .server-auth-session-actions {
+          grid-template-columns: 1fr;
+        }
+
+        .server-auth-product-search-row {
           grid-template-columns: 1fr;
         }
 

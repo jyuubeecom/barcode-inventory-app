@@ -23,6 +23,7 @@
   let serverDetailMode = false;
   let lastServerProductData = null;
   let lastServerRequestedCode = DEFAULT_TEST_INTERNAL_CODE;
+  let serverDetailReturnTarget = "server-search";
 
   document.addEventListener(
     "DOMContentLoaded",
@@ -687,7 +688,19 @@
         event.preventDefault();
         event.stopImmediatePropagation();
 
+        const returnTarget = serverDetailReturnTarget;
+
         restoreNormalProductDetailLayout();
+        serverDetailReturnTarget = "server-search";
+
+        if (
+          returnTarget === "server-list" &&
+          window.inventoryServerProductList &&
+          typeof window.inventoryServerProductList.returnFromDetail === "function"
+        ) {
+          window.inventoryServerProductList.returnFromDetail();
+          return;
+        }
 
         if (
           window.inventoryApp &&
@@ -920,7 +933,9 @@
 
     if (backButton) {
       backButton.textContent =
-        "サーバー商品検索へ戻る";
+        serverDetailReturnTarget === "server-list"
+          ? "サーバー商品一覧へ戻る"
+          : "サーバー商品検索へ戻る";
     }
   }
 
@@ -1312,7 +1327,12 @@
     openDialog();
   }
 
-  function openServerProductDetailForApp(data, internalCode) {
+  function openServerProductDetailForApp(data, internalCode, options) {
+    serverDetailReturnTarget =
+      options && options.returnTarget === "server-list"
+        ? "server-list"
+        : "server-search";
+
     openServerProductDetail(
       data,
       internalCode

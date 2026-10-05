@@ -17,6 +17,12 @@
   let lastProductStatusFilter = "all";
   let lastLocationFilter = "all";
   let lastSort = "internal_asc";
+  let currentSource = "local";
+  let sourceSwitch = null;
+  let localFilterDetails = null;
+  let localResultsDetails = null;
+  let localStickyNavigation = null;
+  let listHeading = null;
 
   document.addEventListener(
     "DOMContentLoaded",
@@ -34,12 +40,17 @@
     createPanel();
     observeProductListVisibility();
 
+    window.setTimeout(
+      setupProductSourceSwitch,
+      0
+    );
+
     window.addEventListener(
       "inventory-server-auth-changed",
       handleServerAuthChanged
     );
 
-    if (!listScreen.hidden) {
+    if (!listScreen.hidden && currentSource === "server") {
       refreshPanelForCurrentSession();
     }
   }
@@ -54,18 +65,19 @@
     panel = document.createElement("section");
     panel.id = "server-product-list-panel";
     panel.className = "server-product-list-panel";
+    panel.hidden = true;
 
     panel.innerHTML = `
       <div class="server-product-list-heading">
         <div>
           <span class="server-product-list-kicker">さくらサーバー</span>
-          <h3>サーバー商品一覧（閲覧専用）</h3>
+          <h3>サーバーの商品（閲覧専用）</h3>
         </div>
         <span class="server-product-list-badge">テスト中</span>
       </div>
 
       <p class="server-product-list-description">
-        MySQLに保存した商品を、この商品一覧画面から確認するテストです。
+        この商品一覧画面の表示元をサーバーへ切り替えています。
         現段階では架空データだけを表示し、編集・削除・入出庫は行いません。
       </p>
 
@@ -90,6 +102,173 @@
     }
   }
 
+  function setupProductSourceSwitch() {
+    if (!listScreen) {
+      return;
+    }
+
+    if (document.querySelector("#product-list-source-switch")) {
+      sourceSwitch = document.querySelector("#product-list-source-switch");
+      cacheLocalProductListElements();
+      applyProductSourceView();
+      return;
+    }
+
+    listHeading = listScreen.querySelector("h2");
+    cacheLocalProductListElements();
+
+    sourceSwitch = document.createElement("section");
+    sourceSwitch.id = "product-list-source-switch";
+    sourceSwitch.className = "product-list-source-switch";
+
+    sourceSwitch.innerHTML = `
+      <div class="product-list-source-switch-heading">
+        <strong>表示する商品データ</strong>
+        <span>移行テスト中のため、表示元を切り替えて確認できます。</span>
+      </div>
+
+      <div class="product-list-source-switch-buttons">
+        <button
+          id="product-list-source-local"
+          type="button"
+          class="product-list-source-button"
+          data-source="local"
+        >
+          この端末の商品
+        </button>
+
+        <button
+          id="product-list-source-server"
+          type="button"
+          class="product-list-source-button product-list-source-button-server"
+          data-source="server"
+        >
+          サーバーの商品（閲覧専用）
+        </button>
+      </div>
+
+      <p id="product-list-source-status" class="product-list-source-status"></p>
+    `;
+
+    if (listHeading && listHeading.nextSibling) {
+      listScreen.insertBefore(sourceSwitch, listHeading.nextSibling);
+    } else if (listHeading) {
+      listHeading.insertAdjacentElement("afterend", sourceSwitch);
+    } else {
+      listScreen.insertBefore(sourceSwitch, listScreen.firstChild);
+    }
+
+    sourceSwitch.querySelectorAll("[data-source]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        setProductSource(button.dataset.source || "local");
+      });
+    });
+
+    applyProductSourceView();
+  }
+
+  function cacheLocalProductListElements() {
+    localFilterDetails = document.querySelector(
+      "#product-list-filter-details"
+    );
+    localResultsDetails = document.querySelector(
+      "#product-list-results-details"
+    );
+    localStickyNavigation = document.querySelector(
+      "#product-list-sticky-navigation"
+    );
+
+    if (!listHeading) {
+      listHeading = listScreen.querySelector("h2");
+    }
+  }
+
+  function setProductSource(source) {
+    currentSource = source === "server" ? "server" : "local";
+    cacheLocalProductListElements();
+    applyProductSourceView();
+
+    if (currentSource === "server") {
+      refreshPanelForCurrentSession();
+    }
+  }
+
+  function applyProductSourceView() {
+    if (!listScreen) {
+      return;
+    }
+
+    cacheLocalProductListElements();
+
+    const isServer = currentSource === "server";
+
+    if (localFilterDetails) {
+      localFilterDetails.hidden = isServer;
+    }
+
+    if (localResultsDetails) {
+      localResultsDetails.hidden = isServer;
+    }
+
+    if (localStickyNavigation) {
+      localStickyNavigation.hidden = isServer;
+    }
+
+    if (panel) {
+      panel.hidden = !isServer;
+    }
+
+    if (listHeading) {
+      listHeading.textContent = isServer
+        ? "商品一覧画面（サーバー・閲覧専用）"
+        : "商品一覧画面";
+    }
+
+    if (!sourceSwitch) {
+      return;
+    }
+
+    sourceSwitch.querySelectorAll("[data-source]").forEach(function (button) {
+      const selected = button.dataset.source === currentSource;
+      button.classList.toggle("is-selected", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+
+    const status = sourceSwitch.querySelector(
+      "#product-list-source-status"
+    );
+
+    if (status) {
+      status.textContent = isServer
+        ? "現在：サーバーの商品を表示しています。閲覧専用のテスト表示です。"
+        : "現在：この端末に保存されている商品を表示しています。";
+    }
+  }
+
+  function returnFromServerDetail() {
+    currentSource = "server";
+
+    if (
+      window.inventoryApp &&
+      typeof window.inventoryApp.showScreen === "function"
+    ) {
+      window.inventoryApp.showScreen("list");
+    }
+
+    window.setTimeout(function () {
+      setupProductSourceSwitch();
+      applyProductSourceView();
+      refreshPanelForCurrentSession();
+
+      if (sourceSwitch) {
+        sourceSwitch.scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
+      }
+    }, 0);
+  }
+
   function observeProductListVisibility() {
     const observer = new MutationObserver(function (mutations) {
       const becameVisible = mutations.some(function (mutation) {
@@ -101,7 +280,12 @@
       });
 
       if (becameVisible) {
-        refreshPanelForCurrentSession();
+        setupProductSourceSwitch();
+        applyProductSourceView();
+
+        if (currentSource === "server") {
+          refreshPanelForCurrentSession();
+        }
       }
     });
 
@@ -112,7 +296,11 @@
   }
 
   function handleServerAuthChanged(event) {
-    if (!listScreen || listScreen.hidden) {
+    if (
+      !listScreen ||
+      listScreen.hidden ||
+      currentSource !== "server"
+    ) {
       return;
     }
 
@@ -696,7 +884,11 @@
 
     try {
       const data = await bridge.searchProduct(internalCode);
-      bridge.openProductDetail(data, internalCode);
+      bridge.openProductDetail(
+        data,
+        internalCode,
+        { returnTarget: "server-list" }
+      );
     } catch (error) {
       if (error && error.code === "SERVER_LOGIN_REQUIRED") {
         renderLoginRequired();
@@ -879,6 +1071,19 @@
       .replaceAll("'", "&#039;");
   }
 
+  window.inventoryServerProductList = {
+    setSource: setProductSource,
+    getSource: function () {
+      return currentSource;
+    },
+    returnFromDetail: returnFromServerDetail,
+    refresh: function () {
+      if (currentSource === "server") {
+        refreshPanelForCurrentSession();
+      }
+    }
+  };
+
   function createStyles() {
     if (document.querySelector("#server-product-list-style")) {
       return;
@@ -887,6 +1092,65 @@
     const style = document.createElement("style");
     style.id = "server-product-list-style";
     style.textContent = `
+      .product-list-source-switch {
+        margin: 14px 0 18px;
+        padding: 14px;
+        border: 2px solid #b9d8f0;
+        border-radius: 14px;
+        background: #f7fbff;
+      }
+
+      .product-list-source-switch-heading {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+
+      .product-list-source-switch-heading strong {
+        color: #173b58;
+        font-size: 17px;
+      }
+
+      .product-list-source-switch-heading span,
+      .product-list-source-status {
+        color: #60788b;
+        font-size: 13px;
+      }
+
+      .product-list-source-switch-buttons {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .product-list-source-button {
+        min-height: 48px;
+        border: 2px solid #9bb8cf;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #173b58;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .product-list-source-button.is-selected {
+        border-color: #1769c2;
+        background: #1769c2;
+        color: #ffffff;
+        box-shadow: 0 3px 10px rgba(23, 105, 194, 0.18);
+      }
+
+      .product-list-source-button-server.is-selected {
+        border-color: #0f766e;
+        background: #0f766e;
+      }
+
+      .product-list-source-status {
+        margin: 10px 0 0;
+        font-weight: 700;
+      }
       .server-product-list-panel {
         margin: 22px 0;
         padding: 20px;
@@ -1182,6 +1446,19 @@
       }
 
       @media (max-width: 760px) {
+        .product-list-source-switch-heading {
+          display: grid;
+          gap: 5px;
+        }
+
+        .product-list-source-switch-buttons {
+          grid-template-columns: 1fr;
+        }
+
+        .product-list-source-button {
+          min-height: 56px;
+          font-size: 16px;
+        }
         .server-product-list-panel {
           padding: 16px;
         }

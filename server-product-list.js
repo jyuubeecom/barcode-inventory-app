@@ -15,6 +15,7 @@
   let lastResponseData = null;
   let lastStockFilter = "all";
   let lastProductStatusFilter = "all";
+  let lastLocationFilter = "all";
   let lastSort = "internal_asc";
 
   document.addEventListener(
@@ -287,13 +288,31 @@
       lastProductStatusFilter = "all";
     }
 
+    const locations = Array.from(
+      new Set(
+        lastItems.flatMap(function (item) {
+          return getLocationNames(item.locations);
+        })
+      )
+    ).sort(function (a, b) {
+      return a.localeCompare(b, "ja", { numeric: true, sensitivity: "base" });
+    });
+
+    if (
+      lastLocationFilter !== "all" &&
+      !locations.includes(lastLocationFilter)
+    ) {
+      lastLocationFilter = "all";
+    }
+
+    const stockCounts = getStockStatusCounts(lastItems);
     const filteredItems = applyLocalFiltersAndSort(lastItems);
 
     const cards = filteredItems.length
       ? filteredItems.map(createProductCardHtml).join("")
       : `
           <div class="server-product-list-empty">
-            ${lastKeyword || lastStockFilter !== "all" || lastProductStatusFilter !== "all"
+            ${lastKeyword || lastStockFilter !== "all" || lastProductStatusFilter !== "all" || lastLocationFilter !== "all"
               ? "条件に一致するサーバー商品はありません。"
               : "サーバーに登録されている商品はありません。"}
           </div>
@@ -306,6 +325,35 @@
           サーバー検索結果 ${escapeHtml(String(serverCount))}件 / 現在表示 ${escapeHtml(String(filteredItems.length))}件。
           現在は閲覧専用です。
         </span>
+      </div>
+
+      <div class="server-product-list-stock-summary" aria-label="在庫状況のまとめ">
+        <button
+          type="button"
+          class="server-product-list-summary-button server-product-list-summary-out${lastStockFilter === "out" ? " server-product-list-summary-active" : ""}"
+          data-stock-filter="out"
+        >
+          <span>在庫切れ</span>
+          <strong>${escapeHtml(String(stockCounts.out))}件</strong>
+        </button>
+
+        <button
+          type="button"
+          class="server-product-list-summary-button server-product-list-summary-low${lastStockFilter === "low" ? " server-product-list-summary-active" : ""}"
+          data-stock-filter="low"
+        >
+          <span>要補充</span>
+          <strong>${escapeHtml(String(stockCounts.low))}件</strong>
+        </button>
+
+        <button
+          type="button"
+          class="server-product-list-summary-button server-product-list-summary-normal${lastStockFilter === "normal" ? " server-product-list-summary-active" : ""}"
+          data-stock-filter="normal"
+        >
+          <span>通常</span>
+          <strong>${escapeHtml(String(stockCounts.normal))}件</strong>
+        </button>
       </div>
 
       <form
@@ -351,6 +399,16 @@
             <option value="all"${lastProductStatusFilter === "all" ? " selected" : ""}>すべて</option>
             ${productStatuses.map(function (status) {
               return `<option value="${escapeHtml(status)}"${lastProductStatusFilter === status ? " selected" : ""}>${escapeHtml(status)}</option>`;
+            }).join("")}
+          </select>
+        </div>
+
+        <div class="server-product-list-filter-field">
+          <label for="server-product-list-location-filter">保管場所</label>
+          <select id="server-product-list-location-filter">
+            <option value="all"${lastLocationFilter === "all" ? " selected" : ""}>すべて</option>
+            ${locations.map(function (location) {
+              return `<option value="${escapeHtml(location)}"${lastLocationFilter === location ? " selected" : ""}>${escapeHtml(location)}</option>`;
             }).join("")}
           </select>
         </div>
@@ -406,6 +464,9 @@
     const statusFilter = content.querySelector(
       "#server-product-list-status-filter"
     );
+    const locationFilter = content.querySelector(
+      "#server-product-list-location-filter"
+    );
     const sortSelect = content.querySelector(
       "#server-product-list-sort"
     );
@@ -414,6 +475,9 @@
     );
     const refreshButton = content.querySelector(
       "#server-product-list-refresh-button"
+    );
+    const summaryButtons = content.querySelectorAll(
+      ".server-product-list-summary-button"
     );
 
     if (searchForm) {
@@ -439,6 +503,21 @@
       });
     }
 
+    if (locationFilter) {
+      locationFilter.addEventListener("change", function () {
+        lastLocationFilter = locationFilter.value || "all";
+        renderServerProducts(lastItems, lastResponseData);
+      });
+    }
+
+    summaryButtons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        const nextFilter = button.dataset.stockFilter || "all";
+        lastStockFilter = lastStockFilter === nextFilter ? "all" : nextFilter;
+        renderServerProducts(lastItems, lastResponseData);
+      });
+    });
+
     if (sortSelect) {
       sortSelect.addEventListener("change", function () {
         lastSort = sortSelect.value || "internal_asc";
@@ -451,6 +530,7 @@
         lastKeyword = "";
         lastStockFilter = "all";
         lastProductStatusFilter = "all";
+        lastLocationFilter = "all";
         lastSort = "internal_asc";
         loadServerProducts("");
       });
@@ -497,6 +577,13 @@
       if (
         lastProductStatusFilter !== "all" &&
         String(item.product_status || "通常商品") !== lastProductStatusFilter
+      ) {
+        return false;
+      }
+
+      if (
+        lastLocationFilter !== "all" &&
+        !getLocationNames(item.locations).includes(lastLocationFilter)
       ) {
         return false;
       }
@@ -706,6 +793,43 @@
     }
   }
 
+  function getLocationNames(value) {
+    return String(value || "")
+      .split(/\s*[\/／\n]+\s*/)
+      .map(function (part) {
+        return part
+          .replace(/\s*[：:]\s*-?\d[\d,]*\s*個?.*$/, "")
+          .trim();
+      })
+      .filter(Boolean);
+  }
+
+  function getStockStatusCounts(items) {
+    const counts = {
+      normal: 0,
+      low: 0,
+      out: 0
+    };
+
+    items.forEach(function (item) {
+      const status = getStockStatus(
+        item.product_status,
+        toNumber(item.total_stock),
+        toNumber(item.min_stock)
+      );
+
+      if (status === "在庫切れ") {
+        counts.out += 1;
+      } else if (status === "要補充") {
+        counts.low += 1;
+      } else if (status === "通常") {
+        counts.normal += 1;
+      }
+    });
+
+    return counts;
+  }
+
   function getStockStatus(productStatus, stock, minStock) {
     if (String(productStatus || "") === "廃盤") {
       return "廃盤";
@@ -846,6 +970,53 @@
         background: #546e7a !important;
       }
 
+      .server-product-list-stock-summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .server-product-list-summary-button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 54px;
+        padding: 10px 14px;
+        border: 1px solid transparent;
+        border-radius: 12px;
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .server-product-list-summary-button strong {
+        font-size: 18px;
+      }
+
+      .server-product-list-summary-out {
+        border-color: #ef9a9a;
+        background: #fff0f0;
+        color: #b42318;
+      }
+
+      .server-product-list-summary-low {
+        border-color: #ffcc80;
+        background: #fff7e8;
+        color: #a84b00;
+      }
+
+      .server-product-list-summary-normal {
+        border-color: #a5d6a7;
+        background: #eefaf0;
+        color: #1b6e2e;
+      }
+
+      .server-product-list-summary-active {
+        outline: 3px solid #1565c0;
+        outline-offset: 1px;
+      }
+
       .server-product-list-search-form {
         display: grid;
         gap: 8px;
@@ -877,7 +1048,7 @@
 
       .server-product-list-filter-box {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 10px;
         padding: 14px;
         border: 1px solid #d7e2eb;
@@ -1019,6 +1190,7 @@
           align-items: center;
         }
 
+        .server-product-list-stock-summary,
         .server-product-list-search-row,
         .server-product-list-filter-box,
         .server-product-list-actions,

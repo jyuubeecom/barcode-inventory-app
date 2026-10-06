@@ -70,15 +70,18 @@
     panel.innerHTML = `
       <div class="server-product-list-heading">
         <div>
-          <span class="server-product-list-kicker">共有サーバー</span>
-          <h3>共有データを表示中</h3>
+          <span class="server-product-list-kicker">共有在庫</span>
+          <h3>商品一覧</h3>
         </div>
-        <span class="server-product-list-badge">閲覧専用・テスト中</span>
+        <div class="server-product-list-badges">
+          <span class="server-product-list-badge">閲覧専用</span>
+          <span class="server-product-list-badge server-product-list-badge-test">移行テスト中</span>
+        </div>
       </div>
 
       <p class="server-product-list-description">
-        サーバーに保存した商品を、この商品一覧画面で確認しています。
-        現段階では架空データだけを表示し、編集・削除・入出庫は行いません。
+        PCとスマートフォンで共通の商品データを、この商品一覧画面で確認できます。
+        現在は移行テスト中のため、編集・削除・入出庫はまだ行いません。
       </p>
 
       <div
@@ -124,7 +127,7 @@
     sourceSwitch.innerHTML = `
       <div class="product-list-source-switch-heading">
         <strong>表示する商品データ</strong>
-        <span>移行中は共有サーバーを標準表示します。必要なときだけ端末内の旧データへ切り替えられます。</span>
+        <span>通常は共有サーバーの商品を表示します。端末内の旧データは確認が必要なときだけ切り替えて使います。</span>
       </div>
 
       <div class="product-list-source-switch-buttons">
@@ -143,7 +146,7 @@
           class="product-list-source-button product-list-source-button-server"
           data-source="server"
         >
-          共有サーバーの商品（閲覧専用）
+          共有サーバーの商品（標準）
         </button>
       </div>
 
@@ -238,7 +241,7 @@
 
     if (status) {
       status.textContent = isServer
-        ? "現在：サーバーに保存した商品を表示しています。操作はまだ閲覧専用です。"
+        ? "現在：PC・スマホ共通の商品を表示しています。操作はまだ閲覧専用です。"
         : "現在：この端末に残っている旧データを表示しています。";
     }
   }
@@ -333,7 +336,7 @@
       <div class="server-product-list-notice server-product-list-info">
         <strong>🔐 共有サーバーへのログインが必要です</strong>
         <span>
-          共有サーバーの商品一覧を見るには、テスト用アカウントでログインしてください。
+          共有商品一覧を見るには、テスト用アカウントでログインしてください。
         </span>
       </div>
 
@@ -342,7 +345,7 @@
         type="button"
         class="server-product-list-primary-button"
       >
-        サーバーログインして一覧を見る
+        ログインして商品一覧を見る
       </button>
     `;
 
@@ -437,8 +440,8 @@
   function renderLoading() {
     content.innerHTML = `
       <div class="server-product-list-notice server-product-list-info">
-        <strong>商品一覧を読み込んでいます...</strong>
-        <span>ログイン情報を付けてMySQLの商品を確認しています。</span>
+        <strong>共有商品一覧を読み込んでいます...</strong>
+        <span>PC・スマホ共通の商品データを確認しています。</span>
       </div>
     `;
   }
@@ -499,17 +502,17 @@
       : `
           <div class="server-product-list-empty">
             ${lastKeyword || lastStockFilter !== "all" || lastProductStatusFilter !== "all" || lastLocationFilter !== "all"
-              ? "条件に一致するサーバー商品はありません。"
-              : "サーバーに登録されている商品はありません。"}
+              ? "条件に一致する商品はありません。"
+              : "共有サーバーに登録されている商品はありません。"}
           </div>
         `;
 
     content.innerHTML = `
       <div class="server-product-list-notice server-product-list-success">
-        <strong>✓ サーバー商品一覧を取得しました</strong>
+        <strong>✓ 商品一覧を更新しました</strong>
         <span>
-          共有サーバーの商品 ${escapeHtml(String(serverCount))}件 / 現在表示 ${escapeHtml(String(filteredItems.length))}件。
-          現在は閲覧専用です。
+          全 ${escapeHtml(String(serverCount))}件 / 現在表示 ${escapeHtml(String(filteredItems.length))}件。
+          共有サーバーの最新データを表示しています。
         </span>
       </div>
 
@@ -547,7 +550,7 @@
         class="server-product-list-search-form"
       >
         <label for="server-product-list-search-input">
-          サーバー商品を検索
+          商品を検索
         </label>
 
         <div class="server-product-list-search-row">
@@ -633,8 +636,8 @@
       </div>
 
       <p class="server-product-list-footnote">
-        ※ 絞り込み・並べ替えは、取得したサーバー商品に対してこの画面上で行います。
-        詳細を開くときは、最新の商品情報をサーバーからもう一度取得します。
+        ※ 絞り込み・並べ替えは、この画面に取得した共有商品に対して行います。
+        「詳細を見る」を押したときは、最新の商品情報を共有サーバーからもう一度取得します。
       </p>
     `;
 
@@ -817,7 +820,7 @@
         <div class="server-product-list-card-top">
           <div>
             <span class="server-product-list-code">
-              ${escapeHtml(item.internal_code || "未登録")}
+              社内コード：${escapeHtml(item.internal_code || "未登録")}
             </span>
             <h4>${escapeHtml(item.product_name || "商品名未登録")}</h4>
           </div>
@@ -912,7 +915,7 @@
 
     content.innerHTML = `
       <div class="server-product-list-notice server-product-list-error">
-        <strong>⚠ サーバー商品一覧を取得できませんでした</strong>
+        <strong>⚠ 商品一覧を取得できませんでした</strong>
         <span>${escapeHtml(message)}</span>
       </div>
 
@@ -1150,19 +1153,22 @@
         font-weight: 700;
       }
       .server-product-list-panel {
-        margin: 22px 0;
-        padding: 20px;
-        border: 2px solid #64b5f6;
-        border-radius: 16px;
-        background: #f8fcff;
+        margin: 18px 0 22px;
+        padding: 0;
+        border: 0;
+        background: transparent;
       }
 
       .server-product-list-heading {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
         gap: 14px;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
+        padding: 14px 16px;
+        border: 1px solid #b8ddd8;
+        border-radius: 14px;
+        background: #f0fbf9;
       }
 
       .server-product-list-kicker {
@@ -1176,22 +1182,40 @@
       .server-product-list-heading h3 {
         margin: 0;
         color: #123a5a;
+        font-size: 22px;
+      }
+
+      .server-product-list-badges {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 6px;
       }
 
       .server-product-list-badge {
         flex: 0 0 auto;
         padding: 6px 10px;
         border-radius: 999px;
-        background: #e3f2fd;
-        color: #1565c0;
+        background: #e5f5ef;
+        color: #0f6f62;
         font-size: 12px;
         font-weight: 800;
+      }
+
+      .server-product-list-badge-test {
+        background: #e3f2fd;
+        color: #1565c0;
       }
 
       .server-product-list-description,
       .server-product-list-footnote {
         color: #5b7284;
         line-height: 1.7;
+      }
+
+      .server-product-list-description {
+        margin: 0 0 14px;
+        padding: 0 4px;
       }
 
       .server-product-list-content {
@@ -1458,11 +1482,16 @@
           font-size: 16px;
         }
         .server-product-list-panel {
-          padding: 16px;
+          padding: 0;
         }
 
         .server-product-list-heading {
-          align-items: center;
+          align-items: flex-start;
+          padding: 14px;
+        }
+
+        .server-product-list-badges {
+          max-width: 46%;
         }
 
         .server-product-list-stock-summary,

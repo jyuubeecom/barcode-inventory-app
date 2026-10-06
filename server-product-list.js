@@ -17,7 +17,7 @@
   let lastProductStatusFilter = "all";
   let lastLocationFilter = "all";
   let lastSort = "internal_asc";
-  let currentSource = "local";
+  let currentSource = "server";
   let sourceSwitch = null;
   let localFilterDetails = null;
   let localResultsDetails = null;
@@ -68,17 +68,18 @@
     panel.hidden = true;
 
     panel.innerHTML = `
-      <div class="server-product-list-modebar">
-        <div class="server-product-list-modebar-text">
-          <strong>共有データを表示中</strong>
-          <span>サーバーに保存した商品を、この商品一覧画面で確認しています。</span>
+      <div class="server-product-list-heading">
+        <div>
+          <span class="server-product-list-kicker">共有サーバー</span>
+          <h3>共有データを表示中</h3>
         </div>
-
-        <div class="server-product-list-modebar-badges">
-          <span class="server-product-list-modebar-badge server-product-list-modebar-readonly">閲覧専用</span>
-          <span class="server-product-list-modebar-badge">テスト中</span>
-        </div>
+        <span class="server-product-list-badge">閲覧専用・テスト中</span>
       </div>
+
+      <p class="server-product-list-description">
+        サーバーに保存した商品を、この商品一覧画面で確認しています。
+        現段階では架空データだけを表示し、編集・削除・入出庫は行いません。
+      </p>
 
       <div
         id="server-product-list-content"
@@ -123,7 +124,7 @@
     sourceSwitch.innerHTML = `
       <div class="product-list-source-switch-heading">
         <strong>表示する商品データ</strong>
-        <span>移行テスト中のため、表示元を切り替えて確認できます。</span>
+        <span>移行中は共有サーバーを標準表示します。必要なときだけ端末内の旧データへ切り替えられます。</span>
       </div>
 
       <div class="product-list-source-switch-buttons">
@@ -133,7 +134,7 @@
           class="product-list-source-button"
           data-source="local"
         >
-          この端末の商品
+          この端末の商品（旧データ）
         </button>
 
         <button
@@ -142,7 +143,7 @@
           class="product-list-source-button product-list-source-button-server"
           data-source="server"
         >
-          サーバーの商品（閲覧専用）
+          共有サーバーの商品（閲覧専用）
         </button>
       </div>
 
@@ -238,7 +239,7 @@
     if (status) {
       status.textContent = isServer
         ? "現在：サーバーに保存した商品を表示しています。操作はまだ閲覧専用です。"
-        : "現在：この端末に保存されている商品を表示しています。";
+        : "現在：この端末に残っている旧データを表示しています。";
     }
   }
 
@@ -330,9 +331,9 @@
 
     content.innerHTML = `
       <div class="server-product-list-notice server-product-list-info">
-        <strong>🔐 サーバーログインが必要です</strong>
+        <strong>🔐 共有サーバーへのログインが必要です</strong>
         <span>
-          サーバーの商品一覧を見るには、テスト用アカウントでログインしてください。
+          共有サーバーの商品一覧を見るには、テスト用アカウントでログインしてください。
         </span>
       </div>
 
@@ -498,16 +499,16 @@
       : `
           <div class="server-product-list-empty">
             ${lastKeyword || lastStockFilter !== "all" || lastProductStatusFilter !== "all" || lastLocationFilter !== "all"
-              ? "条件に一致する商品はありません。"
-              : "登録されている商品はありません。"}
+              ? "条件に一致するサーバー商品はありません。"
+              : "サーバーに登録されている商品はありません。"}
           </div>
         `;
 
     content.innerHTML = `
       <div class="server-product-list-notice server-product-list-success">
-        <strong>✓ 共有サーバーから商品一覧を取得しました</strong>
+        <strong>✓ サーバー商品一覧を取得しました</strong>
         <span>
-          サーバー検索結果 ${escapeHtml(String(serverCount))}件 / 現在表示 ${escapeHtml(String(filteredItems.length))}件。
+          共有サーバーの商品 ${escapeHtml(String(serverCount))}件 / 現在表示 ${escapeHtml(String(filteredItems.length))}件。
           現在は閲覧専用です。
         </span>
       </div>
@@ -546,7 +547,7 @@
         class="server-product-list-search-form"
       >
         <label for="server-product-list-search-input">
-          商品を検索
+          サーバー商品を検索
         </label>
 
         <div class="server-product-list-search-row">
@@ -911,7 +912,7 @@
 
     content.innerHTML = `
       <div class="server-product-list-notice server-product-list-error">
-        <strong>⚠ 商品一覧を取得できませんでした</strong>
+        <strong>⚠ サーバー商品一覧を取得できませんでした</strong>
         <span>${escapeHtml(message)}</span>
       </div>
 
@@ -1149,62 +1150,45 @@
         font-weight: 700;
       }
       .server-product-list-panel {
-        margin: 18px 0 0;
-        padding: 0;
-        border: 0;
-        background: transparent;
+        margin: 22px 0;
+        padding: 20px;
+        border: 2px solid #64b5f6;
+        border-radius: 16px;
+        background: #f8fcff;
       }
 
-      .server-product-list-modebar {
+      .server-product-list-heading {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: space-between;
         gap: 14px;
-        margin-bottom: 14px;
-        padding: 12px 14px;
-        border: 1px solid #b7d7cf;
-        border-radius: 12px;
-        background: #f1faf7;
+        margin-bottom: 10px;
       }
 
-      .server-product-list-modebar-text {
-        display: grid;
-        gap: 3px;
-        min-width: 0;
-      }
-
-      .server-product-list-modebar-text strong {
-        color: #0f5f57;
-        font-size: 16px;
-      }
-
-      .server-product-list-modebar-text span {
-        color: #55736e;
+      .server-product-list-kicker {
+        display: block;
+        margin-bottom: 3px;
+        color: #1565c0;
         font-size: 13px;
-        line-height: 1.55;
+        font-weight: 700;
       }
 
-      .server-product-list-modebar-badges {
-        display: flex;
+      .server-product-list-heading h3 {
+        margin: 0;
+        color: #123a5a;
+      }
+
+      .server-product-list-badge {
         flex: 0 0 auto;
-        gap: 7px;
-      }
-
-      .server-product-list-modebar-badge {
-        padding: 6px 9px;
+        padding: 6px 10px;
         border-radius: 999px;
         background: #e3f2fd;
         color: #1565c0;
         font-size: 12px;
         font-weight: 800;
-        white-space: nowrap;
       }
 
-      .server-product-list-modebar-readonly {
-        background: #e7f5ef;
-        color: #0f766e;
-      }
-
+      .server-product-list-description,
       .server-product-list-footnote {
         color: #5b7284;
         line-height: 1.7;
@@ -1474,17 +1458,11 @@
           font-size: 16px;
         }
         .server-product-list-panel {
-          margin-top: 14px;
+          padding: 16px;
         }
 
-        .server-product-list-modebar {
-          align-items: flex-start;
-          flex-direction: column;
-        }
-
-        .server-product-list-modebar-badges {
-          width: 100%;
-          flex-wrap: wrap;
+        .server-product-list-heading {
+          align-items: center;
         }
 
         .server-product-list-stock-summary,

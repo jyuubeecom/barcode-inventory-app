@@ -637,7 +637,7 @@
 
       <p class="server-product-list-footnote">
         ※ 絞り込み・並べ替えは、この画面に取得した共有商品に対して行います。
-        「詳細を見る」を押したときは、最新の商品情報を共有サーバーからもう一度取得します。
+        「商品詳細を見る」を押したときは、最新の商品情報を共有サーバーからもう一度取得します。
       </p>
     `;
 
@@ -858,7 +858,7 @@
           class="server-product-list-primary-button server-product-list-detail-button"
           data-internal-code="${escapeHtml(item.internal_code || "")}"
         >
-          詳細を見る
+          商品詳細を見る
         </button>
       </article>
     `;
@@ -903,7 +903,7 @@
     } finally {
       if (button && document.body.contains(button)) {
         button.disabled = false;
-        button.textContent = "詳細を見る";
+        button.textContent = "商品詳細を見る";
       }
     }
   }

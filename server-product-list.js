@@ -68,18 +68,17 @@
     panel.hidden = true;
 
     panel.innerHTML = `
-      <div class="server-product-list-heading">
-        <div>
-          <span class="server-product-list-kicker">さくらサーバー</span>
-          <h3>サーバーの商品（閲覧専用）</h3>
+      <div class="server-product-list-modebar">
+        <div class="server-product-list-modebar-text">
+          <strong>共有データを表示中</strong>
+          <span>サーバーに保存した商品を、この商品一覧画面で確認しています。</span>
         </div>
-        <span class="server-product-list-badge">テスト中</span>
-      </div>
 
-      <p class="server-product-list-description">
-        この商品一覧画面の表示元をサーバーへ切り替えています。
-        現段階では架空データだけを表示し、編集・削除・入出庫は行いません。
-      </p>
+        <div class="server-product-list-modebar-badges">
+          <span class="server-product-list-modebar-badge server-product-list-modebar-readonly">閲覧専用</span>
+          <span class="server-product-list-modebar-badge">テスト中</span>
+        </div>
+      </div>
 
       <div
         id="server-product-list-content"
@@ -219,9 +218,7 @@
     }
 
     if (listHeading) {
-      listHeading.textContent = isServer
-        ? "商品一覧画面（サーバー・閲覧専用）"
-        : "商品一覧画面";
+      listHeading.textContent = "商品一覧画面";
     }
 
     if (!sourceSwitch) {
@@ -240,7 +237,7 @@
 
     if (status) {
       status.textContent = isServer
-        ? "現在：サーバーの商品を表示しています。閲覧専用のテスト表示です。"
+        ? "現在：サーバーに保存した商品を表示しています。操作はまだ閲覧専用です。"
         : "現在：この端末に保存されている商品を表示しています。";
     }
   }
@@ -501,14 +498,14 @@
       : `
           <div class="server-product-list-empty">
             ${lastKeyword || lastStockFilter !== "all" || lastProductStatusFilter !== "all" || lastLocationFilter !== "all"
-              ? "条件に一致するサーバー商品はありません。"
-              : "サーバーに登録されている商品はありません。"}
+              ? "条件に一致する商品はありません。"
+              : "登録されている商品はありません。"}
           </div>
         `;
 
     content.innerHTML = `
       <div class="server-product-list-notice server-product-list-success">
-        <strong>✓ サーバー商品一覧を取得しました</strong>
+        <strong>✓ 共有サーバーから商品一覧を取得しました</strong>
         <span>
           サーバー検索結果 ${escapeHtml(String(serverCount))}件 / 現在表示 ${escapeHtml(String(filteredItems.length))}件。
           現在は閲覧専用です。
@@ -549,7 +546,7 @@
         class="server-product-list-search-form"
       >
         <label for="server-product-list-search-input">
-          サーバー商品を検索
+          商品を検索
         </label>
 
         <div class="server-product-list-search-row">
@@ -914,7 +911,7 @@
 
     content.innerHTML = `
       <div class="server-product-list-notice server-product-list-error">
-        <strong>⚠ サーバー商品一覧を取得できませんでした</strong>
+        <strong>⚠ 商品一覧を取得できませんでした</strong>
         <span>${escapeHtml(message)}</span>
       </div>
 
@@ -1152,45 +1149,62 @@
         font-weight: 700;
       }
       .server-product-list-panel {
-        margin: 22px 0;
-        padding: 20px;
-        border: 2px solid #64b5f6;
-        border-radius: 16px;
-        background: #f8fcff;
+        margin: 18px 0 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
       }
 
-      .server-product-list-heading {
+      .server-product-list-modebar {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
         gap: 14px;
-        margin-bottom: 10px;
+        margin-bottom: 14px;
+        padding: 12px 14px;
+        border: 1px solid #b7d7cf;
+        border-radius: 12px;
+        background: #f1faf7;
       }
 
-      .server-product-list-kicker {
-        display: block;
-        margin-bottom: 3px;
-        color: #1565c0;
+      .server-product-list-modebar-text {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+      }
+
+      .server-product-list-modebar-text strong {
+        color: #0f5f57;
+        font-size: 16px;
+      }
+
+      .server-product-list-modebar-text span {
+        color: #55736e;
         font-size: 13px;
-        font-weight: 700;
+        line-height: 1.55;
       }
 
-      .server-product-list-heading h3 {
-        margin: 0;
-        color: #123a5a;
-      }
-
-      .server-product-list-badge {
+      .server-product-list-modebar-badges {
+        display: flex;
         flex: 0 0 auto;
-        padding: 6px 10px;
+        gap: 7px;
+      }
+
+      .server-product-list-modebar-badge {
+        padding: 6px 9px;
         border-radius: 999px;
         background: #e3f2fd;
         color: #1565c0;
         font-size: 12px;
         font-weight: 800;
+        white-space: nowrap;
       }
 
-      .server-product-list-description,
+      .server-product-list-modebar-readonly {
+        background: #e7f5ef;
+        color: #0f766e;
+      }
+
       .server-product-list-footnote {
         color: #5b7284;
         line-height: 1.7;
@@ -1460,11 +1474,17 @@
           font-size: 16px;
         }
         .server-product-list-panel {
-          padding: 16px;
+          margin-top: 14px;
         }
 
-        .server-product-list-heading {
-          align-items: center;
+        .server-product-list-modebar {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .server-product-list-modebar-badges {
+          width: 100%;
+          flex-wrap: wrap;
         }
 
         .server-product-list-stock-summary,

@@ -5180,6 +5180,10 @@ function createProductListUsabilityStyle() {
       box-sizing: border-box;
     }
 
+    #product-list-sticky-navigation[hidden] {
+      display: none !important;
+    }
+
     #product-list-sticky-navigation button {
       flex: 0 0 auto;
       margin: 0;
@@ -5255,8 +5259,33 @@ function createProductListUsabilityStyle() {
 
     @media (max-width: 700px) {
       #product-list-sticky-navigation {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 8px;
         margin-left: 0;
         margin-right: 0;
+        overflow-x: visible;
+      }
+
+      #product-list-sticky-navigation button {
+        width: 100%;
+        min-width: 0;
+        min-height: 48px;
+        padding: 9px 5px;
+        white-space: normal;
+        line-height: 1.25;
+        font-size: 14px;
+      }
+
+      #product-list-sticky-navigation button:nth-child(1),
+      #product-list-sticky-navigation button:nth-child(2) {
+        grid-column: span 3;
+      }
+
+      #product-list-sticky-navigation button:nth-child(3),
+      #product-list-sticky-navigation button:nth-child(4),
+      #product-list-sticky-navigation button:nth-child(5) {
+        grid-column: span 2;
       }
 
       #product-list-filter-details,

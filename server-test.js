@@ -640,11 +640,11 @@
         type="button"
         class="server-auth-primary-button server-auth-open-detail-button"
       >
-        いつもの商品詳細画面で見る
+        商品詳細を見る
       </button>
 
       <p class="server-auth-readonly-note">
-        ※ サーバー商品は現在「閲覧専用」です。入庫・出庫・編集などはまだ行いません。
+        ※ 現在は閲覧専用です。次の段階で、入庫・出庫などの共有操作を追加していきます。
       </p>
 
       <p class="server-auth-endpoint-note">
@@ -829,7 +829,7 @@
 
     setDetailText(
       "#detail-updated-at",
-      "サーバーから取得した最新表示"
+      "共有サーバーから取得した最新情報"
     );
 
     prepareServerProductDetailLayout();
@@ -869,7 +869,7 @@
       }
 
       heading.textContent =
-        "商品詳細画面（サーバー）";
+        "商品詳細";
     }
 
     let notice = detailScreen.querySelector(
@@ -884,12 +884,12 @@
 
       const strong = document.createElement("strong");
       strong.textContent =
-        "☁ サーバー商品・閲覧専用";
+        "共有サーバーの商品";
 
       const span = document.createElement("span");
       span.textContent =
-        "現在はサーバーの商品情報を確認する段階です。" +
-        "入庫・出庫・編集・削除などの操作はまだ行いません。";
+        "PC・スマホで共通の最新商品情報を表示しています。" +
+        "現在は閲覧専用です。";
 
       notice.appendChild(strong);
       notice.appendChild(span);
@@ -905,6 +905,43 @@
     }
 
     notice.hidden = false;
+
+    let operationGuide = detailScreen.querySelector(
+      "#server-product-detail-operation-guide"
+    );
+
+    if (!operationGuide) {
+      operationGuide = document.createElement("div");
+      operationGuide.id =
+        "server-product-detail-operation-guide";
+      operationGuide.className =
+        "server-product-detail-operation-guide";
+      operationGuide.innerHTML = `
+        <div class="server-product-detail-operation-heading">
+          <strong>この商品でできること</strong>
+          <span>共有サーバー移行中</span>
+        </div>
+        <div class="server-product-detail-operation-row server-product-detail-operation-ready">
+          <span>現在利用できます</span>
+          <strong>商品情報・在庫数・保管場所の確認</strong>
+        </div>
+        <div class="server-product-detail-operation-row server-product-detail-operation-next">
+          <span>次の段階で追加予定</span>
+          <strong>入庫・出庫・在庫履歴・商品編集</strong>
+        </div>
+      `;
+
+      const table = detailScreen.querySelector("table");
+
+      if (table) {
+        table.insertAdjacentElement(
+          "afterend",
+          operationGuide
+        );
+      }
+    }
+
+    operationGuide.hidden = false;
 
     [
       ".product-detail-action-group-main",
@@ -934,8 +971,8 @@
     if (backButton) {
       backButton.textContent =
         serverDetailReturnTarget === "server-list"
-          ? "サーバー商品一覧へ戻る"
-          : "サーバー商品検索へ戻る";
+          ? "商品一覧へ戻る"
+          : "商品検索へ戻る";
     }
   }
 
@@ -964,6 +1001,14 @@
 
     if (notice) {
       notice.hidden = true;
+    }
+
+    const operationGuide = detailScreen.querySelector(
+      "#server-product-detail-operation-guide"
+    );
+
+    if (operationGuide) {
+      operationGuide.hidden = true;
     }
 
     [
@@ -1662,6 +1707,71 @@
 
       .server-product-detail-notice span {
         line-height: 1.6;
+      }
+
+      .server-product-detail-operation-guide {
+        display: grid;
+        gap: 10px;
+        margin: 16px 0;
+        padding: 16px;
+        border: 1px solid #cbdde9;
+        border-radius: 12px;
+        background: #f8fbfd;
+      }
+
+      .server-product-detail-operation-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .server-product-detail-operation-heading strong {
+        color: #173b58;
+        font-size: 18px;
+      }
+
+      .server-product-detail-operation-heading span {
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: #eaf4ff;
+        color: #1565c0;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .server-product-detail-operation-row {
+        display: grid;
+        gap: 4px;
+        padding: 12px 14px;
+        border-radius: 10px;
+      }
+
+      .server-product-detail-operation-row span {
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .server-product-detail-operation-row strong {
+        color: #173b58;
+        line-height: 1.5;
+      }
+
+      .server-product-detail-operation-ready {
+        background: #eef9f0;
+      }
+
+      .server-product-detail-operation-ready span {
+        color: #1f7b31;
+      }
+
+      .server-product-detail-operation-next {
+        background: #fff7e8;
+      }
+
+      .server-product-detail-operation-next span {
+        color: #a55d00;
       }
 
       .server-auth-note,

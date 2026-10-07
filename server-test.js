@@ -7,6 +7,9 @@
   const SERVER_PRODUCT_ENDPOINT =
     "https://jyuubee.sakura.ne.jp/inventory/get-product-auth.php";
 
+  const SERVER_STOCK_HISTORY_ENDPOINT =
+    "https://jyuubee.sakura.ne.jp/inventory/get-stock-history-auth.php";
+
   const DEFAULT_TEST_INTERNAL_CODE = "TEST001";
 
   const TOKEN_STORAGE_KEY =
@@ -835,6 +838,10 @@
     prepareServerProductDetailLayout();
     window.inventoryApp.showScreen("detail");
 
+    loadServerStockHistory(
+      product.internal_code || lastServerRequestedCode
+    );
+
     const detailScreen = document.querySelector(
       "#product-detail"
     );
@@ -923,11 +930,11 @@
         </div>
         <div class="server-product-detail-operation-row server-product-detail-operation-ready">
           <span>現在利用できます</span>
-          <strong>商品情報・在庫数・保管場所の確認</strong>
+          <strong>商品情報・在庫数・保管場所・最近の在庫履歴の確認</strong>
         </div>
         <div class="server-product-detail-operation-row server-product-detail-operation-next">
           <span>次の段階で追加予定</span>
-          <strong>入庫・出庫・在庫履歴・商品編集</strong>
+          <strong>入庫・出庫・商品編集</strong>
         </div>
       `;
 
@@ -942,6 +949,39 @@
     }
 
     operationGuide.hidden = false;
+
+    let historySection = detailScreen.querySelector(
+      "#server-product-stock-history"
+    );
+
+    if (!historySection) {
+      historySection = document.createElement("section");
+      historySection.id = "server-product-stock-history";
+      historySection.className = "server-product-stock-history";
+      historySection.innerHTML = `
+        <div class="server-product-stock-history-heading">
+          <div>
+            <span>共有在庫</span>
+            <h3>最近の在庫履歴</h3>
+          </div>
+          <span class="server-product-stock-history-badge">閲覧専用</span>
+        </div>
+        <div
+          id="server-product-stock-history-content"
+          class="server-product-stock-history-content"
+          aria-live="polite"
+        >
+          履歴を読み込んでいます。
+        </div>
+      `;
+
+      operationGuide.insertAdjacentElement(
+        "afterend",
+        historySection
+      );
+    }
+
+    historySection.hidden = false;
 
     [
       ".product-detail-action-group-main",
@@ -1011,6 +1051,14 @@
       operationGuide.hidden = true;
     }
 
+    const historySection = detailScreen.querySelector(
+      "#server-product-stock-history"
+    );
+
+    if (historySection) {
+      historySection.hidden = true;
+    }
+
     [
       ".product-detail-action-group-main",
       "#product-detail-order-actions",
@@ -1032,6 +1080,190 @@
       backButton.textContent =
         "商品一覧へ戻る";
     }
+  }
+
+  async function loadServerStockHistory(internalCode) {
+    const container = document.querySelector(
+      "#server-product-stock-history-content"
+    );
+
+    if (!container) {
+      return;
+    }
+
+    const code = String(internalCode || "").trim();
+
+    if (!code) {
+      container.innerHTML = `
+        <div class="server-product-stock-history-message server-product-stock-history-error">
+          社内コードを確認できないため、履歴を読み込めませんでした。
+        </div>
+      `;
+      return;
+    }
+
+    const session = getStoredSession();
+
+    if (!session) {
+      container.innerHTML = `
+        <div class="server-product-stock-history-message server-product-stock-history-error">
+          在庫履歴を見るには、サーバーへログインしてください。
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="server-product-stock-history-message">
+        在庫履歴を読み込んでいます。
+      </div>
+    `;
+
+    try {
+      const response = await fetch(
+        SERVER_STOCK_HISTORY_ENDPOINT +
+          "?code=" + encodeURIComponent(code) +
+          "&limit=10",
+        {
+          method: "GET",
+          mode: "cors",
+          cache: "no-store",
+          headers: {
+            Accept: "application/json",
+            Authorization: "Bearer " + session.token
+          }
+        }
+      );
+
+      const data = await readJsonResponse(response);
+
+      if (response.status === 401) {
+        clearStoredSession();
+        notifyServerAuthChanged("expired");
+
+        container.innerHTML = `
+          <div class="server-product-stock-history-message server-product-stock-history-error">
+            ログインの有効期限が切れました。もう一度ログインしてください。
+          </div>
+        `;
+        return;
+      }
+
+      if (!response.ok || !data || data.success !== true) {
+        throw new Error(
+          data && data.message
+            ? data.message
+            : "在庫履歴の取得に失敗しました。"
+        );
+      }
+
+      renderServerStockHistory(
+        Array.isArray(data.items) ? data.items : []
+      );
+    } catch (error) {
+      container.innerHTML = `
+        <div class="server-product-stock-history-message server-product-stock-history-error">
+          ${escapeHtml(
+            getErrorMessage(
+              error,
+              "在庫履歴の読み込みに失敗しました。"
+            )
+          )}
+        </div>
+      `;
+    }
+  }
+
+  function renderServerStockHistory(items) {
+    const container = document.querySelector(
+      "#server-product-stock-history-content"
+    );
+
+    if (!container) {
+      return;
+    }
+
+    if (!items.length) {
+      container.innerHTML = `
+        <div class="server-product-stock-history-message">
+          この商品の在庫履歴はまだありません。
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = items.map(function (item) {
+      const type = String(item.transaction_type || "在庫変更");
+      const quantity = Number(item.quantity || 0);
+      const before = Number(item.stock_before || 0);
+      const after = Number(item.stock_after || 0);
+      const quantityText = getHistoryQuantityText(type, quantity);
+      const location = String(item.location_name || "未登録");
+      const staff = String(item.staff_name || "未登録");
+      const reason = String(item.reason || "未登録");
+      const memo = String(item.memo || "").trim();
+
+      return `
+        <article class="server-product-stock-history-item">
+          <div class="server-product-stock-history-item-top">
+            <div>
+              <span class="server-product-stock-history-date">
+                ${escapeHtml(formatHistoryDate(item.occurred_at))}
+              </span>
+              <strong>${escapeHtml(type)}</strong>
+            </div>
+            <span class="server-product-stock-history-quantity">
+              ${escapeHtml(quantityText)}
+            </span>
+          </div>
+          <div class="server-product-stock-history-stock">
+            在庫 ${formatNumber(before)}個 → <strong>${formatNumber(after)}個</strong>
+          </div>
+          <dl class="server-product-stock-history-meta">
+            <div><dt>保管場所</dt><dd>${escapeHtml(location)}</dd></div>
+            <div><dt>担当者</dt><dd>${escapeHtml(staff)}</dd></div>
+            <div><dt>理由</dt><dd>${escapeHtml(reason)}</dd></div>
+          </dl>
+          ${memo ? `
+            <p class="server-product-stock-history-memo">
+              メモ：${escapeHtml(memo)}
+            </p>
+          ` : ""}
+        </article>
+      `;
+    }).join("");
+  }
+
+  function getHistoryQuantityText(type, quantity) {
+    const amount = Math.abs(Number.isFinite(quantity) ? quantity : 0);
+
+    if (type.includes("出庫")) {
+      return `-${formatNumber(amount)}個`;
+    }
+
+    if (amount === 0) {
+      return "0個";
+    }
+
+    return `+${formatNumber(amount)}個`;
+  }
+
+  function formatHistoryDate(value) {
+    const text = String(value || "").trim();
+
+    if (!text) {
+      return "日時未登録";
+    }
+
+    const match = text.match(
+      /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/
+    );
+
+    if (!match) {
+      return text;
+    }
+
+    return `${match[1]}/${match[2]}/${match[3]} ${match[4]}:${match[5]}`;
   }
 
   function setDetailText(selector, value) {
@@ -1774,6 +2006,143 @@
         color: #a55d00;
       }
 
+      .server-product-stock-history {
+        display: grid;
+        gap: 12px;
+        margin: 16px 0;
+        padding: 16px;
+        border: 1px solid #cbdde9;
+        border-radius: 12px;
+        background: #ffffff;
+      }
+
+      .server-product-stock-history-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .server-product-stock-history-heading > div {
+        display: grid;
+        gap: 2px;
+      }
+
+      .server-product-stock-history-heading > div > span {
+        color: #1565c0;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .server-product-stock-history-heading h3 {
+        margin: 0;
+        color: #173b58;
+        font-size: 19px;
+      }
+
+      .server-product-stock-history-badge {
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: #eef9f0;
+        color: #1f7b31;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .server-product-stock-history-content {
+        display: grid;
+        gap: 10px;
+      }
+
+      .server-product-stock-history-message {
+        padding: 14px;
+        border-radius: 10px;
+        background: #f4f7f9;
+        color: #60788b;
+        line-height: 1.7;
+      }
+
+      .server-product-stock-history-error {
+        background: #fff1f1;
+        color: #a33131;
+      }
+
+      .server-product-stock-history-item {
+        display: grid;
+        gap: 10px;
+        padding: 14px;
+        border: 1px solid #d7e2eb;
+        border-radius: 10px;
+        background: #fafcfe;
+      }
+
+      .server-product-stock-history-item-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .server-product-stock-history-item-top > div {
+        display: grid;
+        gap: 3px;
+      }
+
+      .server-product-stock-history-item-top strong {
+        color: #173b58;
+        font-size: 17px;
+      }
+
+      .server-product-stock-history-date {
+        color: #60788b;
+        font-size: 12px;
+      }
+
+      .server-product-stock-history-quantity {
+        color: #1565c0;
+        font-size: 18px;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+
+      .server-product-stock-history-stock {
+        padding: 9px 11px;
+        border-radius: 8px;
+        background: #eef4f8;
+        color: #355469;
+      }
+
+      .server-product-stock-history-meta {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin: 0;
+      }
+
+      .server-product-stock-history-meta > div {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+      }
+
+      .server-product-stock-history-meta dt {
+        color: #60788b;
+        font-size: 11px;
+      }
+
+      .server-product-stock-history-meta dd {
+        margin: 0;
+        color: #173b58;
+        overflow-wrap: anywhere;
+      }
+
+      .server-product-stock-history-memo {
+        margin: 0;
+        color: #60788b;
+        line-height: 1.6;
+      }
+
       .server-auth-note,
       .server-auth-endpoint-note {
         margin: 0;
@@ -1809,6 +2178,10 @@
         .server-auth-secondary-button {
           min-height: 52px;
           font-size: 17px;
+        }
+
+        .server-product-stock-history-meta {
+          grid-template-columns: 1fr;
         }
       }
     `;

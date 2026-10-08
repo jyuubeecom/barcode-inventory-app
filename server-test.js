@@ -13,6 +13,9 @@
   const SERVER_STOCK_IN_ENDPOINT =
     "https://jyuubee.sakura.ne.jp/inventory/stock-in-auth.php";
 
+  const SERVER_STOCK_OUT_ENDPOINT =
+    "https://jyuubee.sakura.ne.jp/inventory/stock-out-auth.php";
+
   const DEFAULT_TEST_INTERNAL_CODE = "TEST001";
 
   const TOKEN_STORAGE_KEY =
@@ -31,6 +34,7 @@
   let lastServerRequestedCode = DEFAULT_TEST_INTERNAL_CODE;
   let serverDetailReturnTarget = "server-search";
   let lastServerStockInMessage = "";
+  let lastServerStockOutMessage = "";
 
   document.addEventListener(
     "DOMContentLoaded",
@@ -651,7 +655,7 @@
       </button>
 
       <p class="server-auth-readonly-note">
-        ※ 商品詳細画面から共有サーバーへの入庫を試せます。出庫・商品編集はまだ行いません。
+        ※ 商品詳細画面から共有サーバーへの入庫・出庫を試せます。商品編集はまだ行いません。
       </p>
 
       <p class="server-auth-endpoint-note">
@@ -900,7 +904,7 @@
       const span = document.createElement("span");
       span.textContent =
         "PC・スマホで共通の最新商品情報を表示しています。" +
-        "共有サーバーへの入庫に対応しています。出庫・商品編集はまだ移行中です。";
+        "共有サーバーへの入庫・出庫に対応しています。商品編集はまだ移行中です。";
 
       notice.appendChild(strong);
       notice.appendChild(span);
@@ -934,11 +938,11 @@
         </div>
         <div class="server-product-detail-operation-row server-product-detail-operation-ready">
           <span>現在利用できます</span>
-          <strong>商品情報・在庫数・保管場所・最近の在庫履歴・入庫</strong>
+          <strong>商品情報・在庫数・保管場所・最近の在庫履歴・入庫・出庫</strong>
         </div>
         <div class="server-product-detail-operation-row server-product-detail-operation-next">
           <span>次の段階で追加予定</span>
-          <strong>出庫・商品編集</strong>
+          <strong>商品編集</strong>
         </div>
       `;
 
@@ -972,6 +976,24 @@
     stockInSection.hidden = false;
     renderServerStockInSection(stockInSection);
 
+    let stockOutSection = detailScreen.querySelector(
+      "#server-product-stock-out"
+    );
+
+    if (!stockOutSection) {
+      stockOutSection = document.createElement("section");
+      stockOutSection.id = "server-product-stock-out";
+      stockOutSection.className = "server-product-stock-out";
+
+      stockInSection.insertAdjacentElement(
+        "afterend",
+        stockOutSection
+      );
+    }
+
+    stockOutSection.hidden = false;
+    renderServerStockOutSection(stockOutSection);
+
     let historySection = detailScreen.querySelector(
       "#server-product-stock-history"
     );
@@ -997,7 +1019,7 @@
         </div>
       `;
 
-      stockInSection.insertAdjacentElement(
+      stockOutSection.insertAdjacentElement(
         "afterend",
         historySection
       );
@@ -1081,6 +1103,14 @@
       stockInSection.hidden = true;
     }
 
+    const stockOutSection = detailScreen.querySelector(
+      "#server-product-stock-out"
+    );
+
+    if (stockOutSection) {
+      stockOutSection.hidden = true;
+    }
+
     const historySection = detailScreen.querySelector(
       "#server-product-stock-history"
     );
@@ -1090,6 +1120,7 @@
     }
 
     lastServerStockInMessage = "";
+    lastServerStockOutMessage = "";
 
     [
       ".product-detail-action-group-main",
@@ -1163,7 +1194,7 @@
           <span>共有在庫</span>
           <h3>入庫</h3>
         </div>
-        <span class="server-product-stock-in-badge">v285 テスト</span>
+        <span class="server-product-stock-in-badge">v286 テスト</span>
       </div>
 
       <p class="server-product-stock-in-description">
@@ -1530,6 +1561,430 @@
         : isLoading
           ? "server-product-stock-in-loading"
           : "server-product-stock-in-success");
+
+    status.textContent = String(message || "");
+  }
+
+  function renderServerStockOutSection(section) {
+    if (!section) {
+      return;
+    }
+
+    const data = lastServerProductData || {};
+    const product = data.product || {};
+    const stocks = Array.isArray(data.stocks)
+      ? data.stocks
+      : [];
+
+    const internalCode = String(
+      product.internal_code || lastServerRequestedCode || ""
+    ).trim();
+
+    const productName = String(
+      product.product_name || "商品名未登録"
+    );
+
+    const totalStock = toStockNumber(data.total_stock);
+    const availableStocks = stocks.filter(function (stock) {
+      return toStockNumber(stock && stock.quantity) > 0;
+    });
+    const hasStock = totalStock > 0 && availableStocks.length > 0;
+    const locationOptions = buildServerStockOutLocationOptions(availableStocks);
+
+    const statusHtml = lastServerStockOutMessage
+      ? `
+          <div class="server-product-stock-out-status server-product-stock-out-success">
+            ${escapeHtml(lastServerStockOutMessage)}
+          </div>
+        `
+      : "";
+
+    const disabledNote = !hasStock
+      ? `
+          <div class="server-product-stock-out-status server-product-stock-out-error">
+            出庫できる在庫がありません。
+          </div>
+        `
+      : "";
+
+    section.innerHTML = `
+      <div class="server-product-stock-out-heading">
+        <div>
+          <span>共有在庫</span>
+          <h3>出庫</h3>
+        </div>
+        <span class="server-product-stock-out-badge">v286 テスト</span>
+      </div>
+
+      <p class="server-product-stock-out-description">
+        この操作は共有サーバーの在庫を実際に減らし、在庫履歴にも記録します。
+        選択した保管場所の在庫を超える数量は出庫できません。
+      </p>
+
+      ${statusHtml}
+      ${disabledNote}
+
+      <form id="server-product-stock-out-form" class="server-product-stock-out-form">
+        <div class="server-product-stock-out-summary">
+          <span>${escapeHtml(productName)}</span>
+          <strong>現在庫合計 ${formatNumber(totalStock)}個</strong>
+        </div>
+
+        <label>
+          <span>出庫元の保管場所</span>
+          <select id="server-product-stock-out-location" required ${hasStock ? "" : "disabled"}>
+            ${locationOptions}
+          </select>
+        </label>
+
+        <label>
+          <span>出庫数量</span>
+          <input
+            id="server-product-stock-out-quantity"
+            type="number"
+            min="1"
+            max="1000000"
+            step="1"
+            value="1"
+            inputmode="numeric"
+            required
+            ${hasStock ? "" : "disabled"}
+          >
+        </label>
+
+        <label>
+          <span>理由</span>
+          <select id="server-product-stock-out-reason" ${hasStock ? "" : "disabled"}>
+            <option value="販売">販売</option>
+            <option value="出荷" selected>出荷</option>
+            <option value="使用">使用</option>
+            <option value="廃棄">廃棄</option>
+            <option value="移動">移動</option>
+            <option value="棚卸調整">棚卸調整</option>
+            <option value="その他">その他</option>
+          </select>
+        </label>
+
+        <label class="server-product-stock-out-memo-label">
+          <span>メモ（任意）</span>
+          <textarea
+            id="server-product-stock-out-memo"
+            rows="2"
+            maxlength="5000"
+            placeholder="例：出荷伝票確認済み"
+            ${hasStock ? "" : "disabled"}
+          ></textarea>
+        </label>
+
+        <button
+          id="server-product-stock-out-submit"
+          type="submit"
+          ${hasStock ? "" : "disabled"}
+        >
+          出庫内容を確認する
+        </button>
+      </form>
+    `;
+
+    const form = section.querySelector(
+      "#server-product-stock-out-form"
+    );
+
+    if (form && hasStock) {
+      form.addEventListener(
+        "submit",
+        function (event) {
+          event.preventDefault();
+          submitServerStockOut({
+            section,
+            internalCode,
+            productName,
+            totalStock,
+            stocks: availableStocks
+          });
+        }
+      );
+    }
+  }
+
+  function buildServerStockOutLocationOptions(stocks) {
+    if (!Array.isArray(stocks) || !stocks.length) {
+      return '<option value="">出庫できる在庫がありません</option>';
+    }
+
+    return stocks.map(function (stock) {
+      const location = String(
+        stock && stock.location_name
+          ? stock.location_name
+          : ""
+      ).trim();
+      const quantity = toStockNumber(stock && stock.quantity);
+
+      return `
+        <option value="${escapeHtml(location)}">
+          ${escapeHtml(location)}（現在 ${formatNumber(quantity)}個）
+        </option>
+      `;
+    }).join("");
+  }
+
+  async function submitServerStockOut(context) {
+    const section = context && context.section
+      ? context.section
+      : document.querySelector("#server-product-stock-out");
+
+    if (!section) {
+      return;
+    }
+
+    const internalCode = String(
+      context && context.internalCode
+        ? context.internalCode
+        : lastServerRequestedCode || ""
+    ).trim();
+
+    const productName = String(
+      context && context.productName
+        ? context.productName
+        : "商品"
+    );
+
+    const totalStock = toStockNumber(
+      context && context.totalStock
+    );
+
+    const stocks = context && Array.isArray(context.stocks)
+      ? context.stocks
+      : [];
+
+    const locationInput = section.querySelector(
+      "#server-product-stock-out-location"
+    );
+    const quantityInput = section.querySelector(
+      "#server-product-stock-out-quantity"
+    );
+    const reasonInput = section.querySelector(
+      "#server-product-stock-out-reason"
+    );
+    const memoInput = section.querySelector(
+      "#server-product-stock-out-memo"
+    );
+    const submitButton = section.querySelector(
+      "#server-product-stock-out-submit"
+    );
+
+    const locationName = locationInput
+      ? locationInput.value.trim()
+      : "";
+    const quantity = quantityInput
+      ? Math.trunc(Number(quantityInput.value))
+      : 0;
+    const reason = reasonInput
+      ? reasonInput.value.trim()
+      : "出荷";
+    const memo = memoInput
+      ? memoInput.value.trim()
+      : "";
+
+    const selectedStock = stocks.find(function (stock) {
+      return String(stock && stock.location_name || "") === locationName;
+    });
+    const locationStock = toStockNumber(
+      selectedStock && selectedStock.quantity
+    );
+
+    if (!internalCode) {
+      showServerStockOutStatus(
+        section,
+        "社内コードを確認できません。",
+        true
+      );
+      return;
+    }
+
+    if (!locationName) {
+      showServerStockOutStatus(
+        section,
+        "出庫元の保管場所を選択してください。",
+        true
+      );
+      if (locationInput) locationInput.focus();
+      return;
+    }
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      showServerStockOutStatus(
+        section,
+        "出庫数量は1以上で入力してください。",
+        true
+      );
+      if (quantityInput) quantityInput.focus();
+      return;
+    }
+
+    if (quantity > locationStock) {
+      showServerStockOutStatus(
+        section,
+        `出庫数量が在庫数を超えています。${locationName}の現在庫は${formatNumber(locationStock)}個です。`,
+        true
+      );
+      if (quantityInput) quantityInput.focus();
+      return;
+    }
+
+    const session = getStoredSession();
+
+    if (!session) {
+      showServerStockOutStatus(
+        section,
+        "サーバーログインが必要です。いったん商品一覧へ戻り、ログインし直してください。",
+        true
+      );
+      return;
+    }
+
+    const afterStock = Math.max(0, totalStock - quantity);
+    const locationAfter = Math.max(0, locationStock - quantity);
+    const confirmMessage =
+      `${productName}\n` +
+      `${locationName} から ${formatNumber(quantity)}個 出庫します。\n` +
+      `${locationName} ${formatNumber(locationStock)}個 → ${formatNumber(locationAfter)}個\n` +
+      `現在庫合計 ${formatNumber(totalStock)}個 → ${formatNumber(afterStock)}個\n\n` +
+      "この内容で共有サーバーの在庫を更新しますか？";
+
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = "出庫を登録中...";
+    }
+
+    showServerStockOutStatus(
+      section,
+      "共有サーバーへ出庫を登録しています。",
+      false,
+      true
+    );
+
+    try {
+      const response = await fetch(
+        SERVER_STOCK_OUT_ENDPOINT,
+        {
+          method: "POST",
+          mode: "cors",
+          cache: "no-store",
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            Accept: "application/json",
+            Authorization: "Bearer " + session.token
+          },
+          body: JSON.stringify({
+            internal_code: internalCode,
+            location_name: locationName,
+            quantity,
+            reason: reason || "出荷",
+            memo
+          })
+        }
+      );
+
+      const result = await readJsonResponse(response);
+
+      if (response.status === 401) {
+        clearStoredSession();
+        notifyServerAuthChanged("expired");
+        throw new Error(
+          "ログインの有効期限が切れました。もう一度ログインしてください。"
+        );
+      }
+
+      if (!response.ok || !result || result.success !== true) {
+        throw new Error(
+          result && result.message
+            ? result.message
+            : "出庫の登録に失敗しました。"
+        );
+      }
+
+      lastServerStockOutMessage =
+        `✓ 出庫しました。${result.location_name || locationName}：` +
+        `${formatNumber(result.location_stock_before)}個 → ` +
+        `${formatNumber(result.location_stock_after)}個 / ` +
+        `合計 ${formatNumber(result.stock_after)}個`;
+
+      const updatedData = await searchServerProductForApp(internalCode);
+      openServerProductDetail(
+        updatedData,
+        internalCode
+      );
+
+      window.setTimeout(function () {
+        const refreshedSection = document.querySelector(
+          "#server-product-stock-out"
+        );
+
+        if (refreshedSection) {
+          refreshedSection.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+          });
+        }
+      }, 80);
+    } catch (error) {
+      showServerStockOutStatus(
+        section,
+        getErrorMessage(
+          error,
+          "出庫の登録に失敗しました。"
+        ),
+        true
+      );
+
+      if (submitButton && document.body.contains(submitButton)) {
+        submitButton.disabled = false;
+        submitButton.textContent = "出庫内容を確認する";
+      }
+    }
+  }
+
+  function showServerStockOutStatus(
+    section,
+    message,
+    isError = false,
+    isLoading = false
+  ) {
+    if (!section) {
+      return;
+    }
+
+    let status = section.querySelector(
+      "#server-product-stock-out-live-status"
+    );
+
+    if (!status) {
+      status = document.createElement("div");
+      status.id = "server-product-stock-out-live-status";
+
+      const form = section.querySelector(
+        "#server-product-stock-out-form"
+      );
+
+      if (form) {
+        section.insertBefore(status, form);
+      } else {
+        section.appendChild(status);
+      }
+    }
+
+    status.className =
+      "server-product-stock-out-status " +
+      (isError
+        ? "server-product-stock-out-error"
+        : isLoading
+          ? "server-product-stock-out-loading"
+          : "server-product-stock-out-success");
 
     status.textContent = String(message || "");
   }
@@ -2602,6 +3057,150 @@
         cursor: not-allowed;
       }
 
+      .server-product-stock-out {
+        display: grid;
+        gap: 12px;
+        margin: 16px 0;
+        padding: 16px;
+        border: 2px solid #c62828;
+        border-radius: 12px;
+        background: #fff8f8;
+      }
+
+      .server-product-stock-out-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .server-product-stock-out-heading > div {
+        display: grid;
+        gap: 2px;
+      }
+
+      .server-product-stock-out-heading > div > span {
+        color: #c62828;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .server-product-stock-out-heading h3 {
+        margin: 0;
+        color: #173b58;
+        font-size: 20px;
+      }
+
+      .server-product-stock-out-badge {
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: #ffebee;
+        color: #c62828;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .server-product-stock-out-description {
+        margin: 0;
+        color: #526b7c;
+        line-height: 1.7;
+      }
+
+      .server-product-stock-out-status {
+        padding: 12px 14px;
+        border-radius: 10px;
+        line-height: 1.6;
+        font-weight: 700;
+      }
+
+      .server-product-stock-out-success {
+        border: 1px solid #ef9a9a;
+        background: #fff0f0;
+        color: #9f1f1f;
+      }
+
+      .server-product-stock-out-error {
+        border: 1px solid #ef9a9a;
+        background: #fff0f0;
+        color: #b42318;
+      }
+
+      .server-product-stock-out-loading {
+        border: 1px solid #90caf9;
+        background: #eaf5ff;
+        color: #0d5da8;
+      }
+
+      .server-product-stock-out-form {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .server-product-stock-out-summary {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #173b58;
+      }
+
+      .server-product-stock-out-summary strong {
+        color: #c62828;
+        font-size: 18px;
+      }
+
+      .server-product-stock-out-form label {
+        display: grid;
+        gap: 6px;
+        color: #173b58;
+        font-weight: 700;
+      }
+
+      .server-product-stock-out-form select,
+      .server-product-stock-out-form input,
+      .server-product-stock-out-form textarea {
+        width: 100%;
+        min-height: 46px;
+        padding: 10px 12px;
+        border: 1px solid #aebfcd;
+        border-radius: 9px;
+        background: #ffffff;
+        color: #173b58;
+        font: inherit;
+        font-weight: 400;
+        box-sizing: border-box;
+      }
+
+      .server-product-stock-out-form textarea {
+        min-height: 76px;
+        resize: vertical;
+      }
+
+      .server-product-stock-out-memo-label {
+        grid-column: 1 / -1;
+      }
+
+      .server-product-stock-out-form button {
+        grid-column: 1 / -1;
+        min-height: 48px;
+        background: #c62828 !important;
+      }
+
+      .server-product-stock-out-form button:disabled,
+      .server-product-stock-out-form input:disabled,
+      .server-product-stock-out-form select:disabled,
+      .server-product-stock-out-form textarea:disabled {
+        opacity: 0.62;
+        cursor: not-allowed;
+      }
+
       .server-product-stock-history {
         display: grid;
         gap: 12px;
@@ -2784,9 +3383,14 @@
           grid-template-columns: 1fr;
         }
 
-        .server-product-stock-in-summary {
+        .server-product-stock-in-summary,
+        .server-product-stock-out-summary {
           align-items: flex-start;
           flex-direction: column;
+        }
+
+        .server-product-stock-out-form {
+          grid-template-columns: 1fr;
         }
       }
     `;

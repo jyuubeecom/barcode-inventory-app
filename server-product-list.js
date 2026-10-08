@@ -74,14 +74,14 @@
           <h3>商品一覧</h3>
         </div>
         <div class="server-product-list-badges">
-          <span class="server-product-list-badge">閲覧専用</span>
+          <span class="server-product-list-badge">入出庫対応</span>
           <span class="server-product-list-badge server-product-list-badge-test">移行テスト中</span>
         </div>
       </div>
 
       <p class="server-product-list-description">
         PCとスマートフォンで共通の商品データを、この商品一覧画面で確認できます。
-        現在は移行テスト中のため、編集・削除・入出庫はまだ行いません。
+        現在は移行テスト中です。入庫・出庫は商品詳細から利用できます。編集・削除はまだ行いません。
       </p>
 
       <div
@@ -241,7 +241,7 @@
 
     if (status) {
       status.textContent = isServer
-        ? "現在：PC・スマホ共通の商品を表示しています。操作はまだ閲覧専用です。"
+        ? "現在：PC・スマホ共通の商品を表示しています。商品詳細から入庫・出庫できます。"
         : "現在：この端末に残っている旧データを表示しています。";
     }
   }

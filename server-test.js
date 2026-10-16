@@ -16,6 +16,9 @@
   const SERVER_STOCK_OUT_ENDPOINT =
     "https://jyuubee.sakura.ne.jp/inventory/stock-out-auth.php";
 
+  const SERVER_PRODUCT_UPDATE_ENDPOINT =
+    "https://jyuubee.sakura.ne.jp/inventory/update-product-auth.php";
+
   const DEFAULT_TEST_INTERNAL_CODE = "TEST001";
 
   const TOKEN_STORAGE_KEY =
@@ -35,6 +38,8 @@
   let serverDetailReturnTarget = "server-search";
   let lastServerStockInMessage = "";
   let lastServerStockOutMessage = "";
+  let serverEditMode = false;
+  let serverEditSaving = false;
 
   document.addEventListener(
     "DOMContentLoaded",
@@ -44,6 +49,7 @@
   function initializeServerAuthTest() {
     createStyles();
     initializeServerProductDetailBridge();
+    initializeServerProductEditBridge();
 
     const button = document.querySelector(
       "#server-connection-test-button"
@@ -655,7 +661,7 @@
       </button>
 
       <p class="server-auth-readonly-note">
-        ※ 商品詳細画面から共有サーバーへの入庫・出庫を試せます。商品編集はまだ行いません。
+        ※ 商品詳細画面から共有サーバーへの入庫・出庫・商品編集を利用できます。
       </p>
 
       <p class="server-auth-endpoint-note">
@@ -738,6 +744,184 @@
       },
       true
     );
+  }
+
+  // 共有サーバーの商品だけ、従来の編集画面を使ってAPIへ保存する。
+  function initializeServerProductEditBridge() {
+    const editButton = document.querySelector("#edit-from-detail-button");
+    const form = document.querySelector("#edit-product-form");
+    const cancel = document.querySelector("#cancel-edit-button");
+
+    if (editButton) {
+      editButton.addEventListener("click", function (event) {
+        if (!serverDetailMode) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        openServerProductEdit();
+      }, true);
+    }
+    if (form) {
+      form.addEventListener("submit", function (event) {
+        if (!serverEditMode) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        void submitServerProductEdit(form);
+      }, true);
+    }
+    if (cancel) {
+      cancel.addEventListener("click", function (event) {
+        if (!serverEditMode || serverEditSaving) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        closeServerProductEdit();
+      }, true);
+    }
+  }
+
+  function serverEditField(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.value = value == null ? "" : String(value);
+  }
+
+  function setServerEditUnsupportedFields(hidden) {
+    ["edit-location", "edit-order-remaining", "edit-backorder-status"].forEach(function (id) {
+      const input = document.getElementById(id);
+      if (input && input.closest("div")) {
+        input.closest("div").hidden = hidden;
+        input.disabled = hidden;
+      }
+    });
+    const form = document.getElementById("edit-product-form");
+    let notice = document.getElementById("server-product-edit-notice");
+    if (!notice && form) {
+      notice = document.createElement("p");
+      notice.id = "server-product-edit-notice";
+      notice.style.cssText = "padding:12px;border:2px solid #2276c7;border-radius:8px;line-height:1.6";
+      form.prepend(notice);
+    }
+    if (notice) {
+      notice.hidden = !hidden;
+      notice.textContent = "共有サーバーの商品情報を編集します。保管場所・発注残・在庫数はここでは変更しません。";
+    }
+  }
+
+  function openServerProductEdit() {
+    const session = getStoredSession();
+    if (!session || session.user?.role !== "admin") {
+      window.alert("商品編集には管理者としてのサーバーログインが必要です。");
+      return;
+    }
+    const data = lastServerProductData || {};
+    const product = data.product || {};
+    if (!product.internal_code) {
+      window.alert("商品データを取得し直してください。");
+      return;
+    }
+    serverEditMode = true;
+    serverEditField("edit-internal-code", product.internal_code);
+    serverEditField("edit-product-code", product.product_code);
+    serverEditField("edit-product-name", product.product_name);
+    serverEditField("edit-product-color", product.color);
+    serverEditField("edit-jan-code", product.jan_code);
+    serverEditField("edit-stock", data.total_stock || 0);
+    serverEditField("edit-min-stock", product.min_stock ?? 0);
+    serverEditField("edit-category", product.category);
+    serverEditField("edit-supplier", product.supplier_name);
+    const status = document.getElementById("edit-product-status");
+    if (status) {
+      let value = product.product_status || "通常商品";
+      if (value === "通常") value = "通常商品";
+      if (value === "注残") {
+        const option = document.createElement("option");
+        option.value = "注残";
+        option.textContent = "注残";
+        option.dataset.serverOnly = "true";
+        status.append(option);
+      }
+      status.value = value;
+    }
+    setServerEditUnsupportedFields(true);
+    window.inventoryApp.showScreen("edit");
+    document.getElementById("edit-product-code")?.focus();
+  }
+
+  function closeServerProductEdit() {
+    serverEditMode = false;
+    setServerEditUnsupportedFields(false);
+    document.querySelectorAll('#edit-product-status option[data-server-only="true"]').forEach(function (el) { el.remove(); });
+    window.inventoryApp.showScreen("detail");
+  }
+
+  async function submitServerProductEdit(form) {
+    if (serverEditSaving) return;
+    const session = getStoredSession();
+    if (!session || session.user?.role !== "admin") {
+      window.alert("管理者として再ログインしてください。");
+      return;
+    }
+    const value = function (id) {
+      return document.getElementById(id)?.value.trim() || "";
+    };
+    const minRaw = value("edit-min-stock");
+    const minStock = Number(minRaw);
+    if (!value("edit-product-name")) {
+      window.alert("商品名を入力してください。");
+      return;
+    }
+    if (!minRaw || !Number.isInteger(minStock) || minStock < 0 || minStock > 1000000) {
+      window.alert("最低在庫数は0～1000000の整数で入力してください。");
+      return;
+    }
+    const payload = {
+      internal_code: value("edit-internal-code"),
+      product_code: value("edit-product-code"),
+      product_name: value("edit-product-name"),
+      color: value("edit-product-color"),
+      jan_code: value("edit-jan-code"),
+      min_stock: minStock,
+      category: value("edit-category"),
+      supplier_name: value("edit-supplier"),
+      product_status: value("edit-product-status")
+    };
+    if (payload.internal_code !== String(lastServerProductData?.product?.internal_code || "")) {
+      window.alert("社内コードが一致しません。商品を取得し直してください。");
+      return;
+    }
+    if (!window.confirm("商品情報を共有サーバーに保存します。よろしいですか？\n商品名：" + payload.product_name)) return;
+    const submit = form.querySelector('button[type="submit"]');
+    serverEditSaving = true;
+    if (submit) { submit.disabled = true; submit.textContent = "保存中..."; }
+    try {
+      const response = await fetch(SERVER_PRODUCT_UPDATE_ENDPOINT, {
+        method: "POST", mode: "cors", cache: "no-store",
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          Accept: "application/json",
+          Authorization: "Bearer " + session.token
+        },
+        body: JSON.stringify(payload)
+      });
+      const result = await readJsonResponse(response);
+      if (response.status === 401) {
+        clearStoredSession();
+        notifyServerAuthChanged("expired");
+      }
+      if (!response.ok || result?.success !== true) {
+        throw new Error(result?.message || "商品情報を保存できませんでした。");
+      }
+      // 保存直後に必ずMySQLから最新情報を取得し直す。
+      const latest = await searchServerProductForApp(payload.internal_code);
+      lastServerProductData = latest;
+      closeServerProductEdit();
+      openServerProductDetail(latest, payload.internal_code);
+      window.alert(result.changed === false ? "変更内容はありません。" : "商品情報を共有サーバーに保存しました。");
+    } catch (error) {
+      window.alert("確認してください：" + getErrorMessage(error, "通信エラー"));
+      // 保存後の再取得が失敗した場合、再送信前に詳細で最新データを確認する。
+    } finally {
+      serverEditSaving = false;
+      if (submit) { submit.disabled = false; submit.textContent = "変更内容を保存する"; }
+    }
   }
 
   function openServerProductDetail(data, requestedCode) {
@@ -904,7 +1088,7 @@
       const span = document.createElement("span");
       span.textContent =
         "PC・スマホで共通の最新商品情報を表示しています。" +
-        "共有サーバーへの入庫・出庫に対応しています。商品編集はまだ移行中です。";
+        "共有サーバーへの入庫・出庫・商品編集に対応しています。";
 
       notice.appendChild(strong);
       notice.appendChild(span);
@@ -938,11 +1122,11 @@
         </div>
         <div class="server-product-detail-operation-row server-product-detail-operation-ready">
           <span>現在利用できます</span>
-          <strong>商品情報・在庫数・保管場所・最近の在庫履歴・入庫・出庫</strong>
+          <strong>商品情報・在庫数・保管場所・最近の在庫履歴・入庫・出庫・商品編集</strong>
         </div>
         <div class="server-product-detail-operation-row server-product-detail-operation-next">
-          <span>次の段階で追加予定</span>
-          <strong>商品編集</strong>
+          <span>今後の段階</span>
+          <strong>その他の機能を順次移行</strong>
         </div>
       `;
 
@@ -958,6 +1142,18 @@
 
     operationGuide.hidden = false;
 
+    let editAction = detailScreen.querySelector("#server-product-edit-action");
+    if (!editAction) {
+      editAction = document.createElement("button");
+      editAction.id = "server-product-edit-action";
+      editAction.type = "button";
+      editAction.textContent = "商品情報を編集する";
+      editAction.style.cssText = "padding:14px 22px;background:#1769b0;color:white;border:0;border-radius:8px;font-size:17px;font-weight:bold;margin:12px 0;cursor:pointer";
+      operationGuide.insertAdjacentElement("afterend", editAction);
+      editAction.addEventListener("click", openServerProductEdit);
+    }
+    editAction.hidden = false;
+
     let stockInSection = detailScreen.querySelector(
       "#server-product-stock-in"
     );
@@ -967,7 +1163,7 @@
       stockInSection.id = "server-product-stock-in";
       stockInSection.className = "server-product-stock-in";
 
-      operationGuide.insertAdjacentElement(
+      editAction.insertAdjacentElement(
         "afterend",
         stockInSection
       );
@@ -1094,6 +1290,9 @@
     if (operationGuide) {
       operationGuide.hidden = true;
     }
+
+    const editAction = detailScreen.querySelector("#server-product-edit-action");
+    if (editAction) editAction.hidden = true;
 
     const stockInSection = detailScreen.querySelector(
       "#server-product-stock-in"

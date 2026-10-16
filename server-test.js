@@ -19,6 +19,9 @@
   const SERVER_PRODUCT_UPDATE_ENDPOINT =
     "https://jyuubee.sakura.ne.jp/inventory/update-product-auth.php";
 
+  const SERVER_PRODUCT_CREATE_ENDPOINT =
+    "https://jyuubee.sakura.ne.jp/inventory/create-product-auth.php";
+
   const DEFAULT_TEST_INTERNAL_CODE = "TEST001";
 
   const TOKEN_STORAGE_KEY =
@@ -40,6 +43,7 @@
   let lastServerStockOutMessage = "";
   let serverEditMode = false;
   let serverEditSaving = false;
+  let serverRegisterSaving = false;
 
   document.addEventListener(
     "DOMContentLoaded",
@@ -50,6 +54,7 @@
     createStyles();
     initializeServerProductDetailBridge();
     initializeServerProductEditBridge();
+    initializeServerProductRegisterBridge();
 
     const button = document.querySelector(
       "#server-connection-test-button"
@@ -744,6 +749,193 @@
       },
       true
     );
+  }
+
+  // v288: いつもの商品登録画面に保存先の選択を追加する。
+  // ローカル登録の既存処理はそのまま残し、サーバー選択時だけAPIへ送信する。
+  function initializeServerProductRegisterBridge() {
+    const form = document.getElementById("product-form");
+    const screen = document.getElementById("product-register");
+    if (!form || !screen) return;
+
+    const notice = document.createElement("div");
+    notice.id = "v288-register-save-destination";
+    notice.style.cssText =
+      "border:2px solid #1976d2;border-radius:10px;padding:14px;" +
+      "margin:0 0 22px;line-height:1.7;background:#eef6ff;" +
+      "color:#153853;";
+    notice.innerHTML = `
+      <label for="v288-register-save-mode" style="display:block;font-weight:bold;margin:0 0 8px;">
+        保存先
+      </label>
+      <select id="v288-register-save-mode" style="width:100%;padding:12px;font-size:16px;">
+        <option value="server">共有サーバー（PC・スマホ共通）</option>
+        <option value="local">この端末内（従来の保存方法）</option>
+      </select>
+      <p id="v288-register-save-hint" style="margin:8px 0 0;"></p>
+      <button id="v288-register-login" type="button" style="margin-top:10px;" hidden>
+        サーバーにログインする
+      </button>
+    `;
+    form.prepend(notice);
+
+    const mode = notice.querySelector("#v288-register-save-mode");
+    const hint = notice.querySelector("#v288-register-save-hint");
+    const login = notice.querySelector("#v288-register-login");
+    const unsupported = ["order-remaining", "backorder-status"];
+
+    function updateRegisterMode(autoChoose) {
+      const session = getStoredSession();
+      const loggedInAdmin = !!session && session.user?.role === "admin";
+      if (autoChoose) {
+        mode.value = loggedInAdmin ? "server" : "local";
+      }
+      const isServer = mode.value === "server";
+      // 発注残・注残設定は、現時点のサーバー新規登録APIでは対応していない。
+      for (const id of unsupported) {
+        const input = document.getElementById(id);
+        const row = input?.closest("div");
+        if (row) row.hidden = isServer;
+        if (input) input.disabled = isServer;
+      }
+      if (isServer) {
+        hint.textContent = loggedInAdmin
+          ? "共有サーバーに新規登録します。商品・初期在庫・履歴をPCとスマホで共有します。発注残・注残設定は現在未対応です。"
+          : "共有サーバーへの登録には管理者ログインが必要です。未ログインの場合は登録されません。";
+      } else {
+        hint.textContent = "これまでどおり、この端末内に保存します。共有サーバーには反映されません。";
+      }
+      login.hidden = !isServer || loggedInAdmin;
+    }
+
+    mode.addEventListener("change", function () {
+      updateRegisterMode(false);
+    });
+    login.addEventListener("click", function () {
+      openServerLoginForCode("");
+    });
+    window.addEventListener("inventory-server-auth-changed", function () {
+      updateRegisterMode(false);
+    });
+
+    // ホームから登録画面を開いたタイミングでログイン状態に合わせる。
+    const observer = new MutationObserver(function () {
+      if (!screen.hidden) updateRegisterMode(true);
+    });
+    observer.observe(screen, {attributes: true, attributeFilter: ["hidden"]});
+    updateRegisterMode(true);
+
+    form.addEventListener("submit", function (event) {
+      if (mode.value !== "server") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void submitServerProductRegister(form);
+    }, true);
+  }
+
+  async function submitServerProductRegister(form) {
+    if (serverRegisterSaving) return;
+    const session = getStoredSession();
+    if (!session || session.user?.role !== "admin") {
+      window.alert("共有サーバーへの新規登録には管理者ログインが必要です。サーバーログイン・商品検索からログインしてください。");
+      return;
+    }
+    if (window.inventoryPermissions &&
+        typeof window.inventoryPermissions.requireAdmin === "function") {
+      const allowed = await window.inventoryPermissions.requireAdmin("商品の新規登録");
+      if (!allowed) return;
+    }
+
+    const value = function (id) {
+      return String(document.getElementById(id)?.value ?? "").trim();
+    };
+    const stockRaw = value("stock");
+    const minRaw = value("min-stock");
+    const initialStock = Number(stockRaw);
+    const minStock = Number(minRaw);
+
+    if (!value("internal-code") || !value("product-name") ||
+        !value("location") || !value("supplier")) {
+      window.alert("社内コード・商品名・保管場所・仕入先を入力してください。");
+      return;
+    }
+    if (!stockRaw || !Number.isInteger(initialStock) || initialStock < 0 || initialStock > 1000000 ||
+        !minRaw || !Number.isInteger(minStock) || minStock < 0 || minStock > 1000000) {
+      window.alert("初期在庫数・最低在庫数は0～1000000の整数で入力してください。");
+      return;
+    }
+    if (Number(value("order-remaining") || "0") !== 0 || value("backorder-status") === "注残") {
+      window.alert("共有サーバーへの新規登録では発注残数と注残設定にまだ対応していません。値を0・通常に戻すか、端末内保存を選んでください。");
+      return;
+    }
+    const payload = {
+      internal_code: value("internal-code"),
+      product_code: value("product-code"),
+      product_name: value("product-name"),
+      color: value("product-color"),
+      jan_code: value("jan-code"),
+      initial_stock: initialStock,
+      min_stock: minStock,
+      category: value("category"),
+      location_name: value("location"),
+      supplier_name: value("supplier"),
+      product_status: value("product-status") || "通常商品",
+      unit: "個",
+      memo: ""
+    };
+    if (!window.confirm(
+      "商品を共有サーバーに新規登録します。よろしいですか？\n" +
+      "商品名：" + payload.product_name + "\n" +
+      "社内コード：" + payload.internal_code + "\n" +
+      "初期在庫：" + initialStock + "個（" + payload.location_name + "）"
+    )) return;
+
+    const button = form.querySelector('button[type="submit"]');
+    serverRegisterSaving = true;
+    if (button) { button.disabled = true; button.textContent = "登録中..."; }
+    let stored = false;
+    try {
+      const response = await fetch(SERVER_PRODUCT_CREATE_ENDPOINT, {
+        method: "POST", mode: "cors", cache: "no-store",
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          Accept: "application/json",
+          Authorization: "Bearer " + session.token
+        },
+        body: JSON.stringify(payload)
+      });
+      const result = await readJsonResponse(response);
+      if (response.status === 401) {
+        clearStoredSession();
+        notifyServerAuthChanged("expired");
+      }
+      if (!response.ok || result?.success !== true) {
+        throw new Error(result?.message || "商品を登録できませんでした。");
+      }
+      stored = true;
+      form.reset();
+      const stockInput = document.getElementById("stock");
+      const minInput = document.getElementById("min-stock");
+      if (stockInput) stockInput.value = "0";
+      if (minInput) minInput.value = "0";
+      if (window.inventoryServerProductList?.refresh) {
+        window.inventoryServerProductList.refresh();
+      }
+      try {
+        const latest = await searchServerProductForApp(payload.internal_code);
+        window.inventoryApp.showScreen("detail");
+        openServerProductDetail(latest, payload.internal_code);
+        window.alert("商品を共有サーバーに登録しました。商品詳細を表示します。");
+      } catch (readError) {
+        window.inventoryApp.showScreen("home");
+        window.alert("共有サーバーへの商品登録は成功しましたが、表示の再取得に失敗しました。再登録せず、サーバー検索で確認してください。\n" + getErrorMessage(readError, "通信エラー"));
+      }
+    } catch (error) {
+      window.alert((stored ? "再登録せず確認してください：" : "登録できませんでした：") + getErrorMessage(error, "通信エラー"));
+    } finally {
+      serverRegisterSaving = false;
+      if (button) { button.disabled = false; button.textContent = "商品を登録する"; }
+    }
   }
 
   // 共有サーバーの商品だけ、従来の編集画面を使ってAPIへ保存する。

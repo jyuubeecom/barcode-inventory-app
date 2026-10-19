@@ -28,6 +28,9 @@
   const SERVER_PRODUCTS_CSV_ENDPOINT =
     "https://jyuubee.sakura.ne.jp/inventory/export-products-auth.php";
 
+  const SERVER_STOCK_HISTORY_CSV_ENDPOINT =
+    "https://jyuubee.sakura.ne.jp/inventory/export-stock-history-auth.php";
+
   // 数量調整APIが現在対応している保管場所。従来の端末内の候補は変更しない。
   const SERVER_ADJUST_LOCATIONS = ["本社", "酒本倉庫1階", "酒本倉庫2階"];
 
@@ -70,6 +73,7 @@
     initializeServerProductRegisterBridge();
     initializeServerStockAdjustBridge();
     initializeServerProductsCsvExport();
+    initializeServerStockHistoryCsvExport();
 
     const button = document.querySelector(
       "#server-connection-test-button"
@@ -183,6 +187,111 @@
         error && error.message
           ? error.message
           : "CSV出力に失敗しました。通信状態を確認してください。"
+      );
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+
+  // v291: 端末内の既存入出庫履歴CSV出力には触れず、共有サーバー専用で追加する。
+  function initializeServerStockHistoryCsvExport() {
+    const button = document.querySelector(
+      "#export-server-stock-history-csv-button"
+    );
+    if (!button || button.dataset.serverCsvBound === "true") {
+      return;
+    }
+    button.dataset.serverCsvBound = "true";
+    button.addEventListener("click", exportServerStockHistoryCsv);
+  }
+
+  async function exportServerStockHistoryCsv() {
+    const button = document.querySelector(
+      "#export-server-stock-history-csv-button"
+    );
+    if (!button || button.disabled) {
+      return;
+    }
+
+    const session = getStoredSession();
+    if (!session) {
+      window.alert(
+        "共有サーバーの入出庫履歴CSVを出力するには、サーバーログインが必要です。"
+      );
+      openDialog();
+      return;
+    }
+
+    const originalLabel = button.textContent.trim();
+    button.disabled = true;
+    button.textContent = "共有サーバーから履歴CSVを取得中...";
+
+    try {
+      const response = await fetch(SERVER_STOCK_HISTORY_CSV_ENDPOINT, {
+        method: "GET",
+        mode: "cors",
+        cache: "no-store",
+        headers: {
+          Accept: "text/csv, application/json",
+          Authorization: "Bearer " + session.token
+        }
+      });
+
+      if (!response.ok) {
+        let message = "共有サーバーの入出庫履歴CSVを取得できませんでした。";
+        try {
+          const errorData = await response.json();
+          if (errorData && errorData.message) {
+            message = String(errorData.message);
+          }
+        } catch (readError) {
+          // サーバーのエラーがJSON以外でも適切に表示する。
+        }
+
+        if (response.status === 401) {
+          clearStoredSession();
+          notifyServerAuthChanged("expired");
+          message = "ログインの有効期限が切れました。もう一度サーバーにログインしてください。";
+        }
+        throw new Error(message);
+      }
+
+      const contentType = response.headers.get("Content-Type") || "";
+      if (!/text\/csv/i.test(contentType)) {
+        throw new Error(
+          "サーバーからCSV以外のデータが返されました。ファイルは保存していません。"
+        );
+      }
+
+      const csvBlob = await response.blob();
+      if (csvBlob.size === 0) {
+        throw new Error("履歴CSVが空でした。ダウンロードを中止しました。");
+      }
+
+      const defaultName = "入出庫履歴_" +
+        new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }) +
+        ".csv";
+      const fileName = getServerCsvFilename(
+        response.headers.get("Content-Disposition"), defaultName
+      );
+
+      const downloadUrl = URL.createObjectURL(csvBlob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = fileName;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(function () {
+        URL.revokeObjectURL(downloadUrl);
+      }, 30000);
+    } catch (error) {
+      window.alert(
+        error && error.message
+          ? error.message
+          : "履歴CSV出力に失敗しました。通信状態を確認してください。"
       );
     } finally {
       button.disabled = false;

@@ -25,6 +25,9 @@
   const SERVER_STOCK_ADJUST_ENDPOINT =
     "https://jyuubee.sakura.ne.jp/inventory/stock-adjust-auth.php";
 
+  const SERVER_PRODUCTS_CSV_ENDPOINT =
+    "https://jyuubee.sakura.ne.jp/inventory/export-products-auth.php";
+
   // 数量調整APIが現在対応している保管場所。従来の端末内の候補は変更しない。
   const SERVER_ADJUST_LOCATIONS = ["本社", "酒本倉庫1階", "酒本倉庫2階"];
 
@@ -66,6 +69,7 @@
     initializeServerProductEditBridge();
     initializeServerProductRegisterBridge();
     initializeServerStockAdjustBridge();
+    initializeServerProductsCsvExport();
 
     const button = document.querySelector(
       "#server-connection-test-button"
@@ -79,6 +83,136 @@
       "click",
       openDialog
     );
+  }
+
+  // v290: 端末内の既存CSV出力には触れず、共有サーバー専用ボタンだけ追加する。
+  function initializeServerProductsCsvExport() {
+    const button = document.querySelector(
+      "#export-server-products-csv-button"
+    );
+    if (!button || button.dataset.serverCsvBound === "true") {
+      return;
+    }
+    button.dataset.serverCsvBound = "true";
+    button.addEventListener("click", exportServerProductsCsv);
+  }
+
+  async function exportServerProductsCsv() {
+    const button = document.querySelector(
+      "#export-server-products-csv-button"
+    );
+    if (!button || button.disabled) {
+      return;
+    }
+
+    const session = getStoredSession();
+    if (!session) {
+      window.alert(
+        "共有サーバーの商品マスタCSVを出力するには、サーバーログインが必要です。"
+      );
+      openDialog();
+      return;
+    }
+
+    const originalLabel = button.textContent.trim();
+    button.disabled = true;
+    button.textContent = "共有サーバーからCSVを取得中...";
+
+    try {
+      const response = await fetch(SERVER_PRODUCTS_CSV_ENDPOINT, {
+        method: "GET",
+        mode: "cors",
+        cache: "no-store",
+        headers: {
+          Accept: "text/csv, application/json",
+          Authorization: "Bearer " + session.token
+        }
+      });
+
+      if (!response.ok) {
+        let message = "共有サーバーの商品マスタCSVを取得できませんでした。";
+        try {
+          const errorData = await response.json();
+          if (errorData && errorData.message) {
+            message = String(errorData.message);
+          }
+        } catch (readError) {
+          // エラー応答がJSONではなくてもエラーを表示する。
+        }
+
+        if (response.status === 401) {
+          clearStoredSession();
+          notifyServerAuthChanged("expired");
+          message = "ログインの有効期限が切れました。もう一度サーバーにログインしてください。";
+        }
+        throw new Error(message);
+      }
+
+      const contentType = response.headers.get("Content-Type") || "";
+      if (!/text\/csv/i.test(contentType)) {
+        throw new Error(
+          "サーバーからCSV以外のデータが返されました。ファイルは保存していません。"
+        );
+      }
+
+      const csvBlob = await response.blob();
+      if (csvBlob.size === 0) {
+        throw new Error("CSVファイルが空でした。ダウンロードを中止しました。");
+      }
+
+      const defaultName = "商品マスタ_" +
+        new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }) +
+        ".csv";
+      const fileName = getServerCsvFilename(
+        response.headers.get("Content-Disposition"), defaultName
+      );
+
+      const downloadUrl = URL.createObjectURL(csvBlob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = fileName;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(function () {
+        URL.revokeObjectURL(downloadUrl);
+      }, 30000);
+    } catch (error) {
+      window.alert(
+        error && error.message
+          ? error.message
+          : "CSV出力に失敗しました。通信状態を確認してください。"
+      );
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+
+  function getServerCsvFilename(disposition, fallback) {
+    const headerValue = String(disposition || "");
+    const utf8Name = headerValue.match(/filename\*\s*=\s*UTF-8''([^;\s]+)/i);
+    let fileName = "";
+
+    if (utf8Name) {
+      try {
+        fileName = decodeURIComponent(utf8Name[1]);
+      } catch (error) {
+        fileName = "";
+      }
+    }
+    if (!fileName) {
+      const basicName = headerValue.match(/filename\s*=\s*"?([^";]+)"?/i);
+      fileName = basicName ? basicName[1] : fallback;
+    }
+
+    // サーバーのファイル名がパスや制御文字として解釈されないようにする。
+    fileName = String(fileName).replace(/[\\/:*?"<>|\x00-\x1F]/g, "_");
+    if (!fileName.toLowerCase().endsWith(".csv")) {
+      fileName = fallback;
+    }
+    return fileName;
   }
 
   async function openDialog() {

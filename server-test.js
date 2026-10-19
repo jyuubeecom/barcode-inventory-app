@@ -22,6 +22,12 @@
   const SERVER_PRODUCT_CREATE_ENDPOINT =
     "https://jyuubee.sakura.ne.jp/inventory/create-product-auth.php";
 
+  const SERVER_STOCK_ADJUST_ENDPOINT =
+    "https://jyuubee.sakura.ne.jp/inventory/stock-adjust-auth.php";
+
+  // 数量調整APIが現在対応している保管場所。従来の端末内の候補は変更しない。
+  const SERVER_ADJUST_LOCATIONS = ["本社", "酒本倉庫1階", "酒本倉庫2階"];
+
   const DEFAULT_TEST_INTERNAL_CODE = "TEST001";
 
   const TOKEN_STORAGE_KEY =
@@ -44,6 +50,10 @@
   let serverEditMode = false;
   let serverEditSaving = false;
   let serverRegisterSaving = false;
+  let serverAdjustMode = false;
+  let serverAdjustOpening = false;
+  let serverAdjustSaving = false;
+  let serverAdjustOriginal = null;
 
   document.addEventListener(
     "DOMContentLoaded",
@@ -55,6 +65,7 @@
     initializeServerProductDetailBridge();
     initializeServerProductEditBridge();
     initializeServerProductRegisterBridge();
+    initializeServerStockAdjustBridge();
 
     const button = document.querySelector(
       "#server-connection-test-button"
@@ -1116,6 +1127,328 @@
     }
   }
 
+  // v289：共有サーバー商品から従来の数量調整画面を使用する。
+  // 端末内の商品を扱う場合はinventory.jsの元の処理を一切変更しない。
+  function initializeServerStockAdjustBridge() {
+    const screen = document.querySelector("#stock-adjust");
+    const form = document.querySelector("#stock-adjust-form");
+    const location = document.querySelector("#stock-adjust-location");
+    const newStock = document.querySelector("#stock-adjust-new-stock");
+    const cancel = document.querySelector("#cancel-stock-adjust-button");
+    if (!screen || !form || !location || !newStock || !cancel) return;
+
+    form.addEventListener("submit", function (event) {
+      if (!serverAdjustMode) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void submitServerStockAdjust();
+    }, true);
+
+    location.addEventListener("change", function (event) {
+      if (!serverAdjustMode) return;
+      event.stopImmediatePropagation();
+      updateServerStockAdjustLocation();
+    }, true);
+
+    newStock.addEventListener("input", function (event) {
+      if (!serverAdjustMode) return;
+      event.stopImmediatePropagation();
+      updateServerStockAdjustDifference();
+    }, true);
+
+    cancel.addEventListener("click", function (event) {
+      if (!serverAdjustMode) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void cancelServerStockAdjust();
+    }, true);
+
+    // ホーム等へ移った場合、端末内の数量調整に干渉しないようモード解除。
+    const observer = new MutationObserver(function () {
+      if (serverAdjustMode && screen.hidden && !serverAdjustSaving) {
+        resetServerStockAdjustMode();
+      }
+    });
+    observer.observe(screen, { attributes: true, attributeFilter: ["hidden"] });
+  }
+
+  function serverAdjustField(id) {
+    return document.getElementById("stock-adjust-" + id);
+  }
+
+  function resetServerStockAdjustMode() {
+    serverAdjustMode = false;
+    serverAdjustOriginal = null;
+    const person = serverAdjustField("person");
+    if (person) {
+      person.readOnly = false;
+      person.removeAttribute("aria-description");
+    }
+    const notice = document.getElementById("server-stock-adjust-notice");
+    if (notice) notice.hidden = true;
+  }
+
+  async function openServerStockAdjust() {
+    if (!serverDetailMode || serverAdjustOpening || serverAdjustSaving) return;
+
+    const session = getStoredSession();
+    if (!session || session.user?.role !== "admin") {
+      window.alert("数量調整には管理者としてのサーバーログインが必要です。");
+      return;
+    }
+    if (window.inventoryPermissions?.requireAdmin &&
+        !(await window.inventoryPermissions.requireAdmin("数量調整"))) {
+      return;
+    }
+
+    const internalCode = String(lastServerProductData?.product?.internal_code || "").trim();
+    if (!internalCode) {
+      window.alert("商品データを確認できません。商品を検索し直してください。");
+      return;
+    }
+
+    const action = document.getElementById("server-product-adjust-action");
+    serverAdjustOpening = true;
+    if (action) { action.disabled = true; action.textContent = "在庫を確認中..."; }
+    try {
+      // 古い画面の数字ではなく、操作直前のサーバー在庫を基準にする。
+      const data = await searchServerProductForApp(internalCode);
+      const stockRows = Array.isArray(data.stocks) ? data.stocks : [];
+      const stocks = {};
+      for (const entry of stockRows) {
+        const name = String(entry.location_name || "").trim();
+        if (name) stocks[name] = toStockNumber(entry.quantity);
+      }
+      const totalStock = toStockNumber(data.total_stock);
+      serverAdjustOriginal = { internalCode, totalStock, stocks };
+      serverAdjustMode = true;
+      const form = document.getElementById("stock-adjust-form");
+      if (!form) throw new Error("数量調整画面が見つかりません。");
+      form.reset();
+
+      const values = {
+        "internal-code": internalCode,
+        "product-name": data.product?.product_name || "商品名未登録",
+        "current-stock": totalStock,
+        "reason": "棚卸調整",
+        "memo": ""
+      };
+      Object.entries(values).forEach(function ([key, value]) {
+        const input = serverAdjustField(key);
+        if (input) input.value = String(value);
+      });
+      const location = serverAdjustField("location");
+      if (location) {
+        location.replaceChildren();
+        SERVER_ADJUST_LOCATIONS.forEach(function (name) {
+          const option = document.createElement("option");
+          option.value = name;
+          option.textContent = name + "（現在 " + formatNumber(stocks[name] || 0) + "個）";
+          location.appendChild(option);
+        });
+        const primary = SERVER_ADJUST_LOCATIONS.find(function (name) {
+          return (stocks[name] || 0) > 0;
+        });
+        location.value = primary || SERVER_ADJUST_LOCATIONS[0];
+      }
+      const person = serverAdjustField("person");
+      if (person) {
+        person.value = session.user.display_name || session.user.username || "管理者";
+        person.readOnly = true;
+        person.setAttribute("aria-description", "担当者はサーバーのログインユーザーから自動記録します");
+      }
+      let notice = document.getElementById("server-stock-adjust-notice");
+      if (!notice) {
+        notice = document.createElement("p");
+        notice.id = "server-stock-adjust-notice";
+        notice.style.cssText = "padding:12px;border:2px solid #1976d2;border-radius:8px;background:#eef6ff;line-height:1.7";
+        form.prepend(notice);
+      }
+      notice.textContent =
+        "共有サーバーの在庫を調整します。担当者はログイン中の管理者を自動記録します。" +
+        " 調整を確定するとPC・スマホ共通の在庫が変わります。";
+      notice.hidden = false;
+      updateServerStockAdjustLocation();
+      window.inventoryApp.showScreen("stockAdjust");
+      if (serverAdjustField("new-stock")) serverAdjustField("new-stock").focus();
+    } catch (error) {
+      resetServerStockAdjustMode();
+      window.alert("数量調整を開けませんでした：" + getErrorMessage(error, "通信エラー"));
+    } finally {
+      serverAdjustOpening = false;
+      if (action && document.contains(action)) {
+        action.disabled = false;
+        action.textContent = "数量調整する";
+      }
+    }
+  }
+
+  function updateServerStockAdjustLocation() {
+    if (!serverAdjustMode || !serverAdjustOriginal) return;
+    const location = serverAdjustField("location")?.value || "";
+    const before = serverAdjustOriginal.stocks[location] || 0;
+    const oldInput = serverAdjustField("location-stock");
+    const newInput = serverAdjustField("new-stock");
+    if (oldInput) oldInput.value = String(before);
+    if (newInput) newInput.value = String(before);
+    updateServerStockAdjustDifference();
+  }
+
+  function updateServerStockAdjustDifference() {
+    if (!serverAdjustMode || !serverAdjustOriginal) return;
+    const location = serverAdjustField("location")?.value || "";
+    const oldStock = serverAdjustOriginal.stocks[location] || 0;
+    const rawValue = serverAdjustField("new-stock")?.value ?? "";
+    const nextStock = Number(rawValue);
+    const differenceInput = serverAdjustField("difference");
+    const totalInput = serverAdjustField("after-total-stock");
+    if (rawValue.trim() === "" || !Number.isInteger(nextStock) || nextStock < 0 || nextStock > 1000000) {
+      if (differenceInput) differenceInput.value = "0～1000000の整数を入力してください";
+      if (totalInput) totalInput.value = String(serverAdjustOriginal.totalStock);
+      return;
+    }
+    const difference = nextStock - oldStock;
+    if (differenceInput) differenceInput.value = (difference > 0 ? "＋" : "") + difference + "個";
+    if (totalInput) totalInput.value = String(serverAdjustOriginal.totalStock + difference);
+  }
+
+  async function submitServerStockAdjust() {
+    if (!serverAdjustMode || !serverAdjustOriginal || serverAdjustSaving) return;
+    const snapshot = serverAdjustOriginal;
+    const session = getStoredSession();
+    if (!session || session.user?.role !== "admin") {
+      window.alert("管理者としてサーバーに再ログインしてください。");
+      return;
+    }
+    const location = String(serverAdjustField("location")?.value || "").trim();
+    const raw = serverAdjustField("new-stock")?.value ?? "";
+    const nextStock = Number(raw);
+    const reason = String(serverAdjustField("reason")?.value || "").trim();
+    const memo = String(serverAdjustField("memo")?.value || "").trim();
+    if (!SERVER_ADJUST_LOCATIONS.includes(location)) {
+      window.alert("保管場所を選択してください。");
+      return;
+    }
+    if (raw.trim() === "" || !Number.isInteger(nextStock) || nextStock < 0 || nextStock > 1000000) {
+      window.alert("調整後の在庫数は0～1000000の整数で入力してください。");
+      return;
+    }
+    if (!["棚卸調整", "入力間違いの修正", "破損・廃棄", "その他"].includes(reason)) {
+      window.alert("数量調整の理由を選択してください。");
+      return;
+    }
+    if (memo.length > 5000) {
+      window.alert("メモは5000文字以内にしてください。");
+      return;
+    }
+    const beforeLocation = snapshot.stocks[location] || 0;
+    const difference = nextStock - beforeLocation;
+    if (difference === 0) {
+      window.alert("在庫数が変更されていません。調整後の数量を確認してください。");
+      return;
+    }
+    const totalAfter = snapshot.totalStock + difference;
+    if (totalAfter < 0 || totalAfter > 1000000000) {
+      window.alert("調整後の総在庫数を確認してください。");
+      return;
+    }
+
+    const details = [
+      { label: "商品名", value: serverAdjustField("product-name")?.value || "" },
+      { label: "保管場所", value: location },
+      { label: "場所別在庫", value: beforeLocation + "個 → " + nextStock + "個" },
+      { label: "差異", value: (difference > 0 ? "+" : "") + difference + "個" },
+      { label: "総在庫", value: snapshot.totalStock + "個 → " + totalAfter + "個" },
+      { label: "担当者", value: session.user.display_name || session.user.username || "管理者" },
+      { label: "理由", value: reason }
+    ];
+    let confirmed;
+    if (window.inventoryApp?.showAppDialog) {
+      confirmed = await window.inventoryApp.showAppDialog({
+        type: "warning", icon: "📦", title: "数量調整を確定しますか？",
+        message: "共有サーバーの在庫が変更されます。内容を確認してください。",
+        details,
+        notice: "PC・スマホ共通の場所別在庫と総在庫を変更し、履歴へ「数量調整」として記録します。",
+        isConfirm: true, cancelText: "戻る", confirmText: "数量調整を確定する"
+      });
+    } else {
+      confirmed = window.confirm(details.map((item) => item.label + "：" + item.value).join("\n") + "\n\n共有サーバーに保存しますか？");
+    }
+    if (!confirmed) return;
+
+    const submit = document.querySelector('#stock-adjust-form button[type="submit"]');
+    serverAdjustSaving = true;
+    if (submit) { submit.disabled = true; submit.textContent = "共有サーバーへ保存中..."; }
+    let saved = false;
+    try {
+      const response = await fetch(SERVER_STOCK_ADJUST_ENDPOINT, {
+        method: "POST", mode: "cors", cache: "no-store",
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          Accept: "application/json",
+          Authorization: "Bearer " + session.token
+        },
+        body: JSON.stringify({
+          internal_code: snapshot.internalCode,
+          location_name: location,
+          new_location_stock: nextStock,
+          expected_location_stock: beforeLocation,
+          expected_total_stock: snapshot.totalStock,
+          reason,
+          memo
+        })
+      });
+      const result = await readJsonResponse(response);
+      if (response.status === 401) {
+        clearStoredSession();
+        notifyServerAuthChanged("expired");
+      }
+      if (!response.ok || result?.success !== true) {
+        if (response.status === 409) {
+          throw new Error("ほかの端末で在庫が変更された可能性があります。数量調整を取り消し、商品詳細を再読み込みしてください。\n" + (result?.message || ""));
+        }
+        throw new Error(result?.message || "数量調整を記録できませんでした。");
+      }
+      saved = true;
+      // 保存済み。通信エラー時の二重送信を防ぐため再取得は別途行う。
+      const fresh = await searchServerProductForApp(snapshot.internalCode);
+      resetServerStockAdjustMode();
+      window.inventoryApp.showScreen("detail");
+      openServerProductDetail(fresh, snapshot.internalCode);
+      window.alert("数量調整を記録しました。" +
+        "\n" + location + "：" + beforeLocation + "個 → " + nextStock + "個" +
+        "\n総在庫：" + snapshot.totalStock + "個 → " + totalAfter + "個");
+    } catch (error) {
+      const message = getErrorMessage(error, "通信エラー");
+      if (saved) {
+        resetServerStockAdjustMode();
+        window.inventoryApp.showScreen("detail");
+        window.alert("数量調整の保存は成功しましたが、商品情報の再取得に失敗しました。再送信せず、商品を検索し直してください。\n" + message);
+      } else {
+        window.alert("数量調整を確認してください：" + message +
+          "\n通信が途切れた場合は再実行する前に商品詳細で在庫を確認してください。");
+      }
+    } finally {
+      serverAdjustSaving = false;
+      if (submit && document.contains(submit)) {
+        submit.disabled = false;
+        submit.textContent = "数量調整を確定する";
+      }
+    }
+  }
+
+  async function cancelServerStockAdjust() {
+    if (serverAdjustSaving) return;
+    if (!serverAdjustMode) return;
+    const location = serverAdjustField("location")?.value || "";
+    const changed = Number(serverAdjustField("new-stock")?.value || 0) !==
+        (serverAdjustOriginal?.stocks[location] || 0) ||
+      String(serverAdjustField("memo")?.value || "").trim() !== "";
+    if (changed && !window.confirm("数量調整をやめますか？入力した内容は保存されません。")) return;
+    resetServerStockAdjustMode();
+    window.inventoryApp.showScreen("detail");
+  }
+
   function openServerProductDetail(data, requestedCode) {
     if (
       !window.inventoryApp ||
@@ -1280,7 +1613,7 @@
       const span = document.createElement("span");
       span.textContent =
         "PC・スマホで共通の最新商品情報を表示しています。" +
-        "共有サーバーへの入庫・出庫・商品編集に対応しています。";
+        "共有サーバーへの入庫・出庫・商品編集・数量調整に対応しています。";
 
       notice.appendChild(strong);
       notice.appendChild(span);
@@ -1314,7 +1647,7 @@
         </div>
         <div class="server-product-detail-operation-row server-product-detail-operation-ready">
           <span>現在利用できます</span>
-          <strong>商品情報・在庫数・保管場所・最近の在庫履歴・入庫・出庫・商品編集</strong>
+          <strong>商品情報・在庫数・保管場所・最近の在庫履歴・入庫・出庫・商品編集・数量調整</strong>
         </div>
         <div class="server-product-detail-operation-row server-product-detail-operation-next">
           <span>今後の段階</span>
@@ -1346,6 +1679,24 @@
     }
     editAction.hidden = false;
 
+    // v289：従来の「数量調整画面」を共有サーバー商品から開けるようにする。
+    let adjustAction = detailScreen.querySelector("#server-product-adjust-action");
+    if (!adjustAction) {
+      adjustAction = document.createElement("button");
+      adjustAction.id = "server-product-adjust-action";
+      adjustAction.type = "button";
+      adjustAction.textContent = "数量調整する";
+      adjustAction.style.cssText =
+        "width:100%;padding:14px 22px;background:#be6d08;color:#fff;" +
+        "border:0;border-radius:8px;font-size:17px;font-weight:bold;" +
+        "margin:0 0 14px;cursor:pointer";
+      editAction.insertAdjacentElement("afterend", adjustAction);
+      adjustAction.addEventListener("click", function () {
+        void openServerStockAdjust();
+      });
+    }
+    adjustAction.hidden = false;
+
     let stockInSection = detailScreen.querySelector(
       "#server-product-stock-in"
     );
@@ -1355,7 +1706,7 @@
       stockInSection.id = "server-product-stock-in";
       stockInSection.className = "server-product-stock-in";
 
-      editAction.insertAdjacentElement(
+      adjustAction.insertAdjacentElement(
         "afterend",
         stockInSection
       );
@@ -1485,6 +1836,10 @@
 
     const editAction = detailScreen.querySelector("#server-product-edit-action");
     if (editAction) editAction.hidden = true;
+
+    const adjustAction = detailScreen.querySelector("#server-product-adjust-action");
+    if (adjustAction) adjustAction.hidden = true;
+    if (serverAdjustMode && !serverAdjustSaving) resetServerStockAdjustMode();
 
     const stockInSection = detailScreen.querySelector(
       "#server-product-stock-in"

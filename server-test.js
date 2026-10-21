@@ -3512,8 +3512,15 @@
     );
   }
 
+  // v292: CSV一括登録画面は既存の管理者ログイン状態を安全に共用する。
+  // パスワードそのものは渡さず、画面から新たなログイン処理も作らない。
   window.inventoryServerSearch = {
     hasSession: hasServerSession,
+    getSession: getStoredSession,
+    expireSession: function () {
+      clearStoredSession();
+      notifyServerAuthChanged("expired");
+    },
     searchProduct: searchServerProductForApp,
     openLogin: openServerLoginForCode,
     openProductDetail: openServerProductDetailForApp

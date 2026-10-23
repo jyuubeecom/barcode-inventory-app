@@ -57,6 +57,7 @@ async function initializeSalesPlanFeature() {
   const cancelEditButton = document.querySelector("#cancel-sales-plan-edit-button");
   const searchInput = document.querySelector("#sales-plan-search");
   const monthFilter = document.querySelector("#sales-plan-month-filter");
+  const showEndedCheckbox = document.querySelector("#sales-plan-show-ended");
   const printMonthInput = document.querySelector("#sales-plan-print-month");
   const printCalendarButton = document.querySelector("#print-sales-plan-calendar-button");
   const printCalendarA4Button = document.querySelector("#print-sales-plan-calendar-a4-button");
@@ -118,6 +119,13 @@ async function initializeSalesPlanFeature() {
         monthFilter.value;
     }
   });
+
+  if (showEndedCheckbox) {
+    showEndedCheckbox.addEventListener("change", function () {
+      salesPlanCurrentPage = 1;
+      renderSalesPlanTable();
+    });
+  }
 
   if (printCalendarButton) {
     printCalendarButton.addEventListener(
@@ -3637,11 +3645,46 @@ function getFilteredSalesPlans() {
   });
 }
 
+// 出荷終了日の「翌日」から終了扱いにします。端末の現地日付を使用します。
+function getSalesPlanTodayLocal() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getSalesPlanEndDate(record) {
+  const type = getSalesPlanShippingType(record);
+  if (type === "date") return record.shippingDate;
+  if (type === "period") return record.shippingEndDate;
+  if (type === "month") return getLastDateOfMonth(record.shippingMonth);
+  return ""; // 日付不明の予定は勝手に隠しません。
+}
+
+function isSalesPlanEnded(record, today) {
+  const endDate = getSalesPlanEndDate(record);
+  return Boolean(endDate && endDate < today);
+}
+
+// 表の絞り込みのみ。印刷や在庫計算には終了済みの表示切替を適用しません。
+function getVisibleSalesPlans() {
+  const allMatched = getFilteredSalesPlans();
+  const showEndedCheckbox = document.querySelector("#sales-plan-show-ended");
+  if (showEndedCheckbox && showEndedCheckbox.checked) return allMatched;
+  const today = getSalesPlanTodayLocal();
+  return allMatched.filter(function (record) {
+    return !isSalesPlanEnded(record, today);
+  });
+}
+
 function renderSalesPlanTable() {
   const tbody = document.querySelector("#sales-plan-table-body");
   if (!tbody) return;
 
-  const filtered = getFilteredSalesPlans();
+  const allMatched = getFilteredSalesPlans();
+  const filtered = getVisibleSalesPlans();
+  const today = getSalesPlanTodayLocal();
   const totalPages = Math.max(1, Math.ceil(filtered.length / SALES_PLAN_PAGE_SIZE));
   if (salesPlanCurrentPage > totalPages) salesPlanCurrentPage = totalPages;
 
@@ -3651,8 +3694,11 @@ function renderSalesPlanTable() {
 
   pageItems.forEach(function (record) {
     const row = document.createElement("tr");
+    const ended = isSalesPlanEnded(record, today);
+    if (ended) row.classList.add("sales-plan-ended-row");
+    const endedTag = ended ? '<span class="sales-plan-ended-tag">終了</span>' : '';
     row.innerHTML = `
-      <td>${escapeSalesPlanHtml(formatSalesPlanShipping(record))}</td>
+      <td>${escapeSalesPlanHtml(formatSalesPlanShipping(record))}${endedTag}</td>
       <td>${escapeSalesPlanHtml(record.customerName)}</td>
       <td>${escapeSalesPlanHtml(record.subtitle || "－")}</td>
       <td class="sales-plan-remarks-cell">${escapeSalesPlanHtml(record.remarks || "－")}</td>
@@ -3681,7 +3727,9 @@ function renderSalesPlanTable() {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
     cell.colSpan = 9;
-    cell.textContent = "条件に一致する販売予定はありません。";
+    cell.textContent = allMatched.length > 0 && filtered.length === 0
+      ? "終了した販売予定は非表示です。上の『終了した販売予定も表示する』で確認できます。"
+      : "条件に一致する販売予定はありません。";
     row.appendChild(cell);
     tbody.appendChild(row);
   }
@@ -3689,8 +3737,12 @@ function renderSalesPlanTable() {
   const totalQuantity = filtered.reduce(function (sum, record) {
     return sum + Number(record.quantity || 0);
   }, 0);
+  const endedCount = allMatched.filter(function (record) {
+    return isSalesPlanEnded(record, today);
+  }).length;
+  const showingEnded = Boolean(document.querySelector("#sales-plan-show-ended")?.checked);
   document.querySelector("#sales-plan-summary").textContent =
-    `登録：${filtered.length}件 / 予定数量合計：${totalQuantity.toLocaleString("ja-JP")}個`;
+    `表示：${filtered.length}件 / 予定数量合計：${totalQuantity.toLocaleString("ja-JP")}個 / 終了済み：${endedCount}件${showingEnded ? "（表示中）" : "（非表示）"}`;
   document.querySelector("#sales-plan-page-status").textContent =
     `${salesPlanCurrentPage} / ${totalPages}ページ`;
   document.querySelector("#sales-plan-prev-page").disabled = salesPlanCurrentPage <= 1;
@@ -3698,7 +3750,7 @@ function renderSalesPlanTable() {
 }
 
 function getSalesPlanTotalPages() {
-  return Math.max(1, Math.ceil(getFilteredSalesPlans().length / SALES_PLAN_PAGE_SIZE));
+  return Math.max(1, Math.ceil(getVisibleSalesPlans().length / SALES_PLAN_PAGE_SIZE));
 }
 
 function compareSalesPlans(a, b) {
@@ -3983,6 +4035,13 @@ function createSalesPlanStyle() {
     .sales-plan-actions button { margin-right: 6px; }
     .sales-plan-delete-button { background: #c62828 !important; }
     .sales-plan-summary-box { background: #e8f5e9; border-radius: 10px; padding: 12px 14px; font-weight: 700; margin-top: 12px; }
+    .sales-plan-ended-filter { margin-top: 12px; padding: 12px 14px; background: #f4f7f9; border: 1px solid #cbd5df; border-radius: 10px; }
+    .sales-plan-ended-filter label { display: flex; align-items: center; gap: 10px; font-weight: 800; cursor: pointer; color: #263d4d; line-height: 1.5; font-size: 1rem; }
+    .sales-plan-ended-filter input[type="checkbox"] { width: 24px !important; height: 24px !important; min-width: 24px; margin: 0; accent-color: #1976d2; cursor: pointer; }
+    .sales-plan-ended-filter p { margin: 6px 0 0 34px; color: #455a64; line-height: 1.5; font-size: .89rem; }
+    #sales-plan .sales-plan-ended-row td { background: #eff2f4; color: #53616e; }
+    #sales-plan .sales-plan-ended-row .sales-plan-number { font-weight: 600; }
+    .sales-plan-ended-tag { display: inline-block; margin: 5px 0 0; padding: 2px 9px; border-radius: 999px; background: #d8dfe4; color: #334653; font-size: .82rem; font-weight: 800; white-space: nowrap; }
     .sales-plan-print-area {
       display: grid;
       grid-template-columns: minmax(220px, 300px) repeat(2, minmax(230px, 1fr));

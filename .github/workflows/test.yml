@@ -2,7 +2,7 @@ name: 架空データによる検証
 
 on:
   push:
-    branches: [update-v293.3, work/stock-csv-apply]
+    branches: [update-v293.3, work/stock-csv-apply, work/shared-sales-csv]
   pull_request:
     branches: [main]
 
@@ -46,4 +46,6 @@ jobs:
       - name: PHP構文チェック
         run: find server tests -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: 架空データ・隔離DBで原子性と競合を検証
-        run: php tests/stock-csv-mysql.php
+        run: |
+          php tests/stock-csv-mysql.php
+          php tests/sales-csv-mysql.php

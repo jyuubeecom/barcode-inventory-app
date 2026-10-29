@@ -22,7 +22,7 @@ test('all application scripts and inline scripts compile', () => {
 });
 test('HTML script references and service-worker cached files exist and use the same versions', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  const context = vm.createContext({self:{addEventListener() {}}});
+  const context = vm.createContext({self:{registration:{scope:'https://example.invalid/inventory-test-v2933/'}, addEventListener() {}}});
   vm.runInContext(fs.readFileSync(path.join(root, 'service-worker.js'), 'utf8') + '\nglobalThis.files = APP_FILES;', context);
   for (const file of context.files) assert.ok(fs.existsSync(path.join(root, file.split('?')[0])), file);
   for (const m of html.matchAll(/<script\b[^>]*src="([^"]+)"/g)) {

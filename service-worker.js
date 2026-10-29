@@ -1,6 +1,8 @@
 "use strict";
 
-const CACHE_NAME = "barcode-inventory-app-v2933-stock-plan-validation-1";
+// 同じドメインの桜花・本番版・テスト版のキャッシュを分ける。
+const CACHE_PREFIX = "barcode-inventory-app:" + encodeURIComponent(self.registration.scope) + ":";
+const CACHE_NAME = CACHE_PREFIX + "v2933-stock-plan-validation-2";
 const APP_FILES = [
   "./", "./index.html", "./style.css?v=108", "./storage.js?v=269",
   "./normal-shipment.js?v=226",
@@ -34,7 +36,8 @@ self.addEventListener("activate", function (event) {
     caches.keys()
       .then(function (names) {
         return Promise.all(names.map(function (name) {
-          return name === CACHE_NAME ? Promise.resolve(false) : caches.delete(name);
+          return name.startsWith(CACHE_PREFIX) && name !== CACHE_NAME
+            ? caches.delete(name) : Promise.resolve(false);
         }));
       })
       .then(function () { return self.clients.claim(); })
@@ -46,7 +49,10 @@ self.addEventListener("fetch", function (event) {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
+  const scopeUrl = new URL(self.registration.scope);
+  // APIや別アプリの応答（認証付き在庫を含む）はキャッシュしない。
+  if (url.origin !== scopeUrl.origin || !url.pathname.startsWith(scopeUrl.pathname)) return;
+  if (/\.php$/i.test(url.pathname) || request.headers?.has("Authorization")) return;
 
   const isAppCode =
     request.mode === "navigate" ||
@@ -68,16 +74,16 @@ self.addEventListener("fetch", function (event) {
         })
         .catch(function () {
           if (request.mode === "navigate") {
-            return caches.match("./index.html");
+            return caches.match("./index.html", { cacheName: CACHE_NAME });
           }
-          return caches.match(request);
+          return caches.match(request, { cacheName: CACHE_NAME });
         })
     );
     return;
   }
 
   event.respondWith(
-    caches.match(request).then(function (cached) {
+    caches.match(request, { cacheName: CACHE_NAME }).then(function (cached) {
       if (cached) return cached;
 
       return fetch(request).then(function (response) {

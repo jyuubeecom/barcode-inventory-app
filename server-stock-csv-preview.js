@@ -1,6 +1,8 @@
 "use strict";
 
 /*
+ * v293.3 第1段階：v293.2の読み取り専用比較に「反映候補の選択・確認」を追加する。
+ * サーバー在庫や履歴は変更せず、反映用APIも呼び出さない。
  * v293.2 第1段階：在庫CSVと共有サーバーの保管場所別在庫を読み取り専用で照合する。
  * CSVファイルはブラウザ内で解析し、認証済みの既存商品取得APIをGETするだけ。
  * 在庫数の変更、サーバーへのCSV送信、端末内データの変更は一切行わない。
@@ -21,6 +23,10 @@
   let screen = null;
   let processing = false;
   let generation = 0;
+  let activeController = null;
+  // v293.3: 反映候補は画面内メモリだけに保持し、保存・送信しない。
+  let selectableRows = [];
+  const selectedLines = new Set();
 
   document.addEventListener("DOMContentLoaded", initialize);
 
@@ -85,9 +91,26 @@
           </div>
           <p class="v2932-stock-help">※ 商品コードの有無や在庫数の一致だけでは、CSVをそのまま本番反映してよいとは限りません。保管場所の対応と更新履歴の保存を別途確認する必要があります。</p>
         </div>
+        <div class="v2932-stock-box" id="v2933-stock-plan" hidden>
+          <h3>4．反映候補を確認する（まだ更新しません）</h3>
+          <p class="v2932-stock-help">差異がある行から反映候補を選べます。選択内容はこの画面で確認するだけで、サーバーや端末内の在庫は変更しません。再照合・画面移動・ログアウト時には選択を破棄します。</p>
+          <div id="v2933-stock-options" class="v2933-stock-options"></div>
+          <p id="v2933-stock-selection" role="status" aria-live="polite">0件選択中</p>
+          <button id="v2933-stock-show-plan" type="button" disabled>選択した反映候補を確認する</button>
+          <div id="v2933-stock-confirm" class="v2933-stock-confirm" hidden aria-live="polite">
+            <h4>反映前の確認内容（プレビューのみ）</h4>
+            <p>これは更新予定の確認です。実際の更新ボタンではありません。更新直前にはサーバー在庫の再照合・バックアップ・履歴保存が必要です。</p>
+            <div id="v2933-stock-confirm-rows"></div>
+          </div>
+        </div>
         <button id="v2932-stock-back" type="button" class="v2932-stock-back">ホームに戻る</button>
       </div>`;
     main.appendChild(screen);
+
+    // 他の画面からhiddenが変更された場合も、古い照合結果を残さない。
+    new MutationObserver(function () {
+      if (screen.hidden) resetResult();
+    }).observe(screen, { attributes: true, attributeFilter: ["hidden"] });
 
     openButton.addEventListener("click", openScreen);
     element("v2932-stock-login").addEventListener("click", function () {
@@ -96,6 +119,7 @@
     element("v2932-stock-file").addEventListener("change", resetResult);
     element("v2932-stock-check").addEventListener("click", checkStockCsv);
     element("v2932-stock-back").addEventListener("click", returnHome);
+    element("v2933-stock-show-plan").addEventListener("click", showSelectedPlan);
     window.addEventListener("inventory-server-auth-changed", function () {
       generation += 1;
       refreshLogin();
@@ -121,7 +145,6 @@
   }
 
   function returnHome() {
-    if (processing) return;
     generation += 1;
     resetResult();
     element("v2932-stock-file").value = "";
@@ -140,11 +163,22 @@
   function resetResult() {
     if (!screen) return;
     generation += 1;
+    if (activeController) activeController.abort();
+    activeController = null;
+    setProcessing(false);
     element("v2932-stock-message").textContent = "CSVを選択して、比較ボタンを押してください。";
     element("v2932-stock-counts").replaceChildren();
     element("v2932-stock-counts").hidden = true;
     element("v2932-stock-rows").replaceChildren();
     element("v2932-stock-table-wrap").hidden = true;
+    selectableRows = [];
+    selectedLines.clear();
+    element("v2933-stock-options").replaceChildren();
+    element("v2933-stock-confirm-rows").replaceChildren();
+    element("v2933-stock-confirm").hidden = true;
+    element("v2933-stock-plan").hidden = true;
+    element("v2933-stock-show-plan").disabled = true;
+    element("v2933-stock-selection").textContent = "0件選択中";
   }
 
   function setProcessing(value) {
@@ -159,6 +193,7 @@
     let row = [];
     let field = "";
     let quoted = false;
+    let quoteClosed = false;
     let fieldStarted = false;
     const input = String(text || "").replace(/^\uFEFF/, "");
     for (let i = 0; i < input.length; i += 1) {
@@ -168,20 +203,23 @@
           field += '"'; i += 1;
         } else if (ch === '"') {
           quoted = false;
+          quoteClosed = true;
         } else {
           field += ch;
         }
+      } else if (quoteClosed && ch !== "," && ch !== "\r" && ch !== "\n") {
+        throw new Error("CSVの閉じ引用符の後に余分な文字があります。");
       } else if (ch === '"' && !fieldStarted) {
         quoted = true;
         fieldStarted = true;
       } else if (ch === '"') {
         throw new Error("CSVの引用符の形式が正しくありません。");
       } else if (ch === ",") {
-        row.push(field); field = ""; fieldStarted = false;
+        row.push(field); field = ""; fieldStarted = false; quoteClosed = false;
       } else if (ch === "\r" || ch === "\n") {
         if (ch === "\r" && input[i + 1] === "\n") i += 1;
         row.push(field); rows.push(row);
-        row = []; field = ""; fieldStarted = false;
+        row = []; field = ""; fieldStarted = false; quoteClosed = false;
       } else {
         field += ch;
         fieldStarted = true;
@@ -260,9 +298,9 @@
     return rows;
   }
 
-  async function loadServerProduct(code, token) {
+  async function loadServerProduct(code, token, signal) {
     const response = await fetch(PRODUCT_ENDPOINT + "?code=" + encodeURIComponent(code), {
-      method: "GET", mode: "cors", cache: "no-store",
+      method: "GET", mode: "cors", cache: "no-store", signal: signal,
       headers: { Accept: "application/json", Authorization: "Bearer " + token }
     });
     let data = null;
@@ -297,6 +335,8 @@
     }
 
     const run = ++generation;
+    const controller = new AbortController();
+    activeController = controller;
     setProcessing(true);
     try {
       const csv = await file.text();
@@ -313,7 +353,7 @@
         element("v2932-stock-message").textContent =
           "共有サーバーの商品を照合中です（" + (i + 1) + "/" + validCodes.length + "）。";
         try {
-          cache.set(code, await loadServerProduct(code, session.token));
+          cache.set(code, await loadServerProduct(code, session.token, controller.signal));
         } catch (error) {
           if (run !== generation) return;
           if (!getAdminSession()) throw error;
@@ -336,11 +376,29 @@
           r.status = "商品未登録";
           return;
         }
+        if (result.data.stocks.some(function (stock) {
+          return !stock || typeof stock.location_name !== "string" || !normalizeLocation(stock.location_name);
+        })) {
+          r.status = "取得失敗";
+          r.errors.push("サーバーの保管場所の形式が不正です");
+          return;
+        }
         const locationEntries = result.data.stocks.filter(function (stock) {
           return normalizeLocation(stock.location_name) === r.location;
         });
         // APIの値が不正な場合、差異を「0個」と誤表示しない。
-        const numbers = locationEntries.map(function (stock) { return Number(stock.quantity); });
+        const numbers = locationEntries.map(function (stock) {
+          const value = stock.quantity;
+          // null・空欄・真偽値等をNumber()で0/1に変換しない。
+          if (typeof value !== "number" &&
+              (typeof value !== "string" || !/^\d+$/.test(value.trim()))) return NaN;
+          return Number(value);
+        });
+        if (locationEntries.length > 1) {
+          r.status = "取得失敗";
+          r.errors.push("サーバーの同じ保管場所が重複しています。登録内容を確認してください");
+          return;
+        }
         if (numbers.some(function (n) { return !Number.isSafeInteger(n) || n < 0; })) {
           r.status = "取得失敗";
           r.errors.push("サーバーの在庫数の形式が不正です");
@@ -356,7 +414,11 @@
       if (run !== generation) return;
       element("v2932-stock-message").textContent = "照合できませんでした：" + String(error?.message || error);
     } finally {
-      setProcessing(false);
+      // キャンセル後に開始した別の照合のボタン状態を変更しない。
+      if (run === generation) {
+        activeController = null;
+        setProcessing(false);
+      }
     }
   }
 
@@ -396,8 +458,96 @@
       tbody.appendChild(tr);
     });
     element("v2932-stock-table-wrap").hidden = false;
+    renderSelectionPlan(rows);
     element("v2932-stock-message").textContent =
       "照合が完了しました。CSVとサーバーの在庫を比較しただけで、データは一切保存・変更していません。";
+  }
+
+  // 現時点では「差異あり」かつ保管場所が明確な行だけを候補にする。
+  // 「本社」は集計値のため、どの棚へ反映すべきか判断できず選択不可。
+  function isSafeCandidate(row) {
+    return row.status === "差異あり" &&
+      row.location !== "本社" &&
+      KNOWN_LOCATIONS.includes(row.location) &&
+      Number.isSafeInteger(row.quantity) &&
+      Number.isSafeInteger(row.serverQuantity);
+  }
+
+  function renderSelectionPlan(rows) {
+    const plan = element("v2933-stock-plan");
+    const options = element("v2933-stock-options");
+    selectableRows = rows.filter(function (r) { return r.status === "差異あり"; });
+    selectedLines.clear();
+    options.replaceChildren();
+    element("v2933-stock-confirm").hidden = true;
+    element("v2933-stock-confirm-rows").replaceChildren();
+    plan.hidden = false;
+    if (!selectableRows.length) {
+      const message = document.createElement("p");
+      message.textContent = "差異がある行はありません。反映候補は0件です。";
+      options.appendChild(message);
+    }
+    selectableRows.forEach(function (r) {
+      const safe = isSafeCandidate(r);
+      const label = document.createElement("label");
+      label.className = "v2933-stock-option" + (safe ? "" : " v2933-stock-disabled");
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.disabled = !safe;
+      input.setAttribute("aria-label", r.code + "・" + r.location + "を反映候補にする");
+      const info = document.createElement("span");
+      const title = document.createElement("strong");
+      title.textContent = r.code + " ／ " + r.location;
+      const details = document.createElement("small");
+      details.textContent = "サーバー " + r.serverQuantity + "個 → CSV " + r.quantity + "個 （差異 " +
+        (r.difference > 0 ? "+" : "") + r.difference + "個）";
+      info.append(title, details);
+      if (!safe) {
+        const caution = document.createElement("small");
+        caution.textContent = "この保管場所は直接反映できません。棚・保管場所を確認してください。";
+        info.appendChild(caution);
+      }
+      label.append(input, info);
+      options.appendChild(label);
+      input.addEventListener("change", function () {
+        if (input.checked) selectedLines.add(r.line);
+        else selectedLines.delete(r.line);
+        updateSelectedCount();
+      });
+    });
+    updateSelectedCount();
+  }
+
+  function updateSelectedCount() {
+    element("v2933-stock-selection").textContent =
+      selectedLines.size + "件選択中（保存・更新はされません）";
+    element("v2933-stock-show-plan").disabled = selectedLines.size === 0;
+    element("v2933-stock-confirm").hidden = true;
+    element("v2933-stock-confirm-rows").replaceChildren();
+  }
+
+  function showSelectedPlan() {
+    if (!getAdminSession()) {
+      resetResult();
+      element("v2933-stock-selection").textContent = "管理者として再ログインし、再照合してください。";
+      return;
+    }
+    if (processing) return;
+    const preview = element("v2933-stock-confirm-rows");
+    preview.replaceChildren();
+    const candidates = selectableRows.filter(function (r) {
+      return selectedLines.has(r.line) && isSafeCandidate(r);
+    });
+    if (!candidates.length) return;
+    candidates.forEach(function (r) {
+      const line = document.createElement("div");
+      line.className = "v2933-stock-preview-row";
+      line.textContent = r.code + " ／ " + r.location + "：現在 " +
+        r.serverQuantity + "個 → CSV " + r.quantity + "個";
+      preview.appendChild(line);
+    });
+    element("v2933-stock-confirm").hidden = false;
+    element("v2933-stock-confirm").scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   function addStyles() {
@@ -405,7 +555,7 @@
     const style = document.createElement("style");
     style.id = "v2932-stock-style";
     style.textContent = `
-      #server-stock-csv-preview-screen[hidden], #v2932-stock-counts[hidden], #v2932-stock-table-wrap[hidden] { display:none!important; }
+      #server-stock-csv-preview-screen[hidden], #v2932-stock-counts[hidden], #v2932-stock-table-wrap[hidden], #v2933-stock-plan[hidden], #v2933-stock-confirm[hidden] { display:none!important; }
       .v2932-stock-panel {max-width:980px;margin:12px auto 45px;padding:clamp(15px,3vw,28px);background:#fff;border:1px solid #d7e1e9;border-radius:16px;color:#163349;}
       .v2932-stock-panel h2 {font-size:clamp(21px,3vw,28px);color:#1663bc;line-height:1.45;border-bottom:2px solid #8cc4f5;padding-bottom:12px;}
       .v2932-stock-panel h3 {font-size:19px;margin:0 0 12px;}
@@ -430,6 +580,18 @@
       .v2932-stock-ok {background:#eff9f1;}
       .v2932-stock-diff {background:#fff3dd;}
       .v2932-stock-check-row {background:#f4f6f8;}
+      .v2933-stock-options {display:grid;gap:10px;margin:14px 0;}
+      .v2933-stock-option {display:flex;align-items:center;gap:14px;border:1px solid #cbdce7;border-radius:10px;padding:12px;cursor:pointer;}
+      .v2933-stock-option input {width:24px;height:24px;flex-shrink:0;accent-color:#1663bc;}
+      .v2933-stock-option span {display:grid;gap:5px;min-width:0;overflow-wrap:anywhere;}
+      .v2933-stock-option small {font-size:13px;line-height:1.5;}
+      .v2933-stock-disabled {background:#f5f6f7;cursor:not-allowed;color:#526574;}
+      #v2933-stock-show-plan {min-height:50px;border:0;border-radius:9px;padding:12px 18px;background:#1764b8;color:#fff;font-size:16px;font-weight:700;cursor:pointer;}
+      #v2933-stock-show-plan:disabled {background:#a5b4bd;cursor:not-allowed;}
+      .v2933-stock-confirm {border:2px solid #1663bc;border-radius:10px;background:#f0f7ff;padding:14px;margin-top:14px;}
+      .v2933-stock-confirm h4 {margin:0 0 8px;font-size:17px;}
+      .v2933-stock-preview-row {border-top:1px solid #d4e3ef;padding:12px 4px;overflow-wrap:anywhere;}
+      @media(max-width:600px){#v2933-stock-show-plan{width:100%;}.v2933-stock-option{padding:12px 8px;}}
       @media(max-width:600px){.v2932-stock-panel{margin:8px auto 25px;padding:12px}.v2932-stock-box{padding:12px}.v2932-stock-panel h2{font-size:21px}#v2932-stock-login,#v2932-stock-check{width:100%}}
     `;
     document.head.appendChild(style);

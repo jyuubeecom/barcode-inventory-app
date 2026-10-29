@@ -14,6 +14,8 @@ CSV照合後、選んだ差異行を管理者が明示的に確認して反映�
 
 ## 配置手順（まだ本番へ実施しない）
 
+準備用の `server/check-stock-csv-readiness.php` をサーバーのprivateディレクトリに転送し、CLIで実行できる。既存のprivate/db-config.phpをサーバー内で読み取り、必要な表・列・InnoDB・再送管理表の主キー・APIファイルの有無を確認する。データ・表・アプリファイルは変更せず、認証情報や業務レコードは表示しない。Webからの実行は404で拒否する。APIファイルの有無は内容・配置バージョンの一致までは保証しない。
+
 1. 現在のDBとPCアプリをバックアップする。
 2. 本番と別の隔離DBで `tests/mysql-schema.sql`、`server/migrations/001-stock-csv-batches.sql` を適用し、PHP8.2 + pdo_mysql + mbstringで `php tests/stock-csv-mysql.php` を実行する。テストはDB名inventory_csv_test以外を拒否し、テストDB内の表を作り直す。絶対に本番接続情報をテストに渡さない。
 3. レビュー後、migration SQLだけを本番DBに一度適用する。既存の3表の構造は変更しない。操作履歴表は再送保護に必要なので任意に削除しない。

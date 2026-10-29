@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../server/stock-csv-service.php';
+require_once __DIR__ . '/../server/check-stock-csv-readiness.php';
 
 function connection(): PDO
 {
@@ -19,7 +20,12 @@ if (($argv[1] ?? '') === '--worker') {
 $pdo = connection();
 foreach (['stock_csv_batches', 'stock_transactions', 'product_stocks', 'products'] as $table) $pdo->exec('DROP TABLE IF EXISTS ' . $table);
 $pdo->exec(file_get_contents(__DIR__ . '/mysql-schema.sql'));
+$missingBatch = stockCsvReadiness($pdo);
+if (!$missingBatch['existing_tables_ready'] || $missingBatch['batch_table_ready']) throw new RuntimeException('Preflight did not detect the missing migration');
 $pdo->exec(file_get_contents(__DIR__ . '/../server/migrations/001-stock-csv-batches.sql'));
+$ready = stockCsvReadiness($pdo);
+if (!$ready['existing_tables_ready'] || !$ready['batch_table_ready']) throw new RuntimeException('Preflight rejected the migrated schema');
+echo "PASS read-only preflight detects pending and completed migration\n";
 
 function check(bool $condition, string $message): void { if (!$condition) throw new RuntimeException($message); }
 function fixture(PDO $pdo): void
@@ -42,6 +48,13 @@ function failure(callable $fn, int $status): void
 function countRows(PDO $pdo, string $table): int { return (int)$pdo->query('SELECT COUNT(*) FROM ' . $table)->fetchColumn(); }
 
 fixture($pdo);
+$pdo->beginTransaction();
+$pdo->exec("INSERT INTO products (internal_code,product_name) VALUES ('FAKE-PREFLIGHT','架空確認用')");
+stockCsvReadiness($pdo);
+check($pdo->inTransaction(), 'Preflight committed an existing transaction');
+$pdo->rollBack();
+check(countRows($pdo, 'products') === 2, 'Preflight modified or committed product data');
+echo "PASS preflight preserves records and caller transaction\n";
 $first = applyStockCsv($pdo, request(), $admin);
 check(countRows($pdo, 'stock_transactions') === 1, 'Missing history');
 $history = $pdo->query('SELECT * FROM stock_transactions')->fetch();

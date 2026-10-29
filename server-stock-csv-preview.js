@@ -23,6 +23,7 @@
   let screen = null;
   let processing = false;
   let generation = 0;
+  let activeController = null;
   // v293.3: 反映候補は画面内メモリだけに保持し、保存・送信しない。
   let selectableRows = [];
   const selectedLines = new Set();
@@ -106,6 +107,11 @@
       </div>`;
     main.appendChild(screen);
 
+    // 他の画面からhiddenが変更された場合も、古い照合結果を残さない。
+    new MutationObserver(function () {
+      if (screen.hidden) resetResult();
+    }).observe(screen, { attributes: true, attributeFilter: ["hidden"] });
+
     openButton.addEventListener("click", openScreen);
     element("v2932-stock-login").addEventListener("click", function () {
       window.inventoryServerSearch?.openLogin?.("");
@@ -139,7 +145,6 @@
   }
 
   function returnHome() {
-    if (processing) return;
     generation += 1;
     resetResult();
     element("v2932-stock-file").value = "";
@@ -158,6 +163,9 @@
   function resetResult() {
     if (!screen) return;
     generation += 1;
+    if (activeController) activeController.abort();
+    activeController = null;
+    setProcessing(false);
     element("v2932-stock-message").textContent = "CSVを選択して、比較ボタンを押してください。";
     element("v2932-stock-counts").replaceChildren();
     element("v2932-stock-counts").hidden = true;
@@ -185,6 +193,7 @@
     let row = [];
     let field = "";
     let quoted = false;
+    let quoteClosed = false;
     let fieldStarted = false;
     const input = String(text || "").replace(/^\uFEFF/, "");
     for (let i = 0; i < input.length; i += 1) {
@@ -194,20 +203,23 @@
           field += '"'; i += 1;
         } else if (ch === '"') {
           quoted = false;
+          quoteClosed = true;
         } else {
           field += ch;
         }
+      } else if (quoteClosed && ch !== "," && ch !== "\r" && ch !== "\n") {
+        throw new Error("CSVの閉じ引用符の後に余分な文字があります。");
       } else if (ch === '"' && !fieldStarted) {
         quoted = true;
         fieldStarted = true;
       } else if (ch === '"') {
         throw new Error("CSVの引用符の形式が正しくありません。");
       } else if (ch === ",") {
-        row.push(field); field = ""; fieldStarted = false;
+        row.push(field); field = ""; fieldStarted = false; quoteClosed = false;
       } else if (ch === "\r" || ch === "\n") {
         if (ch === "\r" && input[i + 1] === "\n") i += 1;
         row.push(field); rows.push(row);
-        row = []; field = ""; fieldStarted = false;
+        row = []; field = ""; fieldStarted = false; quoteClosed = false;
       } else {
         field += ch;
         fieldStarted = true;
@@ -286,9 +298,9 @@
     return rows;
   }
 
-  async function loadServerProduct(code, token) {
+  async function loadServerProduct(code, token, signal) {
     const response = await fetch(PRODUCT_ENDPOINT + "?code=" + encodeURIComponent(code), {
-      method: "GET", mode: "cors", cache: "no-store",
+      method: "GET", mode: "cors", cache: "no-store", signal: signal,
       headers: { Accept: "application/json", Authorization: "Bearer " + token }
     });
     let data = null;
@@ -323,6 +335,8 @@
     }
 
     const run = ++generation;
+    const controller = new AbortController();
+    activeController = controller;
     setProcessing(true);
     try {
       const csv = await file.text();
@@ -339,7 +353,7 @@
         element("v2932-stock-message").textContent =
           "共有サーバーの商品を照合中です（" + (i + 1) + "/" + validCodes.length + "）。";
         try {
-          cache.set(code, await loadServerProduct(code, session.token));
+          cache.set(code, await loadServerProduct(code, session.token, controller.signal));
         } catch (error) {
           if (run !== generation) return;
           if (!getAdminSession()) throw error;
@@ -362,11 +376,29 @@
           r.status = "商品未登録";
           return;
         }
+        if (result.data.stocks.some(function (stock) {
+          return !stock || typeof stock.location_name !== "string" || !normalizeLocation(stock.location_name);
+        })) {
+          r.status = "取得失敗";
+          r.errors.push("サーバーの保管場所の形式が不正です");
+          return;
+        }
         const locationEntries = result.data.stocks.filter(function (stock) {
           return normalizeLocation(stock.location_name) === r.location;
         });
         // APIの値が不正な場合、差異を「0個」と誤表示しない。
-        const numbers = locationEntries.map(function (stock) { return Number(stock.quantity); });
+        const numbers = locationEntries.map(function (stock) {
+          const value = stock.quantity;
+          // null・空欄・真偽値等をNumber()で0/1に変換しない。
+          if (typeof value !== "number" &&
+              (typeof value !== "string" || !/^\d+$/.test(value.trim()))) return NaN;
+          return Number(value);
+        });
+        if (locationEntries.length > 1) {
+          r.status = "取得失敗";
+          r.errors.push("サーバーの同じ保管場所が重複しています。登録内容を確認してください");
+          return;
+        }
         if (numbers.some(function (n) { return !Number.isSafeInteger(n) || n < 0; })) {
           r.status = "取得失敗";
           r.errors.push("サーバーの在庫数の形式が不正です");
@@ -382,7 +414,11 @@
       if (run !== generation) return;
       element("v2932-stock-message").textContent = "照合できませんでした：" + String(error?.message || error);
     } finally {
-      setProcessing(false);
+      // キャンセル後に開始した別の照合のボタン状態を変更しない。
+      if (run === generation) {
+        activeController = null;
+        setProcessing(false);
+      }
     }
   }
 
@@ -491,10 +527,12 @@
   }
 
   function showSelectedPlan() {
-    if (!getAdminSession() || processing) {
+    if (!getAdminSession()) {
+      resetResult();
       element("v2933-stock-selection").textContent = "管理者として再ログインし、再照合してください。";
       return;
     }
+    if (processing) return;
     const preview = element("v2933-stock-confirm-rows");
     preview.replaceChildren();
     const candidates = selectableRows.filter(function (r) {

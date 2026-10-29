@@ -1,0 +1,23 @@
+name: 架空データによる検証
+
+on:
+  push:
+    branches: [update-v293.3]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: CSV照合と既存機能の回帰テスト（サーバー接続なし）
+        run: node --test tests/*.test.cjs
+      - name: 差分の空白チェック
+        run: git diff --check

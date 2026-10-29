@@ -2,7 +2,7 @@
 
 // 同じドメインの桜花・本番版・テスト版のキャッシュを分ける。
 const CACHE_PREFIX = "barcode-inventory-app:" + encodeURIComponent(self.registration.scope) + ":";
-const CACHE_NAME = CACHE_PREFIX + "v2933-stock-plan-validation-2";
+const CACHE_NAME = CACHE_PREFIX + "v2933-stock-plan-validation-3";
 const APP_FILES = [
   "./", "./index.html", "./style.css?v=108", "./storage.js?v=269",
   "./normal-shipment.js?v=226",
@@ -58,6 +58,7 @@ self.addEventListener("fetch", function (event) {
     request.mode === "navigate" ||
     url.pathname.endsWith(".js") ||
     url.pathname.endsWith(".css") ||
+    url.pathname.endsWith("/manifest.json") ||
     url.pathname.endsWith("/index.html");
 
   if (isAppCode) {

@@ -30,6 +30,11 @@ def build(destination):
                 manifest = json.loads(data)
                 manifest['name'] = '【検証用】バーコード在庫・棚卸管理 v293.3'
                 manifest['short_name'] = '在庫テスト2933'
+                # Keep this identity stable across test builds, and distinct from
+                # the production app even if both manifests share a directory.
+                # This does not override Chrome's handling of a legacy app with
+                # a broader scope; coexistence still needs an Android check.
+                manifest['id'] = './?app=barcode-inventory-test-v2933'
                 data = (json.dumps(manifest, ensure_ascii=False, indent=2) + '\n').encode('utf-8')
             archive.writestr(name, data)
     return destination

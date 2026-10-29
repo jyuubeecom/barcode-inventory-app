@@ -60,7 +60,9 @@ function salesCsvPlan(PDO $pdo, array $rows, bool $lock): array
     }
     $duplicates = []; $fresh = []; $net = [];
     foreach ($rows as $row) {
-        $stmt = $pdo->prepare('SELECT row_id FROM sales_csv_rows WHERE row_id=?' . ($lock ? ' FOR UPDATE' : ''));
+        // Product locks serialize matching IDs (the code is part of the signature).
+        // A consistent read here avoids gap locks between unrelated product imports.
+        $stmt = $pdo->prepare('SELECT row_id FROM sales_csv_rows WHERE row_id=?');
         $stmt->execute([$row['id']]);
         if ($stmt->fetchColumn() !== false) { $duplicates[] = $row['id']; continue; }
         $fresh[] = $row;
@@ -83,7 +85,7 @@ function salesCsvPlan(PDO $pdo, array $rows, bool $lock): array
         } elseif ($quantity < 0) {
             $locationChanges[] = ['location_name' => '本社', 'before' => $stocks['本社'] ?? 0, 'after' => ($stocks['本社'] ?? 0) - $quantity];
         }
-        $changes[] = ['internal_code' => $code, 'product_name' => $products[$code]['product_name'], 'quantity' => $quantity,
+        $changes[] = ['internal_code' => (string)$code, 'product_name' => $products[$code]['product_name'], 'quantity' => $quantity,
             'before' => $before, 'after' => $after, 'locations' => $locationChanges];
     }
     // A preview becomes stale if any inventory, product metadata, or duplicate decision changes.

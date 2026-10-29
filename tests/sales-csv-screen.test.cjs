@@ -79,7 +79,10 @@ test('apply persists exact operation before send and retries uncertainty with sa
 });
 test('reload restores pending operation without automatically sending',async()=>{
   const h=harness(async(url,opts)=>{if(JSON.parse(opts.body).action==='preview')return response(previewResult());throw new Error('lost');});await h.compare();await h.api.apply();
-  const restored=harness(undefined,h.receipts);await restored.api.open();assert.equal(restored.calls.length,0);assert.equal(restored.get('shared-sales-retry').hidden,false);await restored.api.submit();assert.equal(JSON.parse(restored.calls[0][1].body).request_id,JSON.parse(h.receipts.get(key)||'{}').payload?.request_id || JSON.parse(restored.calls[0][1].body).request_id);
+  const original=JSON.parse(h.receipts.get(key)).payload;
+  const restored=harness((url,opts)=>response({...previewResult(),request_id:JSON.parse(opts.body).request_id,message:'保存済み'}),h.receipts);
+  await restored.api.open();assert.equal(restored.calls.length,0);assert.equal(restored.get('shared-sales-retry').hidden,false);
+  await restored.api.submit();assert.deepEqual(JSON.parse(restored.calls[0][1].body),original);assert.equal(restored.receipts.has(key),false);
 });
 test('different user cannot retry another user operation',async()=>{
   const receipts=new Map([[key,JSON.stringify({owner:'2',payload:{request_id:'FAKE',rows:[]}})]]);const h=harness(undefined,receipts);await h.api.submit();assert.equal(h.calls.length,0);assert.ok(receipts.has(key));
@@ -93,4 +96,9 @@ test('malformed and unauthorized replies keep unresolved request for safe retry'
 });
 test('shared history uses authenticated read action, renders text and home navigation works',async()=>{
   const h=harness(()=>response({success:true,batches:[{created_at:'2026-10-01',file_name:'<fake>.csv',imported_count:1,request_id:'FAKE-ID'}]}));await h.api.open();await h.api.history();assert.equal(JSON.parse(h.calls[0][1].body).action,'history');assert.equal(h.calls[0][1].headers.Authorization,'Bearer FAKE_TEST_TOKEN');assert.match(h.get('shared-sales-history').children[0].textContent,/<fake>/);await h.get('shared-sales-back').fire('click');assert.equal(h.home.hidden,false);
+});
+
+test('malformed CSV and unexpected apply success never produce an untracked write',async()=>{
+  for(const text of [csvText()+'"',csvText().replace('架空商品','"abc"tail')]) { const h=harness();await h.compare(text);assert.equal(h.calls.length,0); }
+  const h=harness((url,opts)=>response(JSON.parse(opts.body).action==='preview'?previewResult():{success:true}));await h.compare();await h.api.apply();assert.ok(h.receipts.has(key));assert.equal(h.get('shared-sales-retry').hidden,false);
 });

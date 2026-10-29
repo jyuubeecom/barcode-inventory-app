@@ -11,11 +11,56 @@
   };
   function message(text) { el("shared-sales-message").textContent = text; }
   function invalidate() { generation++; plan = null; if (screen) { el("shared-sales-apply").disabled = true; el("shared-sales-result").textContent = ""; } }
+  function parseSharedCsv(text) {
+    const rows = [];
+    let row = [];
+    let field = "";
+    let quoted = false;
+    let quoteClosed = false;
+    let fieldStarted = false;
+    const input = String(text || "").replace(/^\uFEFF/, "");
+    for (let i = 0; i < input.length; i += 1) {
+      const ch = input[i];
+      if (quoted) {
+        if (ch === '"' && input[i + 1] === '"') {
+          field += '"'; i += 1;
+        } else if (ch === '"') {
+          quoted = false;
+          quoteClosed = true;
+        } else {
+          field += ch;
+        }
+      } else if (quoteClosed && ch !== "," && ch !== "\r" && ch !== "\n") {
+        throw new Error("CSVの閉じ引用符の後に余分な文字があります。");
+      } else if (ch === '"' && !fieldStarted) {
+        quoted = true;
+        fieldStarted = true;
+      } else if (ch === '"') {
+        throw new Error("CSVの引用符の形式が正しくありません。");
+      } else if (ch === ",") {
+        row.push(field); field = ""; fieldStarted = false; quoteClosed = false;
+      } else if (ch === "\r" || ch === "\n") {
+        if (ch === "\r" && input[i + 1] === "\n") i += 1;
+        row.push(field); rows.push(row);
+        row = []; field = ""; fieldStarted = false; quoteClosed = false;
+      } else {
+        field += ch;
+        fieldStarted = true;
+      }
+    }
+    if (quoted) throw new Error("CSVのダブルクォーテーションが閉じていません。");
+    if (field !== "" || row.length > 0 || fieldStarted) {
+      row.push(field); rows.push(row);
+    }
+    return rows;
+  }
+
   function normalizeRows(parsed) {
     const rows = []; let ignored = 0;
     for (const [index, raw] of parsed.rows.entries()) {
       const row = Array.from({length:12}, (_, i) => normalizeSalesActualText(raw[i]));
       if (!["売上", "返品"].includes(row[11])) { ignored++; continue; }
+      if (raw.length !== 12) throw new Error(`CSV ${parsed.headerIndex + index + 2}行目の列数を確認してください（12列必要です）。`);
       const date = parseSalesActualDate(row[5]);
       const quantity = parseSalesActualNumber(row[6]);
       if (!row[0] || row[0] === "0" || !date || !Number.isSafeInteger(quantity) || quantity === 0 || Math.abs(quantity) > 1000000 || (row[11] === "売上" && quantity < 0)) {
@@ -43,6 +88,13 @@
       return data;
     } finally { clearTimeout(timer); }
   }
+  function validPlan(data) {
+    return Number.isSafeInteger(data?.imported_count) && data.imported_count >= 0 &&
+      Number.isSafeInteger(data.duplicate_count) && data.duplicate_count >= 0 && Array.isArray(data.changes) &&
+      data.changes.every(item => typeof item.internal_code === "string" && typeof item.product_name === "string" &&
+        [item.quantity,item.before,item.after].every(Number.isSafeInteger) && Array.isArray(item.locations) &&
+        item.locations.every(l => typeof l.location_name === "string" && [l.before,l.after].every(Number.isSafeInteger)));
+  }
   function renderPlan(data, ignored) {
     const target = el("shared-sales-result"); target.textContent = "";
     const summary = document.createElement("p");
@@ -63,10 +115,13 @@
     if (!file || file.size === 0 || file.size > 512 * 1024) { message("512KBまでの売上CSVを選択してください。"); return; }
     busy = true; message("共有サーバーの在庫と取込済み行を確認しています。");
     try {
-      const parsed = parseSalesActualCsv(await readSalesActualCsvText(file));
+      const text = await readSalesActualCsvText(file);
+      parseSharedCsv(text); // Reject malformed quotes before using the legacy header/date helpers.
+      const parsed = parseSalesActualCsv(text);
       const normalized = normalizeRows(parsed);
       const data = await request({action:"preview", rows:normalized.rows}, auth);
       if (current !== generation || session()?.token !== auth.token) return;
+      if (!validPlan(data) || !/^[0-9a-f]{64}$/.test(data.preview_hash) || data.imported_count + data.duplicate_count !== normalized.rows.length) throw new Error("照合結果を確認できませんでした。再照合してください。");
       plan = {rows:normalized.rows, preview_hash:data.preview_hash, file_name:file.name, owner:String(auth.user.id), token:auth.token};
       renderPlan(data, normalized.ignored);
       el("shared-sales-apply").disabled = data.imported_count === 0;
@@ -97,6 +152,7 @@
     try {
       const result = await request(pending.payload, auth);
       const id = pending.payload.request_id;
+      if (result.request_id !== id || !validPlan(result)) throw new Error("保存応答を確認できません。");
       clearPending();
       if (session()?.token !== auth.token) return;
       renderPlan(result, 0); message(result.message + " 操作番号：" + id + (result.replayed ? "（保存済みの結果）" : ""));

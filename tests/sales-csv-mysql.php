@@ -87,3 +87,8 @@ fixture();$r=input([row()]);$results=parallel([$r,$r]);check(count(array_filter(
 fixture();$r=input([row()]);$s=$r;$s['request_id']='12345678-1234-4234-8234-000000000002';$results=parallel([$r,$s]);check(count(array_filter($results,fn($r)=>$r['success']??false))===1 && count(array_filter($results,fn($r)=>($r['status']??0)===409))===1 && total()===10,'Parallel different keys double-deducted');
 fixture();$r=input([row()]);$s=input([row('FAKE-001','12','売上','FAKE-INVOICE-2')],'2');$results=parallel([$r,$s]);check(count(array_filter($results,fn($r)=>$r['success']??false))===1 && countTable('sales_csv_rows')===1 && total()>=0,'Competing oversell');
 echo "PASS simultaneous same key, same sales/different keys and competing PCs cannot double deduct or oversell\n";
+
+fixture();$r=input([row()]);$s=input([row('FAKE-002','1')],'2');$results=parallel([$r,$s]);check(count(array_filter($results,fn($r)=>$r['success']??false))===2 && countTable('sales_csv_rows')===2,'Unrelated products blocked each other');
+echo "PASS unrelated product imports both succeed without duplicate-index gap locks\n";
+fixture();$pdo->exec("INSERT INTO products (internal_code,product_name) VALUES ('100','numeric fake')");$pdo->exec("INSERT INTO product_stocks (internal_code,location_name,quantity) VALUES ('100','本社',2)");$numeric=applySalesCsv($pdo,input([row('100','1')]),$admin);check($numeric['changes'][0]['internal_code']==='100','Numeric code lost string type');
+echo "PASS numeric-looking codes retain their string type\n";

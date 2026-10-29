@@ -7,7 +7,7 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 
 // Small DOM double for this screen's event flow. No network or persistent storage.
-function harness(fetchImpl) {
+function harness(fetchImpl, savedReceipts = new Map()) {
   const ids = new Map();
   const observers = [];
   class Element {
@@ -33,8 +33,9 @@ function harness(fetchImpl) {
     addEventListener() {} };
   const events = {};
   const calls = [];
-  let session = { token: 'FAKE_TEST_TOKEN', user: {role: 'admin'} };
-  const window = { scrollTo() {}, alert() {}, addEventListener(type, fn) { (events[type] ||= []).push(fn); },
+  let session = { token: 'FAKE_TEST_TOKEN', user: {id:1,role: 'admin'} };
+  const receipts = savedReceipts;
+  const window = { sessionStorage: {getItem:k=>receipts.get(k), setItem:(k,v)=>receipts.set(k,v), removeItem:k=>receipts.delete(k)}, crypto: {randomUUID: () => "12345678-1234-4234-8234-123456789012"}, confirm: () => true, scrollTo() {}, alert() {}, addEventListener(type, fn) { (events[type] ||= []).push(fn); },
     inventoryServerSearch: { getSession: () => session, expireSession() { session = null; for (const fn of events['inventory-server-auth-changed'] || []) fn(); } },
     inventoryApp: {showScreen() { home.hidden = false; }} };
   class MutationObserver { constructor(fn) { this.fn = fn; } observe(target) { observers.push({target, fn: this.fn}); } }
@@ -42,13 +43,13 @@ function harness(fetchImpl) {
     fetch: async (...args) => { calls.push(args); return fetchImpl ? fetchImpl(...args) : response([{location_name: '本社1階 A区', quantity: '5'}]); } });
   const source = fs.readFileSync(path.join(root, 'server-stock-csv-preview.js'), 'utf8');
   // Test-only access to lexical helpers; production code exposes no test API.
-  vm.runInContext(source.replace(/\}\)\(\);\s*$/, 'globalThis.testApi = {parseCsv, validateRows, initialize, openScreen, checkStockCsv, showSelectedPlan}; })();'), context);
+  vm.runInContext(source.replace(/\}\)\(\);\s*$/, 'globalThis.testApi = {parseCsv, validateRows, initialize, openScreen, checkStockCsv, showSelectedPlan, applySelectedRows, submitPendingApply}; })();'), context);
   const api = context.testApi; api.initialize();
   const get = id => ids.get(id);
   async function compare(csv = '社内コード,保管場所,在庫数\nFAKE-001,本社1階 A区,8') {
     await api.openScreen(); get('v2932-stock-file').files = [{size: Buffer.byteLength(csv), text: async () => csv}]; await api.checkStockCsv();
   }
-  return {api, get, calls, compare, main, home, window, setSession(v) {session = v;} };
+  return {api, get, calls, compare, main, home, window, receipts, setSession(v) {session = v;} };
 }
 function response(stocks, status = 200) { return {status, ok: status === 200, json: async () => ({success: true, stocks})}; }
 function status(h) { return h.get('v2932-stock-rows').children.map(tr => tr.children.at(-1).textContent); }
@@ -155,4 +156,83 @@ test('zero server quantity is valid and CSV markup is rendered as text', async (
   const h = harness(() => response([{location_name:'本社1階 A区', quantity:'0'}])); await h.compare(csv('8','本社1階 A区','<b>FAKE-001</b>'));
   assert.deepEqual(status(h), ['差異あり']); assert.equal(h.get('v2932-stock-rows').children[0].children[1].textContent, '<b>FAKE-001</b>');
   assert.equal(h.get('v2932-stock-rows').children[0].children[1].children.length, 0);
+});
+
+async function selectAndConfirm(h) {
+  await h.compare();
+  const input = h.get('v2933-stock-options').children[0].children[0];
+  input.checked = true; await input.fire('change'); h.api.showSelectedPlan();
+}
+test('apply is explicit, admin-only and sends the full comparison snapshot', async () => {
+  const h = harness(async (url, options) => {
+    if (options.method === 'GET') return response([{location_name:'本社1階 A区',quantity:5}]);
+    const body = JSON.parse(options.body);
+    assert.equal(body.rows[0].quantity, 8);
+    assert.deepEqual(body.rows[0].expected_stocks, [{location_name:'本社1階 A区',quantity:5}]);
+    return {ok:true,status:200,json:async()=>({success:true,request_id:body.request_id})};
+  });
+  await selectAndConfirm(h); assert.equal(h.calls.length,1);
+  await h.api.applySelectedRows(); assert.equal(h.calls.length,2);
+  assert.equal(h.calls[1][1].method,'POST');
+  assert.match(h.get('v2934-stock-apply-status').textContent,/反映済み/);
+  assert.equal(h.get('v2933-stock-plan').hidden,true);
+  await h.api.applySelectedRows(); assert.equal(h.calls.length,2);
+});
+test('cancel, no preview and expired admin session never submit', async () => {
+  const h = harness(); await h.compare(); await h.api.applySelectedRows();
+  assert.equal(h.calls.length,1);
+  const input = h.get('v2933-stock-options').children[0].children[0];input.checked=true;await input.fire('change');h.api.showSelectedPlan();
+  h.window.confirm=()=>false;await h.api.applySelectedRows();assert.equal(h.calls.length,1);
+  h.window.confirm=()=>true;h.setSession(null);await h.api.applySelectedRows();assert.equal(h.calls.length,1);
+});
+test('lost response retains the operation and retries exactly the same body', async () => {
+  let writes=0;
+  const h=harness(async (url,options)=>{
+    if(options.method==='GET')return response([{location_name:'本社1階 A区',quantity:5}]);
+    if(++writes===1)throw Error('FAKE_DISCONNECT');
+    return {ok:true,status:200,json:async()=>({success:true,request_id:JSON.parse(options.body).request_id,replayed:true})};
+  });
+  await selectAndConfirm(h);await h.api.applySelectedRows();
+  assert.equal(h.get('v2934-stock-retry').hidden,false);
+  await h.api.applySelectedRows();assert.equal(writes,1);
+  await h.api.submitPendingApply();assert.equal(writes,2);
+  assert.equal(h.calls[1][1].body,h.calls[2][1].body);
+  assert.equal(h.get('v2934-stock-retry').hidden,true);
+});
+test('conflict clears stale candidates; concurrent clicks produce one write', async () => {
+  let release;
+  const h=harness(async (url,options)=>{
+    if(options.method==='GET')return response([{location_name:'本社1階 A区',quantity:5}]);
+    return new Promise(resolve=>{release=()=>resolve({ok:false,status:409,json:async()=>({success:false,message:'再照合してください'})});});
+  });
+  await selectAndConfirm(h);const pending=h.api.applySelectedRows();await h.api.applySelectedRows();
+  assert.equal(h.calls.length,2);release();await pending;
+  assert.equal(h.get('v2933-stock-plan').hidden,true);
+  assert.match(h.get('v2934-stock-apply-status').textContent,/再照合/);
+});
+test('logout during a write keeps the receipt retryable without sending with an expired session', async()=>{
+  const h=harness(async(url,options)=>{
+    if(options.method==='GET')return response([{location_name:'本社1階 A区',quantity:5}]);
+    return {ok:false,status:401,json:async()=>({success:false,message:'再ログイン'})};
+  });
+  await selectAndConfirm(h);await h.api.applySelectedRows();assert.equal(h.get('v2934-stock-retry').hidden,false);
+  await h.api.submitPendingApply();assert.equal(h.calls.length,2);
+});
+
+test('a reloaded tab restores the same operation without auto-submitting', async()=>{
+  const first=harness(async(url,options)=>{
+    if(options.method==='GET')return response([{location_name:'本社1階 A区',quantity:5}]);
+    throw Error('FAKE_DISCONNECT');
+  });
+  await selectAndConfirm(first);await first.api.applySelectedRows();
+  const second=harness(async(url,options)=>({ok:true,status:200,json:async()=>({success:true,request_id:JSON.parse(options.body).request_id})}),first.receipts);
+  assert.equal(second.calls.length,0);
+  await second.api.submitPendingApply();
+  assert.equal(second.calls[0][1].body,first.calls[1][1].body);
+  assert.equal(second.receipts.size,0);
+});
+test('disabled receipt storage stops the write before any POST',async()=>{
+  const h=harness();await selectAndConfirm(h);h.window.sessionStorage.setItem=()=>{throw Error('FAKE_QUOTA')};
+  await h.api.applySelectedRows();assert.equal(h.calls.length,1);
+  assert.match(h.get('v2934-stock-apply-status').textContent,/開始できません/);
 });

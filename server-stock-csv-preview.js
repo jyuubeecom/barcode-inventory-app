@@ -1,14 +1,13 @@
 "use strict";
 
-/*
- * v293.3 第1段階：v293.2の読み取り専用比較に「反映候補の選択・確認」を追加する。
- * サーバー在庫や履歴は変更せず、反映用APIも呼び出さない。
- * v293.2 第1段階：在庫CSVと共有サーバーの保管場所別在庫を読み取り専用で照合する。
- * CSVファイルはブラウザ内で解析し、認証済みの既存商品取得APIをGETするだけ。
- * 在庫数の変更、サーバーへのCSV送信、端末内データの変更は一切行わない。
- */
+// 在庫CSVの照合と、管理者による選択行の一括反映。
 (function () {
   const PRODUCT_ENDPOINT = "https://jyuubee.sakura.ne.jp/inventory/get-product-auth.php";
+  const APPLY_ENDPOINT = "https://jyuubee.sakura.ne.jp/inventory/apply-stock-csv-auth.php";
+  const PENDING_KEY = "inventory-stock-csv-pending-v1";
+  let pendingApply = null;
+  let pendingOwner = "";
+  let applying = false;
   const MAX_FILE_BYTES = 512 * 1024;
   const MAX_ROWS = 300;
   const MAX_PRODUCTS = 100;
@@ -24,7 +23,7 @@
   let processing = false;
   let generation = 0;
   let activeController = null;
-  // v293.3: 反映候補は画面内メモリだけに保持し、保存・送信しない。
+  // 比較候補は画面内だけに保持。確定操作だけを再試行用にタブ内保存する。
   let selectableRows = [];
   const selectedLines = new Set();
 
@@ -49,7 +48,7 @@
     openButton.id = "show-server-stock-csv-preview";
     openButton.type = "button";
     openButton.className = "home-dashboard-action home-action-settings";
-    openButton.textContent = "在庫CSVと共有サーバーを照合（試作）";
+    openButton.textContent = "在庫CSVと共有サーバーを照合・反映";
     buttons.appendChild(openButton);
 
     screen = document.createElement("section");
@@ -60,9 +59,8 @@
         <h2>在庫CSV・保管場所別在庫の事前照合</h2>
         <p class="v2932-stock-intro">在庫CSVの数量と、共有サーバーに保存された数量を比べます。</p>
         <div class="v2932-stock-alert" role="note">
-          <strong>読み取り・比較だけを行う試作版です。</strong>
-          この画面から商品・数量・入出庫履歴・販売予定は変更できません。CSVファイル自体もサーバーへ送信しません。
-          在庫を反映する機能は今後追加します。
+          <strong>比較だけでは在庫は変更されません。</strong>
+          選択した行を確認して反映すると、共有サーバーの数量と更新履歴を保存します。端末内の在庫・売上・販売予定は変更しません。
         </div>
         <div class="v2932-stock-box">
           <h3>1．管理者ログイン</h3>
@@ -92,20 +90,34 @@
           <p class="v2932-stock-help">※ 商品コードの有無や在庫数の一致だけでは、CSVをそのまま本番反映してよいとは限りません。保管場所の対応と更新履歴の保存を別途確認する必要があります。</p>
         </div>
         <div class="v2932-stock-box" id="v2933-stock-plan" hidden>
-          <h3>4．反映候補を確認する（まだ更新しません）</h3>
-          <p class="v2932-stock-help">差異がある行から反映候補を選べます。選択内容はこの画面で確認するだけで、サーバーや端末内の在庫は変更しません。再照合・画面移動・ログアウト時には選択を破棄します。</p>
+          <h3>4．反映する行を確認する</h3>
+          <p class="v2932-stock-help">差異がある行から反映候補を選べます。選択・確認だけでは在庫は変更しません。再照合・画面移動・ログアウト時には選択を破棄します。</p>
           <div id="v2933-stock-options" class="v2933-stock-options"></div>
           <p id="v2933-stock-selection" role="status" aria-live="polite">0件選択中</p>
           <button id="v2933-stock-show-plan" type="button" disabled>選択した反映候補を確認する</button>
           <div id="v2933-stock-confirm" class="v2933-stock-confirm" hidden aria-live="polite">
-            <h4>反映前の確認内容（プレビューのみ）</h4>
-            <p>これは更新予定の確認です。実際の更新ボタンではありません。更新直前にはサーバー在庫の再照合・バックアップ・履歴保存が必要です。</p>
+            <h4>反映前の確認内容</h4>
+            <p>反映時にサーバー在庫を再検査し、変更前の数量と更新履歴を保存します。別の端末で在庫が変更されている場合は全件を中止します。</p>
             <div id="v2933-stock-confirm-rows"></div>
+            <button id="v2934-stock-apply" type="button">選択行を共有サーバーに反映する</button>
           </div>
+        </div>
+        <div class="v2932-stock-box">
+          <p id="v2934-stock-apply-status" role="status" aria-live="polite"></p>
+          <button id="v2934-stock-retry" type="button" hidden>同じ操作番号で反映結果を確認・再試行する</button>
         </div>
         <button id="v2932-stock-back" type="button" class="v2932-stock-back">ホームに戻る</button>
       </div>`;
     main.appendChild(screen);
+    try {
+      const saved = JSON.parse(window.sessionStorage?.getItem(PENDING_KEY) || "null");
+      if (saved?.payload?.request_id && Array.isArray(saved.payload.rows)) {
+        pendingApply = saved.payload;
+        pendingOwner = saved.owner;
+        element("v2934-stock-retry").hidden = false;
+        element("v2934-stock-apply-status").textContent = "前回の反映結果が未確認です。同じ管理者で結果を確認してください。操作番号：" + pendingApply.request_id;
+      }
+    } catch (_) { /* Storage restrictions are checked again before any write. */ }
 
     // 他の画面からhiddenが変更された場合も、古い照合結果を残さない。
     new MutationObserver(function () {
@@ -120,6 +132,11 @@
     element("v2932-stock-check").addEventListener("click", checkStockCsv);
     element("v2932-stock-back").addEventListener("click", returnHome);
     element("v2933-stock-show-plan").addEventListener("click", showSelectedPlan);
+    element("v2934-stock-apply").addEventListener("click", applySelectedRows);
+    element("v2934-stock-retry").addEventListener("click", submitPendingApply);
+    window.addEventListener("beforeunload", function (event) {
+      if (pendingApply) { event.preventDefault(); event.returnValue = ""; }
+    });
     window.addEventListener("inventory-server-auth-changed", function () {
       generation += 1;
       refreshLogin();
@@ -404,6 +421,9 @@
           r.errors.push("サーバーの在庫数の形式が不正です");
           return;
         }
+        r.expectedStocks = result.data.stocks.map(function (stock) {
+          return { location_name: stock.location_name, quantity: Number(stock.quantity) };
+        });
         r.serverQuantity = numbers.reduce(function (a, b) { return a + b; }, 0);
         r.difference = r.quantity - r.serverQuantity;
         if (!locationEntries.length) r.status = "保管場所未登録";
@@ -520,7 +540,7 @@
 
   function updateSelectedCount() {
     element("v2933-stock-selection").textContent =
-      selectedLines.size + "件選択中（保存・更新はされません）";
+      selectedLines.size + "件選択中（反映ボタンを押すまで更新されません）";
     element("v2933-stock-show-plan").disabled = selectedLines.size === 0;
     element("v2933-stock-confirm").hidden = true;
     element("v2933-stock-confirm-rows").replaceChildren();
@@ -548,6 +568,81 @@
     });
     element("v2933-stock-confirm").hidden = false;
     element("v2933-stock-confirm").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function applySelectedRows() {
+    if (processing || applying || pendingApply || !getAdminSession() ||
+        element("v2933-stock-confirm").hidden) return;
+    const rows = selectableRows.filter(function (r) {
+      return selectedLines.has(r.line) && isSafeCandidate(r);
+    }).map(function (r) {
+      return { internal_code: r.code, location_name: r.location, quantity: r.quantity,
+        expected_stocks: r.expectedStocks };
+    });
+    if (!rows.length) return;
+    if (!window.crypto?.randomUUID) {
+      element("v2934-stock-apply-status").textContent = "操作番号を作成できません。この環境では反映できません。";
+      return;
+    }
+    if (!window.confirm(rows.length + "行を共有サーバーに反映します。変更前の数量と履歴も保存します。続行しますか？")) return;
+    const payload = { request_id: window.crypto.randomUUID(), rows: rows };
+    pendingOwner = String(getAdminSession().user.id);
+    try {
+      window.sessionStorage.setItem(PENDING_KEY, JSON.stringify({owner: pendingOwner, payload: payload}));
+    } catch (_) {
+      element("v2934-stock-apply-status").textContent = "再試行用の操作情報を保存できないため、反映を開始できません。ブラウザの保存設定を確認してください。";
+      return;
+    }
+    pendingApply = payload;
+    return submitPendingApply();
+  }
+
+  async function submitPendingApply() {
+    if (!pendingApply || applying) return;
+    const session = getAdminSession();
+    if (!session || String(session.user.id) !== pendingOwner) {
+      element("v2934-stock-apply-status").textContent = "反映結果の確認には、同じ管理者で再ログインしてください。";
+      element("v2934-stock-retry").hidden = false;
+      return;
+    }
+    applying = true;
+    element("v2934-stock-apply").disabled = true;
+    element("v2934-stock-retry").disabled = true;
+    const operation = pendingApply;
+    element("v2934-stock-apply-status").textContent = "反映結果を確認中です。操作番号：" + operation.request_id;
+    const controller = new AbortController();
+    // Aborting a request does not mean the server rolled back. Retain the SAME operation for retry.
+    const timer = setTimeout(function () { controller.abort(); }, 30000);
+    try {
+      const response = await fetch(APPLY_ENDPOINT, {
+        method: "POST", mode: "cors", cache: "no-store", signal: controller.signal,
+        headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: "Bearer " + session.token },
+        body: JSON.stringify(operation)
+      });
+      const data = await response.json();
+      if (response.ok && data?.success === true && data.request_id === operation.request_id) {
+        pendingApply = null;
+        try { window.sessionStorage.removeItem(PENDING_KEY); } catch (_) { /* Saved receipts are safe to replay. */ }
+        resetResult();
+        element("v2934-stock-apply-status").textContent = "反映済みです。変更前の数量と履歴を保存しました。別のパソコンでは共有サーバーの商品詳細を再取得して確認できます。操作番号：" + operation.request_id;
+      } else if (response.status === 409 || response.status === 400 || response.status === 413) {
+        pendingApply = null;
+        try { window.sessionStorage.removeItem(PENDING_KEY); } catch (_) { /* Saved receipts are safe to replay. */ }
+        resetResult();
+        element("v2934-stock-apply-status").textContent = "反映を中止しました。" + (data?.message || "全件を再照合してください。");
+      } else {
+        if (response.status === 401) window.inventoryServerSearch?.expireSession?.();
+        throw new Error(data?.message || "サーバーの応答を確認できません。");
+      }
+    } catch (error) {
+      element("v2934-stock-apply-status").textContent = "反映結果が未確認です。この画面を閉じず、同じ操作番号で再試行してください。" + String(error?.message || error) + " 操作番号：" + operation.request_id;
+    } finally {
+      clearTimeout(timer);
+      applying = false;
+      element("v2934-stock-apply").disabled = Boolean(pendingApply);
+      element("v2934-stock-retry").disabled = false;
+      element("v2934-stock-retry").hidden = !pendingApply;
+    }
   }
 
   function addStyles() {

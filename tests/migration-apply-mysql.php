@@ -41,7 +41,7 @@ reject(fn()=>applyInventoryMigration($pdo,$request,['id'=>2,'role'=>'admin']),40
 $bad=$request;$bad['products'][1]['memo']='changed';reject(fn()=>applyInventoryMigration($pdo,$bad,$admin),409);
 check(allData($pdo)===$after,'Conflicting retry changed data');
 echo "PASS atomic missing-product addition, fixed status, per-location stock and receipt replay\n";
-$request=plan($pdo,[item('FAKE-STALE','架空')],'22222222-2222-4222-8222-222222222222');
+$request=plan($pdo,[$same,item('FAKE-STALE','架空')],'22222222-2222-4222-8222-222222222222');
 $pdo->exec("UPDATE product_stocks SET quantity=4 WHERE internal_code='FAKE-SAME'");$before=allData($pdo);
 reject(fn()=>applyInventoryMigration($pdo,$request,$admin),409);check(allData($pdo)===$before,'Stale preview wrote records');
 $request=plan($pdo,[item('FAKE-SAME','上書き不可'),item('FAKE-NEVER','架空')],'33333333-3333-4333-8333-333333333333');

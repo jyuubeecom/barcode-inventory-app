@@ -43,6 +43,15 @@ function previewInventoryMigration(PDO $pdo, array $input, array $user): array
     $pdo->exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY');
     $pdo->beginTransaction();
     try {
+        $result = compareInventoryMigrationSnapshot($pdo, $products);
+        $pdo->commit();
+        return $result;
+    } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $e; }
+}
+
+// Caller owns the transaction. Apply obtains locks before using this same comparison.
+function compareInventoryMigrationSnapshot(PDO $pdo, array $products): array
+{
         $count = (int)$pdo->query('SELECT COUNT(*) FROM products')->fetchColumn();
         if ($count > 10000) throw new StockCsvError('サーバー商品が1万件を超えています。照合方法を見直してください。',409);
         $serverCodes = $pdo->query('SELECT internal_code FROM products ORDER BY internal_code')->fetchAll(PDO::FETCH_COLUMN);
@@ -59,7 +68,7 @@ function previewInventoryMigration(PDO $pdo, array $input, array $user): array
             $code = $source['internal_code'];
             $stmt = $pdo->prepare('SELECT internal_code,product_code,product_name,jan_code,color,category,supplier_name,unit,min_stock,product_status,memo FROM products WHERE internal_code=?');
             $stmt->execute([$code]); $saved = $stmt->fetch(PDO::FETCH_ASSOC);
-            $row = ['internal_code'=>$code,'source_stock'=>array_sum(array_column($source['stocks'],'quantity')),'server_stock'=>null,'differences'=>[],'fixed_status_conflict'=>false];
+            $row = ['internal_code'=>$code,'source_stock'=>array_sum(array_column($source['stocks'],'quantity')),'server_stock'=>null,'differences'=>[],'fixed_status_conflict'=>false,'source_stocks'=>$source['stocks']];
             if (!$saved) {
                 $row['result']='new';
                 $row['source_status']=$source['product_status'];
@@ -86,8 +95,6 @@ function previewInventoryMigration(PDO $pdo, array $input, array $user): array
         $serverOnly = array_values(array_filter($serverCodes,fn($code)=>!isset($matched[$code])));
         $summary['server_only']=count($serverOnly);
         $hash = hash('sha256',json_encode([$snapshot,$serverOnly],JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
-        $pdo->commit();
         return ['success'=>true,'preview_only'=>true,'migrated'=>false,'comparison_sha256'=>$hash,'summary'=>$summary,'rows'=>$rows,
             'server_only_codes'=>$serverOnly,'message'=>'照合だけを行いました。商品・在庫・履歴は変更していません。'];
-    } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $e; }
 }

@@ -2,13 +2,13 @@
 
 // 同じドメインの桜花・本番版・テスト版のキャッシュを分ける。
 const CACHE_PREFIX = "barcode-inventory-app:" + encodeURIComponent(self.registration.scope) + ":";
-const CACHE_NAME = CACHE_PREFIX + "v2938-shared-list-1";
+const CACHE_NAME = CACHE_PREFIX + "v2939-shared-report-1";
 const APP_FILES = [
   "./", "./index.html", "./style.css?v=108", "./storage.js?v=269",
   "./normal-shipment.js?v=226",
   "./manual.js?v=207",
   "./backorder-list.js?v=216",
-  "./app.js?v=280", "./natural-stock-search.js?v=275", "./product-history.js?v=107", "./inventory.js?v=195", "./transfer-list.js?v=195", "./location-stock-report.js?v=258",
+  "./app.js?v=280", "./natural-stock-search.js?v=275", "./product-history.js?v=107", "./inventory.js?v=195", "./transfer-list.js?v=195", "./location-stock-report.js?v=29391",
   "./libs/barcode-detector-zxing-adapter.js?v=31",
   "./libs/ZXING-LICENSE.txt",
   "./scanner.js?v=241", "./stocktaking.js?v=202",
@@ -19,7 +19,7 @@ const APP_FILES = [
   "./disposal-list.js?v=246", "./backup.js?v=269", "./restore.js?v=269", "./location-management.js?v=100",
   "./processing-sheet.js?v=211",
   "./processing-conversion.js?v=213",
-  "./single-stock-check.js?v=241", "./customer-master.js?v=270", "./server-test.js?v=292", "./server-csv-import.js?v=292", "./server-account-settings.js?v=2922", "./server-company-master-preview.js?v=2931", "./server-stock-csv-preview.js?v=29341", "./server-sales-csv.js?v=29351", "./migration/backup-audit.js?v=1", "./migration/prepare-products.js?v=1", "./server-migration-preview.js?v=29381", "./server-product-list.js?v=29381", "./home-dashboard.js?v=269", "./app-settings.js?v=270", "./home-alerts.js?v=267", "./pwa.js?v=31", "./manifest.json",
+  "./single-stock-check.js?v=241", "./customer-master.js?v=270", "./server-test.js?v=292", "./server-csv-import.js?v=292", "./server-account-settings.js?v=2922", "./server-company-master-preview.js?v=2931", "./server-stock-csv-preview.js?v=29341", "./server-sales-csv.js?v=29351", "./migration/backup-audit.js?v=1", "./migration/prepare-products.js?v=1", "./server-migration-preview.js?v=29391", "./server-product-list.js?v=29391", "./home-dashboard.js?v=269", "./app-settings.js?v=270", "./home-alerts.js?v=267", "./pwa.js?v=31", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png"
 ];
 

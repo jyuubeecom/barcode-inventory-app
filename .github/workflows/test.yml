@@ -2,7 +2,7 @@ name: 架空データによる検証
 
 on:
   push:
-    branches: [update-v293.3]
+    branches: [update-v293.3, work/stock-csv-apply, work/shared-sales-csv, work/migration-preflight, work/migration-preview, work/migration-add]
   pull_request:
     branches: [main]
 
@@ -21,3 +21,33 @@ jobs:
         run: node --test tests/*.test.cjs
       - name: 差分の空白チェック
         run: git diff --check
+
+  stock-csv-mysql:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test-only
+          MYSQL_DATABASE: inventory_csv_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -ptest-only"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_mysql, mbstring
+      - name: PHP構文チェック
+        run: find server tests -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: 架空データ・隔離DBで原子性と競合を検証
+        run: |
+          php tests/stock-csv-mysql.php
+          php tests/sales-csv-mysql.php
+          php tests/migration-preview-mysql.php
+          php tests/migration-apply-mysql.php

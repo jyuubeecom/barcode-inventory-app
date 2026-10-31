@@ -2,7 +2,7 @@ name: 架空データによる検証
 
 on:
   push:
-    branches: [update-v293.3, work/stock-csv-apply, work/shared-sales-csv, work/migration-preflight, work/migration-preview, work/migration-add]
+    branches: [update-v293.3, work/stock-csv-apply, work/shared-sales-csv, work/migration-preflight, work/migration-preview, work/migration-add, work/shared-products-list]
   pull_request:
     branches: [main]
 
@@ -51,3 +51,4 @@ jobs:
           php tests/sales-csv-mysql.php
           php tests/migration-preview-mysql.php
           php tests/migration-apply-mysql.php
+          php tests/shared-products-mysql.php

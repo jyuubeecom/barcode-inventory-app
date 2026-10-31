@@ -2,22 +2,23 @@
 
 (function () {
   const SERVER_PRODUCTS_ENDPOINT =
-    "https://jyuubee.sakura.ne.jp/inventory/get-products-auth.php";
+    "https://jyuubee.sakura.ne.jp/inventory/shared-products-auth.php";
 
-  const MAX_ITEMS = 200;
+  const MAX_ITEMS = 5000;
+  let requestGeneration = 0;
+  let activeController = null;
 
   let panel = null;
   let content = null;
   let listScreen = null;
   let lastKeyword = "";
-  let isLoading = false;
   let lastItems = [];
   let lastResponseData = null;
   let lastStockFilter = "all";
   let lastProductStatusFilter = "all";
   let lastLocationFilter = "all";
   let lastSort = "internal_asc";
-  let currentSource = "server";
+  let currentSource = "local";
   let sourceSwitch = null;
   let localFilterDetails = null;
   let localResultsDetails = null;
@@ -127,7 +128,7 @@
     sourceSwitch.innerHTML = `
       <div class="product-list-source-switch-heading">
         <strong>表示する商品データ</strong>
-        <span>通常は共有サーバーの商品を表示します。端末内の旧データは確認が必要なときだけ切り替えて使います。</span>
+        <span>端末内と共有サーバーは別のデータです。ここで切り替えて確認できます。自動で移行・合算はしません。</span>
       </div>
 
       <div class="product-list-source-switch-buttons">
@@ -137,7 +138,7 @@
           class="product-list-source-button"
           data-source="local"
         >
-          この端末の商品（旧データ）
+          この端末の商品
         </button>
 
         <button
@@ -146,7 +147,7 @@
           class="product-list-source-button product-list-source-button-server"
           data-source="server"
         >
-          共有サーバーの商品（標準）
+          共有サーバーの商品
         </button>
       </div>
 
@@ -187,6 +188,7 @@
   }
 
   function setProductSource(source) {
+    invalidateRequest();
     currentSource = source === "server" ? "server" : "local";
     cacheLocalProductListElements();
     applyProductSourceView();
@@ -241,8 +243,8 @@
 
     if (status) {
       status.textContent = isServer
-        ? "現在：PC・スマホ共通の商品を表示しています。商品詳細から入庫・出庫できます。"
-        : "現在：この端末に残っている旧データを表示しています。";
+        ? "現在：共有サーバーの商品のみを表示します。ログインと取得が必要です。"
+        : "現在：この端末に保存されているデータを表示しています。";
     }
   }
 
@@ -297,6 +299,10 @@
   }
 
   function handleServerAuthChanged(event) {
+    invalidateRequest();
+    lastItems = [];
+    lastResponseData = null;
+    if (content) content.innerHTML = "";
     if (
       !listScreen ||
       listScreen.hidden ||
@@ -364,76 +370,51 @@
     }
   }
 
+  function invalidateRequest() {
+    requestGeneration += 1;
+    if (activeController) activeController.abort();
+    activeController = null;
+  }
+
   async function loadServerProducts(keyword) {
-    if (isLoading || !content) {
-      return;
-    }
-
+    if (!content || currentSource !== "server") return;
     const bridge = getServerBridge();
-
-    if (!bridge || !bridge.hasSession()) {
-      renderLoginRequired();
-      return;
-    }
-
+    if (!bridge || !bridge.hasSession()) { renderLoginRequired(); return; }
+    invalidateRequest();
+    const generation = requestGeneration;
+    const token = getServerToken();
+    if (!token) { renderLoginRequired(); return; }
     lastKeyword = String(keyword || "").trim();
-    isLoading = true;
-
+    const controller = new AbortController();
+    activeController = controller;
+    const timer = window.setTimeout(() => controller.abort(), 30000);
+    const isCurrent = () => generation === requestGeneration && currentSource === "server" && token === getServerToken();
     renderLoading();
-
     try {
-      const url = new URL(SERVER_PRODUCTS_ENDPOINT);
-      url.searchParams.set("limit", String(MAX_ITEMS));
-
-      if (lastKeyword) {
-        url.searchParams.set("q", lastKeyword);
-      }
-
-      const token = getServerToken();
-
-      if (!token) {
-        renderLoginRequired();
-        return;
-      }
-
-      const response = await fetch(url.toString(), {
-        method: "GET",
-        mode: "cors",
-        cache: "no-store",
-        headers: {
-          Accept: "application/json",
-          Authorization: "Bearer " + token
-        }
+      const response = await fetch(SERVER_PRODUCTS_ENDPOINT, {
+        method: "GET", mode: "cors", cache: "no-store", signal: controller.signal,
+        headers: { Accept: "application/json", Authorization: "Bearer " + token }
       });
-
       const data = await readJsonResponse(response);
-
-      if (response.status === 401) {
-        clearServerSessionForList();
-        renderLoginRequired();
-        return;
-      }
-
+      if (!isCurrent()) return;
+      if (response.status === 401) { clearServerSessionForList(); renderLoginRequired(); return; }
       if (!response.ok || !data || data.success !== true) {
-        throw new Error(
-          data && data.message
-            ? data.message
-            : "サーバーの商品一覧を取得できませんでした。"
-        );
+        throw new Error(data && data.message ? data.message : "共有商品一覧を取得できませんでした。");
       }
-
-      renderServerProducts(
-        Array.isArray(data.items) ? data.items : [],
-        data
-      );
+      if (data.format !== "inventory-shared-products-v1" || data.complete !== true ||
+          !Array.isArray(data.items) || data.items.length > MAX_ITEMS || data.count !== data.items.length ||
+          !data.items.every(item => item && typeof item.internal_code === "string" &&
+            Number.isSafeInteger(item.total_stock) && item.total_stock >= 0 && Array.isArray(item.stocks))) {
+        throw new Error("全件の取得を確認できませんでした。共有一覧用のサーバーファイルを確認してください。");
+      }
+      renderServerProducts(data.items, data);
     } catch (error) {
-      renderError(
-        error && error.message
-          ? error.message
-          : "サーバー通信に失敗しました。"
-      );
+      if (isCurrent()) renderError(error && error.name === "AbortError" ?
+        "通信が時間切れになりました。再読み込みしてください。" :
+        (error && error.message ? error.message : "サーバー通信に失敗しました。"));
     } finally {
-      isLoading = false;
+      window.clearTimeout(timer);
+      if (generation === requestGeneration) { activeController = null; }
     }
   }
 
@@ -480,7 +461,7 @@
     const locations = Array.from(
       new Set(
         lastItems.flatMap(function (item) {
-          return getLocationNames(item.locations);
+          return item.stocks.map(stock => stock.location_name);
         })
       )
     ).sort(function (a, b) {
@@ -511,8 +492,8 @@
       <div class="server-product-list-notice server-product-list-success">
         <strong>✓ 商品一覧を更新しました</strong>
         <span>
-          全 ${escapeHtml(String(serverCount))}件 / 現在表示 ${escapeHtml(String(filteredItems.length))}件。
-          共有サーバーの最新データを表示しています。
+          共有サーバー全 ${escapeHtml(String(serverCount))}件 / 条件に一致 ${escapeHtml(String(filteredItems.length))}件。
+          取得時点のデータです。他の端末で更新した後は「再読み込み」を押してください。
         </span>
       </div>
 
@@ -672,9 +653,8 @@
     if (searchForm) {
       searchForm.addEventListener("submit", function (event) {
         event.preventDefault();
-        loadServerProducts(
-          searchInput ? searchInput.value : ""
-        );
+        lastKeyword = String(searchInput ? searchInput.value : "").trim();
+        renderServerProducts(lastItems, lastResponseData);
       });
     }
 
@@ -745,6 +725,8 @@
 
   function applyLocalFiltersAndSort(items) {
     const filtered = items.filter(function (item) {
+      if (lastKeyword && ![item.internal_code, item.product_code, item.product_name, item.jan_code, item.color, item.supplier_name]
+        .some(value => String(value || "").normalize("NFKC").toLocaleLowerCase("ja").includes(lastKeyword.normalize("NFKC").toLocaleLowerCase("ja")))) return false;
       const totalStock = toNumber(item.total_stock);
       const minStock = toNumber(item.min_stock);
       const stockStatus = getStockStatus(
@@ -772,7 +754,7 @@
 
       if (
         lastLocationFilter !== "all" &&
-        !getLocationNames(item.locations).includes(lastLocationFilter)
+        !item.stocks.some(stock => stock.location_name === lastLocationFilter)
       ) {
         return false;
       }
@@ -849,7 +831,7 @@
           </div>
           <div class="server-product-list-meta-wide">
             <dt>保管場所</dt>
-            <dd>${escapeHtml(item.locations || "未登録")}</dd>
+            <dd>${item.stocks.length ? item.stocks.map(stock => escapeHtml(stock.location_name) + "：" + formatNumber(stock.quantity) + "個").join("<br>") : "未登録"}</dd>
           </div>
         </dl>
 
@@ -883,14 +865,18 @@
       button.textContent = "読み込み中...";
     }
 
+    const generation = requestGeneration;
+    const token = getServerToken();
     try {
       const data = await bridge.searchProduct(internalCode);
+      if (generation !== requestGeneration || currentSource !== "server" || token !== getServerToken()) return;
       bridge.openProductDetail(
         data,
         internalCode,
         { returnTarget: "server-list" }
       );
     } catch (error) {
+      if (generation !== requestGeneration || token !== getServerToken()) return;
       if (error && error.code === "SERVER_LOGIN_REQUIRED") {
         renderLoginRequired();
       } else {
@@ -984,17 +970,6 @@
         "サーバーから正しい形式の応答がありません。"
       );
     }
-  }
-
-  function getLocationNames(value) {
-    return String(value || "")
-      .split(/\s*[\/／\n]+\s*/)
-      .map(function (part) {
-        return part
-          .replace(/\s*[：:]\s*-?\d[\d,]*\s*個?.*$/, "")
-          .trim();
-      })
-      .filter(Boolean);
   }
 
   function getStockStatusCounts(items) {

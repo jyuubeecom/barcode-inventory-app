@@ -32,8 +32,16 @@
 
   const state = {
     products: [],
-    rows: []
+    rows: [],
+    source: "local",
+    ready: false,
+    fetchedAt: "",
+    sharedCount: 0,
+    notice: "在庫データを読み込んでいます。"
   };
+
+  let generation = 0;
+  let controller = null;
 
   document.addEventListener(
     "DOMContentLoaded",
@@ -46,6 +54,11 @@
     createStyles();
     populateLocationOptions();
     bindEvents();
+    window.addEventListener("inventory-server-auth-changed", handleReportAuthChanged);
+    const section = document.querySelector("#location-stock-report");
+    if (section) new MutationObserver(function () {
+      if (section.hidden) invalidateReportRequest();
+    }).observe(section, {attributes:true, attributeFilter:["hidden"]});
   }
 
   function createHomeButton() {
@@ -118,6 +131,17 @@
         </button>
       </div>
 
+      <section class="location-stock-report-source">
+        <label for="location-stock-report-source">表示する在庫データ</label>
+        <select id="location-stock-report-source">
+          <option value="local">この端末の在庫</option>
+          <option value="server">共有サーバーの在庫</option>
+        </select>
+        <button id="location-stock-report-reload" type="button">再読み込み</button>
+        <button id="location-stock-report-login" type="button" hidden>共有サーバーにログイン</button>
+        <p>端末内と共有サーバーは別のデータです。自動で移行・合算はしません。共有在庫は取得時点の内容です。他の端末で更新した後は再読み込みしてください。</p>
+        <p>在庫がある保管場所を1行ずつ表示します。共有在庫では「未確認」の場所も表示します。数量0の場所と保管場所未登録の商品は表に含みません。</p>
+      </section>
       <div class="location-stock-report-controls">
         <div>
           <label for="location-stock-report-location">保管場所</label>
@@ -239,6 +263,17 @@
         font-size: 14px;
       }
 
+      .location-stock-report-source {
+        padding: 16px; margin: 0 0 16px; border: 2px solid #b9d8f0;
+        border-radius: 12px; background: #f7fbff;
+      }
+      .location-stock-report-source select, .location-stock-report-source button {
+        min-height: 48px; margin: 4px; max-width: 100%; font: inherit;
+      }
+      .location-stock-report-source p {color: #546e7a; line-height: 1.7;}
+      @media (max-width: 760px) {
+        .location-stock-report-source select, .location-stock-report-source button {width: 100%; margin: 4px 0;}
+      }
       .location-stock-report-controls {
         display: grid;
         grid-template-columns: minmax(220px, 0.9fr) minmax(280px, 1.4fr) auto;
@@ -549,7 +584,7 @@
       new Set(
         state.rows
           .map(function (row) {
-            return normalizeLocationName(row.location);
+            return state.source === "server" ? row.location : normalizeLocationName(row.location);
           })
           .filter(Boolean)
       )
@@ -589,6 +624,18 @@
   }
 
   function bindEvents() {
+    document.querySelector("#location-stock-report-source")?.addEventListener("change", function (event) {
+      state.source = event.target.value === "server" ? "server" : "local";
+      // A selected place from the previous data source must not hide all new rows.
+      const select = document.querySelector("#location-stock-report-location");
+      if (select) select.value = ALL_LOCATIONS_VALUE;
+      void reloadReport();
+    });
+    document.querySelector("#location-stock-report-reload")?.addEventListener("click", reloadReport);
+    document.querySelector("#location-stock-report-login")?.addEventListener("click", function () {
+      window.inventoryServerSearch?.openLogin("");
+    });
+
     document
       .querySelector(
         "#show-location-stock-report-button"
@@ -650,27 +697,7 @@
       section.hidden = false;
     }
 
-    setStatus("在庫データを読み込んでいます。");
-
-    try {
-      state.products =
-        await getAllProducts();
-      state.rows =
-        buildAllLocationRows(
-          state.products
-        );
-      populateLocationOptions();
-      renderReport();
-    } catch (error) {
-      console.error(
-        "保管場所別在庫表の読込エラー",
-        error
-      );
-
-      setStatus(
-        "在庫データを読み込めませんでした。画面を更新して、もう一度お試しください。"
-      );
-    }
+    await reloadReport();
 
     if (section) {
       window.requestAnimationFrame(
@@ -684,6 +711,123 @@
     }
   }
 
+  function handleReportAuthChanged() {
+    if (state.source !== "server") return;
+    clearReport();
+    const section = document.querySelector("#location-stock-report");
+    if (section && !section.hidden) void reloadReport();
+  }
+
+  function invalidateReportRequest() {
+    generation += 1;
+    if (controller) controller.abort();
+    controller = null;
+  }
+
+  function readToken() {
+    try { return sessionStorage.getItem("barcodeInventoryServerAccessToken") || ""; }
+    catch (_) { return ""; }
+  }
+
+  function clearReport() {
+    invalidateReportRequest();
+    state.products = []; state.rows = []; state.ready = false; state.fetchedAt = ""; state.sharedCount = 0;
+    document.querySelector("#location-stock-print-dialog [data-location-stock-print-close]")?.click();
+    state.notice = "在庫データを読み込んでいます。";
+    renderReport();
+  }
+
+  function buildSharedRows(data) {
+    if (!data || data.success !== true || data.format !== "inventory-shared-products-v1" || data.complete !== true ||
+        !Array.isArray(data.items) || data.count !== data.items.length || data.count > 5000 ||
+        typeof data.fetched_at !== "string" || !Number.isFinite(Date.parse(data.fetched_at))) {
+      throw new Error("共有在庫の全件取得を確認できませんでした。");
+    }
+    const rows = [], codes = new Set();
+    let stockRows = 0;
+    data.items.forEach(function (item) {
+      if (!item || typeof item.internal_code !== "string" || !item.internal_code || codes.has(item.internal_code) ||
+          !Array.isArray(item.stocks) || !Number.isSafeInteger(item.total_stock) || item.total_stock < 0) {
+        throw new Error("共有商品の形式を確認できませんでした。");
+      }
+      codes.add(item.internal_code);
+      const locations = new Set();
+      let total = 0;
+      item.stocks.forEach(function (entry) {
+        if (++stockRows > 50000 || !entry || typeof entry.location_name !== "string" || !entry.location_name ||
+            locations.has(entry.location_name) || !Number.isSafeInteger(entry.quantity) || entry.quantity < 0) {
+          throw new Error("共有在庫の場所・数量を確認できませんでした。");
+        }
+        locations.add(entry.location_name); total += entry.quantity;
+        if (entry.quantity > 0) rows.push({location:entry.location_name, internalCode:item.internal_code,
+          productCode:String(item.product_code || ""), productName:String(item.product_name || ""),
+          productColor:String(item.color || ""), stock:entry.quantity, status:String(item.product_status || "通常商品")});
+      });
+      if (!Number.isSafeInteger(total) || total !== item.total_stock) throw new Error("場所別在庫と合計が一致しません。");
+    });
+    return rows.sort(compareRows);
+  }
+
+  async function reloadReport() {
+    clearReport();
+    const ownGeneration = generation;
+    const source = state.source;
+    const token = readToken();
+    const login = document.querySelector("#location-stock-report-login");
+    if (login) login.hidden = true;
+    const isCurrent = () => generation === ownGeneration && source === state.source && (source === "local" || token === readToken());
+    let timer;
+    try {
+      if (source === "local") {
+        const products = await getAllProducts();
+        if (!isCurrent()) return;
+        state.products = products;
+        state.rows = buildAllLocationRows(products);
+      } else {
+        if (!token || !window.inventoryServerSearch?.hasSession()) {
+          state.notice = "共有サーバーへのログインが必要です。";
+          if (login) login.hidden = false;
+          renderReport(); return;
+        }
+        const requestController = new AbortController(); controller = requestController;
+        timer = window.setTimeout(() => requestController.abort(), 30000);
+        const response = await fetch("https://jyuubee.sakura.ne.jp/inventory/shared-products-auth.php", {
+          method:"GET", mode:"cors", cache:"no-store", signal:requestController.signal,
+          headers:{Accept:"application/json", Authorization:"Bearer " + token}
+        });
+        if (!isCurrent()) return;
+        if (response.status === 401) {
+          // Only the unchanged session may be cleared by this response.
+          try { ["barcodeInventoryServerAccessToken", "barcodeInventoryServerAccessExpiresAt", "barcodeInventoryServerUser"]
+            .forEach(key => sessionStorage.removeItem(key)); } catch (_) { /* UI still asks for login. */ }
+          window.dispatchEvent(new CustomEvent("inventory-server-auth-changed", {detail:{loggedIn:false, reason:"expired"}}));
+          return;
+        }
+        const data = await response.json();
+        if (!isCurrent()) return;
+        if (!response.ok || !data || data.success !== true) throw new Error(data?.message || "共有在庫を取得できませんでした。");
+        const rows = buildSharedRows(data);
+        state.rows = rows; state.sharedCount = data.count; state.fetchedAt = data.fetched_at;
+      }
+      state.ready = true;
+      populateLocationOptions();
+      renderReport();
+    } catch (error) {
+      if (!isCurrent()) return;
+      state.notice = error?.name === "AbortError" ? "通信が時間切れになりました。再読み込みしてください。" :
+        (source === "server" ? (error?.message || "共有在庫を取得できませんでした。") : "端末内の在庫を読み込めませんでした。");
+      renderReport();
+    } finally {
+      if (timer) window.clearTimeout(timer);
+      if (generation === ownGeneration) controller = null;
+    }
+  }
+
+  function sourceDescription() {
+    return state.source === "server" ? "共有サーバーの在庫" + (state.fetchedAt ?
+      "（取得日時：" + new Date(state.fetchedAt).toLocaleString("ja-JP") + " / 全" + state.sharedCount + "商品）" : "") : "この端末の在庫";
+  }
+
   function hideMainSections() {
     document
       .querySelectorAll("main > section")
@@ -693,6 +837,7 @@
   }
 
   function showHomeScreen() {
+    invalidateReportRequest();
     hideMainSections();
 
     const home =
@@ -985,6 +1130,8 @@
   }
 
   function renderReport() {
+    const print = document.querySelector("#location-stock-report-print-button");
+    if (print) print.disabled = !state.ready;
     const rows = getVisibleRows();
     renderTableHeader();
     renderTableBody(rows);
@@ -1008,7 +1155,7 @@
     }
 
     setStatus(
-      rows.length > 0
+      !state.ready ? state.notice : rows.length > 0
         ? `${getSelectedLocationLabel()}：${formatNumber(rows.length)}行の在庫を表示しています。`
         : `${getSelectedLocationLabel()}：該当する在庫はありません。`
     );
@@ -1110,7 +1257,7 @@
       );
 
     if (status) {
-      status.textContent = message;
+      status.textContent = sourceDescription() + "：" + message;
     }
   }
 
@@ -1131,6 +1278,7 @@
   }
 
   function openPrintChoiceDialog() {
+    if (!state.ready) return;
     document
       .querySelector(
         "#location-stock-print-dialog"
@@ -1311,7 +1459,7 @@
   }
 
   function openPrintWindow(title, rows, filterLabel) {
-    if (!Array.isArray(rows) || rows.length === 0) {
+    if (!state.ready || !Array.isArray(rows) || rows.length === 0) {
       void showNoDataDialog();
       return false;
     }
@@ -1511,6 +1659,7 @@
           </div>
           <div class="print-info">
             <div>対象：${escapeHtml(filterLabel || "全保管場所")}</div>
+            <div>データ元：${escapeHtml(sourceDescription())}</div>
             <div>印刷日時：${escapeHtml(printedAt)}</div>
             <div class="print-summary">${formatNumber(rows.length)}行 / 在庫合計 ${formatNumber(totalStock)}個</div>
           </div>

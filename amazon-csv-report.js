@@ -4,7 +4,7 @@
   const core = window.inventoryAmazonCsv;
   const escape = v => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const number = n => Number(n).toLocaleString("ja-JP");
-  const state = {rows: null, result: null, name: "", loaded: "", sample: false, view: "product"};
+  const state = {rows: null, result: null, name: "", loaded: "", sample: false, view: "product", destination: null};
   let generation = 0;
   const $ = id => document.getElementById("amazon-" + id);
   const style = `
@@ -33,6 +33,7 @@
       <button id="amazon-sample" type="button">架空データで試す</button><button id="amazon-refresh" type="button" disabled>現在庫・販売予定を再取得</button></div>
       <p id="amazon-status" role="status" aria-live="polite">CSVを選んでください。架空データでも動作を確認できます。</p>
       <div class="amazon-controls"><button id="amazon-product" type="button" aria-pressed="true">商品別</button><button id="amazon-site" type="button" aria-pressed="false">配送先別</button><button id="amazon-print" type="button" disabled>表示中の集計を印刷する</button><button id="amazon-home" type="button">ホームへ戻る</button></div>
+      <label id="amazon-destination-controls" hidden>表示・印刷する配送先<select id="amazon-destination" disabled><option value="">すべての配送先</option></select></label>
       <div id="amazon-output"></div>`;
     document.querySelector("main").appendChild(section);
     const css = document.createElement("style"); css.textContent = style; document.head.appendChild(css);
@@ -43,11 +44,16 @@
     $("refresh").addEventListener("click", refresh);
     $("sample").addEventListener("click", sample);
     for (const view of ["product", "site"]) $(view).addEventListener("click", () => { state.view = view; render(); });
+    $("destination").addEventListener("change", () => {
+      const value = $("destination").value;
+      const group = state.result && /^\d+$/.test(value) ? state.result.sites[Number(value)] : null;
+      state.destination = group ? group.site : null; render();
+    });
     $("print").addEventListener("click", print);
   }
-  function clear() { state.result = null; $("output").innerHTML = ""; $("print").disabled = true; $("refresh").disabled = true; }
+  function clear() { state.result = null; $("output").innerHTML = ""; $("print").disabled = true; $("refresh").disabled = true; $("destination").disabled = true; }
   async function loadFile() {
-    const request = ++generation; clear(); state.rows = null; state.sample = false;
+    const request = ++generation; clear(); state.rows = null; state.sample = false; state.destination = null;
     const file = $("file").files[0]; if (!file) return;
     $("status").textContent = "CSVを読み込んでいます…";
     try {
@@ -83,16 +89,30 @@
   }
   function report() {
     const r = state.result; if (!r) return "";
-    const warning = r.issues.length ? `<p class="amazon-warning">要確認：${number(r.issues.length)}行。数量が確認できた${number(r.excluded)}個は、配送先合計に含めますが商品別集計・在庫照合には含めません。${r.invalidQuantityRows ? `数量不明${number(r.invalidQuantityRows)}行は合計に含まれず、CSV全体の総数量は確定していません。` : ""}</p>` : "";
+    const filtered = state.view === "site" && state.destination !== null;
+    const groups = filtered ? r.sites.filter(g => g.site === state.destination) : r.sites;
+    const displayedIssues = filtered ? r.issues.filter(i => (i.site || "（配送先未指定）") === state.destination) : r.issues;
+    const excluded = groups.reduce((n, g) => n + g.excluded, 0);
+    const unknown = groups.reduce((n, g) => n + g.unknown, 0);
+    const total = groups.reduce((n, g) => n + g.qty, 0);
+    const warning = displayedIssues.length ? `<p class="amazon-warning">要確認：${number(displayedIssues.length)}行。数量が確認できた${number(excluded)}個は、配送先合計に含めますが商品別集計・在庫照合には含めません。${unknown ? `数量不明${number(unknown)}行は合計に含まれず、表示対象の総数量は確定していません。` : ""}</p>` : "";
     let body;
     if (state.view === "product") body = r.items.length ? table(r.items, false) : "<p>JANの確認が済んだ商品はありません。配送先別で数量を確認できます。</p>";
-    else body = `<div class="amazon-table-wrap"><table class="amazon-table"><thead><tr><th>配送先</th><th>数量（確認済み分）</th><th>うち商品照合対象外</th><th>数量不明の行</th></tr></thead><tbody>${r.sites.map(g => `<tr><td>${escape(g.site)}</td><td class="qty">${number(g.qty)}</td><td class="qty">${number(g.excluded)}</td><td class="qty">${number(g.unknown)}</td></tr>`).join("")}<tr class="amazon-total"><td>全配送先合計</td><td class="qty">${number(r.total)}</td><td class="qty">${number(r.excluded)}</td><td class="qty">${number(r.invalidQuantityRows)}</td></tr></tbody></table></div>` + r.sites.map(g => `<h3>${escape(g.site)} ／ ${number(g.qty)}個${g.unknown ? "（数量不明あり）" : ""}</h3>${g.items.length ? table(g.items, true) : "<p>商品別の内訳はJAN等の確認後に表示します。</p>"}`).join("");
-    const issues = r.issues.length ? `<h3>確認が必要な明細（別商品と混ぜず、元の行ごとに表示）</h3><div class="amazon-table-wrap"><table class="amazon-table"><thead><tr><th>CSV行</th><th>配送先</th><th>JAN（元の表記）</th><th>商品名</th><th>数量</th><th>確認事項</th></tr></thead><tbody>${r.issues.map(i => `<tr><td>${i.line}</td><td>${escape(i.site)}</td><td>${escape(i.jan)}</td><td>${escape(i.name)}</td><td class="qty">${i.qty === null ? "不明" : number(i.qty)}</td><td>${escape(i.issues.join(" ／ "))}</td></tr>`).join("")}</tbody></table></div>` : "";
+    else body = `<div class="amazon-table-wrap"><table class="amazon-table"><thead><tr><th>配送先</th><th>数量（確認済み分）</th><th>うち商品照合対象外</th><th>数量不明の行</th></tr></thead><tbody>${groups.map(g => `<tr><td>${escape(g.site)}</td><td class="qty">${number(g.qty)}</td><td class="qty">${number(g.excluded)}</td><td class="qty">${number(g.unknown)}</td></tr>`).join("")}<tr class="amazon-total"><td>${filtered ? "選択配送先の合計" : "全配送先合計"}</td><td class="qty">${number(total)}</td><td class="qty">${number(excluded)}</td><td class="qty">${number(unknown)}</td></tr></tbody></table></div>` + groups.map(g => `<h3>${escape(g.site)} ／ ${number(g.qty)}個${g.unknown ? "（数量不明あり）" : ""}</h3>${g.items.length ? table(g.items, true) : "<p>商品別の内訳はJAN等の確認後に表示します。</p>"}`).join("");
+    const issues = displayedIssues.length ? `<h3>確認が必要な明細（別商品と混ぜず、元の行ごとに表示）</h3><div class="amazon-table-wrap"><table class="amazon-table"><thead><tr><th>CSV行</th><th>配送先</th><th>JAN（元の表記）</th><th>商品名</th><th>数量</th><th>確認事項</th></tr></thead><tbody>${displayedIssues.map(i => `<tr><td>${i.line}</td><td>${escape(i.site)}</td><td>${escape(i.jan)}</td><td>${escape(i.name)}</td><td class="qty">${i.qty === null ? "不明" : number(i.qty)}</td><td>${escape(i.issues.join(" ／ "))}</td></tr>`).join("")}</tbody></table></div>` : "";
     return `<h2>${state.sample ? "【架空データ】" : ""}Amazon CSV ${state.view === "product" ? "商品別集計" : "配送先別集計"}</h2><p>${escape(state.name)} ／ 取得日時：${escape(state.loaded)}</p>
-      <p class="amazon-summary">${number(state.rows.length)}行 ／ 配送先 ${number(r.sites.length)}件 ／ 数量の確認済み合計 ${number(r.total)}個 ／ 商品照合対象 ${number(r.items.length)}商品・${number(r.eligible)}個</p>
+      <p class="amazon-summary">CSV全体：${number(state.rows.length)}行 ／ 配送先 ${number(r.sites.length)}件 ／ 数量の確認済み合計 ${number(r.total)}個 ／ 商品照合対象 ${number(r.items.length)}商品・${number(r.eligible)}個</p>
+      ${state.view === "site" ? `<p class="amazon-summary">表示・印刷対象：${filtered ? escape(state.destination) : "すべての配送先"} ／ 数量の確認済み合計 ${number(total)}個${unknown ? "（数量不明あり）" : ""}</p>` : ""}
       ${warning}<p>黄色＝販売予定あり（この端末に登録済みの全予定。過去分も含む）。赤字＝全配送先のAmazon必要数が現在庫を超過。販売予定の数量は差し引きません。<br>同JANの在庫は数量が最大の商品を採用し、合算しません。配送先別の現在庫は全体在庫の参考表示です。配送先への割当ではありません。</p>${body}${issues}`;
   }
   function render() {
+    const groups = state.result ? state.result.sites : [];
+    if (state.destination !== null && !groups.some(g => g.site === state.destination)) state.destination = null;
+    $("destination-controls").hidden = state.view !== "site";
+    $("destination").innerHTML = '<option value="">すべての配送先</option>' + groups.map((g, i) => `<option value="${i}">${escape(g.site)}</option>`).join("");
+    const selected = groups.findIndex(g => g.site === state.destination);
+    $("destination").value = selected < 0 ? "" : String(selected);
+    $("destination").disabled = !state.result;
     $("product").setAttribute("aria-pressed", String(state.view === "product")); $("site").setAttribute("aria-pressed", String(state.view === "site"));
     $("output").innerHTML = report(); $("print").disabled = !state.result;
   }
@@ -107,7 +127,7 @@
     return [[{janCode:"4901234567894",internalCode:"DEMO-A1",productName:"架空商品A",stock:2}, {janCode:"4901234567894",internalCode:"DEMO-A2",productName:"架空商品A（重複）",stock:8}, {janCode:"4901234567900",internalCode:"DEMO-B",productName:"架空商品B",stock:20}], [{internalCode:"DEMO-A1",quantity:3}]];
   }
   function sample() {
-    generation++; clear(); $("file").value = ""; state.sample = true; state.name = "架空CSV（保存・在庫変更なし）";
+    generation++; clear(); state.destination = null; $("file").value = ""; state.sample = true; state.name = "架空CSV（保存・在庫変更なし）";
     state.rows = [{line:2,site:"架空配送先・東",jan:"4901234567894",qty:6,name:"架空商品A",issues:[]},{line:3,site:"架空配送先・西",jan:"4901234567894",qty:4,name:"架空商品A",issues:[]},{line:4,site:"架空配送先・東",jan:"4901234567900",qty:5,name:"架空商品B",issues:[]}];
     refresh();
   }

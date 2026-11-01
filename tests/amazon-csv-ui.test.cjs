@@ -35,3 +35,24 @@ test('malformed file clears prior results and disables printing; CSV import does
  s.elem('amazon-file').files=[{name:'bad.csv',size:20,arrayBuffer:async()=>new TextEncoder().encode('a,b,c\n1,2,3').buffer}];await s.h.loadFile();
  assert.equal(s.h.state.result,null);assert.equal(s.elem('amazon-output').innerHTML,'');assert.equal(s.elem('amazon-print').disabled,true);assert.match(s.elem('amazon-status').textContent,/列を確認/);
 });
+test('one destination prints only its own demand while shortage still uses global demand; product view remains global',async()=>{
+ const s=setup();s.h.init();s.h.sample();await new Promise(r=>setImmediate(r));
+ s.h.state.view='site';s.h.render();const index=s.h.state.result.sites.findIndex(g=>g.site==='架空配送先・西');
+ s.elem('amazon-destination').value=String(index);s.elem('amazon-destination').events.change();s.h.print();
+ let html=s.printed();assert.match(html,/表示・印刷対象：架空配送先・西.*合計 4個/);assert.doesNotMatch(html,/架空配送先・東/);assert.match(html,/在庫不足（2個）/);assert.match(html,/amazon-short">8個/);
+ assert.equal((html.match(/<tr class="amazon-planned">/g)||[]).length,1);
+ s.h.state.view='product';s.h.render();html=s.elem('amazon-output').innerHTML;assert.match(html,/>10<\/td>/);assert.match(html,/架空商品B/);assert.equal(s.elem('amazon-destination-controls').hidden,true);
+ s.h.state.view='site';s.h.render();assert.equal(s.elem('amazon-destination').value,String(index));
+ s.elem('amazon-destination').value='';s.elem('amazon-destination').events.change();assert.match(s.elem('amazon-output').innerHTML,/架空配送先・東/);assert.match(s.elem('amazon-output').innerHTML,/すべての配送先.*合計 15個/);
+});
+test('selected destination filters uncertain JAN rows and partial totals too, and escapes destination names',async()=>{
+ const site='<img src=x onerror=bad>';
+ const s=setup();s.h.state.rows=[{...valid,site,qty:7,issues:['要確認']},{...valid,site:'別の配送先',qty:999,issues:['要確認']},{...valid,site,qty:null,issues:['数量不明']}];
+ s.h.state.view='site';await s.h.refresh();s.h.state.destination=site;s.h.render();s.h.print();
+ for(const html of [s.elem('amazon-output').innerHTML,s.printed()]){assert.match(html,/表示・印刷対象：&lt;img/);assert.match(html,/要確認：2行/);assert.match(html,/数量不明1行/);assert.match(html,/合計 7個/);assert.doesNotMatch(html,/<img src=x|別の配送先/);}
+ assert.match(s.elem('amazon-destination').innerHTML,/&lt;img/);
+});
+test('refresh retains an existing destination and resets a destination absent from replacement CSV',async()=>{
+ const s=setup();s.h.sample();await new Promise(r=>setImmediate(r));s.h.state.view='site';s.h.state.destination='架空配送先・西';await s.h.refresh();assert.equal(s.h.state.destination,'架空配送先・西');
+ s.h.state.sample=false;s.h.state.rows=[valid];await s.h.refresh();assert.equal(s.h.state.destination,null);assert.match(s.elem('amazon-output').innerHTML,/すべての配送先/);
+});

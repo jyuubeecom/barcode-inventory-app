@@ -51,3 +51,21 @@ test('saved write followed by failed display read cannot become another submit',
 test('shared form rejects fractional quantities before confirmation and persistence',async()=>{
  const f=uiFixture({quantity:'1.5'});await f.run();assert.equal(f.count().prepared,0);assert.match(f.notices.at(-1)[1],/整数/);
 });
+
+test('actual login shape without numeric ID supports retry after reload and token renewal',async()=>{
+ const login={token:'FAKE-FIRST',user:{username:'fake-worker',display_name:'架空担当者',role:'worker'}};
+ const storage=new Map();const first=client(async()=>{throw new Error('FAKE_LOST_RESPONSE');},storage);
+ first.api.prepare(login,fields,stocks);await assert.rejects(first.api.send(login));
+ const retry=client(async(url,opts)=>ok(JSON.parse(opts.body).request_id),storage);
+ await assert.rejects(retry.api.send({...login,user:{...login.user,username:'other-worker'}}));
+ assert.equal(retry.calls.length,0);
+ await retry.api.send({...login,token:'FAKE-RENEWED',user:{...login.user,id:8}});
+ assert.equal(retry.api.pending(),null);assert.equal(retry.calls.length,1);
+ assert.equal(JSON.parse(first.calls[0][1].body).request_id,JSON.parse(retry.calls[0][1].body).request_id);
+ assert.ok(!JSON.stringify([...storage.values()]).includes(login.token));
+});
+test('missing token, missing identity and read-only role cannot prepare a write',()=>{
+ for(const login of [null,{user:{username:'fake',role:'worker'}},{token:'FAKE',user:{role:'worker'}},{token:'FAKE',user:{username:'fake',role:'viewer'}}]) {
+  const a=client();assert.throws(()=>a.api.prepare(login,fields,stocks));assert.equal(a.storage.size,0);assert.equal(a.calls.length,0);
+ }
+});

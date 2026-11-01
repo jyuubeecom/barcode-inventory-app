@@ -3,6 +3,14 @@
   // Per app path; never store a bearer token or mutate the terminal inventory DB.
   const key = 'inventory-shared-operation-v1:' + (root.location?.pathname || '/');
   let busy = false;
+  function owner(session) {
+    const user = session?.user;
+    if (!session?.token || !['admin','worker'].includes(user?.role)) return null;
+    // Login returns username/display_name/role; numeric IDs are server-side.
+    // Prefer username so adding an ID to a future response keeps retries stable.
+    if (typeof user.username === 'string' && user.username.trim()) return 'username:' + user.username;
+    return user.id ? String(user.id) : null;
+  }
   function pending() {
     const raw = root.localStorage.getItem(key);
     if (!raw) return null;
@@ -22,12 +30,13 @@
   }
   function prepare(session, fields, stocks) {
     if (pending()) throw new Error('未確認の入出庫があります。先に「前回の入出庫を再確認」を押してください。');
-    if (!session?.user?.id || !['admin','worker'].includes(session.user.role)) throw new Error('サーバーにログインしてください。');
+    const account = owner(session);
+    if (!account) throw new Error('サーバーにログインしてください。');
     const quantity = Number(fields.quantity);
     if (String(fields.quantity).trim() === '' || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000000) throw new Error('数量は1～1000000の整数で入力してください。');
     if (!['in','out'].includes(fields.action)) throw new Error('入出庫の種類を確認してください。');
     const request = {...fields, quantity, expected_stocks:snapshot(stocks), request_id:root.crypto.randomUUID()};
-    const p = {owner:String(session.user.id),request};
+    const p = {owner:account,request};
     root.localStorage.setItem(key,JSON.stringify(p)); // Must persist before sending.
     return p;
   }
@@ -35,7 +44,10 @@
     if (busy) throw new Error('入出庫の結果を確認中です。');
     const p = pending();
     if (!p) throw new Error('未確認の入出庫はありません。');
-    if (!session?.token || String(session.user?.id) !== p.owner || !['admin','worker'].includes(session.user?.role)) throw new Error('前回と同じ担当者でサーバーにログインしてください。');
+    // Accept numeric owners already persisted by the previous build as well.
+    const account = owner(session);
+    const legacyOwner = account && session.user.id && String(session.user.id) === p.owner;
+    if (!account || (account !== p.owner && !legacyOwner)) throw new Error('前回と同じ担当者でサーバーにログインしてください。');
     busy = true;
     try {
       const response = await root.fetch('https://jyuubee.sakura.ne.jp/inventory/shared-stock-operation-auth.php', {

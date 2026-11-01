@@ -19,23 +19,23 @@ def build(destination):
             if name == 'storage.js':
                 old = b'"barcodeInventoryDatabase"'
                 assert data.count(old) == 1, 'Database declaration changed; review isolation before packaging.'
-                data = data.replace(old, b'"barcodeInventoryDatabase-test-v2939"')
+                data = data.replace(old, b'"barcodeInventoryDatabase-test-v2940"')
             elif name == 'index.html':
                 text = data.decode('utf-8')
-                assert '画面版 v293.9' in text
-                text = text.replace('画面版 v293.9', '検証専用・画面版 v293.9')
+                assert '画面版 v294.0' in text
+                text = text.replace('画面版 v294.0', '検証専用・画面版 v294.0')
                 text = text.replace('<title>', '<title>【検証用】', 1)
                 data = text.encode('utf-8')
             elif name == 'manifest.json':
                 import json
                 manifest = json.loads(data)
-                manifest['name'] = '【検証用】バーコード在庫・棚卸管理 v293.9'
-                manifest['short_name'] = '在庫テスト2939'
+                manifest['name'] = '【検証用】バーコード在庫・棚卸管理 v294.0'
+                manifest['short_name'] = '在庫テスト2940'
                 # Keep this identity stable across test builds, and distinct from
                 # the production app even if both manifests share a directory.
                 # This does not override Chrome's handling of a legacy app with
                 # a broader scope; coexistence still needs an Android check.
-                manifest['id'] = './?app=barcode-inventory-test-v2939'
+                manifest['id'] = './?app=barcode-inventory-test-v2940'
                 data = (json.dumps(manifest, ensure_ascii=False, indent=2) + '\n').encode('utf-8')
             archive.writestr(name, data)
     return destination

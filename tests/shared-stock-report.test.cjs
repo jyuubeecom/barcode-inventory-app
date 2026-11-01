@@ -10,7 +10,6 @@ function setup(fetchImpl,localProducts=[]) {
   const c=vm.createContext({window,document:doc,AbortController,fetch:fetchImpl,console,sessionStorage:{getItem:()=>token,removeItem(){token='';}},CustomEvent:function(){},getAllProducts:async()=>{localReads++;return localProducts;},getProductLocationStocks:product=>{normalizations++;return product.locationStocks || [];}});
   let src=fs.readFileSync(path.join(__dirname,'../location-stock-report.js'),'utf8');
   src=src.replace('  function formatNumber(value) {',`  window.h={state,rows:buildSharedRows,reload:reloadReport,visible:getVisibleRows,auth:handleReportAuthChanged,
-    scroll:moveReportHorizontally,scrollControls:updateScrollControls,
     print:openPrintWindow,invalidate:invalidateReportRequest,source(value){state.source=value;},
     localRows:buildAllLocationRows};
   function formatNumber(value) {`);
@@ -70,31 +69,4 @@ test('default local report preserves the existing positive-stock policy and neve
  await s.h.reload();assert.equal(s.h.state.source,'local');assert.equal(s.reads(),1);assert.equal(requests,0);
  assert.equal(s.h.state.rows.length,2);assert.equal(s.h.state.rows.reduce((n,r)=>n+r.stock,0),10);assert.ok(s.h.state.rows.every(r=>r.status==='廃盤予定'));
  assert.equal(JSON.stringify(products),original);
-});
-
-
-test('horizontal controls reflect both edges and hidden or fully fitting tables',()=>{
- const s=setup(async()=>{throw new Error('unexpected request');});
- const wrap=s.element('#location-stock-report-table-scroll');
- Object.assign(wrap,{clientWidth:500,scrollWidth:1200,scrollLeft:0,hidden:false,style:{setProperty(){}}});
- s.h.scrollControls();
- for(const position of ['top','bottom']){
-  assert.equal(s.element(`#location-stock-report-scroll-controls-${position}`).hidden,false);
-  assert.equal(s.element(`#location-stock-report-scroll-left-${position}`).disabled,true);
-  assert.equal(s.element(`#location-stock-report-scroll-right-${position}`).disabled,false);
- }
- wrap.scrollLeft=700;s.h.scrollControls();
- assert.equal(s.element('#location-stock-report-scroll-right-top').disabled,true);
- assert.equal(s.element('#location-stock-report-scroll-left-bottom').disabled,false);
- wrap.scrollWidth=500;s.h.scrollControls();assert.equal(s.element('#location-stock-report-scroll-controls-top').hidden,true);
- wrap.scrollWidth=1200;wrap.hidden=true;s.h.scrollControls();assert.equal(s.element('#location-stock-report-scroll-controls-bottom').hidden,true);
-});
-
-test('horizontal buttons move only the table and align frozen identity columns to measured widths',()=>{
- const s=setup(async()=>{throw new Error('unexpected request');});let move,offset;
- const wrap=s.element('#location-stock-report-table-scroll');Object.assign(wrap,{clientWidth:500,scrollWidth:1200,hidden:false,scrollLeft:100,scrollBy(options){move=options;},style:{setProperty(k,v){offset=[k,v];}}});
- s.element('#location-stock-report-head .report-pin-code').getBoundingClientRect=()=>({width:142});
- s.h.scrollControls();assert.deepEqual(offset,['--report-pinned-code-offset','142px']);
- s.h.scroll(1);assert.equal(move.left,300);s.h.scroll(-1);assert.equal(move.left,-300);
- assert.equal(s.reads(),0);assert.equal(s.normalizations(),0);
 });

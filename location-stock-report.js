@@ -189,14 +189,13 @@
         在庫データを読み込んでいます。
       </div>
 
-      ${createScrollControls("top")}
-      <div id="location-stock-report-table-scroll" class="location-stock-report-table-wrap" tabindex="0" role="region" aria-label="現在庫表。左右にスクロールできます" aria-describedby="location-stock-report-scroll-help-top">
-        <table class="location-stock-report-table">
-          <thead id="location-stock-report-head"></thead>
-          <tbody id="location-stock-report-body"></tbody>
+      <div class="location-stock-report-table-wrap">
+        <table class="location-stock-report-table" role="table">
+          <colgroup><col style="width:5%"><col style="width:13%"><col style="width:14%"><col style="width:14%"><col style="width:25%"><col style="width:6%"><col style="width:10%"><col style="width:13%"></colgroup>
+          <thead id="location-stock-report-head" role="rowgroup"></thead>
+          <tbody id="location-stock-report-body" role="rowgroup"></tbody>
         </table>
       </div>
-      ${createScrollControls("bottom")}
 
       <p
         id="location-stock-report-empty"
@@ -216,14 +215,6 @@
     `;
 
     main.appendChild(section);
-  }
-
-  function createScrollControls(position) {
-    return `<div id="location-stock-report-scroll-controls-${position}" class="location-stock-report-scroll-controls" hidden>
-      <span id="location-stock-report-scroll-help-${position}">左右に動かせます。社内コードと商品名は固定表示します。</span>
-      <button id="location-stock-report-scroll-left-${position}" type="button" aria-controls="location-stock-report-table-scroll">← 左へ</button>
-      <button id="location-stock-report-scroll-right-${position}" type="button" aria-controls="location-stock-report-table-scroll">右へ →</button>
-    </div>`;
   }
 
   function createStyles() {
@@ -358,14 +349,7 @@
       }
 
       .location-stock-report-table-wrap {
-        --report-code-width: 140px;
-        --report-name-width: 220px;
-        --report-pinned-code-offset: 140px;
         overflow-x: auto;
-        max-width: 100%;
-        position: relative;
-        isolation: isolate;
-        scrollbar-width: auto;
         -webkit-overflow-scrolling: touch;
         border: 1px solid #cfd8dc;
         border-radius: 12px;
@@ -375,8 +359,7 @@
       .location-stock-report-table {
         width: 100%;
         min-width: 980px;
-        border-collapse: separate;
-        border-spacing: 0;
+        border-collapse: collapse;
       }
 
       .location-stock-report-table th,
@@ -393,34 +376,6 @@
         z-index: 1;
         background: #eaf3ff;
         white-space: nowrap;
-      }
-
-      .location-stock-report-scroll-controls {
-        display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 10px 0;
-      }
-      .location-stock-report-scroll-controls[hidden] { display: none; }
-      .location-stock-report-scroll-controls span { flex: 1 1 240px; font-size: 13px; color: #455a64; }
-      #location-stock-report .location-stock-report-scroll-controls button { width: auto; min-width: 88px; margin: 0; padding: 8px 12px; }
-      #location-stock-report .location-stock-report-scroll-controls button:disabled { opacity: .45; cursor: default; }
-      .location-stock-report-table-wrap:focus-visible { outline: 3px solid #1976d2; outline-offset: 3px; }
-      .location-stock-report-table .report-pin-code,
-      .location-stock-report-table .report-pin-name {
-        position: sticky; z-index: 2; background: #fff; box-sizing: border-box;
-        overflow-wrap: anywhere; white-space: normal;
-      }
-      .location-stock-report-table .report-pin-code {
-        left: 0; width: var(--report-code-width); min-width: var(--report-code-width); max-width: var(--report-code-width);
-      }
-      .location-stock-report-table .report-pin-name {
-        left: var(--report-pinned-code-offset); width: var(--report-name-width); min-width: var(--report-name-width); max-width: var(--report-name-width);
-        box-shadow: 3px 0 0 #d1deec;
-      }
-      .location-stock-report-table th.report-pin-code,
-      .location-stock-report-table th.report-pin-name { z-index: 3; background: #eaf3ff; }
-      @media (max-width: 600px) {
-        .location-stock-report-table-wrap { --report-code-width: 100px; --report-name-width: 140px; }
-        .location-stock-report-table .report-pin-code,
-        .location-stock-report-table .report-pin-name { font-size: 12px; padding: 8px 6px; }
       }
 
       .location-stock-report-table tbody tr:last-child td {
@@ -612,6 +567,41 @@
       }
     `;
 
+    style.textContent += `
+      /* Fit all eight fields in the available width. Never hide or truncate values. */
+      #location-stock-report { min-width: 0; }
+      .location-stock-report-table-wrap { max-width: 100%; overflow: visible; container-type: inline-size; }
+      .location-stock-report-table { width: 100%; min-width: 0; table-layout: fixed; }
+      .location-stock-report-table th, .location-stock-report-table td { min-width: 0; max-width: 100%; padding: 9px 6px; overflow-wrap: anywhere; word-break: normal; white-space: normal; }
+      .location-stock-report-table th { position: static; }
+      .location-stock-report-table .location-stock-report-quantity { min-width: 0; font-size: 16px; white-space: normal; }
+      .location-stock-report-location-cell, .location-stock-report-color { min-width: 0; white-space: normal; }
+      .location-stock-report-status-badge { max-width: 100%; box-sizing: border-box; white-space: normal; overflow-wrap: anywhere; padding: 4px 6px; }
+
+      @container (max-width: 720px) {
+        .location-stock-report-table colgroup { display: none; }
+        .location-stock-report-table, .location-stock-report-table tbody { display: block; width: 100%; }
+        .location-stock-report-table thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+        .location-stock-report-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin: 0 0 12px; padding: 12px; background: #f7fbff; border: 1px solid #cbdced; border-radius: 10px; }
+        .location-stock-report-table td { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; max-width: 100%; border: 0; padding: 5px; text-align: left !important; font-size: 14px; }
+        .location-stock-report-table td[data-label="商品名"], .location-stock-report-table td[data-label="保管場所"] { grid-column: 1 / -1; }
+        .location-stock-report-table td::before { content: attr(data-label); font-size: 12px; font-weight: 600; color: #526b80; }
+        .location-stock-report-table td[data-label="商品名"] { font-size: 16px; font-weight: 700; }
+        .location-stock-report-table td.location-stock-report-quantity { font-size: 20px; }
+}
+      @media (max-width: 760px) {
+        .location-stock-report-table colgroup { display: none; }
+        .location-stock-report-table, .location-stock-report-table tbody { display: block; width: 100%; }
+        .location-stock-report-table thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+        .location-stock-report-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin: 0 0 12px; padding: 12px; background: #f7fbff; border: 1px solid #cbdced; border-radius: 10px; }
+        .location-stock-report-table td { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; max-width: 100%; border: 0; padding: 5px; text-align: left !important; font-size: 14px; }
+        .location-stock-report-table td[data-label="商品名"], .location-stock-report-table td[data-label="保管場所"] { grid-column: 1 / -1; }
+        .location-stock-report-table td::before { content: attr(data-label); font-size: 12px; font-weight: 600; color: #526b80; }
+        .location-stock-report-table td[data-label="商品名"] { font-size: 16px; font-weight: 700; }
+        .location-stock-report-table td.location-stock-report-quantity { font-size: 20px; }
+}
+    `;
+
     document.head.appendChild(style);
   }
 
@@ -670,17 +660,6 @@
   }
 
   function bindEvents() {
-    const wrap = document.querySelector("#location-stock-report-table-scroll");
-    wrap?.addEventListener("scroll", updateScrollControls, {passive:true});
-    window.addEventListener("resize", updateScrollControls);
-    if (wrap && typeof ResizeObserver !== "undefined") new ResizeObserver(updateScrollControls).observe(wrap);
-    ["top", "bottom"].forEach(function (position) {
-      ["left", "right"].forEach(function (direction) {
-        document.querySelector(`#location-stock-report-scroll-${direction}-${position}`)?.addEventListener("click", function () {
-          moveReportHorizontally(direction === "left" ? -1 : 1);
-        });
-      });
-    });
     document.querySelector("#location-stock-report-source")?.addEventListener("change", function (event) {
       state.source = event.target.value === "server" ? "server" : "local";
       // A selected place from the previous data source must not hide all new rows.
@@ -1211,42 +1190,11 @@
       tableWrap.hidden = rows.length === 0;
     }
 
-    updateScrollControls();
-
     setStatus(
       !state.ready ? state.notice : rows.length > 0
         ? `${getSelectedLocationLabel()}：${formatNumber(rows.length)}行の在庫を表示しています。`
         : `${getSelectedLocationLabel()}：該当する在庫はありません。`
     );
-  }
-
-  function updateScrollControls() {
-    const wrap = document.querySelector("#location-stock-report-table-scroll");
-    if (!wrap) return;
-    const max = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
-    const overflow = !wrap.hidden && wrap.clientWidth > 0 && max > 1;
-    const code = document.querySelector("#location-stock-report-head .report-pin-code");
-    if (code && code.getBoundingClientRect) {
-      const width = code.getBoundingClientRect().width;
-      if (width > 0) wrap.style.setProperty("--report-pinned-code-offset", width + "px");
-    }
-    ["top", "bottom"].forEach(function (position) {
-      const controls = document.querySelector(`#location-stock-report-scroll-controls-${position}`);
-      const left = document.querySelector(`#location-stock-report-scroll-left-${position}`);
-      const right = document.querySelector(`#location-stock-report-scroll-right-${position}`);
-      if (controls) controls.hidden = !overflow;
-      if (left) left.disabled = !overflow || wrap.scrollLeft <= 1;
-      if (right) right.disabled = !overflow || wrap.scrollLeft >= max - 1;
-    });
-  }
-
-  function moveReportHorizontally(direction) {
-    const wrap = document.querySelector("#location-stock-report-table-scroll");
-    if (!wrap || wrap.hidden || wrap.scrollWidth <= wrap.clientWidth) return;
-    // Leave enough overlap to track a row between clicks. Touch/keyboard scrolling also works.
-    const amount = Math.max(120, wrap.clientWidth * .6) * direction;
-    const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    wrap.scrollBy({left:amount, behavior:reduced ? "auto" : "smooth"});
   }
 
   function renderTableHeader() {
@@ -1260,15 +1208,15 @@
     }
 
     head.innerHTML = `
-      <tr>
-        <th>No</th>
-        <th>保管場所</th>
-        <th class="report-pin-code" scope="col">社内コード</th>
-        <th>商品コード</th>
-        <th class="report-pin-name" scope="col">商品名</th>
-        <th>色</th>
-        <th>現在庫</th>
-        <th>商品状態</th>
+      <tr role="row">
+        <th role="columnheader" scope="col">No</th>
+        <th role="columnheader" scope="col">保管場所</th>
+        <th role="columnheader" scope="col">社内コード</th>
+        <th role="columnheader" scope="col">商品コード</th>
+        <th role="columnheader" scope="col">商品名</th>
+        <th role="columnheader" scope="col">色</th>
+        <th role="columnheader" scope="col">現在庫</th>
+        <th role="columnheader" scope="col">商品状態</th>
       </tr>
     `;
   }
@@ -1286,15 +1234,15 @@
     body.innerHTML = rows.map(
       function (row, index) {
         return `
-          <tr>
-            <td>${index + 1}</td>
-            <td class="location-stock-report-location-cell">${escapeHtml(row.location)}</td>
-            <td class="report-pin-code">${escapeHtml(row.internalCode || "-")}</td>
-            <td>${escapeHtml(row.productCode || "-")}</td>
-            <td class="report-pin-name">${escapeHtml(row.productName || "-")}</td>
-            <td class="location-stock-report-color">${escapeHtml(row.productColor || "-")}</td>
-            <td class="location-stock-report-quantity">${formatNumber(row.stock)}個</td>
-            <td>${createStatusBadge(row.status)}</td>
+          <tr role="row">
+            <td role="cell" data-label="No">${index + 1}</td>
+            <td role="cell" data-label="保管場所" class="location-stock-report-location-cell">${escapeHtml(row.location)}</td>
+            <td role="cell" data-label="社内コード">${escapeHtml(row.internalCode || "-")}</td>
+            <td role="cell" data-label="商品コード">${escapeHtml(row.productCode || "-")}</td>
+            <td role="cell" data-label="商品名">${escapeHtml(row.productName || "-")}</td>
+            <td role="cell" data-label="色" class="location-stock-report-color">${escapeHtml(row.productColor || "-")}</td>
+            <td role="cell" data-label="現在庫" class="location-stock-report-quantity">${formatNumber(row.stock)}個</td>
+            <td role="cell" data-label="商品状態">${createStatusBadge(row.status)}</td>
           </tr>
         `;
       }

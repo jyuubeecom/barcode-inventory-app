@@ -189,12 +189,14 @@
         在庫データを読み込んでいます。
       </div>
 
-      <div class="location-stock-report-table-wrap">
+      ${createScrollControls("top")}
+      <div id="location-stock-report-table-scroll" class="location-stock-report-table-wrap" tabindex="0" role="region" aria-label="現在庫表。左右にスクロールできます" aria-describedby="location-stock-report-scroll-help-top">
         <table class="location-stock-report-table">
           <thead id="location-stock-report-head"></thead>
           <tbody id="location-stock-report-body"></tbody>
         </table>
       </div>
+      ${createScrollControls("bottom")}
 
       <p
         id="location-stock-report-empty"
@@ -214,6 +216,14 @@
     `;
 
     main.appendChild(section);
+  }
+
+  function createScrollControls(position) {
+    return `<div id="location-stock-report-scroll-controls-${position}" class="location-stock-report-scroll-controls" hidden>
+      <span id="location-stock-report-scroll-help-${position}">左右に動かせます。社内コードと商品名は固定表示します。</span>
+      <button id="location-stock-report-scroll-left-${position}" type="button" aria-controls="location-stock-report-table-scroll">← 左へ</button>
+      <button id="location-stock-report-scroll-right-${position}" type="button" aria-controls="location-stock-report-table-scroll">右へ →</button>
+    </div>`;
   }
 
   function createStyles() {
@@ -348,7 +358,14 @@
       }
 
       .location-stock-report-table-wrap {
+        --report-code-width: 140px;
+        --report-name-width: 220px;
+        --report-pinned-code-offset: 140px;
         overflow-x: auto;
+        max-width: 100%;
+        position: relative;
+        isolation: isolate;
+        scrollbar-width: auto;
         -webkit-overflow-scrolling: touch;
         border: 1px solid #cfd8dc;
         border-radius: 12px;
@@ -358,7 +375,8 @@
       .location-stock-report-table {
         width: 100%;
         min-width: 980px;
-        border-collapse: collapse;
+        border-collapse: separate;
+        border-spacing: 0;
       }
 
       .location-stock-report-table th,
@@ -375,6 +393,34 @@
         z-index: 1;
         background: #eaf3ff;
         white-space: nowrap;
+      }
+
+      .location-stock-report-scroll-controls {
+        display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 10px 0;
+      }
+      .location-stock-report-scroll-controls[hidden] { display: none; }
+      .location-stock-report-scroll-controls span { flex: 1 1 240px; font-size: 13px; color: #455a64; }
+      #location-stock-report .location-stock-report-scroll-controls button { width: auto; min-width: 88px; margin: 0; padding: 8px 12px; }
+      #location-stock-report .location-stock-report-scroll-controls button:disabled { opacity: .45; cursor: default; }
+      .location-stock-report-table-wrap:focus-visible { outline: 3px solid #1976d2; outline-offset: 3px; }
+      .location-stock-report-table .report-pin-code,
+      .location-stock-report-table .report-pin-name {
+        position: sticky; z-index: 2; background: #fff; box-sizing: border-box;
+        overflow-wrap: anywhere; white-space: normal;
+      }
+      .location-stock-report-table .report-pin-code {
+        left: 0; width: var(--report-code-width); min-width: var(--report-code-width); max-width: var(--report-code-width);
+      }
+      .location-stock-report-table .report-pin-name {
+        left: var(--report-pinned-code-offset); width: var(--report-name-width); min-width: var(--report-name-width); max-width: var(--report-name-width);
+        box-shadow: 3px 0 0 #d1deec;
+      }
+      .location-stock-report-table th.report-pin-code,
+      .location-stock-report-table th.report-pin-name { z-index: 3; background: #eaf3ff; }
+      @media (max-width: 600px) {
+        .location-stock-report-table-wrap { --report-code-width: 100px; --report-name-width: 140px; }
+        .location-stock-report-table .report-pin-code,
+        .location-stock-report-table .report-pin-name { font-size: 12px; padding: 8px 6px; }
       }
 
       .location-stock-report-table tbody tr:last-child td {
@@ -624,6 +670,17 @@
   }
 
   function bindEvents() {
+    const wrap = document.querySelector("#location-stock-report-table-scroll");
+    wrap?.addEventListener("scroll", updateScrollControls, {passive:true});
+    window.addEventListener("resize", updateScrollControls);
+    if (wrap && typeof ResizeObserver !== "undefined") new ResizeObserver(updateScrollControls).observe(wrap);
+    ["top", "bottom"].forEach(function (position) {
+      ["left", "right"].forEach(function (direction) {
+        document.querySelector(`#location-stock-report-scroll-${direction}-${position}`)?.addEventListener("click", function () {
+          moveReportHorizontally(direction === "left" ? -1 : 1);
+        });
+      });
+    });
     document.querySelector("#location-stock-report-source")?.addEventListener("change", function (event) {
       state.source = event.target.value === "server" ? "server" : "local";
       // A selected place from the previous data source must not hide all new rows.
@@ -1154,11 +1211,42 @@
       tableWrap.hidden = rows.length === 0;
     }
 
+    updateScrollControls();
+
     setStatus(
       !state.ready ? state.notice : rows.length > 0
         ? `${getSelectedLocationLabel()}：${formatNumber(rows.length)}行の在庫を表示しています。`
         : `${getSelectedLocationLabel()}：該当する在庫はありません。`
     );
+  }
+
+  function updateScrollControls() {
+    const wrap = document.querySelector("#location-stock-report-table-scroll");
+    if (!wrap) return;
+    const max = Math.max(0, wrap.scrollWidth - wrap.clientWidth);
+    const overflow = !wrap.hidden && wrap.clientWidth > 0 && max > 1;
+    const code = document.querySelector("#location-stock-report-head .report-pin-code");
+    if (code && code.getBoundingClientRect) {
+      const width = code.getBoundingClientRect().width;
+      if (width > 0) wrap.style.setProperty("--report-pinned-code-offset", width + "px");
+    }
+    ["top", "bottom"].forEach(function (position) {
+      const controls = document.querySelector(`#location-stock-report-scroll-controls-${position}`);
+      const left = document.querySelector(`#location-stock-report-scroll-left-${position}`);
+      const right = document.querySelector(`#location-stock-report-scroll-right-${position}`);
+      if (controls) controls.hidden = !overflow;
+      if (left) left.disabled = !overflow || wrap.scrollLeft <= 1;
+      if (right) right.disabled = !overflow || wrap.scrollLeft >= max - 1;
+    });
+  }
+
+  function moveReportHorizontally(direction) {
+    const wrap = document.querySelector("#location-stock-report-table-scroll");
+    if (!wrap || wrap.hidden || wrap.scrollWidth <= wrap.clientWidth) return;
+    // Leave enough overlap to track a row between clicks. Touch/keyboard scrolling also works.
+    const amount = Math.max(120, wrap.clientWidth * .6) * direction;
+    const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    wrap.scrollBy({left:amount, behavior:reduced ? "auto" : "smooth"});
   }
 
   function renderTableHeader() {
@@ -1175,9 +1263,9 @@
       <tr>
         <th>No</th>
         <th>保管場所</th>
-        <th>社内コード</th>
+        <th class="report-pin-code" scope="col">社内コード</th>
         <th>商品コード</th>
-        <th>商品名</th>
+        <th class="report-pin-name" scope="col">商品名</th>
         <th>色</th>
         <th>現在庫</th>
         <th>商品状態</th>
@@ -1201,9 +1289,9 @@
           <tr>
             <td>${index + 1}</td>
             <td class="location-stock-report-location-cell">${escapeHtml(row.location)}</td>
-            <td>${escapeHtml(row.internalCode || "-")}</td>
+            <td class="report-pin-code">${escapeHtml(row.internalCode || "-")}</td>
             <td>${escapeHtml(row.productCode || "-")}</td>
-            <td>${escapeHtml(row.productName || "-")}</td>
+            <td class="report-pin-name">${escapeHtml(row.productName || "-")}</td>
             <td class="location-stock-report-color">${escapeHtml(row.productColor || "-")}</td>
             <td class="location-stock-report-quantity">${formatNumber(row.stock)}個</td>
             <td>${createStatusBadge(row.status)}</td>

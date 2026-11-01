@@ -27,12 +27,12 @@
     document.getElementById("home-sales-buttons").appendChild(button);
     const section = document.createElement("section"); section.id = "amazon-csv-report"; section.hidden = true;
     section.innerHTML = `<h2>Amazon CSVの集計</h2>
-      <p class="amazon-note">C列：配送先拠点 ／ E列：JANコード ／ N列：数量<br>この端末の在庫・販売予定と照合します。CSVはサーバーへ送りません。在庫数・販売予定は変更しません。</p>
+      <p class="amazon-note">C列：配送先 ／ E列：JANコード ／ N列：数量<br>この端末の在庫・販売予定と照合します。CSVはサーバーへ送りません。在庫数・販売予定は変更しません。</p>
       <div class="amazon-controls"><label>Amazon CSV<input id="amazon-file" type="file" accept=".csv,text/csv"></label>
       <label>文字コード<select id="amazon-encoding"><option value="auto">自動（UTF-8 / Shift_JIS）</option><option value="utf-8">UTF-8</option><option value="shift_jis">Shift_JIS</option></select></label>
       <button id="amazon-sample" type="button">架空データで試す</button><button id="amazon-refresh" type="button" disabled>現在庫・販売予定を再取得</button></div>
       <p id="amazon-status" role="status" aria-live="polite">CSVを選んでください。架空データでも動作を確認できます。</p>
-      <div class="amazon-controls"><button id="amazon-product" type="button" aria-pressed="true">商品別</button><button id="amazon-site" type="button" aria-pressed="false">拠点別</button><button id="amazon-print" type="button" disabled>表示中の集計を印刷する</button><button id="amazon-home" type="button">ホームへ戻る</button></div>
+      <div class="amazon-controls"><button id="amazon-product" type="button" aria-pressed="true">商品別</button><button id="amazon-site" type="button" aria-pressed="false">配送先別</button><button id="amazon-print" type="button" disabled>表示中の集計を印刷する</button><button id="amazon-home" type="button">ホームへ戻る</button></div>
       <div id="amazon-output"></div>`;
     document.querySelector("main").appendChild(section);
     const css = document.createElement("style"); css.textContent = style; document.head.appendChild(css);
@@ -79,18 +79,18 @@
     return `<tr class="${item.planned ? "amazon-planned" : ""}"><td>${escape(item.jan)}</td><td>${escape(item.name)}<br><small>${escape(item.internalCode)}</small></td><td class="qty">${number(site ? item.siteQty : item.qty)}</td>${site ? `<td class="qty">${number(item.qty)}</td>` : ""}<td class="qty ${item.shortage ? "amazon-short" : ""}">${stock}</td><td>${escape(status)}</td></tr>`;
   }
   function table(items, site) {
-    return `<div class="amazon-table-wrap"><table class="amazon-table"><thead><tr><th>JAN</th><th>商品名 ／ 社内コード</th><th>${site ? "この拠点の数量" : "Amazon必要数"}</th>${site ? "<th>全拠点必要数</th>" : ""}<th>現在庫（この端末）</th><th>確認事項</th></tr></thead><tbody>${items.map(i => row(i, site)).join("")}</tbody></table></div>`;
+    return `<div class="amazon-table-wrap"><table class="amazon-table"><thead><tr><th>JAN</th><th>商品名 ／ 社内コード</th><th>${site ? "この配送先の数量" : "Amazon必要数"}</th>${site ? "<th>全配送先必要数</th>" : ""}<th>現在庫（この端末）</th><th>確認事項</th></tr></thead><tbody>${items.map(i => row(i, site)).join("")}</tbody></table></div>`;
   }
   function report() {
     const r = state.result; if (!r) return "";
-    const warning = r.issues.length ? `<p class="amazon-warning">要確認：${number(r.issues.length)}行。数量が確認できた${number(r.excluded)}個は、拠点合計に含めますが商品別集計・在庫照合には含めません。${r.invalidQuantityRows ? `数量不明${number(r.invalidQuantityRows)}行は合計に含まれず、CSV全体の総数量は確定していません。` : ""}</p>` : "";
+    const warning = r.issues.length ? `<p class="amazon-warning">要確認：${number(r.issues.length)}行。数量が確認できた${number(r.excluded)}個は、配送先合計に含めますが商品別集計・在庫照合には含めません。${r.invalidQuantityRows ? `数量不明${number(r.invalidQuantityRows)}行は合計に含まれず、CSV全体の総数量は確定していません。` : ""}</p>` : "";
     let body;
-    if (state.view === "product") body = r.items.length ? table(r.items, false) : "<p>JANの確認が済んだ商品はありません。拠点別で数量を確認できます。</p>";
-    else body = `<div class="amazon-table-wrap"><table class="amazon-table"><thead><tr><th>配送先拠点</th><th>数量（確認済み分）</th><th>うち商品照合対象外</th><th>数量不明の行</th></tr></thead><tbody>${r.sites.map(g => `<tr><td>${escape(g.site)}</td><td class="qty">${number(g.qty)}</td><td class="qty">${number(g.excluded)}</td><td class="qty">${number(g.unknown)}</td></tr>`).join("")}<tr class="amazon-total"><td>全拠点合計</td><td class="qty">${number(r.total)}</td><td class="qty">${number(r.excluded)}</td><td class="qty">${number(r.invalidQuantityRows)}</td></tr></tbody></table></div>` + r.sites.map(g => `<h3>${escape(g.site)} ／ ${number(g.qty)}個${g.unknown ? "（数量不明あり）" : ""}</h3>${g.items.length ? table(g.items, true) : "<p>商品別の内訳はJAN等の確認後に表示します。</p>"}`).join("");
-    const issues = r.issues.length ? `<h3>確認が必要な明細（別商品と混ぜず、元の行ごとに表示）</h3><div class="amazon-table-wrap"><table class="amazon-table"><thead><tr><th>CSV行</th><th>拠点</th><th>JAN（元の表記）</th><th>商品名</th><th>数量</th><th>確認事項</th></tr></thead><tbody>${r.issues.map(i => `<tr><td>${i.line}</td><td>${escape(i.site)}</td><td>${escape(i.jan)}</td><td>${escape(i.name)}</td><td class="qty">${i.qty === null ? "不明" : number(i.qty)}</td><td>${escape(i.issues.join(" ／ "))}</td></tr>`).join("")}</tbody></table></div>` : "";
-    return `<h2>${state.sample ? "【架空データ】" : ""}Amazon CSV ${state.view === "product" ? "商品別集計" : "拠点別集計"}</h2><p>${escape(state.name)} ／ 取得日時：${escape(state.loaded)}</p>
-      <p class="amazon-summary">${number(state.rows.length)}行 ／ ${number(r.sites.length)}拠点 ／ 数量の確認済み合計 ${number(r.total)}個 ／ 商品照合対象 ${number(r.items.length)}商品・${number(r.eligible)}個</p>
-      ${warning}<p>黄色＝販売予定あり（この端末に登録済みの全予定。過去分も含む）。赤字＝全拠点のAmazon必要数が現在庫を超過。販売予定の数量は差し引きません。<br>同JANの在庫は数量が最大の商品を採用し、合算しません。拠点別の現在庫は全体在庫の参考表示です。拠点への割当ではありません。</p>${body}${issues}`;
+    if (state.view === "product") body = r.items.length ? table(r.items, false) : "<p>JANの確認が済んだ商品はありません。配送先別で数量を確認できます。</p>";
+    else body = `<div class="amazon-table-wrap"><table class="amazon-table"><thead><tr><th>配送先</th><th>数量（確認済み分）</th><th>うち商品照合対象外</th><th>数量不明の行</th></tr></thead><tbody>${r.sites.map(g => `<tr><td>${escape(g.site)}</td><td class="qty">${number(g.qty)}</td><td class="qty">${number(g.excluded)}</td><td class="qty">${number(g.unknown)}</td></tr>`).join("")}<tr class="amazon-total"><td>全配送先合計</td><td class="qty">${number(r.total)}</td><td class="qty">${number(r.excluded)}</td><td class="qty">${number(r.invalidQuantityRows)}</td></tr></tbody></table></div>` + r.sites.map(g => `<h3>${escape(g.site)} ／ ${number(g.qty)}個${g.unknown ? "（数量不明あり）" : ""}</h3>${g.items.length ? table(g.items, true) : "<p>商品別の内訳はJAN等の確認後に表示します。</p>"}`).join("");
+    const issues = r.issues.length ? `<h3>確認が必要な明細（別商品と混ぜず、元の行ごとに表示）</h3><div class="amazon-table-wrap"><table class="amazon-table"><thead><tr><th>CSV行</th><th>配送先</th><th>JAN（元の表記）</th><th>商品名</th><th>数量</th><th>確認事項</th></tr></thead><tbody>${r.issues.map(i => `<tr><td>${i.line}</td><td>${escape(i.site)}</td><td>${escape(i.jan)}</td><td>${escape(i.name)}</td><td class="qty">${i.qty === null ? "不明" : number(i.qty)}</td><td>${escape(i.issues.join(" ／ "))}</td></tr>`).join("")}</tbody></table></div>` : "";
+    return `<h2>${state.sample ? "【架空データ】" : ""}Amazon CSV ${state.view === "product" ? "商品別集計" : "配送先別集計"}</h2><p>${escape(state.name)} ／ 取得日時：${escape(state.loaded)}</p>
+      <p class="amazon-summary">${number(state.rows.length)}行 ／ 配送先 ${number(r.sites.length)}件 ／ 数量の確認済み合計 ${number(r.total)}個 ／ 商品照合対象 ${number(r.items.length)}商品・${number(r.eligible)}個</p>
+      ${warning}<p>黄色＝販売予定あり（この端末に登録済みの全予定。過去分も含む）。赤字＝全配送先のAmazon必要数が現在庫を超過。販売予定の数量は差し引きません。<br>同JANの在庫は数量が最大の商品を採用し、合算しません。配送先別の現在庫は全体在庫の参考表示です。配送先への割当ではありません。</p>${body}${issues}`;
   }
   function render() {
     $("product").setAttribute("aria-pressed", String(state.view === "product")); $("site").setAttribute("aria-pressed", String(state.view === "site"));
@@ -108,7 +108,7 @@
   }
   function sample() {
     generation++; clear(); $("file").value = ""; state.sample = true; state.name = "架空CSV（保存・在庫変更なし）";
-    state.rows = [{line:2,site:"架空拠点・東",jan:"4901234567894",qty:6,name:"架空商品A",issues:[]},{line:3,site:"架空拠点・西",jan:"4901234567894",qty:4,name:"架空商品A",issues:[]},{line:4,site:"架空拠点・東",jan:"4901234567900",qty:5,name:"架空商品B",issues:[]}];
+    state.rows = [{line:2,site:"架空配送先・東",jan:"4901234567894",qty:6,name:"架空商品A",issues:[]},{line:3,site:"架空配送先・西",jan:"4901234567894",qty:4,name:"架空商品A",issues:[]},{line:4,site:"架空配送先・東",jan:"4901234567900",qty:5,name:"架空商品B",issues:[]}];
     refresh();
   }
 })();

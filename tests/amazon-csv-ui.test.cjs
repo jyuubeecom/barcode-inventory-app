@@ -12,11 +12,11 @@ function setup(products=[],plans=[]){
  let src=fs.readFileSync(path.join(__dirname,'../amazon-csv-report.js'),'utf8').replace('  function sampleInventory() {','  window.h={state,refresh,sample,render,print,loadFile,init};\n  function sampleInventory() {');vm.runInContext(src,context);
  return {h:window.h,elem,init:()=>init(),printed:()=>printed,reads:()=>reads,pops:()=>pops,printCalls:()=>printCalls};
 }
-const valid={line:2,jan:'4901234567894',site:'架空拠点',qty:10,name:'<script>bad</script>',issues:[]};
+const valid={line:2,jan:'4901234567894',site:'架空配送先',qty:10,name:'<script>bad</script>',issues:[]};
 test('sample report renders maximum 8 with shortage and sales-plan text in both screen and print; no database reads',async()=>{
  const s=setup();s.h.init();s.h.sample();await new Promise(r=>setImmediate(r));
  assert.equal(s.reads(),0);let html=s.elem('amazon-output').innerHTML;assert.match(html,/amazon-short">8個/);assert.match(html,/販売予定あり/);assert.match(html,/15個/);assert.match(html,/同JAN 2件：最大在庫を採用/);
- s.h.state.view='site';s.h.render();s.h.print();html=s.printed();assert.match(html,/拠点別集計/);assert.equal((html.match(/<tr class="amazon-planned">/g)||[]).length,2);assert.match(html,/全拠点必要数/);assert.match(html,/在庫不足（2個）/);assert.equal(s.printCalls(),1);
+ s.h.state.view='site';s.h.render();s.h.print();html=s.printed();assert.match(html,/配送先別集計/);assert.equal((html.match(/<tr class="amazon-planned">/g)||[]).length,2);assert.match(html,/全配送先必要数/);assert.match(html,/在庫不足（2個）/);assert.equal(s.printCalls(),1);
 });
 test('CSV and inventory strings are escaped in on-screen and printed tables; unmatched JAN is not fabricated zero',async()=>{
  const s=setup();s.h.state.rows=[valid];s.h.state.name='<img src=x onerror=bad>';

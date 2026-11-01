@@ -48,13 +48,13 @@
     const csv = parseCsv(text);
     if (csv.length < 2) throw new Error("見出しと明細が必要です。");
     const h = csv.shift().map(clean);
-    if (!/^(配送センター|配送先拠点|配送先拠点名)$/.test(h[2] || "") || !/^(製品コード|JAN|JANコード)$/i.test(h[4] || "") || !/^(依頼数量|数量)$/.test(h[13] || "")) throw new Error("列を確認してください。C列：配送先拠点、E列：JANコード、N列：数量（見出し行が必要です）。");
+    if (!/^(配送センター|配送先|配送先拠点|配送先拠点名)$/.test(h[2] || "") || !/^(製品コード|JAN|JANコード)$/i.test(h[4] || "") || !/^(依頼数量|数量)$/.test(h[13] || "")) throw new Error("列を確認してください。C列：配送先、E列：JANコード、N列：数量（見出し行が必要です）。");
     const rows = csv.map((cells, i) => {
       if (cells.length < 14) throw new Error(`明細${i + 1}行目の列が不足しています。`);
       const jan = clean(cells[4]), site = clean(cells[2]), qty = quantity(cells[13]);
       const issues = [];
       if (qty === null) issues.push("数量が0以上の整数ではありません");
-      if (!site) issues.push("配送先拠点がありません");
+      if (!site) issues.push("配送先がありません");
       const problem = janIssue(jan); if (problem) issues.push(problem);
       return {line: i + 2, jan, site, qty, name: clean(cells[7]), model: clean(cells[6]), issues};
     });
@@ -65,7 +65,7 @@
     let total = 0, eligible = 0, invalidQuantityRows = 0;
     for (const row of rows) {
       if (row.qty !== null) total = add(total, row.qty); else invalidQuantityRows++;
-      const site = row.site || "（拠点未指定）";
+      const site = row.site || "（配送先未指定）";
       if (!sites.has(site)) sites.set(site, {site, qty: 0, unknown: 0, excluded: 0, items: new Map()});
       const group = sites.get(site);
       if (row.qty !== null) group.qty = add(group.qty, row.qty); else group.unknown++;

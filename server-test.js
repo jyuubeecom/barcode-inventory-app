@@ -45,6 +45,8 @@
   const USER_STORAGE_KEY =
     "barcodeInventoryServerUser";
 
+  let startupLogin = false;
+  const startupInert = new Map();
   let overlay = null;
   let content = null;
   let serverDetailMode = false;
@@ -349,12 +351,45 @@
   }
 
   function closeDialog() {
+    if (startupLogin) return;
     if (!overlay) {
       return;
     }
 
     overlay.hidden = true;
     document.body.classList.remove("server-auth-dialog-open");
+  }
+
+  // Reuse the existing authentication flow; startup never searches a test product.
+  function openStartupLogin() {
+    if (startupLogin) return;
+    startupLogin = true;
+    createStyles();
+    ensureDialog();
+    overlay.querySelector('#server-auth-title').textContent = 'ログイン';
+    overlay.querySelector('.server-auth-description').textContent = 'ログインして、みんなの在庫を使います。';
+    overlay.querySelector('#server-auth-close-button').hidden = true;
+    for (const node of document.body.children) {
+      if (node !== overlay) {startupInert.set(node, node.inert);node.inert = true;}
+    }
+    overlay.hidden = false;
+    document.body.classList.add('server-auth-dialog-open');
+    renderLoginForm();
+  }
+
+  function finishStartupLogin(navigate = true) {
+    if (!startupLogin) return;
+    startupLogin = false;
+    for (const [node, value] of startupInert) node.inert = value;
+    startupInert.clear();
+    overlay.querySelector('#server-auth-title').textContent = 'サーバーログイン・商品検索';
+    overlay.querySelector('.server-auth-description').textContent = 'ログインして、共有サーバーの商品を検索します。';
+    overlay.querySelector('#server-auth-close-button').hidden = false;
+    closeDialog();
+    if (navigate) {
+      window.inventoryApp?.showScreen('home');
+      document.querySelector('#show-list-button')?.focus();
+    }
   }
 
   function ensureDialog() {
@@ -469,7 +504,7 @@
       : `
           <div class="server-auth-status server-auth-info">
             <strong>🔐 サーバーログインが必要です</strong>
-            <span>テスト用のログインIDとパスワードを入力してください。</span>
+            <span>ログインIDとパスワードを入力してください。</span>
           </div>
         `;
 
@@ -484,7 +519,7 @@
             type="text"
             autocomplete="username"
             maxlength="50"
-            placeholder="例：test-admin"
+            placeholder="ログインIDを入力"
             required
           >
         </label>
@@ -506,7 +541,7 @@
           type="submit"
           class="server-auth-primary-button"
         >
-          ログインして商品検索へ進む
+          ${startupLogin ? "ログイン" : "ログインして商品検索へ進む"}
         </button>
       </form>
 
@@ -633,6 +668,10 @@
         );
       }
 
+      if (startupLogin) {
+        finishStartupLogin();
+        return;
+      }
       renderLoggedInState(session);
       await loadProtectedProduct(session, DEFAULT_TEST_INTERNAL_CODE);
     } catch (error) {
@@ -3165,6 +3204,9 @@
       notifyServerAuthChanged("expired");
     },
     searchProduct: searchServerProductForApp,
+    openStartupLogin,
+    cancelStartupLogin: () => finishStartupLogin(false),
+    logout: function () {clearStoredSession();notifyServerAuthChanged("logout");},
     openLogin: openServerLoginForCode,
     openProductDetail: openServerProductDetailForApp
   };
@@ -3191,6 +3233,8 @@
         padding: 18px;
         background: rgba(15, 33, 48, 0.62);
       }
+
+      #server-auth-close-button[hidden] { display: none !important; }
 
       .server-auth-overlay[hidden] {
         display: none !important;

@@ -17,6 +17,10 @@
   root.inventoryCommonWorkspace = {mode,source,setMode};
   function apply() {
     root.document.body.dataset.workspace = mode();
+    const storageNote = root.document.querySelector?.('#home .home-storage-note');
+    if (storageNote) storageNote.textContent = mode() === 'shared'
+      ? '在庫は共通サーバーに保存されます。別の端末で更新した後は「再読み込み」を押してください。'
+      : 'この画面の在庫データは、現在開いている端末内に保存されています。共通在庫には反映されません。';
     const select = root.document.getElementById('inventory-workspace-mode');
     if (select) select.value = mode();
     const settings = root.document.getElementById('inventory-workspace-settings');

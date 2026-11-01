@@ -54,3 +54,4 @@ jobs:
           php tests/shared-products-mysql.php
           php tests/shared-stock-operation-mysql.php
           php tests/shared-planning-mysql.php
+          php tests/shared-sales-summary-mysql.php

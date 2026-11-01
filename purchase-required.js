@@ -95,124 +95,9 @@ async function refreshPurchaseRequiredData() {
     const plans = result[2];
     const batches = result[3];
 
-    const context = buildPurchaseRequiredDateContext(new Date());
-    const normalCalculation =
-      window.normalShipmentCalculator &&
-      typeof window.normalShipmentCalculator.calculateRange === "function"
-        ? window.normalShipmentCalculator.calculateRange(
-            actuals,
-            plans,
-            context.actualStartDate,
-            context.actualEndDate
-          )
-        : null;
-    const actualByProduct = normalCalculation
-      ? null
-      : aggregatePurchaseActuals(actuals, context.actualMonthKeys);
-    const planByProduct = aggregatePurchasePlans(plans, context.forecastStartDate, context.forecastEndDate);
-    const coverage = calculatePurchaseActualCoverage(batches, context.actualStartDate, context.actualEndDate);
-    const seasonalContext = buildPurchaseSeasonalAnalysisContext(products, actuals, context);
-
-    purchaseRequiredRows = products
-      .filter(function (product) { return !isPurchaseDiscontinuedProduct(product); })
-      .map(function (product) {
-        const internalCode = String(product.internalCode || "").trim();
-        const normalSummary = normalCalculation
-          ? window.normalShipmentCalculator.getProductSummary(normalCalculation, internalCode)
-          : null;
-        const grossSixMonthSales = normalSummary
-          ? Number(normalSummary.totalShipment || 0)
-          : Number(actualByProduct.get(internalCode) || 0);
-        const excludedCustomerSales = normalSummary
-          ? Number(normalSummary.excludedCustomerShipment || 0)
-          : 0;
-        const sixMonthSales = normalSummary
-          ? Math.max(0, Number(normalSummary.averageTargetShipment || 0))
-          : Math.max(0, grossSixMonthSales);
-        const monthlyAverage = Math.max(0, Math.ceil(sixMonthSales / 6));
-        const threeMonthBase = monthlyAverage * 3;
-        const seasonalRow = seasonalContext.rowsByCode.get(internalCode) || null;
-        const seasonalForecast = calculatePurchaseSeasonalForecast(
-          monthlyAverage,
-          context,
-          seasonalRow,
-          seasonalContext
-        );
-        const threeMonthSalesForecast = seasonalForecast.salesForecast;
-        const plannedQuantity = planByProduct.get(internalCode) || 0;
-        const requiredStockRaw = threeMonthSalesForecast + plannedQuantity;
-        const requiredStock = Math.ceil(requiredStockRaw);
-        const currentStock = getPurchaseStockNumber(product.stock);
-        const orderRemaining = getPurchaseOrderRemaining(product);
-        const currentShortage = Math.max(0, requiredStock - currentStock);
-        const shortage = Math.max(
-          0,
-          requiredStock -
-            currentStock -
-            orderRemaining
-        );
-        const judgment =
-          shortage > 0
-            ? "required"
-            : "ordered";
-
-        return {
-          internalCode: internalCode,
-          productCode: product.productCode || "",
-          productName: product.productName || "",
-          currentStock: currentStock,
-          orderRemaining: orderRemaining,
-          stockWithOrderRemaining:
-            currentStock +
-            orderRemaining,
-          currentShortage: currentShortage,
-          grossSixMonthSales: grossSixMonthSales,
-          excludedCustomerSales: excludedCustomerSales,
-          sixMonthSales: sixMonthSales,
-          monthlyAverage: monthlyAverage,
-          threeMonthBase: threeMonthBase,
-          threeMonthSalesForecast: threeMonthSalesForecast,
-          seasonalApplied: seasonalForecast.applied,
-          seasonalTrendType: seasonalForecast.trendType,
-          seasonalSeasonKey: seasonalForecast.seasonKey,
-          seasonalSeasonLabel: seasonalForecast.seasonLabel,
-          seasonalSeasonIcon: seasonalForecast.seasonIcon,
-          seasonalMonthlyAverage: seasonalForecast.seasonalMonthlyAverage,
-          seasonalDays: seasonalForecast.seasonalDays,
-          seasonalHistoryMonths: seasonalContext.availableMonthCount,
-          seasonalHistoryStartMonth: seasonalContext.startMonth,
-          seasonalHistoryEndMonth: seasonalContext.endMonth,
-          plannedQuantity: plannedQuantity,
-          requiredStock: requiredStock,
-          shortage: shortage,
-          judgment: judgment,
-          location: product.location || "",
-          isBackorder: isPurchaseBackorderProduct(product)
-        };
-      })
-      .filter(function (row) {
-        return row.currentShortage > 0;
-      })
-      .sort(function (a, b) {
-        if (a.judgment !== b.judgment) {
-          return a.judgment === "required"
-            ? -1
-            : 1;
-        }
-        if (a.isBackorder !== b.isBackorder) return a.isBackorder ? -1 : 1;
-        if (b.shortage !== a.shortage) return b.shortage - a.shortage;
-        return a.internalCode.localeCompare(b.internalCode, "ja", { numeric: true });
-      });
-
-    purchaseRequiredContext = {
-      ...context,
-      coverage: coverage,
-      totalProducts: products.length,
-      seasonalAvailableMonthCount: seasonalContext.availableMonthCount,
-      seasonalEnoughHistory: seasonalContext.enoughHistory,
-      seasonalStartMonth: seasonalContext.startMonth,
-      seasonalEndMonth: seasonalContext.endMonth
-    };
+    const snapshot = calculatePurchaseRequiredSnapshot(products, actuals, plans, batches, new Date());
+    purchaseRequiredRows = snapshot.rows;
+    purchaseRequiredContext = snapshot.context;
     purchaseRequiredCurrentPage = 1;
     renderPurchaseRequiredSummary();
     renderPurchaseRequiredCoverageWarning();
@@ -1136,3 +1021,127 @@ window.purchaseRequiredApp.open =
     }
   };
 
+
+// Synchronous calculation only; no storage, DOM, migration or stock writes.
+function calculatePurchaseRequiredSnapshot(products, actuals, plans, batches, today) {
+    const context = buildPurchaseRequiredDateContext(today);
+    const normalCalculation =
+      window.normalShipmentCalculator &&
+      typeof window.normalShipmentCalculator.calculateRange === "function"
+        ? window.normalShipmentCalculator.calculateRange(
+            actuals,
+            plans,
+            context.actualStartDate,
+            context.actualEndDate
+          )
+        : null;
+    const actualByProduct = normalCalculation
+      ? null
+      : aggregatePurchaseActuals(actuals, context.actualMonthKeys);
+    const planByProduct = aggregatePurchasePlans(plans, context.forecastStartDate, context.forecastEndDate);
+    const coverage = calculatePurchaseActualCoverage(batches, context.actualStartDate, context.actualEndDate);
+    const seasonalContext = buildPurchaseSeasonalAnalysisContext(products, actuals, context);
+
+    const rows = products
+      .filter(function (product) { return !isPurchaseDiscontinuedProduct(product); })
+      .map(function (product) {
+        const internalCode = String(product.internalCode || "").trim();
+        const normalSummary = normalCalculation
+          ? window.normalShipmentCalculator.getProductSummary(normalCalculation, internalCode)
+          : null;
+        const grossSixMonthSales = normalSummary
+          ? Number(normalSummary.totalShipment || 0)
+          : Number(actualByProduct.get(internalCode) || 0);
+        const excludedCustomerSales = normalSummary
+          ? Number(normalSummary.excludedCustomerShipment || 0)
+          : 0;
+        const sixMonthSales = normalSummary
+          ? Math.max(0, Number(normalSummary.averageTargetShipment || 0))
+          : Math.max(0, grossSixMonthSales);
+        const monthlyAverage = Math.max(0, Math.ceil(sixMonthSales / 6));
+        const threeMonthBase = monthlyAverage * 3;
+        const seasonalRow = seasonalContext.rowsByCode.get(internalCode) || null;
+        const seasonalForecast = calculatePurchaseSeasonalForecast(
+          monthlyAverage,
+          context,
+          seasonalRow,
+          seasonalContext
+        );
+        const threeMonthSalesForecast = seasonalForecast.salesForecast;
+        const plannedQuantity = planByProduct.get(internalCode) || 0;
+        const requiredStockRaw = threeMonthSalesForecast + plannedQuantity;
+        const requiredStock = Math.ceil(requiredStockRaw);
+        const currentStock = getPurchaseStockNumber(product.stock);
+        const orderRemaining = getPurchaseOrderRemaining(product);
+        const currentShortage = Math.max(0, requiredStock - currentStock);
+        const shortage = Math.max(
+          0,
+          requiredStock -
+            currentStock -
+            orderRemaining
+        );
+        const judgment =
+          shortage > 0
+            ? "required"
+            : "ordered";
+
+        return {
+          internalCode: internalCode,
+          productCode: product.productCode || "",
+          productName: product.productName || "",
+          currentStock: currentStock,
+          orderRemaining: orderRemaining,
+          stockWithOrderRemaining:
+            currentStock +
+            orderRemaining,
+          currentShortage: currentShortage,
+          grossSixMonthSales: grossSixMonthSales,
+          excludedCustomerSales: excludedCustomerSales,
+          sixMonthSales: sixMonthSales,
+          monthlyAverage: monthlyAverage,
+          threeMonthBase: threeMonthBase,
+          threeMonthSalesForecast: threeMonthSalesForecast,
+          seasonalApplied: seasonalForecast.applied,
+          seasonalTrendType: seasonalForecast.trendType,
+          seasonalSeasonKey: seasonalForecast.seasonKey,
+          seasonalSeasonLabel: seasonalForecast.seasonLabel,
+          seasonalSeasonIcon: seasonalForecast.seasonIcon,
+          seasonalMonthlyAverage: seasonalForecast.seasonalMonthlyAverage,
+          seasonalDays: seasonalForecast.seasonalDays,
+          seasonalHistoryMonths: seasonalContext.availableMonthCount,
+          seasonalHistoryStartMonth: seasonalContext.startMonth,
+          seasonalHistoryEndMonth: seasonalContext.endMonth,
+          plannedQuantity: plannedQuantity,
+          requiredStock: requiredStock,
+          shortage: shortage,
+          judgment: judgment,
+          location: product.location || "",
+          isBackorder: isPurchaseBackorderProduct(product)
+        };
+      })
+      .filter(function (row) {
+        return row.currentShortage > 0;
+      })
+      .sort(function (a, b) {
+        if (a.judgment !== b.judgment) {
+          return a.judgment === "required"
+            ? -1
+            : 1;
+        }
+        if (a.isBackorder !== b.isBackorder) return a.isBackorder ? -1 : 1;
+        if (b.shortage !== a.shortage) return b.shortage - a.shortage;
+        return a.internalCode.localeCompare(b.internalCode, "ja", { numeric: true });
+      });
+
+    const snapshotContext = {
+      ...context,
+      coverage: coverage,
+      totalProducts: products.length,
+      seasonalAvailableMonthCount: seasonalContext.availableMonthCount,
+      seasonalEnoughHistory: seasonalContext.enoughHistory,
+      seasonalStartMonth: seasonalContext.startMonth,
+      seasonalEndMonth: seasonalContext.endMonth
+    };
+    return {rows, context:snapshotContext};
+}
+window.purchaseRequiredApp.calculateShared = calculatePurchaseRequiredSnapshot;

@@ -95,7 +95,8 @@
    function sync(){box.hidden=root.document.body.dataset.roleMode==='worker';box.querySelector('[data-retry]').hidden=!pending();}
    box.querySelector('[data-preview]').addEventListener('click',async()=>{
     if(working)return;working=true;apply.disabled=true;preview=null;
-    try{const file=box.querySelector('input').files[0];if(!file||file.size>50000000)throw Error('50MB以下の全データバックアップJSONを選んでください。');
+    try{const file=box.querySelector('input').files[0];if(!file)throw Error('全データバックアップJSONを選んでください。');if(file.size>100000000)throw Error('100MB以下の全データバックアップJSONを選んでください。');
+     text(output,'バックアップを読み込んでいます。予定情報だけを確認します。');
      const d=project(JSON.parse(await file.text()));const r=await compare(d);text(output,counts(r.counts)+(r.can_initialize?'。まだ保存されていません。':'。共有予定は登録済みです。上書きしません。'));apply.disabled=!r.can_initialize;
     }catch(e){text(output,e.message);}finally{working=false;sync();}
    });

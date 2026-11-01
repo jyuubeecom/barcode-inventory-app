@@ -2183,12 +2183,12 @@
           <span>共有在庫</span>
           <h3>入庫</h3>
         </div>
-        <span class="server-product-stock-in-badge">v286 テスト</span>
+        <span class="server-product-stock-in-badge">共有在庫</span>
       </div>
 
       <p class="server-product-stock-in-description">
         この操作は共有サーバーの在庫を実際に増やし、在庫履歴にも記録します。
-        現在は架空商品で動作確認しています。
+        保存後、ほかの端末では共有在庫を再読み込みしてください。
       </p>
 
       ${statusHtml}
@@ -2317,201 +2317,7 @@
   }
 
   async function submitServerStockIn(context) {
-    const section = context && context.section
-      ? context.section
-      : document.querySelector("#server-product-stock-in");
-
-    if (!section) {
-      return;
-    }
-
-    const internalCode = String(
-      context && context.internalCode
-        ? context.internalCode
-        : lastServerRequestedCode || ""
-    ).trim();
-
-    const productName = String(
-      context && context.productName
-        ? context.productName
-        : "商品"
-    );
-
-    const totalStock = toStockNumber(
-      context && context.totalStock
-    );
-
-    const locationInput = section.querySelector(
-      "#server-product-stock-in-location"
-    );
-    const quantityInput = section.querySelector(
-      "#server-product-stock-in-quantity"
-    );
-    const reasonInput = section.querySelector(
-      "#server-product-stock-in-reason"
-    );
-    const memoInput = section.querySelector(
-      "#server-product-stock-in-memo"
-    );
-    const submitButton = section.querySelector(
-      "#server-product-stock-in-submit"
-    );
-
-    const locationName = locationInput
-      ? locationInput.value.trim()
-      : "";
-    const quantity = quantityInput
-      ? Math.trunc(Number(quantityInput.value))
-      : 0;
-    const reason = reasonInput
-      ? reasonInput.value.trim()
-      : "仕入れ";
-    const memo = memoInput
-      ? memoInput.value.trim()
-      : "";
-
-    if (!internalCode) {
-      showServerStockInStatus(
-        section,
-        "社内コードを確認できません。",
-        true
-      );
-      return;
-    }
-
-    if (!locationName) {
-      showServerStockInStatus(
-        section,
-        "入庫先の保管場所を選択してください。",
-        true
-      );
-      if (locationInput) locationInput.focus();
-      return;
-    }
-
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      showServerStockInStatus(
-        section,
-        "入庫数量は1以上で入力してください。",
-        true
-      );
-      if (quantityInput) quantityInput.focus();
-      return;
-    }
-
-    const session = getStoredSession();
-
-    if (!session) {
-      showServerStockInStatus(
-        section,
-        "サーバーログインが必要です。いったん商品一覧へ戻り、ログインし直してください。",
-        true
-      );
-      return;
-    }
-
-    const afterStock = totalStock + quantity;
-    const confirmMessage =
-      `${productName}\n` +
-      `${locationName} に ${formatNumber(quantity)}個 入庫します。\n` +
-      `現在庫合計 ${formatNumber(totalStock)}個 → ${formatNumber(afterStock)}個\n\n` +
-      "この内容で共有サーバーの在庫を更新しますか？";
-
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
-
-    if (submitButton) {
-      submitButton.disabled = true;
-      submitButton.textContent = "入庫を登録中...";
-    }
-
-    showServerStockInStatus(
-      section,
-      "共有サーバーへ入庫を登録しています。",
-      false,
-      true
-    );
-
-    try {
-      const response = await fetch(
-        SERVER_STOCK_IN_ENDPOINT,
-        {
-          method: "POST",
-          mode: "cors",
-          cache: "no-store",
-          headers: {
-            "Content-Type": "application/json; charset=utf-8",
-            Accept: "application/json",
-            Authorization: "Bearer " + session.token
-          },
-          body: JSON.stringify({
-            internal_code: internalCode,
-            location_name: locationName,
-            quantity,
-            reason: reason || "仕入れ",
-            memo
-          })
-        }
-      );
-
-      const result = await readJsonResponse(response);
-
-      if (response.status === 401) {
-        clearStoredSession();
-        notifyServerAuthChanged("expired");
-        throw new Error(
-          "ログインの有効期限が切れました。もう一度ログインしてください。"
-        );
-      }
-
-      if (!response.ok || !result || result.success !== true) {
-        throw new Error(
-          result && result.message
-            ? result.message
-            : "入庫の登録に失敗しました。"
-        );
-      }
-
-      lastServerStockInMessage =
-        `✓ 入庫しました。${result.location_name || locationName}：` +
-        `${formatNumber(result.location_stock_before)}個 → ` +
-        `${formatNumber(result.location_stock_after)}個 / ` +
-        `合計 ${formatNumber(result.stock_after)}個`;
-
-      const updatedData = await searchServerProductForApp(internalCode);
-      openServerProductDetail(
-        updatedData,
-        internalCode
-      );
-
-      window.setTimeout(function () {
-        const refreshedSection = document.querySelector(
-          "#server-product-stock-in"
-        );
-
-        if (refreshedSection) {
-          refreshedSection.scrollIntoView({
-            behavior: "smooth",
-            block: "center"
-          });
-        }
-      }, 80);
-    } catch (error) {
-      showServerStockInStatus(
-        section,
-        getErrorMessage(
-          error,
-          "入庫の登録に失敗しました。"
-        ),
-        true
-      );
-
-      if (submitButton && document.body.contains(submitButton)) {
-        submitButton.disabled = false;
-        submitButton.textContent = "入庫内容を確認する";
-      }
-    }
+    return submitSharedStockOperation("in", context);
   }
 
   function showServerStockInStatus(
@@ -2602,7 +2408,7 @@
           <span>共有在庫</span>
           <h3>出庫</h3>
         </div>
-        <span class="server-product-stock-out-badge">v286 テスト</span>
+        <span class="server-product-stock-out-badge">共有在庫</span>
       </div>
 
       <p class="server-product-stock-out-description">
@@ -2718,223 +2524,60 @@
   }
 
   async function submitServerStockOut(context) {
-    const section = context && context.section
-      ? context.section
-      : document.querySelector("#server-product-stock-out");
+    return submitSharedStockOperation("out", context);
+  }
 
-    if (!section) {
-      return;
-    }
-
-    const internalCode = String(
-      context && context.internalCode
-        ? context.internalCode
-        : lastServerRequestedCode || ""
-    ).trim();
-
-    const productName = String(
-      context && context.productName
-        ? context.productName
-        : "商品"
-    );
-
-    const totalStock = toStockNumber(
-      context && context.totalStock
-    );
-
-    const stocks = context && Array.isArray(context.stocks)
-      ? context.stocks
-      : [];
-
-    const locationInput = section.querySelector(
-      "#server-product-stock-out-location"
-    );
-    const quantityInput = section.querySelector(
-      "#server-product-stock-out-quantity"
-    );
-    const reasonInput = section.querySelector(
-      "#server-product-stock-out-reason"
-    );
-    const memoInput = section.querySelector(
-      "#server-product-stock-out-memo"
-    );
-    const submitButton = section.querySelector(
-      "#server-product-stock-out-submit"
-    );
-
-    const locationName = locationInput
-      ? locationInput.value.trim()
-      : "";
-    const quantity = quantityInput
-      ? Math.trunc(Number(quantityInput.value))
-      : 0;
-    const reason = reasonInput
-      ? reasonInput.value.trim()
-      : "出荷";
-    const memo = memoInput
-      ? memoInput.value.trim()
-      : "";
-
-    const selectedStock = stocks.find(function (stock) {
-      return String(stock && stock.location_name || "") === locationName;
-    });
-    const locationStock = toStockNumber(
-      selectedStock && selectedStock.quantity
-    );
-
-    if (!internalCode) {
-      showServerStockOutStatus(
-        section,
-        "社内コードを確認できません。",
-        true
-      );
-      return;
-    }
-
-    if (!locationName) {
-      showServerStockOutStatus(
-        section,
-        "出庫元の保管場所を選択してください。",
-        true
-      );
-      if (locationInput) locationInput.focus();
-      return;
-    }
-
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      showServerStockOutStatus(
-        section,
-        "出庫数量は1以上で入力してください。",
-        true
-      );
-      if (quantityInput) quantityInput.focus();
-      return;
-    }
-
-    if (quantity > locationStock) {
-      showServerStockOutStatus(
-        section,
-        `出庫数量が在庫数を超えています。${locationName}の現在庫は${formatNumber(locationStock)}個です。`,
-        true
-      );
-      if (quantityInput) quantityInput.focus();
-      return;
-    }
-
-    const session = getStoredSession();
-
-    if (!session) {
-      showServerStockOutStatus(
-        section,
-        "サーバーログインが必要です。いったん商品一覧へ戻り、ログインし直してください。",
-        true
-      );
-      return;
-    }
-
-    const afterStock = Math.max(0, totalStock - quantity);
-    const locationAfter = Math.max(0, locationStock - quantity);
-    const confirmMessage =
-      `${productName}\n` +
-      `${locationName} から ${formatNumber(quantity)}個 出庫します。\n` +
-      `${locationName} ${formatNumber(locationStock)}個 → ${formatNumber(locationAfter)}個\n` +
-      `現在庫合計 ${formatNumber(totalStock)}個 → ${formatNumber(afterStock)}個\n\n` +
-      "この内容で共有サーバーの在庫を更新しますか？";
-
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
-
-    if (submitButton) {
-      submitButton.disabled = true;
-      submitButton.textContent = "出庫を登録中...";
-    }
-
-    showServerStockOutStatus(
-      section,
-      "共有サーバーへ出庫を登録しています。",
-      false,
-      true
-    );
-
+  let sharedOperationSubmitting = false;
+  async function submitSharedStockOperation(action, context) {
+    if (sharedOperationSubmitting) return;
+    sharedOperationSubmitting = true;
+    const section = context.section;
+    const prefix = "#server-product-stock-" + action + "-";
+    const show = action === "in" ? showServerStockInStatus : showServerStockOutStatus;
+    const button = section.querySelector(prefix + "submit");
+    if (button?.dataset.savedNeedsRefresh) { sharedOperationSubmitting = false; return; }
     try {
-      const response = await fetch(
-        SERVER_STOCK_OUT_ENDPOINT,
-        {
-          method: "POST",
-          mode: "cors",
-          cache: "no-store",
-          headers: {
-            "Content-Type": "application/json; charset=utf-8",
-            Accept: "application/json",
-            Authorization: "Bearer " + session.token
-          },
-          body: JSON.stringify({
-            internal_code: internalCode,
-            location_name: locationName,
-            quantity,
-            reason: reason || "出荷",
-            memo
-          })
-        }
-      );
-
-      const result = await readJsonResponse(response);
-
-      if (response.status === 401) {
-        clearStoredSession();
-        notifyServerAuthChanged("expired");
-        throw new Error(
-          "ログインの有効期限が切れました。もう一度ログインしてください。"
-        );
+      const helper = window.inventorySharedStockOperation;
+      if (!helper) throw new Error("アプリを更新してください。");
+      if (helper.pending()) throw new Error("未確認の入出庫があります。ホームの「前回の入出庫を再確認」を押してください。");
+      const fields = {
+        action, internal_code: context.internalCode,
+        location_name: section.querySelector(prefix + "location").value,
+        quantity: section.querySelector(prefix + "quantity").value,
+        reason: section.querySelector(prefix + "reason").value,
+        memo: section.querySelector(prefix + "memo").value.trim()
+      };
+      const q = Number(fields.quantity);
+      if (!fields.quantity.trim() || !Number.isSafeInteger(q) || q < 1 || q > 1000000) throw new Error("数量は1～1000000の整数で入力してください。");
+      const data = lastServerProductData;
+      if (!data || data.product?.internal_code !== fields.internal_code) throw new Error("商品詳細を再取得してください。");
+      const stocks = helper.snapshot(data.stocks);
+      const old = stocks.find(s => s.location_name === fields.location_name)?.quantity || 0;
+      if (action === "out" && q > old) throw new Error("出庫数量が保管場所の在庫を超えています。");
+      if (!window.confirm(`${context.productName}\n${fields.location_name}：${old}個 → ${old + (action === "in" ? q : -q)}個\n共有サーバーへ${action === "in" ? "入庫" : "出庫"}を登録しますか？`)) return;
+      const session = getStoredSession();
+      helper.prepare(session,fields,stocks);
+      helper.refresh();
+      if (button) button.disabled = true;
+      const result = await helper.send(session);
+      const message = `✓ ${action === "in" ? "入庫" : "出庫"}を保存しました。${result.location_name}：${result.location_stock_before}個 → ${result.location_stock_after}個 ／ 合計 ${result.stock_after}個`;
+      if (action === "in") lastServerStockInMessage = message;
+      else lastServerStockOutMessage = message;
+      // Saving already succeeded. A subsequent read failure must never imply retrying a new write.
+      show(section,message,false);
+      try {
+        const updatedData = await searchServerProductForApp(fields.internal_code);
+        openServerProductDetail(updatedData,fields.internal_code);
+      } catch (error) {
+        show(section,message + "。最新表示を取得できませんでした。一覧へ戻って再読み込みしてください。",false);
+        if (button) button.dataset.savedNeedsRefresh = "true";
       }
-
-      if (!response.ok || !result || result.success !== true) {
-        throw new Error(
-          result && result.message
-            ? result.message
-            : "出庫の登録に失敗しました。"
-        );
-      }
-
-      lastServerStockOutMessage =
-        `✓ 出庫しました。${result.location_name || locationName}：` +
-        `${formatNumber(result.location_stock_before)}個 → ` +
-        `${formatNumber(result.location_stock_after)}個 / ` +
-        `合計 ${formatNumber(result.stock_after)}個`;
-
-      const updatedData = await searchServerProductForApp(internalCode);
-      openServerProductDetail(
-        updatedData,
-        internalCode
-      );
-
-      window.setTimeout(function () {
-        const refreshedSection = document.querySelector(
-          "#server-product-stock-out"
-        );
-
-        if (refreshedSection) {
-          refreshedSection.scrollIntoView({
-            behavior: "smooth",
-            block: "center"
-          });
-        }
-      }, 80);
     } catch (error) {
-      showServerStockOutStatus(
-        section,
-        getErrorMessage(
-          error,
-          "出庫の登録に失敗しました。"
-        ),
-        true
-      );
-
-      if (submitButton && document.body.contains(submitButton)) {
-        submitButton.disabled = false;
-        submitButton.textContent = "出庫内容を確認する";
-      }
+      show(section,getErrorMessage(error,"結果が未確認です。ホームから前回の入出庫を再確認してください。"),true);
+    } finally {
+      sharedOperationSubmitting = false;
+      if (button && !button.dataset.savedNeedsRefresh) button.disabled = false;
+      window.inventorySharedStockOperation?.refresh();
     }
   }
 

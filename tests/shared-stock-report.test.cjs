@@ -2,11 +2,11 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
-function setup(fetchImpl,localProducts=[]) {
+function setup(fetchImpl,localProducts=[],workspace=null) {
   let token='FAKE-A',localReads=0,normalizations=0,printed='';const elements=new Map();
   function element(selector){if(!elements.has(selector))elements.set(selector,{value:selector.endsWith('-location')?'__all__':'',hidden:false,disabled:false,textContent:'',innerHTML:'',addEventListener(){},click(){},get options(){return Array.from(this.innerHTML.matchAll(/value="([^"]*)"/g),m=>({value:m[1]}));}});return elements.get(selector);}
   const doc={addEventListener(){},querySelector(selector){return selector.includes('print-dialog')?null:element(selector);}};
-  const window={setTimeout,clearTimeout,alert(){},addEventListener(){},dispatchEvent(){window.h.auth();},inventoryServerSearch:{hasSession:()=>!!token},open(){return {document:{open(){},write(html){printed=html;},close(){}}};}};
+  const window={inventoryCommonWorkspace:workspace,setTimeout,clearTimeout,alert(){},addEventListener(){},dispatchEvent(){window.h.auth();},inventoryServerSearch:{hasSession:()=>!!token},open(){return {document:{open(){},write(html){printed=html;},close(){}}};}};
   const c=vm.createContext({window,document:doc,AbortController,fetch:fetchImpl,console,sessionStorage:{getItem:()=>token,removeItem(){token='';}},CustomEvent:function(){},getAllProducts:async()=>{localReads++;return localProducts;},getProductLocationStocks:product=>{normalizations++;return product.locationStocks || [];}});
   let src=fs.readFileSync(path.join(__dirname,'../location-stock-report.js'),'utf8');
   src=src.replace('  function formatNumber(value) {',`  window.h={state,rows:buildSharedRows,reload:reloadReport,visible:getVisibleRows,auth:handleReportAuthChanged,
@@ -69,4 +69,10 @@ test('default local report preserves the existing positive-stock policy and neve
  await s.h.reload();assert.equal(s.h.state.source,'local');assert.equal(s.reads(),1);assert.equal(requests,0);
  assert.equal(s.h.state.rows.length,2);assert.equal(s.h.state.rows.reduce((n,r)=>n+r.stock,0),10);assert.ok(s.h.state.rows.every(r=>r.status==='廃盤予定'));
  assert.equal(JSON.stringify(products),original);
+});
+
+test('common workspace opens report from server without reading the terminal inventory',async()=>{
+ const s=setup(async()=>response(data()),[{internalCode:'LOCAL-ONLY'}],{source:()=> 'server',mode:()=> 'shared'});
+ await s.h.reload();assert.equal(s.h.state.source,'server');assert.equal(s.reads(),0);assert.equal(s.h.state.rows.length,2);
+ s.token('');s.h.auth();assert.equal(s.reads(),0);assert.equal(s.h.state.rows.length,0);
 });

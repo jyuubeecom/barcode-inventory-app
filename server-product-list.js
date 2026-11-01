@@ -18,7 +18,7 @@
   let lastProductStatusFilter = "all";
   let lastLocationFilter = "all";
   let lastSort = "internal_asc";
-  let currentSource = "local";
+  let currentSource = window.inventoryCommonWorkspace?.source() || "local";
   let sourceSwitch = null;
   let localFilterDetails = null;
   let localResultsDetails = null;
@@ -37,6 +37,9 @@
       return;
     }
 
+    window.addEventListener("inventory-workspace-changed", function () {
+      setProductSource(window.inventoryCommonWorkspace?.source() || "local");
+    });
     createStyles();
     createPanel();
     observeProductListVisibility();
@@ -82,7 +85,7 @@
 
       <p class="server-product-list-description">
         PCとスマートフォンで共通の商品データを、この商品一覧画面で確認できます。
-        現在は共有サーバーです。入庫・出庫は商品詳細から利用できます。編集・削除はまだ行いません。
+        入庫・出庫は商品詳細から操作できます。別の端末で更新した後は「再読み込み」を押してください。
       </p>
 
       <div
@@ -189,11 +192,11 @@
 
   function setProductSource(source) {
     invalidateRequest();
-    currentSource = source === "server" ? "server" : "local";
+    currentSource = window.inventoryCommonWorkspace?.mode() === "shared" ? "server" : source === "server" ? "server" : "local";
     cacheLocalProductListElements();
     applyProductSourceView();
 
-    if (currentSource === "server") {
+    if (currentSource === "server" && !listScreen?.hidden) {
       refreshPanelForCurrentSession();
     }
   }
@@ -342,7 +345,7 @@
       <div class="server-product-list-notice server-product-list-info">
         <strong>🔐 共有サーバーへのログインが必要です</strong>
         <span>
-          共有商品一覧を見るには、テスト用アカウントでログインしてください。
+          会社で使うアカウントでログインしてください。
         </span>
       </div>
 

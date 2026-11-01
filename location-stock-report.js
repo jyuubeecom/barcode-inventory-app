@@ -33,7 +33,7 @@
   const state = {
     products: [],
     rows: [],
-    source: "local",
+    source: window.inventoryCommonWorkspace?.source() || "local",
     ready: false,
     fetchedAt: "",
     sharedCount: 0,
@@ -49,6 +49,16 @@
   );
 
   function initializeLocationStockReport() {
+    window.addEventListener("inventory-workspace-changed", function () {
+      state.source = window.inventoryCommonWorkspace?.source() || "local";
+      const sourceSelect = document.querySelector("#location-stock-report-source");
+      if (sourceSelect) sourceSelect.value = state.source;
+      const locationSelect = document.querySelector("#location-stock-report-location");
+      if (locationSelect) locationSelect.value = ALL_LOCATIONS_VALUE;
+      clearReport();
+      const screen = document.querySelector("#location-stock-report");
+      if (screen && !screen.hidden) void reloadReport();
+    });
     createHomeButton();
     createScreen();
     createStyles();
@@ -132,14 +142,14 @@
       </div>
 
       <section class="location-stock-report-source">
-        <label for="location-stock-report-source">表示する在庫データ</label>
+        <label id="location-stock-report-source-label" for="location-stock-report-source">表示する在庫データ</label>
         <select id="location-stock-report-source">
           <option value="local">この端末の在庫</option>
           <option value="server">共有サーバーの在庫</option>
         </select>
         <button id="location-stock-report-reload" type="button">再読み込み</button>
         <button id="location-stock-report-login" type="button" hidden>共有サーバーにログイン</button>
-        <p>端末内と共有サーバーは別のデータです。自動で移行・合算はしません。共有在庫は取得時点の内容です。他の端末で更新した後は再読み込みしてください。</p>
+        <p class="location-stock-report-legacy-note">端末内と共有サーバーは別のデータです。自動で移行・合算はしません。共有在庫は取得時点の内容です。他の端末で更新した後は再読み込みしてください。</p>
         <p>在庫がある保管場所を1行ずつ表示します。共有在庫では「未確認」の場所も表示します。数量0の場所と保管場所未登録の商品は表に含みません。</p>
       </section>
       <div class="location-stock-report-controls">
@@ -661,7 +671,7 @@
 
   function bindEvents() {
     document.querySelector("#location-stock-report-source")?.addEventListener("change", function (event) {
-      state.source = event.target.value === "server" ? "server" : "local";
+      state.source = window.inventoryCommonWorkspace?.mode() === "shared" ? "server" : event.target.value === "server" ? "server" : "local";
       // A selected place from the previous data source must not hide all new rows.
       const select = document.querySelector("#location-stock-report-location");
       if (select) select.value = ALL_LOCATIONS_VALUE;

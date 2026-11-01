@@ -4,16 +4,16 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const fs=require('node:fs');
 const path=require('node:path');
-function setup(fetch) {
+function setup(fetch,workspace=null) {
   let token='FAKE-A';
   const content={innerHTML:'',querySelector(){return null;},querySelectorAll(){return [];}};
-  const window={setTimeout,clearTimeout,addEventListener(){},dispatchEvent(){},inventoryServerSearch:{hasSession:()=>!!token}};
-  const c=vm.createContext({window,document:{addEventListener(){},body:{contains:()=>true}},sessionStorage:{getItem:()=>token,removeItem(){token='';}},AbortController,fetch,console,CustomEvent:function(){}});
+  const window={inventoryCommonWorkspace:workspace,setTimeout,clearTimeout,addEventListener(){},dispatchEvent(){},inventoryServerSearch:{hasSession:()=>!!token}};
+  const c=vm.createContext({window,document:{addEventListener(){},querySelector(){return null;},body:{contains:()=>true}},sessionStorage:{getItem:()=>token,removeItem(){token='';}},AbortController,fetch,console,CustomEvent:function(){}});
   let src=fs.readFileSync(path.join(__dirname,'../server-product-list.js'),'utf8');
   src=src.replace('  function createStyles() {',`  window.testHooks={load:loadServerProducts, auth:handleServerAuthChanged,
-    local(){invalidateRequest();currentSource='local';}, filter:applyLocalFiltersAndSort,
+    source:()=>currentSource, force:setProductSource, local(){invalidateRequest();currentSource='local';}, filter:applyLocalFiltersAndSort,
     keyword(value){lastKeyword=value;}, location(value){lastLocationFilter=value;},
-    init(value){content=value;currentSource='server';listScreen={hidden:false};}};
+    init(value){content=value;currentSource='server';listScreen={hidden:false,querySelector(){return null;}};}};
   function createStyles() {`);
   vm.runInContext(src,c);window.testHooks.init(content);
   return {h:window.testHooks,content,setToken(v){token=v;}};
@@ -49,4 +49,10 @@ test('incomplete or old endpoint responses are rejected instead of presented as 
 test('names and locations are escaped when rendering shared products',async()=>{
   const s=setup(async()=>response([item(1,{product_name:'<img src=x onerror=alert(1)>',stocks:[{location_name:'<script>',quantity:1}]})]));
   await s.h.load('');assert.doesNotMatch(s.content.innerHTML,/<img|<script>/);assert.match(s.content.innerHTML,/&lt;img/);
+});
+
+test('common workspace refuses local source switching instead of mixing inventories',()=>{
+ const s=setup(async()=>response([item(1)]),{mode:()=> 'shared',source:()=> 'server'});
+ s.h.force('local');
+ assert.equal(s.h.source(),'server');
 });

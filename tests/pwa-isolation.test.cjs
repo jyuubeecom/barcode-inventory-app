@@ -76,7 +76,7 @@ with zipfile.ZipFile(sys.argv[1]) as z:
     storage=z.read('storage.js').decode()
     assert '"barcodeInventoryDatabase-test-v29311"' in storage
     assert '"barcodeInventoryDatabase"' not in storage
-    assert '検証専用・画面版 v293.11' in z.read('index.html').decode()
+    assert '検証専用・画面版 v293.12' in z.read('index.html').decode()
     manifest=json.loads(z.read('manifest.json'))
     assert manifest['short_name']=='在庫テスト29311'
     assert manifest['id']=='./?app=barcode-inventory-test-v29311'

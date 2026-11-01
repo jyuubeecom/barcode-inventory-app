@@ -190,9 +190,10 @@
       </div>
 
       <div class="location-stock-report-table-wrap">
-        <table class="location-stock-report-table">
-          <thead id="location-stock-report-head"></thead>
-          <tbody id="location-stock-report-body"></tbody>
+        <table class="location-stock-report-table" role="table">
+          <colgroup><col style="width:5%"><col style="width:13%"><col style="width:14%"><col style="width:14%"><col style="width:25%"><col style="width:6%"><col style="width:10%"><col style="width:13%"></colgroup>
+          <thead id="location-stock-report-head" role="rowgroup"></thead>
+          <tbody id="location-stock-report-body" role="rowgroup"></tbody>
         </table>
       </div>
 
@@ -564,6 +565,41 @@
           font-size: 20px;
         }
       }
+    `;
+
+    style.textContent += `
+      /* Fit all eight fields in the available width. Never hide or truncate values. */
+      #location-stock-report { min-width: 0; }
+      .location-stock-report-table-wrap { max-width: 100%; overflow: visible; container-type: inline-size; }
+      .location-stock-report-table { width: 100%; min-width: 0; table-layout: fixed; }
+      .location-stock-report-table th, .location-stock-report-table td { min-width: 0; max-width: 100%; padding: 9px 6px; overflow-wrap: anywhere; word-break: normal; white-space: normal; }
+      .location-stock-report-table th { position: static; }
+      .location-stock-report-table .location-stock-report-quantity { min-width: 0; font-size: 16px; white-space: normal; }
+      .location-stock-report-location-cell, .location-stock-report-color { min-width: 0; white-space: normal; }
+      .location-stock-report-status-badge { max-width: 100%; box-sizing: border-box; white-space: normal; overflow-wrap: anywhere; padding: 4px 6px; }
+
+      @container (max-width: 720px) {
+        .location-stock-report-table colgroup { display: none; }
+        .location-stock-report-table, .location-stock-report-table tbody { display: block; width: 100%; }
+        .location-stock-report-table thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+        .location-stock-report-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin: 0 0 12px; padding: 12px; background: #f7fbff; border: 1px solid #cbdced; border-radius: 10px; }
+        .location-stock-report-table td { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; max-width: 100%; border: 0; padding: 5px; text-align: left !important; font-size: 14px; }
+        .location-stock-report-table td[data-label="商品名"], .location-stock-report-table td[data-label="保管場所"] { grid-column: 1 / -1; }
+        .location-stock-report-table td::before { content: attr(data-label); font-size: 12px; font-weight: 600; color: #526b80; }
+        .location-stock-report-table td[data-label="商品名"] { font-size: 16px; font-weight: 700; }
+        .location-stock-report-table td.location-stock-report-quantity { font-size: 20px; }
+}
+      @media (max-width: 760px) {
+        .location-stock-report-table colgroup { display: none; }
+        .location-stock-report-table, .location-stock-report-table tbody { display: block; width: 100%; }
+        .location-stock-report-table thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
+        .location-stock-report-table tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin: 0 0 12px; padding: 12px; background: #f7fbff; border: 1px solid #cbdced; border-radius: 10px; }
+        .location-stock-report-table td { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; max-width: 100%; border: 0; padding: 5px; text-align: left !important; font-size: 14px; }
+        .location-stock-report-table td[data-label="商品名"], .location-stock-report-table td[data-label="保管場所"] { grid-column: 1 / -1; }
+        .location-stock-report-table td::before { content: attr(data-label); font-size: 12px; font-weight: 600; color: #526b80; }
+        .location-stock-report-table td[data-label="商品名"] { font-size: 16px; font-weight: 700; }
+        .location-stock-report-table td.location-stock-report-quantity { font-size: 20px; }
+}
     `;
 
     document.head.appendChild(style);
@@ -1172,15 +1208,15 @@
     }
 
     head.innerHTML = `
-      <tr>
-        <th>No</th>
-        <th>保管場所</th>
-        <th>社内コード</th>
-        <th>商品コード</th>
-        <th>商品名</th>
-        <th>色</th>
-        <th>現在庫</th>
-        <th>商品状態</th>
+      <tr role="row">
+        <th role="columnheader" scope="col">No</th>
+        <th role="columnheader" scope="col">保管場所</th>
+        <th role="columnheader" scope="col">社内コード</th>
+        <th role="columnheader" scope="col">商品コード</th>
+        <th role="columnheader" scope="col">商品名</th>
+        <th role="columnheader" scope="col">色</th>
+        <th role="columnheader" scope="col">現在庫</th>
+        <th role="columnheader" scope="col">商品状態</th>
       </tr>
     `;
   }
@@ -1198,15 +1234,15 @@
     body.innerHTML = rows.map(
       function (row, index) {
         return `
-          <tr>
-            <td>${index + 1}</td>
-            <td class="location-stock-report-location-cell">${escapeHtml(row.location)}</td>
-            <td>${escapeHtml(row.internalCode || "-")}</td>
-            <td>${escapeHtml(row.productCode || "-")}</td>
-            <td>${escapeHtml(row.productName || "-")}</td>
-            <td class="location-stock-report-color">${escapeHtml(row.productColor || "-")}</td>
-            <td class="location-stock-report-quantity">${formatNumber(row.stock)}個</td>
-            <td>${createStatusBadge(row.status)}</td>
+          <tr role="row">
+            <td role="cell" data-label="No">${index + 1}</td>
+            <td role="cell" data-label="保管場所" class="location-stock-report-location-cell">${escapeHtml(row.location)}</td>
+            <td role="cell" data-label="社内コード">${escapeHtml(row.internalCode || "-")}</td>
+            <td role="cell" data-label="商品コード">${escapeHtml(row.productCode || "-")}</td>
+            <td role="cell" data-label="商品名">${escapeHtml(row.productName || "-")}</td>
+            <td role="cell" data-label="色" class="location-stock-report-color">${escapeHtml(row.productColor || "-")}</td>
+            <td role="cell" data-label="現在庫" class="location-stock-report-quantity">${formatNumber(row.stock)}個</td>
+            <td role="cell" data-label="商品状態">${createStatusBadge(row.status)}</td>
           </tr>
         `;
       }

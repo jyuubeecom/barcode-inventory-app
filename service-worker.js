@@ -2,13 +2,13 @@
 
 // 同じドメインの桜花・本番版・テスト版のキャッシュを分ける。
 const CACHE_PREFIX = "barcode-inventory-app:" + encodeURIComponent(self.registration.scope) + ":";
-const CACHE_NAME = CACHE_PREFIX + "v2939-shared-report-1";
+const CACHE_NAME = CACHE_PREFIX + "v29310-stock-fit-2";
 const APP_FILES = [
   "./", "./index.html", "./style.css?v=108", "./storage.js?v=269",
   "./normal-shipment.js?v=226",
   "./manual.js?v=207",
   "./backorder-list.js?v=216",
-  "./app.js?v=280", "./natural-stock-search.js?v=275", "./product-history.js?v=107", "./inventory.js?v=195", "./transfer-list.js?v=195", "./location-stock-report.js?v=29391",
+  "./app.js?v=280", "./natural-stock-search.js?v=275", "./product-history.js?v=107", "./inventory.js?v=195", "./transfer-list.js?v=195", "./location-stock-report.js?v=293102",
   "./libs/barcode-detector-zxing-adapter.js?v=31",
   "./libs/ZXING-LICENSE.txt",
   "./scanner.js?v=241", "./stocktaking.js?v=202",

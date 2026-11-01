@@ -995,6 +995,7 @@ function hideHomeAlertUpdateToast() {
 }
 
 function isHomeAlertPanelUsable() {
+  if (window.inventoryCommonWorkspace?.mode() === "shared") return false;
   const home =
     document.querySelector(
       "#home"

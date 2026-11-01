@@ -2,7 +2,7 @@ name: 架空データによる検証
 
 on:
   push:
-    branches: [update-v293.3, work/stock-csv-apply, work/shared-sales-csv, work/migration-preflight, work/migration-preview, work/migration-add, work/shared-products-list, work/shared-stock-report]
+    branches: [update-v293.3, work/stock-csv-apply, work/shared-sales-csv, work/migration-preflight, work/migration-preview, work/migration-add, work/shared-products-list, work/shared-stock-report, work/amazon-csv-report]
   pull_request:
     branches: [main]
 

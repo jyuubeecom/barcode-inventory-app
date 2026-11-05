@@ -14,7 +14,7 @@
   const groups=new Map();
   actuals.forEach((r,i)=>{
    const code=String(r?.internalCode??'').trim(),q=Number(r?.quantity);
-   if(!code||new TextEncoder().encode(code).length>200||!date(r?.saleDate)||r.quantity===null||r.quantity===''||!Number.isSafeInteger(q))throw Error('販売実績の'+(i+1)+'行目の商品・日付・数量を確認してください。');
+   if(!code||new TextEncoder().encode(code).length>200||!date(r?.saleDate)||!['number','string'].includes(typeof r.quantity)||r.quantity===null||r.quantity===''||!Number.isSafeInteger(q))throw Error('販売実績の'+(i+1)+'行目の商品・日付・数量を確認してください。');
    const month=r.saleDate.slice(0,7),key=JSON.stringify([code,month]);
    if(!groups.has(key))groups.set(key,{internalCode:code,month,ordinary:0,excluded:0});
    const item=groups.get(key),field=excluded(r.customerName)?'excluded':'ordinary';item[field]+=q;
@@ -33,7 +33,9 @@
  }
  function expand(data){
   if(data?.rule!==rule||!Array.isArray(data.months)||!Array.isArray(data.ranges))throw Error('共有実績の形式を確認できません。');
-  return data.months.flatMap(r=>[{internalCode:r.internalCode,saleDate:r.month+'-01',quantity:r.ordinary,customerName:'共有通常取引'},{internalCode:r.internalCode,saleDate:r.month+'-01',quantity:r.excluded,customerName:'清水産業'}]);
+  // The calculators only need the eligible volume. Keep zero-volume months
+  // so a month with only excluded transactions still counts as recorded history.
+  return data.months.map(row=>({internalCode:row.internalCode,saleDate:row.month+'-01',quantity:row.ordinary}));
  }
  function pending(){const raw=root.localStorage.getItem(key);return raw?JSON.parse(raw):null;}
  async function request(method,body){

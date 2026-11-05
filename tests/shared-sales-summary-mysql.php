@@ -6,7 +6,7 @@ if($p->query('SELECT DATABASE()')->fetchColumn()!=='inventory_csv_test')throw ne
 $p->exec(str_replace('CREATE TABLE `','CREATE TABLE IF NOT EXISTS `',file_get_contents(__DIR__.'/mysql-schema.sql')));
 $p->exec(file_get_contents(__DIR__.'/../server/migrations/005-shared-planning.sql'));
 $p->exec('DROP TABLE IF EXISTS shared_sales_summary_state');$p->exec(file_get_contents(__DIR__.'/../server/migrations/006-shared-sales-summary.sql'));
-$p->exec("INSERT IGNORE INTO products(internal_code,product_name,supplier_name) VALUES ('FAKE-SUM-001','架空月別商品','株式会社モービック')");
+$p->exec("INSERT IGNORE INTO products(internal_code,product_name,supplier_name) VALUES ('FAKE-SUM-001','架空月別商品','架空対象仕入先')");
 $p->exec("INSERT INTO product_stocks(internal_code,location_name,quantity) VALUES ('FAKE-SUM-001','本社',10) ON DUPLICATE KEY UPDATE quantity=10");
 function check(bool $v,string $m):void{if(!$v)throw new RuntimeException($m);}
 function failure(callable $f,int $status):void{try{$f();}catch(SharedPlanningError $e){check($e->status===$status,'Wrong status');return;}throw new RuntimeException('Expected rejection');}

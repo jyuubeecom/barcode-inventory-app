@@ -3,7 +3,7 @@
  root.document.addEventListener('DOMContentLoaded',()=>{
   const screen=root.document.getElementById('app-settings-screen');if(!screen)return;
   const api=root.inventorySharedSalesSummary,box=root.document.createElement('section');box.id='shared-summary-settings';
-  box.innerHTML='<h3>販売実績の月別集計を初回共有（管理者用）</h3><p>最新の全データバックアップから商品別・月別の実績を集計します。清水産業・後藤は月平均から除外します。在庫数・取引先名・売上明細は送信しません。過去の出庫を再実行しません。共有済みの実績集計は上書きしません。</p><input type="file" accept=".json,application/json" aria-label="実績を含む全データバックアップ"><button type="button" data-preview>件数を確認する</button><button type="button" data-apply disabled>確認した月別実績を初回共有する</button><button type="button" data-retry>前回の実績共有を再確認</button><p data-status role="status"></p>';
+  box.innerHTML='<h3>販売実績の月別集計を初回共有（管理者用）</h3><p>最新の全データバックアップから商品別・月別の実績を集計します。従来の取引先除外ルールで月平均を計算します。在庫数・取引先名・売上明細は送信しません。過去の出庫を再実行しません。共有済みの実績集計は上書きしません。</p><input type="file" accept=".json,application/json" aria-label="実績を含む全データバックアップ"><button type="button" data-preview>件数を確認する</button><button type="button" data-apply disabled>確認した月別実績を初回共有する</button><button type="button" data-retry>前回の実績共有を再確認</button><p data-status role="status"></p>';
   screen.appendChild(box);const input=box.querySelector('input'),output=box.querySelector('[data-status]'),apply=box.querySelector('[data-apply]'),retry=box.querySelector('[data-retry]');let working=false,generation=0;
   function sync(){box.hidden=root.document.body.dataset.roleMode==='worker';retry.hidden=!api.pending();}
   function invalidate(){generation++;api.invalidate();apply.disabled=true;}

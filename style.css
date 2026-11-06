@@ -1252,3 +1252,51 @@ body.app-dialog-open {
     font-size: 17px;
   }
 }
+
+#shared-stock-compare {
+  margin: 20px 0;
+  padding: 18px;
+  border: 1px solid #b6d5f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+#shared-stock-compare summary {
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+#shared-stock-compare input:not([type="checkbox"]) {
+  display: block;
+  width: 100%;
+  margin: 8px 0;
+}
+
+#shared-stock-compare article {
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f2f7fb;
+  overflow-wrap: anywhere;
+}
+
+#shared-stock-compare .shared-compare-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  width: fit-content;
+  cursor: pointer;
+}
+
+#shared-stock-compare .shared-compare-option input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+#shared-stock-compare [data-preview] {
+  padding: 12px;
+  border: 1px solid #b6d5f0;
+  border-radius: 8px;
+}

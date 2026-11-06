@@ -79,7 +79,7 @@
    if(!r.ok||d.success!==true||d.format!=='inventory-shared-planning-v1'||typeof d.initialized!=='boolean')throw Error('共有予定の準備が必要です。管理者に確認してください。');
    if(!d.initialized)text(output,'販売予定・船便・発注残はまだ共有されていません。発注・船積みの判定は準備中です。');
    else if(!Array.isArray(d.counts))throw Error('共有予定の応答を確認できません。');
-   else text(output,'共有済み（初回共有の内容）：'+counts(d.counts)+'。共有日時：'+d.updated_at+'。発注・船積みの判定は、販売実績の共有と判定処理の接続後に表示します。');
+   else text(output,'共有済み（初回共有の内容）：'+counts(d.counts)+'。共有日時：'+d.updated_at+'。発注・船積みは共有データの参考判定で確認できます。');
   }catch(e){if(own===generation)text(output,e.name==='AbortError'?'通信が時間切れになりました。再確認してください。':e.message);}finally{root.clearTimeout(timer);}
  }
  root.document.addEventListener('DOMContentLoaded',()=>{

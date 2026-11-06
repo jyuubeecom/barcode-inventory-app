@@ -4324,11 +4324,12 @@ window.shippingScheduleFeature = {
 window.shippingScheduleApp =
   window.shippingScheduleApp || {};
 
-window.shippingScheduleApp.getHomeAlertData =
-  async function () {
-    await refreshShippingScheduleData();
-
-    const today =
+window.shippingScheduleApp.getHomeAlertData = async function () {
+  await refreshShippingScheduleData();
+  return buildShippingHomeAlertData();
+};
+function buildShippingHomeAlertData(todayOverride) {
+    const today = todayOverride ||
       getShippingTodayKeyForConfirmation();
 
     const actionableSchedules =
@@ -4593,6 +4594,18 @@ window.shippingScheduleApp.getHomeAlertData =
     };
   };
 
+
+// Synchronous snapshot calculation; no refresh, migration or arrival replay.
+// Restore all legacy view inputs even when calculation fails.
+window.shippingScheduleApp.calculateShared = function(data, today) {
+  const before=[shippingScheduleRecords,shippingScheduleAllocations,shippingScheduleProducts,shippingScheduleSalesActuals,shippingScheduleSalesPlans,shippingWarehouseAllocations,shippingArrivalReceipts];
+  try {
+    [shippingScheduleRecords,shippingScheduleAllocations,shippingScheduleProducts,shippingScheduleSalesActuals,shippingScheduleSalesPlans,shippingWarehouseAllocations,shippingArrivalReceipts]=[data.schedules,data.allocations,data.products,data.actuals,data.plans,data.warehouseAllocations,data.arrivalReceipts];
+    return buildShippingHomeAlertData(today);
+  } finally {
+    [shippingScheduleRecords,shippingScheduleAllocations,shippingScheduleProducts,shippingScheduleSalesActuals,shippingScheduleSalesPlans,shippingWarehouseAllocations,shippingArrivalReceipts]=before;
+  }
+};
 
 /* =========================================================
    v255 販売予定の在庫不足判定用

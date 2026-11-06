@@ -31,6 +31,8 @@ const HOME_DASHBOARD_GROUPS = Object.freeze({
     "export-stocktaking-csv-button"
   ],
   "home-sales-buttons": [
+    "show-amazon-csv-report-button",
+    "show-amazon-pick-list-button",
     "show-sales-plan-button",
     "show-sales-plan-list-button",
     "show-sales-actual-import-button",
@@ -76,6 +78,8 @@ const HOME_DASHBOARD_ACTION_CLASSES = Object.freeze({
   "show-processing-conversion-button": "home-action-processing",
   "show-disposal-list-button": "home-action-disposal",
   "show-sales-plan-button": "home-action-sales",
+  "show-amazon-csv-report-button": "home-action-sales-import",
+  "show-amazon-pick-list-button": "home-action-sales-import",
   "show-sales-plan-list-button": "home-action-sales-list",
   "show-sales-actual-import-button": "home-action-sales-import",
   "show-customer-master-button": "home-action-sales",

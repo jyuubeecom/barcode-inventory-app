@@ -1298,6 +1298,10 @@ function downloadCsvFile(
       }
     );
 
+  downloadFileBlob(blob, fileName);
+}
+
+function downloadFileBlob(blob, fileName) {
   const downloadUrl =
     URL.createObjectURL(
       blob

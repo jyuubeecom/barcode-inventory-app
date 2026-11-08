@@ -16,7 +16,7 @@ function setup(products=[],plans=[]){
  let src=fs.readFileSync(path.join(__dirname,'../amazon-csv-report.js'),'utf8').replace('  function sampleInventory() {','  window.h={state,refresh,sample,render,print,loadFile,init};\n  function sampleInventory() {');vm.runInContext(src,context);
  return {h:window.h,elem,downloads,init:()=>init(),printed:()=>printed,reads:()=>reads,pops:()=>pops,printCalls:()=>printCalls};
 }
-const valid={line:2,jan:'4901234567894',site:'架空配送先',qty:10,name:'<script>bad</script>',issues:[]};
+const valid={line:2,jan:'4901234567894',site:'架空配送先',qty:10,name:'<script>bad</script>',model:'<script>bad</script>',issues:[]};
 test('sample report renders maximum 8 with shortage and sales-plan text in both screen and print; no database reads',async()=>{
  const s=setup();s.h.init();s.h.sample();await new Promise(r=>setImmediate(r));
  assert.equal(s.reads(),0);let html=s.elem('amazon-output').innerHTML;assert.match(html,/amazon-short">8個/);assert.match(html,/販売予定あり/);assert.match(html,/15個/);assert.match(html,/同JAN 2件：最大在庫を採用/);
@@ -45,7 +45,7 @@ test('one destination prints only its own demand while shortage still uses globa
  s.elem('amazon-destination').value=String(index);s.elem('amazon-destination').events.change();s.h.print();
  let html=s.printed();assert.match(html,/表示・印刷対象：架空配送先・西.*合計 4個/);assert.doesNotMatch(html,/架空配送先・東/);assert.match(html,/在庫不足（2個）/);assert.match(html,/amazon-short">8個/);
  assert.equal((html.match(/<tr class="amazon-planned">/g)||[]).length,1);
- s.h.state.view='product';s.h.render();html=s.elem('amazon-output').innerHTML;assert.match(html,/>10<\/td>/);assert.match(html,/架空商品B/);assert.equal(s.elem('amazon-destination-controls').hidden,true);
+ s.h.state.view='product';s.h.render();html=s.elem('amazon-output').innerHTML;assert.match(html,/>10<\/td>/);assert.match(html,/DEMO-CODE-B/);assert.equal(s.elem('amazon-destination-controls').hidden,true);
  s.h.state.view='site';s.h.render();assert.equal(s.elem('amazon-destination').value,String(index));
  s.elem('amazon-destination').value='';s.elem('amazon-destination').events.change();assert.match(s.elem('amazon-output').innerHTML,/架空配送先・東/);assert.match(s.elem('amazon-output').innerHTML,/すべての配送先.*合計 15個/);
 });
@@ -82,10 +82,10 @@ test('PickList keeps PO lines separate, and filters printing and export by desti
  const [{text,name}]=s.downloads;
  assert.match(name,/^Amazonピッキング・パッキング用_.*\.csv$/);
  assert.match(text,/"受領待ちのケース","ピッキング確認","パッキング確認"/);
- assert.match(text,/"DEMO-PO1","架空配送先","DEMO-ASIN","01234565","","架空商品","3","",""/);
+ assert.match(text,/"DEMO-PO1","架空配送先","DEMO-ASIN","01234565","","要確認（商品コードなし）","3","",""/);
  assert.match(text,/"DEMO-PO2"/);
  assert.doesNotMatch(text,/別の配送先/);
- assert.equal(s.reads(),0);
+ assert.equal(s.reads(),1);
 });
 test('a replacement with preparation headers or damaged JAN clears the PickList output',async()=>{
  const s=setup();s.h.init();
@@ -104,7 +104,7 @@ test('a replacement with preparation headers or damaged JAN clears the PickList 
 });
 
 test('PickList Excel export keeps numeric identifiers as literal strings and cases as numbers',async()=>{
- const s=setup();s.h.init();
+ const s=setup([{janCode:'01234565',productCode:'=架空&コード'}]);s.h.init();
  await loadPick(s,[pickHeader,pickLine.replace('JAN,,架空商品','JAN,0000000000123,=架空&商品'),pickLine.replace('架空配送先','別の配送先')].join('\n'));
  s.elem('amazon-pick-site').value='架空配送先';
  s.elem('amazon-pick-site').events.change();
@@ -117,6 +117,67 @@ test('PickList Excel export keeps numeric identifiers as literal strings and cas
  assert.match(sheet,/<c r="D2" t="inlineStr"><is><t xml:space="preserve">01234565<\/t>/);
  assert.match(sheet,/<c r="E2" t="inlineStr"><is><t xml:space="preserve">0000000000123<\/t>/);
  assert.match(sheet,/<c r="G2"><v>3<\/v>/);
- assert.match(sheet,/>=架空&amp;商品<\/t>/);
+ assert.match(sheet,/>=架空&amp;コード<\/t>/);
  assert.doesNotMatch(sheet,/<f[ >]|別の配送先|<row r="3">/);
+});
+
+test('JAN-matched product code replaces long product name in screen, print and CSV',async()=>{
+ const s=setup([{janCode:'01234565',productCode:'DEMO-CODE<&>'}]);s.h.init();
+ await loadPick(s,[pickHeader,pickLine].join('\n'));
+ s.elem('amazon-pick-print').events.click();s.elem('amazon-pick-download').events.click();
+ for(const html of [s.elem('amazon-pick-output').innerHTML,s.printed()]){
+  assert.match(html,/商品コード/);assert.match(html,/DEMO-CODE&lt;&amp;&gt;/);assert.doesNotMatch(html,/架空商品/);
+ }
+ assert.match(s.downloads[0].text,/DEMO-CODE<&>/);
+});
+test('stale master lookup cannot overwrite a replacement file, and failed lookup leaves exports disabled',async()=>{
+ let resolve,fail=false;const s=setup(()=>fail?Promise.reject(new Error('MASTER_FAIL')):new Promise(r=>resolve=r));s.h.init();
+ const old=loadPick(s,[pickHeader,pickLine].join('\n'));await new Promise(r=>setImmediate(r));
+ fail=true;await loadPick(s,[pickHeader,pickLine.replace('PO1','PO2')].join('\n'));
+ resolve([{janCode:'01234565',productCode:'STALE'}]);await old;
+ assert.equal(s.elem('amazon-pick-output').innerHTML,'');assert.equal(s.elem('amazon-pick-excel').disabled,true);
+ assert.match(s.elem('amazon-pick-status').textContent,/MASTER_FAIL/);
+});
+
+test('preparation product and destination reports use master product codes in screen and print',async()=>{
+ const s=setup([{janCode:valid.jan,productCode:'DEMO-PREP<&>',internalCode:'DEMO-INTERNAL',stock:15}]);
+ s.h.init();s.h.state.rows=[{...valid,name:'LONG-NAME-OMIT',model:'MODEL-FALLBACK',qty:4}];await s.h.refresh();
+ for(const view of ['product','site']){
+  s.h.state.view=view;s.h.render();s.h.print();
+  for(const html of [s.elem('amazon-output').innerHTML,s.printed()]){
+   assert.match(html,/商品コード ／ 社内コード/);assert.match(html,/DEMO-PREP&lt;&amp;&gt;/);
+   assert.doesNotMatch(html,/LONG-NAME-OMIT|MODEL-FALLBACK/);assert.match(html,/15個/);
+  }
+ }
+});
+
+test('PickList site codes are short in screen, print, CSV and Excel while filtering retains exact destination',async()=>{
+ const s=setup();s.h.init();
+ await loadPick(s,[pickHeader,pickLine.replace('架空配送先','ABC1 - 架空市'),pickLine.replace('架空配送先','XYZ2 - 別の架空市')].join('\n'));
+ assert.match(s.elem('amazon-pick-site').innerHTML,/value="ABC1 - 架空市">ABC1<\/option>/);
+ s.elem('amazon-pick-site').value='ABC1 - 架空市';s.elem('amazon-pick-site').events.change();
+ s.elem('amazon-pick-print').events.click();s.elem('amazon-pick-download').events.click();
+ for(const html of [s.elem('amazon-pick-output').innerHTML,s.printed()]){
+  assert.match(html,/ABC1/);assert.match(html,/1明細 ／ 3ケース/);assert.doesNotMatch(html,/架空市|XYZ2/);
+ }
+ assert.match(s.downloads[0].text,/"ABC1"/);assert.doesNotMatch(s.downloads[0].text,/架空市|XYZ2/);
+ await s.elem('amazon-pick-excel').events.click();
+ const zip=await require('../libs/jszip-3.10.1.min.js').loadAsync(await s.downloads[1].blob.arrayBuffer());
+ const xml=await zip.file('xl/worksheets/sheet1.xml').async('string');
+ assert.match(xml,/>ABC1<\/t>/);assert.doesNotMatch(xml,/架空市|XYZ2/);
+});
+
+test('preparation shortens destination labels and print, preserving original grouping and issue filtering',async()=>{
+ const s=setup();s.h.init();
+ s.h.state.rows=[{...valid,site:'ABC1 - 架空市',qty:4},{...valid,site:'XYZ2 - 別の架空市',qty:3},
+  {...valid,line:4,site:'ABC1 - 架空市',qty:2,issues:['架空の確認事項']}];
+ await s.h.refresh();s.h.state.view='site';s.h.render();
+ assert.match(s.elem('amazon-destination').innerHTML,/>ABC1<\/option>/);
+ const index=s.h.state.result.sites.findIndex(g=>g.site==='ABC1 - 架空市');
+ s.elem('amazon-destination').value=String(index);s.elem('amazon-destination').events.change();s.h.print();
+ for(const html of [s.elem('amazon-output').innerHTML,s.printed()]){
+  assert.match(html,/表示・印刷対象：ABC1.*合計 6個/);assert.match(html,/架空の確認事項/);
+  assert.doesNotMatch(html,/架空市|XYZ2/);
+ }
+ assert.equal(s.h.state.destination,'ABC1 - 架空市');assert.equal(s.h.state.result.total,9);
 });

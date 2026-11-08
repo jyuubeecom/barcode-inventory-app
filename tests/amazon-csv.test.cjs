@@ -46,3 +46,35 @@ test('same CSV imported twice replaces caller snapshot; pure aggregation does no
  const rows=c.read(csv([['東',A,5]]));const before=JSON.stringify(rows);
  assert.equal(c.aggregate(rows,[],[]).total,5);assert.equal(c.aggregate(rows,[],[]).total,5);assert.equal(JSON.stringify(rows),before);
 });
+
+test('PickList codes prefer JAN-matched master, retain codes as strings, and never mutate source',()=>{
+ const rows=[{jan:C,model:'AMZ-MODEL',name:'Long Amazon name'}];
+ const result=c.resolvePickCodes(rows,[{janCode:C,productCode:'0000123'},{janCode:C,productCode:'0000123'}]);
+ assert.equal(result[0].productCode,'0000123');assert.equal(result[0].codeIssue,'');
+ assert.equal(rows[0].productCode,undefined);
+});
+test('PickList ambiguous master codes require review; numeric or absent models never masquerade as codes',()=>{
+ const row={jan:C,model:'MODEL-1'};
+ assert.match(c.resolvePickCodes([row],[{janCode:C,productCode:'A'},{janCode:C,productCode:'B'}])[0].productCode,/複数/);
+ assert.equal(c.resolvePickCodes([row],[])[0].productCode,'MODEL-1');
+ for(const model of ['',C,'4986012012216','4.986E+12'])assert.match(c.resolvePickCodes([{...row,model}],[])[0].productCode,/商品コードなし/);
+ assert.equal(c.resolvePickCodes([row],[{janCode:A,productCode:'WRONG'}])[0].productCode,'MODEL-1');
+});
+
+test('preparation codes share JAN resolution and conflicting fallback models are not silently merged',()=>{
+ const rows=c.read(csv([['West',A,2],['East',A,3]]));
+ const master=c.aggregate(rows,[{janCode:A,productCode:'DEMO-PREP',stock:10}],[]);
+ assert.equal(master.items[0].productCode,'DEMO-PREP');assert.equal(master.sites[0].items[0].productCode,'DEMO-PREP');
+ assert.equal(master.total,5);assert.equal(master.items[0].stock,10);
+ rows[0].model='MODEL-A';rows[1].model='MODEL-B';
+ assert.match(c.aggregate(rows,[],[]).items[0].productCode,/複数/);
+ rows[0].issues=['test issue'];
+ assert.equal(c.aggregate(rows,[],[]).issues[0].productCode,'MODEL-A');
+});
+
+test('PickList site labels shorten only a recognized four-character prefix',()=>{
+ assert.equal(c.pickSiteLabel('ABC1 - 架空市'),'ABC1');
+ assert.equal(c.pickSiteLabel('XYZ2'),'XYZ2');
+ assert.equal(c.pickSiteLabel('AB123 - 架空市'),'AB123 - 架空市');
+ assert.equal(c.pickSiteLabel('架空配送先'),'架空配送先');
+});

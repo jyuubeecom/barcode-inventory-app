@@ -85,7 +85,7 @@
   function aggregate(rows, products, plans) {
     const byJan = new Map(), sites = new Map(), issues = [];
     let total = 0, eligible = 0, invalidQuantityRows = 0;
-    for (const row of rows) {
+    for (const row of resolvePickCodes(rows, products)) {
       if (row.qty !== null) total = add(total, row.qty); else invalidQuantityRows++;
       const site = row.site || "（配送先未指定）";
       if (!sites.has(site)) sites.set(site, {site, qty: 0, unknown: 0, excluded: 0, items: new Map()});
@@ -93,8 +93,12 @@
       if (row.qty !== null) group.qty = add(group.qty, row.qty); else group.unknown++;
       if (row.issues.length) { issues.push(row); if (row.qty !== null) group.excluded = add(group.excluded, row.qty); continue; }
       eligible = add(eligible, row.qty);
-      if (!byJan.has(row.jan)) byJan.set(row.jan, {jan: row.jan, name: row.name, qty: 0, sites: new Set()});
-      const item = byJan.get(row.jan); item.qty = add(item.qty, row.qty); item.sites.add(site);
+      if (!byJan.has(row.jan)) byJan.set(row.jan, {jan: row.jan, name: row.name, productCode: row.productCode, codeIssue: row.codeIssue, qty: 0, sites: new Set()});
+      const item = byJan.get(row.jan);
+      if (item.productCode !== row.productCode) {
+        item.productCode = "要確認（商品コードが複数）"; item.codeIssue = "商品コードが複数";
+      }
+      item.qty = add(item.qty, row.qty); item.sites.add(site);
       group.items.set(row.jan, add(group.items.get(row.jan) || 0, row.qty));
     }
     const inventory = new Map();
@@ -122,5 +126,31 @@
     return {total, eligible, excluded: total - eligible, invalidQuantityRows, issues, items,
       sites: [...sites.values()].sort((a, b) => a.site.localeCompare(b.site, "ja")).map(g => ({...g, items: [...g.items].map(([jan, qty]) => ({...itemMap.get(jan), siteQty: qty}))}))};
   }
-  root.inventoryAmazonCsv = Object.freeze({parseCsv, janIssue, quantity, read, readPickList, aggregate});
+  function pickSiteLabel(value) {
+    const site = clean(value);
+    const match = site.match(/^([A-Za-z0-9]{4})(?=$|[\s\-–—])/);
+    return match ? match[1] : site;
+  }
+  function resolvePickCodes(details, products) {
+    const byJan = new Map();
+    for (const product of products) {
+      const jan = clean(product.janCode);
+      if (!jan || janIssue(jan)) continue;
+      if (!byJan.has(jan)) byJan.set(jan, new Set());
+      const code = clean(product.productCode);
+      if (code) byJan.get(jan).add(code);
+    }
+    return details.map(row => {
+      const codes = [...(byJan.get(row.jan) || [])];
+      if (codes.length === 1) return {...row, productCode: codes[0], codeIssue: ""};
+      if (codes.length > 1) return {...row, productCode: "要確認（商品コードが複数）", codeIssue: "商品コードが複数"};
+      // A numeric model may simply repeat the JAN. Do not label it a product code.
+      const model = clean(row.model);
+      if (model && model !== row.jan && !/^[0-9\s.+-]+(?:[eE][+-]?\d+)?$/.test(model)) {
+        return {...row, productCode: model, codeIssue: "Amazonモデル番号を使用"};
+      }
+      return {...row, productCode: "要確認（商品コードなし）", codeIssue: "商品コードなし"};
+    });
+  }
+  root.inventoryAmazonCsv = Object.freeze({parseCsv, janIssue, quantity, read, readPickList, aggregate, resolvePickCodes, pickSiteLabel});
 })(typeof window === "undefined" ? globalThis : window);

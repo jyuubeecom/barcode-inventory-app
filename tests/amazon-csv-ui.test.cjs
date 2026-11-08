@@ -7,7 +7,12 @@ function setup(products=[],plans=[]){
  const document={getElementById:elem,addEventListener(event,fn){if(event==='DOMContentLoaded')init=fn;},createElement:()=>({appendChild(){},addEventListener(){}}),querySelector:s=>elem(s),querySelectorAll:()=>[],head:{appendChild(){}}};
  const popup={document:{open(){},write(html){printed=html;},close(){},getElementById:()=>elem('print-again')},focus(){focused++;},print(){printCalls++;}};
  const window={JSZip:require('../libs/jszip-3.10.1.min.js'),scrollTo(){},alert(){},open(){pops++;return popup;}};
- const context=vm.createContext({window,document,TextDecoder,console,getAllProducts:async()=>{reads++;return typeof products==='function'?products():products;},getAllSalesPlans:async()=>plans});
+ const context=vm.createContext({window,document,TextDecoder,console,getAllProducts:async()=>{reads++;return typeof products==='function'?products():products;},getAllSalesPlans:async()=>typeof plans==='function'?plans():plans});
+ const planSource=fs.readFileSync(path.join(__dirname,'../sales-plan.js'),'utf8');
+ for(const name of ['isIsoDate','getLastDateOfMonth','getSalesPlanShippingType','getSalesPlanEndDate','isSalesPlanEnded','getSalesPlanTodayLocal']) {
+  const fn=planSource.match(new RegExp('function '+name+'\\([\\s\\S]*?\\n}'));
+  assert.ok(fn, name); vm.runInContext(fn[0],context);
+ }
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../amazon-csv-core.js'),'utf8'),context);
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../csv.js'),'utf8'),context);
  context.downloadCsvFile=(text,name)=>downloads.push({text,name});
@@ -231,4 +236,60 @@ test('preparation shortens destination labels and print, preserving original gro
   assert.doesNotMatch(html,/架空市|XYZ2/);
  }
  assert.equal(s.h.state.destination,'ABC1 - 架空市');assert.equal(s.h.state.result.total,9);
+});
+
+test('only active sales plans highlight picking and preparation; shipping end day remains active',async()=>{
+ const now=new Date();const today=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
+ const scenarios=[
+  [{shippingType:'date',shippingDate:'2000-01-01'},false],
+  [{shippingType:'date',shippingDate:today},true],
+  [{shippingType:'date',shippingDate:'2999-01-01'},true],
+  [{shippingType:'period',shippingStartDate:'2000-01-01',shippingEndDate:'2000-01-02'},false],
+  [{shippingType:'period',shippingStartDate:'2000-01-01',shippingEndDate:today},true],
+  [{shippingMonth:'2000-01'},false],
+  [{shippingMonth:today.slice(0,7)},true],
+  [{shippingMonth:'2999-01'},true],
+  [{},true]
+ ];
+ for(const [dates,expected] of scenarios){
+  const products=[{janCode:'01234565',internalCode:'LOW',productCode:'LOW',stock:2},{janCode:'01234565',internalCode:'HIGH',productCode:'HIGH',stock:12}];
+  const plans=[{internalCode:'LOW',quantity:9,...dates}];const before=JSON.stringify([products,plans]);
+  const s=setup(products,plans);s.h.init();await loadPick(s,[pickHeader,pickLine].join('\n'));s.elem('amazon-pick-print').events.click();
+  for(const html of [s.elem('amazon-pick-output').innerHTML,s.printed()]) {
+   assert.equal(html.includes('<tr class="amazon-planned">'),expected,JSON.stringify(dates));
+   assert.ok(html.includes('<td>HIGH</td><td>3</td><td>12</td>'));
+  }
+  await s.elem('amazon-pick-excel').events.click();
+  const zip=await require('../libs/jszip-3.10.1.min.js').loadAsync(await s.downloads[0].blob.arrayBuffer());
+  const sheet=await zip.file('xl/worksheets/sheet1.xml').async('string');
+  assert.equal(sheet.includes('<c r="E2" s="1"><v>3</v>'),expected);
+  assert.match(await zip.file('xl/styles.xml').async('string'),/FFFFF1B5/);
+  s.h.state.rows=[{...valid,jan:'01234565'}];await s.h.refresh();
+  assert.equal(s.elem('amazon-output').innerHTML.includes('<tr class="amazon-planned">'),expected);
+  assert.equal(JSON.stringify([products,plans]),before);
+ }
+});
+test('Excel highlights track grouped destinations and spacer rows while CSV remains eight columns',async()=>{
+ const s=setup([{janCode:'01234565',internalCode:'CODE',stock:12,productCode:'CODE'}],[{internalCode:'CODE',shippingDate:'2999-01-01'}]);s.h.init();
+ await loadPick(s,[pickHeader,pickLine.replace('架空配送先','ABC1'),pickLine.replace('架空配送先','XYZ2')].join('\n'));
+ await s.elem('amazon-pick-excel').events.click();
+ const zip=await require('../libs/jszip-3.10.1.min.js').loadAsync(await s.downloads[0].blob.arrayBuffer());
+ const sheet=await zip.file('xl/worksheets/sheet1.xml').async('string');
+ for(const n of [2,4])assert.match(sheet,new RegExp('<c r="A'+n+'" s="1"'));
+ assert.doesNotMatch(sheet,/<c r="[A-H][13]" s="1"/);
+ s.elem('amazon-pick-download').events.click();assert.equal(s.downloads[1].text.split('\r\n')[0].split(',').length,8);
+});
+test('an ended plan does not cancel an active plan for the same product, unrelated and blank codes never highlight',async()=>{
+ const products=[{janCode:'01234565',internalCode:'A',stock:12}];
+ for(const [plans,expected] of [
+  [[{internalCode:'A',shippingDate:'2000-01-01'},{internalCode:'A',shippingDate:'2999-01-01'}],true],
+  [[{internalCode:'B',shippingDate:'2999-01-01'},{internalCode:'',shippingDate:'2999-01-01'}],false]
+ ]){
+  const s=setup(products,plans);s.h.init();await loadPick(s,[pickHeader,pickLine].join('\n'));
+  assert.equal(s.elem('amazon-pick-output').innerHTML.includes('<tr class="amazon-planned">'),expected);
+ }
+});
+test('failure to read sales plans disables picking output instead of silently omitting highlights',async()=>{
+ const s=setup([],()=>{throw new Error('FAKE_PLAN_ERROR');});s.h.init();await loadPick(s,[pickHeader,pickLine].join('\n'));
+ assert.equal(s.elem('amazon-pick-output').innerHTML,'');assert.equal(s.elem('amazon-pick-excel').disabled,true);assert.match(s.elem('amazon-pick-status').textContent,/FAKE_PLAN_ERROR/);
 });

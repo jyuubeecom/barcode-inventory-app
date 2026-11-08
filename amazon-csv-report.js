@@ -55,6 +55,10 @@
     $("print").addEventListener("click", print);
     initPickList();
   }
+  function activePlans(plans) {
+    const today = getSalesPlanTodayLocal();
+    return plans.filter(plan => !isSalesPlanEnded(plan, today));
+  }
   function clear() {
     state.result = null;
     $("output").innerHTML = "";
@@ -79,7 +83,7 @@
     try {
       const [products, plans] = state.sample ? sampleInventory() : await Promise.all([getAllProducts(), getAllSalesPlans()]);
       if (request !== generation) return;
-      state.result = core.aggregate(state.rows, products, plans); state.loaded = new Date().toLocaleString("ja-JP");
+      state.result = core.aggregate(state.rows, products, activePlans(plans)); state.loaded = new Date().toLocaleString("ja-JP");
       $("status").textContent = `${state.sample ? "【架空データ】" : ""}${state.name} ／ 在庫・販売予定の取得日時：${state.loaded}`;
       $("refresh").disabled = false; render();
     } catch (error) { if (request === generation) { clear(); $("refresh").disabled = false; $("status").textContent = "照合できませんでした：" + error.message; } }
@@ -108,7 +112,7 @@
     return `<h2>${state.sample ? "【架空データ】" : ""}Amazon準備用 ${state.view === "product" ? "商品別集計" : "配送先別集計"}</h2><p>${escape(state.name)} ／ 取得日時：${escape(state.loaded)}</p>
       <p class="amazon-summary">CSV全体：${number(state.rows.length)}行 ／ 配送先 ${number(r.sites.length)}件 ／ 数量の確認済み合計 ${number(r.total)}個 ／ 商品照合対象 ${number(r.items.length)}商品・${number(r.eligible)}個</p>
       ${state.view === "site" ? `<p class="amazon-summary">表示・印刷対象：${filtered ? escape(core.pickSiteLabel(state.destination)) : "すべての配送先"} ／ 数量の確認済み合計 ${number(total)}個${unknown ? "（数量不明あり）" : ""}</p>` : ""}
-      ${warning}<p>黄色＝販売予定あり（この端末に登録済みの全予定。過去分も含む）。赤字＝全配送先のAmazon必要数が現在庫を超過。販売予定の数量は差し引きません。<br>同JANの在庫は数量が最大の商品を採用し、合算しません。配送先別の現在庫は全体在庫の参考表示です。配送先への割当ではありません。</p>${body}${issues}`;
+      ${warning}<p>黄色＝販売予定あり（出荷終了日が今日以降の予定。日付不明も含む）。赤字＝全配送先のAmazon必要数が現在庫を超過。販売予定の数量は差し引きません。<br>同JANの在庫は数量が最大の商品を採用し、合算しません。配送先別の現在庫は全体在庫の参考表示です。配送先への割当ではありません。</p>${body}${issues}`;
   }
   function render() {
     const groups = state.result ? state.result.sites : [];
@@ -176,12 +180,12 @@
       return [...groups].map(([site, items]) => ({site, items}));
     }
     const reportHtml = rows => `<p>${escape(filename)} ／ ${escape(core.pickSiteLabel(siteSelect.value) || "すべての配送センター")}</p>
-      <p class="amazon-summary">${number(rows.length)}明細 ／ ${number(rows.reduce((total, row) => total + row.cases, 0))}ケース</p>` +
+      <p class="amazon-summary">${number(rows.length)}明細 ／ ${number(rows.reduce((total, row) => total + row.cases, 0))}ケース</p><p>黄色＝販売予定あり（終了済みを除く。終了日が今日の予定・日付不明も含む）。</p>` +
       pickGroups(rows).map(group => `<div class="amazon-pick-group">
       <h3 class="amazon-pick-site-heading">${escape(core.pickSiteLabel(group.site))} ／ ${number(group.items.length)}明細 ／ ${number(group.items.reduce((total, row) => total + row.cases, 0))}ケース</h3>
       <div class="amazon-table-wrap"><table class="amazon-table">
       <thead><tr>${pickHeadings.map(label => `<th>${label}</th>`).join("")}</tr></thead>
-      <tbody>${group.items.map(row => `<tr>${cells(row).map(value => `<td>${escape(value)}</td>`).join("")}</tr>`).join("")}</tbody>
+      <tbody>${group.items.map(row => `<tr class="${row.planned ? "amazon-planned" : ""}">${cells(row).map(value => `<td>${escape(value)}</td>`).join("")}</tr>`).join("")}</tbody>
       </table></div></div>`).join("");
     function renderPickList() {
       const rows = selectedRows();
@@ -215,9 +219,11 @@
         const bytes = await file.arrayBuffer();
         if (request !== requestId) return;
         const parsed = core.readPickList(decodeCsv(bytes));
-        const products = await getAllProducts();
+        const [products, plans] = await Promise.all([getAllProducts(), getAllSalesPlans()]);
         if (request !== requestId) return;
-        details = core.resolvePickCodes(parsed.details, products);
+        const plannedCodes = new Set(activePlans(plans).map(plan => String(plan.internalCode || "").trim()).filter(Boolean));
+        const plannedJans = new Set(products.filter(product => plannedCodes.has(String(product.internalCode || "").trim())).map(product => String(product.janCode || "").trim()).filter(Boolean));
+        details = core.resolvePickCodes(parsed.details, products).map(row => ({...row, planned: plannedJans.has(row.jan)}));
         filename = file.name;
         const sites = [...new Set(details.map(row => row.site))].sort();
         siteSelect.innerHTML += sites.map(site => `<option value="${escape(site)}">${escape(core.pickSiteLabel(site))}</option>`).join("");
@@ -235,14 +241,16 @@
     excelButton.addEventListener("click", async () => {
       if (excelButton.disabled) return;
       const request = requestId;
-      const rows = pickGroups(selectedRows()).flatMap((group, index) => [
-        ...(index ? [Array(pickHeadings.length).fill("")] : []), ...group.items.map(cells)
+      const exportRows = pickGroups(selectedRows()).flatMap((group, index) => [
+        ...(index ? [null] : []), ...group.items
       ]);
+      const rows = exportRows.map(row => row ? cells(row) : Array(pickHeadings.length).fill(""));
+      const plannedRows = exportRows.flatMap((row, index) => row && row.planned ? [index + 1] : []);
       const filename = pickTitle + "_" + getCsvDateText() + ".xlsx";
       exportingExcel = true;
       excelButton.disabled = true;
       try {
-        const blob = await window.inventoryAmazonPickXlsx.create([pickHeadings, ...rows]);
+        const blob = await window.inventoryAmazonPickXlsx.create([pickHeadings, ...rows], {plannedRows});
         if (request === requestId) downloadFileBlob(blob, filename);
       } catch (error) {
         if (request === requestId) status.textContent = "Excelを出力できませんでした：" + error.message;

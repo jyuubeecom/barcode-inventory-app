@@ -7,7 +7,7 @@
   const state = {rows: null, result: null, name: "", loaded: "", sample: false, view: "product", destination: null};
   let generation = 0;
   const pickTitle = "Amazonピッキング・パッキング用";
-  const pickHeadings = ["PO", "配送センター", "ASIN", "JANコード", "モデル番号", "商品コード", "受領待ちのケース", "ピッキング確認", "パッキング確認"];
+  const pickHeadings = ["PO", "配送センター", "JANコード", "商品コード", "受領待ちのケース", "ピッキング確認", "パッキング確認"];
   const $ = id => document.getElementById("amazon-" + id);
   const style = `
     .amazon-screen .amazon-controls{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:18px 0}
@@ -165,7 +165,7 @@
     const downloadButton = $("pick-download");
     const excelButton = $("pick-excel");
     const selectedRows = () => details.filter(row => !siteSelect.value || row.site === siteSelect.value);
-    const cells = row => [row.po, core.pickSiteLabel(row.site), row.asin, row.jan, row.model, row.productCode, row.cases, "", ""];
+    const cells = row => [row.po, core.pickSiteLabel(row.site), row.jan, row.productCode, row.cases, "", ""];
     const reportHtml = rows => `<p>${escape(filename)} ／ ${escape(core.pickSiteLabel(siteSelect.value) || "すべての配送センター")}</p>
       <p class="amazon-summary">${number(rows.length)}明細 ／ ${number(rows.reduce((total, row) => total + row.cases, 0))}ケース</p>
       <div class="amazon-table-wrap"><table class="amazon-table">

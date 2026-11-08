@@ -64,6 +64,57 @@ test('refresh retains an existing destination and resets a destination absent fr
 
 const pickHeader = 'PO,配送センター,ASIN,製品コード,製品コードの種類,モデル番号,商品名,入荷待ち,受領待ちのケース';
 const pickLine = 'DEMO-PO1,架空配送先,DEMO-ASIN,01234565,JAN,,架空商品,,3';
+test('picking count and maximum stock are adjacent in screen, print, CSV and numeric Excel cells',async()=>{
+ for(const stocks of [[2,12],[12,12],[0,0]]) {
+  const s=setup(stocks.map(stock=>({janCode:'01234565',productCode:'CODE',stock})));s.h.init();
+  await loadPick(s,[pickHeader,pickLine].join('\n'));
+  s.elem('amazon-pick-print').events.click();s.elem('amazon-pick-download').events.click();
+  const expected=Math.max(...stocks);
+  for(const html of [s.elem('amazon-pick-output').innerHTML,s.printed()]) {
+   assert.match(html,/<th>ピッキング数<\/th><th>在庫数<\/th>/);
+   assert.ok(html.includes(`<td>3</td><td>${expected}</td>`));
+   assert.doesNotMatch(html,/<th>受領待ちのケース<\/th>/);
+  }
+  assert.ok(s.downloads[0].text.includes(`"CODE","3","${expected}","",""`));
+  await s.elem('amazon-pick-excel').events.click();
+  const zip=await require('../libs/jszip-3.10.1.min.js').loadAsync(await s.downloads[1].blob.arrayBuffer());
+  const xml=await zip.file('xl/worksheets/sheet1.xml').async('string');
+  assert.match(xml,/<c r="E2"><v>3<\/v>/);assert.ok(xml.includes(`<c r="F2"><v>${expected}</v></c>`));
+ }
+});
+test('picking print uses A4 portrait with eight fixed columns, preparation retains landscape',async()=>{
+ const s=setup();s.h.init();await loadPick(s,[pickHeader,pickLine].join('\n'));
+ s.elem('amazon-pick-print').events.click();
+ const html=s.printed();assert.match(html,/@page \{ size:A4 portrait; margin:12mm; \}/);
+ assert.ok(html.lastIndexOf('A4 portrait')>html.indexOf('A4 landscape'));
+ assert.match(html,/table-layout:fixed/);assert.match(html,/overflow-wrap:anywhere/);
+ assert.equal((html.match(/<th>/g)||[]).length,8);
+ s.h.sample();await new Promise(r=>setImmediate(r));s.h.print();
+ assert.match(s.printed(),/A4 landscape/);assert.doesNotMatch(s.printed(),/A4 portrait/);
+});
+test('PickList groups interleaved destinations without merging PO lines; exports keep all quantities',async()=>{
+ const s=setup();s.h.init();
+ await loadPick(s,[pickHeader,
+  pickLine.replace('架空配送先','ABC1 - 架空市'),
+  pickLine.replace('架空配送先','XYZ2 - 架空市').replace('PO1','PO2'),
+  pickLine.replace('架空配送先','ABC1 - 架空市').replace('PO1','PO3')].join('\n'));
+ s.elem('amazon-pick-print').events.click();
+ for(const html of [s.elem('amazon-pick-output').innerHTML,s.printed()]) {
+  assert.equal((html.match(/<table class="amazon-table">/g)||[]).length,2);
+  assert.match(html,/ABC1 ／ 2明細 ／ 6ケース/);assert.match(html,/XYZ2 ／ 1明細 ／ 3ケース/);
+  assert.match(html,/3明細 ／ 9ケース/);
+  assert.ok(html.indexOf('DEMO-PO3')<html.indexOf('DEMO-PO2'));
+ }
+ s.elem('amazon-pick-download').events.click();
+ const csv=s.downloads[0].text;
+ assert.ok(csv.indexOf('DEMO-PO3')<csv.indexOf('DEMO-PO2'));
+ await s.elem('amazon-pick-excel').events.click();
+ const zip=await require('../libs/jszip-3.10.1.min.js').loadAsync(await s.downloads[1].blob.arrayBuffer());
+ const xml=await zip.file('xl/worksheets/sheet1.xml').async('string');
+ assert.match(xml,/<row r="4"><c r="A4" t="inlineStr"><is><t xml:space="preserve"><\/t>/);
+ assert.match(xml,/<c r="A5" t="inlineStr"><is><t xml:space="preserve">DEMO-PO2/);
+ assert.equal((xml.match(/<v>3<\/v>/g)||[]).length,3);
+});
 async function loadPick(s, text, name='DemoPickList.csv') {
  const buffer = new TextEncoder().encode(text).buffer;
  s.elem('amazon-pick-file').files=[{name,size:buffer.byteLength,arrayBuffer:async()=>buffer}];
@@ -81,8 +132,8 @@ test('PickList keeps PO lines separate, and filters printing and export by desti
  s.elem('amazon-pick-download').events.click();
  const [{text,name}]=s.downloads;
  assert.match(name,/^Amazonピッキング・パッキング用_.*\.csv$/);
- assert.match(text,/"受領待ちのケース","ピッキング確認","パッキング確認"/);
- assert.match(text,/"DEMO-PO1","架空配送先","01234565","要確認（商品コードなし）","3","",""/);
+ assert.match(text,/"ピッキング数","在庫数","ピッキング確認","パッキング確認"/);
+ assert.match(text,/"DEMO-PO1","架空配送先","01234565","要確認（商品コードなし）","3","未登録","",""/);
  assert.match(text,/"DEMO-PO2"/);
  assert.doesNotMatch(text,/別の配送先|ASIN|モデル番号/);
  assert.equal(s.reads(),1);

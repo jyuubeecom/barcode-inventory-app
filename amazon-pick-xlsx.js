@@ -20,7 +20,7 @@
     zip.file("xl/workbook.xml", `<workbook xmlns="${spreadsheet}" xmlns:r="${office}"><sheets><sheet name="作業一覧" sheetId="1" r:id="rId1"/></sheets></workbook>`);
     zip.file("xl/_rels/workbook.xml.rels", `<Relationships xmlns="${packageRelationships}"><Relationship Id="rId1" Type="${office}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`);
 
-    const widths = [15, 12, 17, 28, 21, 20, 20];
+    const widths = [15, 12, 17, 28, 15, 15, 20, 20];
     const cols = widths.map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`).join("");
     const sheetRows = rows.map((row, index) => {
       const rowNumber = index + 1;

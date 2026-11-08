@@ -136,14 +136,26 @@
     for (const product of products) {
       const jan = clean(product.janCode);
       if (!jan || janIssue(jan)) continue;
-      if (!byJan.has(jan)) byJan.set(jan, new Set());
-      const code = clean(product.productCode);
-      if (code) byJan.get(jan).add(code);
+      if (!byJan.has(jan)) byJan.set(jan, []);
+      byJan.get(jan).push(product);
     }
     return details.map(row => {
-      const codes = [...(byJan.get(row.jan) || [])];
+      const matches = byJan.get(row.jan) || [];
+      // Duplicate stocks are compared, never added. Tied maxima retain that quantity.
+      const stock = matches.length && matches.every(p => quantity(p.stock) !== null)
+        ? matches.reduce((max, p) => Math.max(max, quantity(p.stock)), 0) : null;
+      row = {...row, stock, stockMatched: matches.length > 0};
+      const codes = [...new Set(matches.map(p => clean(p.productCode)).filter(Boolean))];
       if (codes.length === 1) return {...row, productCode: codes[0], codeIssue: ""};
-      if (codes.length > 1) return {...row, productCode: "要確認（商品コードが複数）", codeIssue: "商品コードが複数"};
+      if (codes.length > 1) {
+        if (matches.every(p => quantity(p.stock) !== null)) {
+          const maxStock = matches.reduce((max, p) => Math.max(max, quantity(p.stock)), 0);
+          const leaders = matches.filter(p => quantity(p.stock) === maxStock);
+          const topCodes = [...new Set(leaders.map(p => clean(p.productCode)))];
+          if (topCodes.length === 1 && topCodes[0]) return {...row, productCode: topCodes[0], codeIssue: ""};
+        }
+        return {...row, productCode: "要確認（商品コードが複数）", codeIssue: "商品コードが複数"};
+      }
       // A numeric model may simply repeat the JAN. Do not label it a product code.
       const model = clean(row.model);
       if (model && model !== row.jan && !/^[0-9\s.+-]+(?:[eE][+-]?\d+)?$/.test(model)) {

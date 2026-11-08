@@ -82,9 +82,9 @@ test('PickList keeps PO lines separate, and filters printing and export by desti
  const [{text,name}]=s.downloads;
  assert.match(name,/^Amazonピッキング・パッキング用_.*\.csv$/);
  assert.match(text,/"受領待ちのケース","ピッキング確認","パッキング確認"/);
- assert.match(text,/"DEMO-PO1","架空配送先","DEMO-ASIN","01234565","","要確認（商品コードなし）","3","",""/);
+ assert.match(text,/"DEMO-PO1","架空配送先","01234565","要確認（商品コードなし）","3","",""/);
  assert.match(text,/"DEMO-PO2"/);
- assert.doesNotMatch(text,/別の配送先/);
+ assert.doesNotMatch(text,/別の配送先|ASIN|モデル番号/);
  assert.equal(s.reads(),1);
 });
 test('a replacement with preparation headers or damaged JAN clears the PickList output',async()=>{
@@ -114,9 +114,9 @@ test('PickList Excel export keeps numeric identifiers as literal strings and cas
  const JSZip=require('../libs/jszip-3.10.1.min.js');
  const zip=await JSZip.loadAsync(await blob.arrayBuffer());
  const sheet=await zip.file('xl/worksheets/sheet1.xml').async('string');
- assert.match(sheet,/<c r="D2" t="inlineStr"><is><t xml:space="preserve">01234565<\/t>/);
- assert.match(sheet,/<c r="E2" t="inlineStr"><is><t xml:space="preserve">0000000000123<\/t>/);
- assert.match(sheet,/<c r="G2"><v>3<\/v>/);
+ assert.match(sheet,/<c r="C2" t="inlineStr"><is><t xml:space="preserve">01234565<\/t>/);
+ assert.doesNotMatch(sheet,/ASIN|モデル番号|DEMO-ASIN|0000000000123/);
+ assert.match(sheet,/<c r="E2"><v>3<\/v>/);
  assert.match(sheet,/>=架空&amp;コード<\/t>/);
  assert.doesNotMatch(sheet,/<f[ >]|別の配送先|<row r="3">/);
 });
@@ -126,7 +126,7 @@ test('JAN-matched product code replaces long product name in screen, print and C
  await loadPick(s,[pickHeader,pickLine].join('\n'));
  s.elem('amazon-pick-print').events.click();s.elem('amazon-pick-download').events.click();
  for(const html of [s.elem('amazon-pick-output').innerHTML,s.printed()]){
-  assert.match(html,/商品コード/);assert.match(html,/DEMO-CODE&lt;&amp;&gt;/);assert.doesNotMatch(html,/架空商品/);
+  assert.match(html,/商品コード/);assert.match(html,/DEMO-CODE&lt;&amp;&gt;/);assert.doesNotMatch(html,/架空商品|<th>ASIN<\/th>|<th>モデル番号<\/th>|DEMO-ASIN/);
  }
  assert.match(s.downloads[0].text,/DEMO-CODE<&>/);
 });

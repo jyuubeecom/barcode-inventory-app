@@ -7,7 +7,7 @@
   const state = {rows: null, result: null, name: "", loaded: "", sample: false, view: "product", destination: null};
   let generation = 0;
   const pickTitle = "Amazonピッキング・パッキング用";
-  const pickHeadings = ["PO", "配送センター", "JANコード", "商品コード", "受領待ちのケース", "ピッキング確認", "パッキング確認"];
+  const pickHeadings = ["PO", "配送センター", "JANコード", "商品コード", "ピッキング数", "在庫数", "ピッキング確認", "パッキング確認"];
   const $ = id => document.getElementById("amazon-" + id);
   const style = `
     .amazon-screen .amazon-controls{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:18px 0}
@@ -16,6 +16,7 @@
     .amazon-table-wrap{overflow:auto;margin:16px 0}.amazon-table{width:100%;border-collapse:collapse;font-size:14px}
     .amazon-table th,.amazon-table td{border:1px solid #bdcbd8;padding:10px;text-align:left;vertical-align:top}
     .amazon-table th{background:#e9f2fc}.amazon-table .qty{text-align:right;white-space:nowrap}
+    .amazon-pick-group{margin:28px 0}.amazon-pick-site-heading{font-size:20px;border-top:3px solid #1763aa;padding:12px 0 4px;margin:0;break-after:avoid;page-break-after:avoid}.amazon-pick-group .amazon-table-wrap{margin-top:8px}
     .amazon-planned{background:#fff1b5}.amazon-short{color:#bb1717;font-weight:bold}
     .amazon-warning{background:#fff3e7;padding:12px;border:1px solid #d98d37;border-radius:8px}
     .amazon-summary{font-weight:bold;font-size:17px;margin:16px 0}.amazon-total{font-weight:bold;background:#f0f4f8}
@@ -29,7 +30,7 @@
     document.getElementById("home-sales-buttons").appendChild(button);
     const section = document.createElement("section"); section.id = "amazon-csv-report"; section.className = "amazon-screen"; section.hidden = true;
     section.innerHTML = `<h2>Amazon準備用</h2>
-      <p class="amazon-note">C列：配送先 ／ E列：JANコード ／ N列：数量<br>商品コードはこの端末の商品マスタをJANで照合し、コードがない場合はAmazonのモデル番号を使用します。特定できない場合は「要確認」です。<br>この端末の在庫・販売予定と照合します。CSVはサーバーへ送りません。在庫数・販売予定は変更しません。</p>
+      <p class="amazon-note">C列：配送先 ／ E列：JANコード ／ N列：数量<br>商品コードはこの端末の商品マスタをJANで照合し、コードがない場合はAmazonのモデル番号を使用します。同じJANが複数ある場合は現在庫が最も多い商品のコードを使います。在庫数が同じでコードが異なる場合や特定できない場合は「要確認」です。<br>この端末の在庫・販売予定と照合します。CSVはサーバーへ送りません。在庫数・販売予定は変更しません。</p>
       <div class="amazon-controls"><label>Amazon CSV<input id="amazon-file" type="file" accept=".csv,text/csv"></label>
       <label>文字コード<select id="amazon-encoding"><option value="auto">自動（UTF-8 / Shift_JIS）</option><option value="utf-8">UTF-8</option><option value="shift_jis">Shift_JIS</option></select></label>
       <button id="amazon-sample" type="button">架空データで試す</button><button id="amazon-refresh" type="button" disabled>現在庫・販売予定を再取得</button></div>
@@ -142,7 +143,7 @@
     section.className = "amazon-screen";
     section.hidden = true;
     section.innerHTML = `<h2>${pickTitle}</h2>
-      <p class="amazon-note">AmazonのPickListを読み込み、PO（発注番号）ごとの明細を確認します。数量はCSVの「受領待ちのケース」です。商品コードはこの端末の商品マスタをJANで照合します。マスタにコードがない場合はAmazonのモデル番号を使い、数字だけのモデル番号や候補が複数の場合は「要確認」と表示します。</p>
+      <p class="amazon-note">AmazonのPickListを読み込み、PO（発注番号）ごとの明細を確認します。ピッキング数はCSVの「受領待ちのケース」です。在庫数はCSV読込時のこの端末の現在庫です。同じJANが複数ある場合は最大値を表示し、同数の場合もその数量を表示します。在庫数は合算せず、ピッキング数も差し引きません。商品コードはこの端末の商品マスタをJANで照合します。マスタにコードがない場合はAmazonのモデル番号を使い、同じJANが複数ある場合は現在庫が最も多い商品のコードを使います。在庫数が同じでコードが異なる場合、在庫数が不明の場合、数字だけのモデル番号の場合は「要確認」と表示します。</p>
       <div class="amazon-controls"><label>Amazon PickList CSV<input id="amazon-pick-file" type="file" accept=".csv,text/csv"></label>
       <label>配送センター<select id="amazon-pick-site" disabled><option value="">すべての配送センター</option></select></label>
       <button id="amazon-pick-print" type="button" disabled>表示中の作業一覧を印刷する</button>
@@ -165,13 +166,23 @@
     const downloadButton = $("pick-download");
     const excelButton = $("pick-excel");
     const selectedRows = () => details.filter(row => !siteSelect.value || row.site === siteSelect.value);
-    const cells = row => [row.po, core.pickSiteLabel(row.site), row.jan, row.productCode, row.cases, "", ""];
+    const cells = row => [row.po, core.pickSiteLabel(row.site), row.jan, row.productCode, row.cases, row.stock === null ? (row.stockMatched ? "在庫数不明" : "未登録") : row.stock, "", ""];
+    function pickGroups(rows) {
+      const groups = new Map();
+      for (const row of rows) {
+        if (!groups.has(row.site)) groups.set(row.site, []);
+        groups.get(row.site).push(row);
+      }
+      return [...groups].map(([site, items]) => ({site, items}));
+    }
     const reportHtml = rows => `<p>${escape(filename)} ／ ${escape(core.pickSiteLabel(siteSelect.value) || "すべての配送センター")}</p>
-      <p class="amazon-summary">${number(rows.length)}明細 ／ ${number(rows.reduce((total, row) => total + row.cases, 0))}ケース</p>
+      <p class="amazon-summary">${number(rows.length)}明細 ／ ${number(rows.reduce((total, row) => total + row.cases, 0))}ケース</p>` +
+      pickGroups(rows).map(group => `<div class="amazon-pick-group">
+      <h3 class="amazon-pick-site-heading">${escape(core.pickSiteLabel(group.site))} ／ ${number(group.items.length)}明細 ／ ${number(group.items.reduce((total, row) => total + row.cases, 0))}ケース</h3>
       <div class="amazon-table-wrap"><table class="amazon-table">
       <thead><tr>${pickHeadings.map(label => `<th>${label}</th>`).join("")}</tr></thead>
-      <tbody>${rows.map(row => `<tr>${cells(row).map(value => `<td>${escape(value)}</td>`).join("")}</tr>`).join("")}</tbody>
-      </table></div>`;
+      <tbody>${group.items.map(row => `<tr>${cells(row).map(value => `<td>${escape(value)}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table></div></div>`).join("");
     function renderPickList() {
       const rows = selectedRows();
       output.innerHTML = rows.length ? reportHtml(rows) : "";
@@ -224,7 +235,9 @@
     excelButton.addEventListener("click", async () => {
       if (excelButton.disabled) return;
       const request = requestId;
-      const rows = selectedRows().map(cells);
+      const rows = pickGroups(selectedRows()).flatMap((group, index) => [
+        ...(index ? [Array(pickHeadings.length).fill("")] : []), ...group.items.map(cells)
+      ]);
       const filename = pickTitle + "_" + getCsvDateText() + ".xlsx";
       exportingExcel = true;
       excelButton.disabled = true;
@@ -241,7 +254,7 @@
     downloadButton.addEventListener("click", () => {
       if (downloadButton.disabled) return;
       const safeCell = value => typeof value === "string" && /^[\s]*[=+@-]/.test(value) ? "'" + value : value;
-      const rows = selectedRows().map(row => cells(row).map(safeCell));
+      const rows = pickGroups(selectedRows()).flatMap(group => group.items.map(row => cells(row).map(safeCell)));
       downloadCsvFile(createCsvText([pickHeadings, ...rows]), pickTitle + "_" + getCsvDateText() + ".csv");
     });
   }
@@ -251,7 +264,20 @@
   function printReport(title, html) {
     const popup = window.open("", "_blank");
     if (!popup) { window.alert("印刷画面を開くには、ポップアップを許可してください。"); return; }
-    popup.document.open(); popup.document.write(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>${title}</title><style>${style}</style></head><body><button id="print-again">印刷する</button>${html}</body></html>`); popup.document.close();
+    const pickPrintStyle = title === pickTitle ? `
+      @media print {
+        @page { size:A4 portrait; margin:12mm; }
+        .amazon-table-wrap { overflow:visible; }
+        .amazon-table { table-layout:fixed; font-size:8.5pt; }
+        .amazon-table th,.amazon-table td { padding:4px; overflow-wrap:anywhere; }
+        .amazon-table th:nth-child(1) { width:12%; }
+        .amazon-table th:nth-child(2) { width:10%; }
+        .amazon-table th:nth-child(3) { width:19%; }
+        .amazon-table th:nth-child(4) { width:19%; }
+        .amazon-table th:nth-child(5),.amazon-table th:nth-child(6),.amazon-table th:nth-child(7),.amazon-table th:nth-child(8) { width:10%; }
+        .amazon-pick-site-heading { font-size:13pt; }
+      }` : "";
+    popup.document.open(); popup.document.write(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>${title}</title><style>${style}${pickPrintStyle}</style></head><body><button id="print-again">印刷する</button>${html}</body></html>`); popup.document.close();
     popup.document.getElementById("print-again").addEventListener("click", () => popup.print()); popup.focus(); popup.print();
   }
   function sampleInventory() {

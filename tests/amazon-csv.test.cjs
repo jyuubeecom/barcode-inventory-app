@@ -78,3 +78,35 @@ test('PickList site labels shorten only a recognized four-character prefix',()=>
  assert.equal(c.pickSiteLabel('AB123 - 架空市'),'AB123 - 架空市');
  assert.equal(c.pickSiteLabel('架空配送先'),'架空配送先');
 });
+test('picking stock shows maximum duplicate quantity, tied quantity once, zero and unknown distinctly',()=>{
+ const rows=[{jan:C,model:'MODEL'}];
+ for(const [stocks,expected] of [[[2,12],12],[[12,12],12],[[0,0],0],[[2,'12'],12],[[2,undefined],null],[[2,-1],null]]) {
+  const products=stocks.map(stock=>({janCode:C,productCode:'CODE',stock}));
+  const before=JSON.stringify(products);
+  const result=c.resolvePickCodes(rows,products)[0];
+  assert.equal(result.stock,expected);assert.equal(result.stockMatched,true);
+  assert.equal(JSON.stringify(products),before);
+ }
+ const missing=c.resolvePickCodes(rows,[])[0];assert.equal(missing.stock,null);assert.equal(missing.stockMatched,false);
+ assert.equal(rows[0].stock,undefined);
+});
+test('duplicate JAN product codes use the greatest stock regardless of master order, without mutation',()=>{
+ const rows=[{jan:C,model:'FALLBACK'}];
+ const products=[{janCode:C,productCode:'LOW',stock:2},{janCode:C,productCode:'HIGH',stock:'12'}];
+ const before=JSON.stringify(products);
+ for(const master of [products,[...products].reverse()]) {
+  assert.equal(c.resolvePickCodes(rows,master)[0].productCode,'HIGH');
+  const prepared=c.aggregate([{...rows[0],site:'DEMO',qty:3,issues:[]}],master,[]);
+  assert.equal(prepared.items[0].productCode,'HIGH');assert.equal(prepared.items[0].stock,12);
+ }
+ assert.equal(JSON.stringify(products),before);assert.equal(rows[0].productCode,undefined);
+});
+test('maximum-stock code ties and unknown stocks require review, but equal winners with one code resolve',()=>{
+ const row={jan:C,model:'FALLBACK'};
+ for(const stock of [5,undefined,'bad',-1,1.5]) {
+  const master=[{janCode:C,productCode:'A',stock:5},{janCode:C,productCode:'B',stock}];
+  assert.match(c.resolvePickCodes([row],master)[0].productCode,/要確認/);
+ }
+ const master=[{janCode:C,productCode:'A',stock:0},{janCode:C,productCode:'B',stock:5},{janCode:C,productCode:'B',stock:5}];
+ assert.equal(c.resolvePickCodes([row],master)[0].productCode,'B');
+});

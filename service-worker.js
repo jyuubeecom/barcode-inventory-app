@@ -2,7 +2,7 @@
 
 // 同じドメインの桜花・本番版・テスト版のキャッシュを分ける。
 const CACHE_PREFIX = "barcode-inventory-app:" + encodeURIComponent(self.registration.scope) + ":";
-const CACHE_NAME = CACHE_PREFIX + "v2942-amazon-seven-columns-1";
+const CACHE_NAME = CACHE_PREFIX + "v2943-amazon-picking-stock-1";
 const APP_FILES = [
   "./", "./index.html", "./style.css?v=293171", "./storage.js?v=269",
   "./normal-shipment.js?v=226",
@@ -19,7 +19,7 @@ const APP_FILES = [
   "./disposal-list.js?v=246", "./backup.js?v=269", "./restore.js?v=269", "./location-management.js?v=100",
   "./processing-sheet.js?v=211",
   "./processing-conversion.js?v=213",
-  "./single-stock-check.js?v=241", "./customer-master.js?v=270", "./common-workspace.js?v=293121", "./shared-planning.js?v=293151", "./shared-sales-summary.js?v=293151", "./shared-decisions.js?v=293151", "./shared-summary-settings.js?v=293151", "./shared-stock-compare.js?v=293171", "./shared-stock-operation.js?v=293112", "./server-test.js?v=293141", "./startup-login.js?v=293141", "./server-csv-import.js?v=292", "./server-account-settings.js?v=2922", "./server-company-master-preview.js?v=2931", "./server-stock-csv-preview.js?v=29341", "./server-sales-csv.js?v=29351", "./migration/backup-audit.js?v=1", "./migration/prepare-products.js?v=1", "./server-migration-preview.js?v=29391", "./server-product-list.js?v=293121", "./amazon-csv-core.js?v=29409", "./libs/jszip-3.10.1.min.js", "./amazon-pick-xlsx.js?v=29411", "./amazon-csv-report.js?v=29411", "./home-dashboard.js?v=29406", "./app-settings.js?v=270", "./home-alerts.js?v=293131", "./pwa.js?v=31", "./manifest.json",
+  "./single-stock-check.js?v=241", "./customer-master.js?v=270", "./common-workspace.js?v=293121", "./shared-planning.js?v=293151", "./shared-sales-summary.js?v=293151", "./shared-decisions.js?v=293151", "./shared-summary-settings.js?v=293151", "./shared-stock-compare.js?v=293171", "./shared-stock-operation.js?v=293112", "./server-test.js?v=293141", "./startup-login.js?v=293141", "./server-csv-import.js?v=292", "./server-account-settings.js?v=2922", "./server-company-master-preview.js?v=2931", "./server-stock-csv-preview.js?v=29341", "./server-sales-csv.js?v=29351", "./migration/backup-audit.js?v=1", "./migration/prepare-products.js?v=1", "./server-migration-preview.js?v=29391", "./server-product-list.js?v=293121", "./amazon-csv-core.js?v=29430", "./libs/jszip-3.10.1.min.js", "./amazon-pick-xlsx.js?v=29430", "./amazon-csv-report.js?v=29430", "./home-dashboard.js?v=29406", "./app-settings.js?v=270", "./home-alerts.js?v=293131", "./pwa.js?v=31", "./manifest.json",
   "./icons/icon-192.png", "./icons/icon-512.png"
 ];
 

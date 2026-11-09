@@ -6,6 +6,7 @@ const HOME_DASHBOARD_GROUPS = Object.freeze({
     "show-list-button",
     "show-location-stock-report-button",
     "show-stocktaking-button",
+    "show-shared-stocktaking-button",
     "show-register-button"
   ],
   "home-product-buttons": [
@@ -68,6 +69,7 @@ const HOME_DASHBOARD_ACTION_CLASSES = Object.freeze({
   "show-list-button": "home-action-list",
   "show-location-stock-report-button": "home-action-list",
   "show-stocktaking-button": "home-action-stocktaking",
+  "show-shared-stocktaking-button": "home-action-stocktaking",
   "show-register-button": "home-action-register",
   "show-barcode-lookup-button": "home-action-search",
   "show-unassigned-location-button": "home-action-location",
@@ -482,6 +484,10 @@ function createMobileHomeControls(
 function triggerMobileHomeAction(
   actionId
 ) {
+  if (actionId === "show-stocktaking-button" &&
+      window.inventoryCommonWorkspace?.mode() === "shared") {
+    actionId = "show-shared-stocktaking-button";
+  }
   const target =
     document.querySelector(
       `#${actionId}`

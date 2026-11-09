@@ -22,6 +22,22 @@ jobs:
       - name: 差分の空白チェック
         run: git diff --check
 
+  shared-stocktaking-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: 隔離した画面テスト環境を準備
+        run: |
+          npm install --prefix "$RUNNER_TEMP/inventory-browser-tests" playwright@1.56.1 --no-audit --no-fund
+          "$RUNNER_TEMP/inventory-browser-tests/node_modules/.bin/playwright" install --with-deps chromium --only-shell
+      - name: スマホ・PCの共有棚卸（全外部通信を架空応答に置換）
+        env:
+          NODE_PATH: ${{ runner.temp }}/inventory-browser-tests/node_modules
+        run: node tests/shared-stocktaking-browser.cjs
+
   stock-csv-mysql:
     runs-on: ubuntu-latest
     services:
@@ -55,3 +71,4 @@ jobs:
           php tests/shared-stock-operation-mysql.php
           php tests/shared-planning-mysql.php
           php tests/shared-sales-summary-mysql.php
+          php tests/shared-stocktaking-mysql.php

@@ -11,6 +11,23 @@ function fixture(fetchImpl){
  vm.runInNewContext(source,c);return {api:c.inventorySharedStocktaking,calls,setSession:s=>{current=s;}};
 }
 const fields={action:'save',stocktaking_id:id,internal_code:'FAKE-01',expected_version:0,counted_stock:'0',memo:''};
+test('saved result summary distinguishes unchecked, confirmed zero, match, shortage and surplus without changing input',()=>{
+ const f=fixture();
+ const items=[
+  {internal_code:'FAKE-A',registered_stock:0,counted_stock:null},
+  {internal_code:'FAKE-B',registered_stock:0,counted_stock:0},
+  {internal_code:'FAKE-C',registered_stock:10,counted_stock:0},
+  {internal_code:'FAKE-D',registered_stock:3,counted_stock:5},
+  {internal_code:'FAKE-E',registered_stock:2,counted_stock:2}
+ ];
+ const before=JSON.stringify(items),summary=f.api.summarize(items);
+ assert.deepEqual(JSON.parse(JSON.stringify(summary)),{target:5,checked:4,unchecked:1,match:2,shortage:1,surplus:1});
+ assert.equal(JSON.stringify(items),before);assert.equal(f.calls.length,0);
+});
+test('incomplete or invalid saved result is rejected instead of reporting zero differences',()=>{
+ const f=fixture(),valid={internal_code:'FAKE-A',registered_stock:1,counted_stock:null};
+ for(const items of [null,[],[valid,valid],[{...valid,counted_stock:undefined}],[{...valid,counted_stock:'0'}],[{...valid,counted_stock:-1}],[{...valid,registered_stock:null}],[{...valid,counted_stock:1.5}]])assert.throws(()=>f.api.summarize(items));
+});
 function result(options){const r=JSON.parse(options.body);return {ok:true,json:async()=>({...r,success:true,version:1})};}
 test('zero is confirmed while blank, negative, fractional and excessive counts are rejected',()=>{
  const f=fixture();assert.equal(f.api.quantity('0'),0);

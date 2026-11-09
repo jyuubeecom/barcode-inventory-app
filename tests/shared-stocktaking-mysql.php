@@ -3,7 +3,7 @@ declare(strict_types=1);
 require_once __DIR__.'/../server/shared-stocktaking-service.php';
 $pdo=new PDO(getenv('STOCK_CSV_TEST_DSN')?:'mysql:host=127.0.0.1;dbname=inventory_csv_test;charset=utf8mb4',getenv('STOCK_CSV_TEST_USER')?:'root',getenv('STOCK_CSV_TEST_PASSWORD')?:'test-only',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false]);
 if($pdo->query('SELECT DATABASE()')->fetchColumn()!=='inventory_csv_test')throw new RuntimeException('Disposable DB only');
-foreach(['shared_stocktaking_items','shared_stocktakings','shared_stocktaking_requests','sales_csv_rows','sales_csv_batches','stock_csv_batches','stock_transactions','product_stocks','products']as$t)$pdo->exec('DROP TABLE IF EXISTS '.$t);
+foreach(['shared_stocktaking_finalizations','shared_stocktaking_items','shared_stocktakings','shared_stocktaking_requests','sales_csv_rows','sales_csv_batches','stock_csv_batches','stock_transactions','product_stocks','products']as$t)$pdo->exec('DROP TABLE IF EXISTS '.$t);
 $pdo->exec(file_get_contents(__DIR__.'/mysql-schema.sql'));
 $pdo->exec(file_get_contents(__DIR__.'/../server/migrations/007-shared-stocktaking.sql'));
 function check(bool $ok,string $message):void{if(!$ok)throw new RuntimeException($message);}

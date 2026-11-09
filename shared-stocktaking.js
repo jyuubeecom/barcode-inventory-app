@@ -1,7 +1,15 @@
 "use strict";
 (function (root) {
   const endpoint = 'https://jyuubee.sakura.ne.jp/inventory/shared-stocktaking-auth.php';
-  let pending = null, busy = false;
+  let pending = null, busy = false, restoreError=false;
+  const pendingKey='inventorySharedStocktakingFinalizePendingV1';
+  try {
+    const saved=JSON.parse(root.sessionStorage?.getItem(pendingKey)||'null');
+    if(saved!==null){
+      if(saved?.request?.action!=='finalize' || typeof saved.owner!=='string' || !/^[0-9a-f-]{36}$/.test(saved.request.request_id) || !/^[0-9a-f-]{36}$/.test(saved.request.stocktaking_id) || !/^[0-9a-f]{64}$/.test(saved.request.preview_token))throw Error();
+      pending=saved;
+    }
+  } catch (_) { restoreError=true; }
   const session = () => root.inventoryServerSearch?.getSession();
   function owner(s) {
     if (!s?.token || !['admin','worker'].includes(s.user?.role)) return null;
@@ -29,13 +37,13 @@
     }
     return counts;
   }
-  async function request(method, body, id) {
+  async function request(method, body, id, preview=false) {
     const s = session();
     if (!owner(s)) throw Error('商品一覧からサーバーにログインしてください。');
     const controller = new AbortController();
     const timer = root.setTimeout(() => controller.abort(), 30000);
     try {
-      const response = await root.fetch(endpoint + (id ? '?id=' + encodeURIComponent(id) : ''), {
+      const response = await root.fetch(endpoint + (id ? '?id=' + encodeURIComponent(id) + (preview?'&preview=finalize':'') : ''), {
         method, mode:'cors', cache:'no-store', signal:controller.signal,
         headers:{Accept:'application/json', Authorization:'Bearer ' + s.token, ...(body ? {'Content-Type':'application/json'} : {})},
         ...(body ? {body:JSON.stringify(body)} : {})
@@ -51,14 +59,23 @@
     } finally { root.clearTimeout(timer); }
   }
   function prepare(fields) {
+    if(restoreError)throw Error('前回の反映操作を読み出せません。ブラウザの保存設定を確認し、棚卸の状態を再読み込みしてください。');
     if (pending || busy) throw Error('前回の保存結果を先に再確認してください。');
     const account = owner(session());
     if (!account) throw Error('商品一覧からサーバーにログインしてください。');
-    if (!['start','save'].includes(fields.action)) throw Error('棚卸の操作を確認してください。');
+    if (!['start','save','finalize'].includes(fields.action)) throw Error('棚卸の操作を確認してください。');
+    if(fields.action==='finalize' && session()?.user?.role!=='admin')throw Error('棚卸の確定・在庫反映は管理者専用です。');
     const request = {...fields, request_id:root.crypto.randomUUID()};
     if (request.action === 'save') request.counted_stock = quantity(request.counted_stock);
-    pending = {owner:account, request};
+    const next={owner:account, request};
+    if(request.action==='finalize') {
+      if(!/^[0-9a-f]{64}$/.test(request.preview_token))throw Error('反映内容を再確認してください。');
+      try { const json=JSON.stringify(next);root.sessionStorage.setItem(pendingKey,json);if(root.sessionStorage.getItem(pendingKey)!==json)throw Error(); }
+      catch(_){throw Error('再確認用の操作番号を保存できません。ブラウザの保存設定を確認してください。');}
+    }
+    pending = next;
   }
+  function clearPending(){if(pending?.request.action==='finalize'){try{root.sessionStorage.removeItem(pendingKey);}catch(_){/* A retained receipt is safe to replay. */}}pending=null;}
   async function send() {
     if (busy) throw Error('保存結果を確認中です。');
     const p = pending;
@@ -69,16 +86,17 @@
       const data = await request('POST', p.request);
       if (data.request_id !== p.request.request_id || typeof data.stocktaking_id !== 'string' ||
           (p.request.action === 'start' && data.stocktaking_id !== p.request.request_id) ||
-          (p.request.action === 'save' && (data.stocktaking_id !== p.request.stocktaking_id || data.internal_code !== p.request.internal_code || data.counted_stock !== p.request.counted_stock || data.version !== p.request.expected_version + 1 || data.memo !== p.request.memo))) {
+          (p.request.action === 'save' && (data.stocktaking_id !== p.request.stocktaking_id || data.internal_code !== p.request.internal_code || data.counted_stock !== p.request.counted_stock || data.version !== p.request.expected_version + 1 || data.memo !== p.request.memo)) ||
+          (p.request.action === 'finalize' && (data.stocktaking_id!==p.request.stocktaking_id || data.action!=='finalize' || data.status!=='finalized' || data.preview_token!==p.request.preview_token || !Number.isSafeInteger(data.changed_count) || data.changed_count<0))) {
         throw Error('保存結果を確認できません。「前回の保存を再確認」を押してください。');
       }
-      pending = null;
+      clearPending();
       return data;
-    } catch (e) { if (e.definitive) pending = null; throw e; }
+    } catch (e) { if (e.definitive) clearPending(); throw e; }
     finally { busy = false; }
   }
   root.inventorySharedStocktaking = {quantity, summarize, prepare, send, pending:() => pending,
-    overview:() => request('GET'), read:id => request('GET', null, id)};
+    overview:() => request('GET'), read:id => request('GET', null, id), previewFinalize:id=>request('GET',null,id,true)};
   if (!root.document) return;
 
   root.document.addEventListener('DOMContentLoaded', () => {
@@ -86,14 +104,14 @@
     const actions = root.document.getElementById('home-quick-action-buttons');
     if (!home || !actions) return;
     const api = root.inventorySharedStocktaking;
-    let current = null, loading = false, epoch = 0, offset = 0;
+    let current = null, loading = false, epoch = 0, offset = 0, finalPreview=null;
     const drafts = new Map();
     const button = root.document.createElement('button');
     button.id = 'show-shared-stocktaking-button'; button.type = 'button'; button.textContent = '棚卸を開始・再開';
     actions.appendChild(button);
     const panel = root.document.createElement('section'); panel.id = 'shared-stocktaking-panel'; panel.hidden = true;
     panel.innerHTML = `<h2 tabindex="-1">共有棚卸</h2>
-      <p>数えた数量をスマホ・PCで共有します。この段階では現在庫を変更しません。棚卸確定・在庫への反映は準備中です。</p>
+      <p>数量の保存だけでは現在庫を変更しません。管理者が反映内容を確認し「棚卸を確定して在庫へ反映」を実行したときだけ、対象の保管場所の在庫を変更します。</p>
       <p role="status" data-message></p>
       <button type="button" data-retry hidden>前回の保存を再確認</button>
       <div data-overview>
@@ -102,7 +120,7 @@
           <label>保管場所<select data-location required><option value="">読み込み後に選択してください</option></select></label>
           <p>選んだ保管場所に在庫登録のある商品（0個を含む）が対象です。登録在庫は開始時点の数量を保存します。</p>
           <button type="submit">棚卸を開始する</button></form>
-        <h3>保存済みの棚卸を再開する（新しい順・最新100件）</h3><div data-sessions></div>
+        <h3>保存済みの棚卸を開く（新しい順・最新100件）</h3><div data-sessions></div>
       </div>
       <div data-active hidden><h3 data-title></h3><p data-summary></p>
         <button type="button" data-review>保存済みの結果を確認</button>
@@ -110,8 +128,17 @@
           <h3 id="shared-stocktaking-review-title" tabindex="-1">保存済みの棚卸結果</h3>
           <p data-review-info></p><dl data-review-counts></dl>
           <p data-review-note></p>
-          <p>登録在庫は棚卸開始時点の数量です。未確認の商品は差異なし・不足・過剰に含めません。棚卸確定・現在庫への反映は準備中です。</p>
+          <p>登録在庫は棚卸開始時点の数量です。未確認の商品は差異なし・不足・過剰に含めません。</p>
           <button type="button" data-review-close>結果を閉じる</button>
+        </section>
+        <button type="button" data-finalize-preview hidden>確定・在庫反映の内容を確認（管理者）</button>
+        <section data-finalize-result hidden>
+          <h3 tabindex="-1">棚卸確定・在庫反映前の確認</h3><p data-finalize-info></p>
+          <p>全対象の商品を確認してください。実行後は数量を編集できません。差異のある商品は「棚卸調整」として履歴に記録します。ほかの保管場所は変更しません。</p>
+          <div data-finalize-rows></div>
+          <label><input type="checkbox" data-finalize-check>対象・数量・差異を確認しました</label>
+          <button type="button" data-finalize-commit>棚卸を確定して在庫へ反映</button>
+          <button type="button" data-finalize-cancel>反映せず閉じる</button>
         </section>
         <label>商品名・商品コード・JAN・社内コードで検索<input type="search" data-search></label>
         <label>表示対象<select data-filter><option value="all">すべて</option><option value="unchecked">未確認</option><option value="checked">確認済み</option></select></label>
@@ -138,6 +165,7 @@
     root.document.head.appendChild(style);
     const el = selector => panel.querySelector(selector);
     function message(text) { el('[data-message]').textContent = text; }
+    function clearFinalize(){finalPreview=null;el('[data-finalize-result]').hidden=true;el('[data-finalize-rows]').replaceChildren();el('[data-finalize-info]').textContent='';el('[data-finalize-check]').checked=false;}
     function clearReview() { el('[data-review-result]').hidden=true;el('[data-review-counts]').replaceChildren();el('[data-review-info]').textContent='';el('[data-review-note]').textContent=''; }
     function updateReviewNote() {
       el('[data-review-note]').textContent=drafts.size?`未保存の入力 ${drafts.size}件は、この結果に含めていません。入力内容はそのまま残しています。`:'画面の検索・絞り込みに関係なく、この棚卸の全対象を集計しています。';
@@ -146,6 +174,12 @@
       const blocked = loading || !!api.pending();
       for (const b of panel.querySelectorAll('button')) b.disabled = blocked;
       for (const input of panel.querySelectorAll('input,select,textarea')) input.disabled = blocked;
+      const finalized=current?.session.status==='finalized';
+      if(finalized)for(const node of el('[data-items]').querySelectorAll('input,textarea,button'))node.disabled=true;
+      const canFinalize=session()?.user?.role==='admin' && root.document.body.dataset.roleMode!=='worker';
+      el('[data-finalize-preview]').hidden=!current || finalized || !canFinalize;
+      if(!canFinalize)clearFinalize();
+      el('[data-finalize-commit]').disabled=blocked || !finalPreview || !el('[data-finalize-check]').checked || drafts.size>0;
       el('[data-retry]').hidden = !api.pending(); el('[data-retry]').disabled = loading;
     }
     function discard() {
@@ -166,6 +200,7 @@
       const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     }
     async function overview(generation) {
+      clearFinalize();
       clearReview();
       const data = validate(await api.overview()); if (generation !== epoch) return;
       current = null; drafts.clear();
@@ -177,18 +212,19 @@
       if (!data.sessions.length) el('[data-sessions]').textContent = '保存済みの棚卸はありません。';
       for (const s of data.sessions) {
         const b = root.document.createElement('button'); b.type = 'button';
-        b.textContent = `${s.stocktaking_date} ／ ${s.location_name} ／ ${s.checked_count}/${s.item_count}件確認済み ／ 開始：${s.operator_name} ／ 番号末尾 ${s.id.slice(-8)}`;
+        b.textContent = `${s.stocktaking_date} ／ ${s.location_name} ／ ${s.status==='finalized'?'確定・反映済み':'棚卸中'} ／ ${s.checked_count}/${s.item_count}件確認済み ／ 開始：${s.operator_name} ／ 番号末尾 ${s.id.slice(-8)}`;
         b.addEventListener('click', () => { void run(g => load(s.id,g)); });
         el('[data-sessions]').appendChild(b);
       }
       message('共有棚卸を読み込みました。');
     }
     async function load(id, generation) {
+      clearFinalize();
       clearReview();
       const data = validate(await api.read(id)); if (generation !== epoch) return;
       current = data; drafts.clear(); offset = 0;
       el('[data-overview]').hidden = true; el('[data-active]').hidden = false;
-      el('[data-title]').textContent = `${data.session.stocktaking_date} ／ ${data.session.location_name} ／ 棚卸中`;
+      el('[data-title]').textContent = `${data.session.stocktaking_date} ／ ${data.session.location_name} ／ ${data.session.status==='finalized'?'確定・反映済み（編集不可）':'棚卸中'}`;
       el('[data-search]').value = ''; el('[data-filter]').value = 'all'; render();
       message('保存済みの数量を読み込みました。登録在庫は棚卸開始時点の数量です。');
     }
@@ -220,6 +256,7 @@
         const memo=root.document.createElement('textarea'); memo.maxLength=1000; memo.value=draft?draft.memo:item.memo; memoLabel.appendChild(memo);
         const save=root.document.createElement('button'); save.type='button'; save.textContent='この商品の数量を保存';
         const track=()=>{
+          clearFinalize();
           if (input.value === String(item.counted_stock ?? '') && memo.value === item.memo) drafts.delete(item.internal_code);
           else drafts.set(item.internal_code,{quantity:input.value,memo:memo.value});
           if(!el('[data-review-result]').hidden)updateReviewNote();
@@ -227,6 +264,7 @@
         };
         input.addEventListener('input',track); memo.addEventListener('input',track);
         save.addEventListener('click',()=>{ void run(async generation=>{
+          clearFinalize();
           if (root.inventoryCommonWorkspace?.mode() !== 'shared') throw Error('共通データに切り替えてください。');
           api.prepare({action:'save',stocktaking_id:current.session.id,internal_code:item.internal_code,expected_version:item.version,counted_stock:input.value,memo:memo.value});
           const result=await api.send(); if (generation!==epoch) return;
@@ -237,10 +275,14 @@
       sync();
     }
     function applySaved(result) {
+      clearFinalize();
       clearReview();
       if (!current || current.session.id!==result.stocktaking_id) return;
       const item=current.items.find(i=>i.internal_code===result.internal_code);
       if (item) { Object.assign(item,{counted_stock:result.counted_stock,memo:result.memo,counted_by:result.counted_by,version:result.version});drafts.delete(item.internal_code);render(); }
+    }
+    function markFinalized(result){
+      if(current?.session.id===result.stocktaking_id){current.session.status='finalized';clearReview();clearFinalize();render();}
     }
     button.addEventListener('click',()=>{
       panel.hidden=false; el('h2').focus();
@@ -257,8 +299,9 @@
     });
     el('[data-retry]').addEventListener('click',()=>{ void run(async generation=>{
       const kind=api.pending()?.request.action;const data=await api.send(); if(generation!==epoch)return;
-      if(kind==='start')await load(data.stocktaking_id,generation);else applySaved(data);
-      message('前回の保存を確認しました。別の端末では再読み込みしてください。');
+      if(kind==='finalize')markFinalized(data);
+      if(kind==='start'||kind==='finalize')await load(data.stocktaking_id,generation);else applySaved(data);
+      message(kind==='finalize'?'前回の棚卸確定・在庫反映を確認しました。別の端末では在庫を再読み込みしてください。':'前回の保存を確認しました。別の端末では再読み込みしてください。');
     }); });
     el('[data-reload]').addEventListener('click',()=>{ if(discard())void run(g=>current?load(current.session.id,g):overview(g)); });
     el('[data-review]').addEventListener('click',()=>{ void run(async generation=>{
@@ -282,13 +325,37 @@
       message('保存済みの棚卸結果を確認しました。現在庫は変更していません。別の端末で保存した後は、もう一度「保存済みの結果を確認」を押してください。');
     }); });
     el('[data-review-close]').addEventListener('click',clearReview);
+    el('[data-finalize-preview]').addEventListener('click',()=>{void run(async generation=>{
+      clearFinalize();
+      if(drafts.size)throw Error('未保存の入力があります。商品の数量を保存してから反映内容を確認してください。');
+      if(!current || current.session.status!=='draft' || session()?.user?.role!=='admin')throw Error('棚卸中のデータを管理者で開いてください。');
+      const id=current.session.id,data=await api.previewFinalize(id);if(generation!==epoch)return;
+      const counts=api.summarize(data.rows);
+      if(data.format!=='inventory-stocktaking-finalize-preview-v1' || data.stocktaking_id!==id || data.session?.id!==id || !/^[0-9a-f]{64}$/.test(data.preview_token) || counts.unchecked)throw Error('反映内容を確認できません。再読み込みしてください。');
+      finalPreview=data;
+      el('[data-finalize-info]').textContent=`${data.session.stocktaking_date} ／ ${data.session.location_name} ／ 対象 ${counts.target}件・確認済み ${counts.checked}件・未確認 ${counts.unchecked}件・差異なし ${counts.match}件・不足 ${counts.shortage}件・過剰 ${counts.surplus}件`;
+      for(const row of data.rows){const line=root.document.createElement('p');const diff=row.counted_stock-row.registered_stock;line.textContent=`${row.internal_code} ／ ${row.product_code||'コード未登録'} ／ ${row.product_name}：${row.registered_stock} → ${row.counted_stock}個（差異 ${diff>0?'+':''}${diff}）`;line.className=diff===0?'count-match':diff<0?'count-short':'count-over';el('[data-finalize-rows]').appendChild(line);}
+      el('[data-finalize-result]').hidden=false;el('[data-finalize-result] h3').focus();message('まだ現在庫は変更していません。反映前の数量を確認してください。');
+    });});
+    el('[data-finalize-check]').addEventListener('change',sync);
+    el('[data-finalize-cancel]').addEventListener('click',clearFinalize);
+    el('[data-finalize-commit]').addEventListener('click',()=>{void run(async generation=>{
+      if(!finalPreview || drafts.size || !el('[data-finalize-check]').checked || root.inventoryCommonWorkspace?.mode()!=='shared')throw Error('反映内容を再確認してください。');
+      const data=finalPreview;
+      if(!root.confirm(`${data.session.stocktaking_date} ／ ${data.session.location_name} の棚卸を確定し、数えた数量で現在庫を更新します。確定後は編集できません。実行しますか？`))return;
+      api.prepare({action:'finalize',stocktaking_id:data.stocktaking_id,preview_token:data.preview_token});
+      clearFinalize();const result=await api.send();if(generation!==epoch)return;markFinalized(result);
+      await load(result.stocktaking_id,generation);message(`棚卸を確定し、${result.changed_count}商品の現在庫を反映しました。別の端末では在庫を再読み込みしてください。`);
+    });});
     el('[data-list]').addEventListener('click',()=>{ if(discard())void run(overview); });
     el('[data-close]').addEventListener('click',()=>{ panel.hidden=true; });
     for(const name of ['search','filter'])el(`[data-${name}]`).addEventListener(name==='search'?'input':'change',()=>{offset=0;render();});
     el('[data-prev]').addEventListener('click',()=>{offset=Math.max(0,offset-50);render();});
     el('[data-next]').addEventListener('click',()=>{offset+=50;render();});
     root.addEventListener('beforeunload',event=>{if(drafts.size||api.pending()){event.preventDefault();event.returnValue='';}});
+    root.addEventListener('inventory-role-mode-change',()=>{clearFinalize();sync();});
     root.addEventListener('inventory-server-auth-changed',()=>{
+      clearFinalize();
       clearReview();
       epoch++;current=null;drafts.clear();el('[data-items]').replaceChildren();el('[data-sessions]').replaceChildren();el('[data-summary]').textContent='';el('[data-title]').textContent='';
       el('[data-overview]').hidden=true;el('[data-active]').hidden=true;message('ログイン状態が変わりました。「再読み込み」で共有棚卸を確認してください。');sync();

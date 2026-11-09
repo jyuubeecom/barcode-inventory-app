@@ -29,7 +29,7 @@ function readSharedStocktaking(PDO $pdo, array $user, ?string $id=null): array
             $locations=$pdo->query('SELECT DISTINCT location_name FROM product_stocks ORDER BY location_name LIMIT 301')->fetchAll(PDO::FETCH_COLUMN);
             if (count($locations)>300) throw new StockCsvError('保管場所が300件を超えています。',413);
             // Counts use the same snapshot as the draft list.
-            $sessions=$pdo->query("SELECT s.*,COUNT(i.internal_code) AS item_count,SUM(i.counted_stock IS NOT NULL) AS checked_count FROM shared_stocktakings s JOIN shared_stocktaking_items i ON i.stocktaking_id=s.id WHERE s.status='draft' GROUP BY s.id ORDER BY s.created_at DESC,s.id DESC LIMIT 100")->fetchAll(PDO::FETCH_ASSOC);
+            $sessions=$pdo->query("SELECT s.*,COUNT(i.internal_code) AS item_count,SUM(i.counted_stock IS NOT NULL) AS checked_count FROM shared_stocktakings s JOIN shared_stocktaking_items i ON i.stocktaking_id=s.id WHERE s.status IN ('draft','finalized') GROUP BY s.id ORDER BY s.created_at DESC,s.id DESC LIMIT 100")->fetchAll(PDO::FETCH_ASSOC);
             foreach ($sessions as &$s) { $s['item_count']=(int)$s['item_count'];$s['checked_count']=(int)$s['checked_count']; } unset($s);
             $result=['success'=>true,'format'=>'inventory-shared-stocktaking-v1','locations'=>$locations,'sessions'=>$sessions];
         } else {

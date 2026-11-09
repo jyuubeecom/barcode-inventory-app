@@ -13,6 +13,22 @@
     if (!Number.isSafeInteger(n) || n > 1000000000) throw Error('実在庫の上限は1000000000です。');
     return n;
   }
+  function summarize(items) {
+    if (!Array.isArray(items) || !items.length || items.length > 5000) throw Error('棚卸結果を確認できません。再読み込みしてください。');
+    const counts = {target:items.length, checked:0, unchecked:0, match:0, shortage:0, surplus:0};
+    const seen = new Set();
+    for (const item of items) {
+      if (!item || typeof item.internal_code !== 'string' || !item.internal_code || seen.has(item.internal_code) ||
+          !Number.isSafeInteger(item.registered_stock) || item.registered_stock < 0 || item.registered_stock > 1000000000) throw Error('棚卸結果の形式を確認できません。');
+      seen.add(item.internal_code);
+      if (item.counted_stock === null) { counts.unchecked++; continue; }
+      if (!Number.isSafeInteger(item.counted_stock) || item.counted_stock < 0 || item.counted_stock > 1000000000) throw Error('棚卸結果の数量を確認できません。');
+      counts.checked++;
+      const diff = item.counted_stock - item.registered_stock;
+      counts[diff === 0 ? 'match' : diff < 0 ? 'shortage' : 'surplus']++;
+    }
+    return counts;
+  }
   async function request(method, body, id) {
     const s = session();
     if (!owner(s)) throw Error('商品一覧からサーバーにログインしてください。');
@@ -61,7 +77,7 @@
     } catch (e) { if (e.definitive) pending = null; throw e; }
     finally { busy = false; }
   }
-  root.inventorySharedStocktaking = {quantity, prepare, send, pending:() => pending,
+  root.inventorySharedStocktaking = {quantity, summarize, prepare, send, pending:() => pending,
     overview:() => request('GET'), read:id => request('GET', null, id)};
   if (!root.document) return;
 
@@ -89,6 +105,14 @@
         <h3>保存済みの棚卸を再開する（新しい順・最新100件）</h3><div data-sessions></div>
       </div>
       <div data-active hidden><h3 data-title></h3><p data-summary></p>
+        <button type="button" data-review>保存済みの結果を確認</button>
+        <section data-review-result hidden aria-labelledby="shared-stocktaking-review-title">
+          <h3 id="shared-stocktaking-review-title" tabindex="-1">保存済みの棚卸結果</h3>
+          <p data-review-info></p><dl data-review-counts></dl>
+          <p data-review-note></p>
+          <p>登録在庫は棚卸開始時点の数量です。未確認の商品は差異なし・不足・過剰に含めません。棚卸確定・現在庫への反映は準備中です。</p>
+          <button type="button" data-review-close>結果を閉じる</button>
+        </section>
         <label>商品名・商品コード・JAN・社内コードで検索<input type="search" data-search></label>
         <label>表示対象<select data-filter><option value="all">すべて</option><option value="unchecked">未確認</option><option value="checked">確認済み</option></select></label>
         <p data-page></p><div data-items></div>
@@ -106,10 +130,18 @@
       #shared-stocktaking-panel button{margin:6px 6px 6px 0;padding:14px;min-height:48px}
       #shared-stocktaking-panel article{padding:16px;margin:14px 0;border:1px solid #bbcbd6;border-radius:10px}
       #shared-stocktaking-panel [data-message]{white-space:pre-wrap;font-weight:bold}
+      #shared-stocktaking-panel [data-review-result]{padding:16px;border:2px solid #86b5d5;border-radius:10px;margin:12px 0;background:#f6fbff}
+      #shared-stocktaking-panel [data-review-counts]{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+      #shared-stocktaking-panel [data-review-counts]>div{padding:12px;background:white;border:1px solid #bdcbd5;border-radius:8px}
+      #shared-stocktaking-panel [data-review-counts] dt{font-weight:bold}#shared-stocktaking-panel [data-review-counts] dd{margin:8px 0 0;font-size:24px;font-weight:bold}
       #shared-stocktaking-panel .count-match{color:#246b35}#shared-stocktaking-panel .count-short{color:#ad2929}#shared-stocktaking-panel .count-over{color:#a45c00}`;
     root.document.head.appendChild(style);
     const el = selector => panel.querySelector(selector);
     function message(text) { el('[data-message]').textContent = text; }
+    function clearReview() { el('[data-review-result]').hidden=true;el('[data-review-counts]').replaceChildren();el('[data-review-info]').textContent='';el('[data-review-note]').textContent=''; }
+    function updateReviewNote() {
+      el('[data-review-note]').textContent=drafts.size?`未保存の入力 ${drafts.size}件は、この結果に含めていません。入力内容はそのまま残しています。`:'画面の検索・絞り込みに関係なく、この棚卸の全対象を集計しています。';
+    }
     function sync() {
       const blocked = loading || !!api.pending();
       for (const b of panel.querySelectorAll('button')) b.disabled = blocked;
@@ -134,6 +166,7 @@
       const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     }
     async function overview(generation) {
+      clearReview();
       const data = validate(await api.overview()); if (generation !== epoch) return;
       current = null; drafts.clear();
       el('[data-active]').hidden = true; el('[data-overview]').hidden = false;
@@ -151,6 +184,7 @@
       message('共有棚卸を読み込みました。');
     }
     async function load(id, generation) {
+      clearReview();
       const data = validate(await api.read(id)); if (generation !== epoch) return;
       current = data; drafts.clear(); offset = 0;
       el('[data-overview]').hidden = true; el('[data-active]').hidden = false;
@@ -188,6 +222,7 @@
         const track=()=>{
           if (input.value === String(item.counted_stock ?? '') && memo.value === item.memo) drafts.delete(item.internal_code);
           else drafts.set(item.internal_code,{quantity:input.value,memo:memo.value});
+          if(!el('[data-review-result]').hidden)updateReviewNote();
           el('[data-summary]').textContent = `対象 ${current.items.length}件 ／ 確認済み ${checked}件 ／ 未確認 ${current.items.length-checked}件 ／ 未保存の入力 ${drafts.size}件`;
         };
         input.addEventListener('input',track); memo.addEventListener('input',track);
@@ -202,6 +237,7 @@
       sync();
     }
     function applySaved(result) {
+      clearReview();
       if (!current || current.session.id!==result.stocktaking_id) return;
       const item=current.items.find(i=>i.internal_code===result.internal_code);
       if (item) { Object.assign(item,{counted_stock:result.counted_stock,memo:result.memo,counted_by:result.counted_by,version:result.version});drafts.delete(item.internal_code);render(); }
@@ -225,6 +261,27 @@
       message('前回の保存を確認しました。別の端末では再読み込みしてください。');
     }); });
     el('[data-reload]').addEventListener('click',()=>{ if(discard())void run(g=>current?load(current.session.id,g):overview(g)); });
+    el('[data-review]').addEventListener('click',()=>{ void run(async generation=>{
+      clearReview();
+      if (!current) throw Error('棚卸を開き直してください。');
+      const id=current.session.id;
+      const data=validate(await api.read(id));
+      if(generation!==epoch)return;
+      if(data.session?.id!==id)throw Error('棚卸番号が一致しません。再読み込みしてください。');
+      const counts=api.summarize(data.items);
+      el('[data-review-info]').textContent=`${data.session.stocktaking_date} ／ ${data.session.location_name} ／ 取得時点の保存済み結果（全対象）`;
+      const labels={target:'対象商品',checked:'確認済み',unchecked:'未確認',match:'差異なし',shortage:'在庫不足',surplus:'在庫過剰'};
+      for(const [key,label] of Object.entries(labels)){
+        const box=root.document.createElement('div'),term=root.document.createElement('dt'),value=root.document.createElement('dd');
+        term.textContent=label;value.textContent=counts[key]+'件';
+        if(['match','shortage','surplus'].includes(key))box.className=key==='match'?'count-match':key==='shortage'?'count-short':'count-over';
+        box.append(term,value);el('[data-review-counts]').appendChild(box);
+      }
+      updateReviewNote();
+      el('[data-review-result]').hidden=false;el('#shared-stocktaking-review-title').focus();
+      message('保存済みの棚卸結果を確認しました。現在庫は変更していません。別の端末で保存した後は、もう一度「保存済みの結果を確認」を押してください。');
+    }); });
+    el('[data-review-close]').addEventListener('click',clearReview);
     el('[data-list]').addEventListener('click',()=>{ if(discard())void run(overview); });
     el('[data-close]').addEventListener('click',()=>{ panel.hidden=true; });
     for(const name of ['search','filter'])el(`[data-${name}]`).addEventListener(name==='search'?'input':'change',()=>{offset=0;render();});
@@ -232,6 +289,7 @@
     el('[data-next]').addEventListener('click',()=>{offset+=50;render();});
     root.addEventListener('beforeunload',event=>{if(drafts.size||api.pending()){event.preventDefault();event.returnValue='';}});
     root.addEventListener('inventory-server-auth-changed',()=>{
+      clearReview();
       epoch++;current=null;drafts.clear();el('[data-items]').replaceChildren();el('[data-sessions]').replaceChildren();el('[data-summary]').textContent='';el('[data-title]').textContent='';
       el('[data-overview]').hidden=true;el('[data-active]').hidden=true;message('ログイン状態が変わりました。「再読み込み」で共有棚卸を確認してください。');sync();
     });

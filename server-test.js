@@ -68,6 +68,10 @@
     initializeServerAuthTest
   );
 
+  window.addEventListener("inventory-role-mode-change", function () {
+    if (serverDetailMode) syncServerProductDetailPermissions();
+  });
+
   function initializeServerAuthTest() {
     createStyles();
     initializeServerProductDetailBridge();
@@ -1857,6 +1861,26 @@
     }
   }
 
+  function syncServerProductDetailPermissions() {
+    const detail = document.querySelector("#product-detail");
+    if (!detail) return;
+    const isAdmin = window.inventoryPermissions?.isAdmin?.() === true;
+    ["#server-product-edit-action", "#server-product-adjust-action"].forEach(function (selector) {
+      const action = detail.querySelector(selector);
+      if (action) {
+        action.hidden = !isAdmin;
+        action.classList.toggle("role-menu-hidden", !isAdmin);
+      }
+    });
+    const ready = detail.querySelector(".server-product-detail-operation-ready strong");
+    if (ready) ready.textContent = "商品情報・在庫数・保管場所・最近の在庫履歴・入庫・出庫" +
+      (isAdmin ? "・商品編集・数量調整" : "");
+    const description = detail.querySelector("#server-product-detail-notice span");
+    if (description) description.textContent = "PC・スマホで共通の最新商品情報を表示しています。" +
+      (isAdmin ? "共有サーバーへの入庫・出庫・商品編集・数量調整に対応しています。" :
+        "共有サーバーへの入庫・出庫と在庫履歴の確認ができます。");
+  }
+
   function prepareServerProductDetailLayout() {
     const detailScreen = document.querySelector(
       "#product-detail"
@@ -2079,6 +2103,7 @@
           ? "商品一覧へ戻る"
           : "商品検索へ戻る";
     }
+    syncServerProductDetailPermissions();
   }
 
   function restoreNormalProductDetailLayout() {

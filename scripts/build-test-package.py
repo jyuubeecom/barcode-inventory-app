@@ -22,8 +22,8 @@ def build(destination):
                 data = data.replace(old, b'"barcodeInventoryDatabase-test-v29311"')
             elif name == 'index.html':
                 text = data.decode('utf-8')
-                assert '画面版 v294.4' in text
-                text = text.replace('画面版 v294.4', '検証専用・画面版 v294.4')
+                assert '画面版 v294.5' in text
+                text = text.replace('画面版 v294.5', '検証専用・画面版 v294.5')
                 text = text.replace('<title>', '<title>【検証用】', 1)
                 data = text.encode('utf-8')
             elif name == 'manifest.json':

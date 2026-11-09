@@ -7,7 +7,7 @@ function bridge({fail=false,storageFails=false}={}){
  const body=node(),under=node();body.appendChild(under);const values=new Map(),screens=[],calls=[];
  const doc={body,head:node(),createElement:()=>node(),addEventListener(){},querySelector:()=>null};
  const c={document:doc,sessionStorage:{getItem:k=>values.get(k)||null,setItem(k,v){if(storageFails)throw Error('FAKE_STORAGE');values.set(k,v);},removeItem:k=>values.delete(k)},window:null,CustomEvent:function(t,o){this.type=t;this.detail=o.detail;},fetch:async(u,o)=>{calls.push({u,o});return {ok:!fail,status:fail?401:200,headers:{get:()=> 'application/json'},json:async()=>fail?{success:false,message:'FAKE_BAD_LOGIN'}:{success:true,token:'FAKE-TOKEN',expires_in:60,user:{username:'fake-worker',role:'worker'}}};},Date,Map,Set,Number,JSON,Error,console};
- c.window=c;c.dispatchEvent=()=>{};c.inventoryApp={showScreen:s=>screens.push(s)};c.inventoryPermissions={isAdmin:()=>false};
+ c.window=c;c.addEventListener=()=>{};c.dispatchEvent=()=>{};c.inventoryApp={showScreen:s=>screens.push(s)};c.inventoryPermissions={isAdmin:()=>false};
  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../server-test.js'),'utf8'),c);
  const api=c.inventoryServerSearch;
  function dialog(){return body.children.find(n=>n.id==='server-auth-dialog');}

@@ -38,7 +38,7 @@
       body[data-workspace="shared"] #home .home-summary-grid,
       body[data-workspace="shared"] #home .home-function-grid,
       body[data-workspace="shared"] #home-alert-panel,
-      body[data-workspace="shared"] #home-quick-action-buttons > :not(#show-list-button):not(#show-location-stock-report-button),
+      body[data-workspace="shared"] #home-quick-action-buttons > :not(#show-list-button):not(#show-location-stock-report-button):not(#show-shared-stocktaking-button),
       body[data-workspace="shared"] #product-list-source-switch,
       body[data-workspace="shared"] #location-stock-report-source-label,
       body[data-workspace="shared"] #location-stock-report-source,
@@ -57,7 +57,7 @@
     if (home) {
       const box = root.document.createElement('section');
       box.id = 'common-workspace-home';
-      box.innerHTML = '<strong>みんなの在庫</strong><p id="common-workspace-status" role="status"></p><p>商品を探す → 在庫を見る → 入庫・出庫。別の端末で更新した後は「再読み込み」を押してください。</p><details><summary>利用できる機能</summary><p>商品一覧・現在庫表・商品詳細からの入庫と出庫が共通データに対応しています。棚卸・販売実績・加工・移動などは接続準備中です。</p></details>';
+      box.innerHTML = '<strong>みんなの在庫</strong><p id="common-workspace-status" role="status"></p><p>商品を探す → 在庫を見る → 入庫・出庫。別の端末で更新した後は「再読み込み」を押してください。</p><details><summary>利用できる機能</summary><p>商品一覧・現在庫表・商品詳細からの入庫と出庫が共通データに対応しています。共有棚卸は開始・実在庫の保存・再開に対応しています。棚卸確定と在庫への反映・販売実績・加工・移動などは接続準備中です。</p></details>';
       home.querySelector('.home-dashboard-heading')?.insertAdjacentElement('afterend',box);
       const legacy = root.document.createElement('p');legacy.id = 'common-workspace-legacy';
       legacy.textContent = '管理者用：端末内の従来機能です。ここでの棚卸・売上・加工・移動は共通在庫に反映されません。設定から「共通データ」に戻れます。';

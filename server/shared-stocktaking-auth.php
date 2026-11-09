@@ -18,6 +18,7 @@ function sharedStocktakingSend(array $data, int $status = 200): void
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') { http_response_code(204); exit; }
 if (!in_array($_SERVER['REQUEST_METHOD'] ?? '', ['GET','POST'], true)) sharedStocktakingSend(['success'=>false,'message'=>'GETまたはPOSTで送信してください。'],405);
 require_once __DIR__ . '/shared-stocktaking-service.php';
+require_once __DIR__ . '/shared-stocktaking-finalize-service.php';
 try {
     $config = require '/home/jyuubee/private/db-config.php';
     require_once '/home/jyuubee/private/auth.php';
@@ -29,6 +30,10 @@ try {
     if ($_SERVER['REQUEST_METHOD']==='GET') {
         $id=$_GET['id']??null;
         if ($id!==null&&!is_string($id)) throw new StockCsvError('棚卸番号を確認してください。');
+        if (isset($_GET['preview'])) {
+            if ($_GET['preview']!=='finalize' || $id===null) throw new StockCsvError('反映対象を確認してください。');
+            sharedStocktakingSend(previewSharedStocktakingFinalize($pdo,$user,$id));
+        }
         sharedStocktakingSend(readSharedStocktaking($pdo,$user,$id));
     }
     $body = file_get_contents('php://input', false, null, 0, 1048577);
@@ -36,7 +41,7 @@ try {
     try { $input = json_decode($body, true, 64, JSON_THROW_ON_ERROR); }
     catch (JsonException $e) { throw new StockCsvError('送信形式が不正です。'); }
     if (!is_array($input)) throw new StockCsvError('送信形式が不正です。');
-    sharedStocktakingSend(writeSharedStocktaking($pdo, $input, $user));
+    sharedStocktakingSend(($input['action']??null)==='finalize' ? finalizeSharedStocktaking($pdo,$input,$user) : writeSharedStocktaking($pdo, $input, $user));
 } catch (Throwable $e) {
     $status = 500; $message = '保存結果を確認できません。同じ操作番号で再確認してください。';
     if ($e instanceof StockCsvError) { $status = $e->status; $message = $e->getMessage(); }

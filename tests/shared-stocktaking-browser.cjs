@@ -5,6 +5,7 @@ const fs=require('node:fs');const path=require('node:path');const http=require('
 const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..');
 const id='12345678-1234-4234-8234-123456789012';
+let inventoryQuantity=10;
 const records=new Map();const receipts=new Map();let lost=false,failReview=false;const posts=[];
 const item=()=>({stocktaking_id:id,internal_code:'FAKE-001',product_code:'FAKE-P001',product_name:'架空棚卸テスト',jan_code:'4980000000000',registered_stock:10,counted_stock:null,memo:'',version:0,counted_by:null});
 const fixture=()=>({session:{id,stocktaking_date:'2026-11-09',location_name:'架空倉庫',status:'draft',operator_name:'架空担当'},items:[item()]});
@@ -39,6 +40,11 @@ async function main(){
      const json=async(data,status=200)=>route.fulfill({status,contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify(data)});
      if(req.method()==='OPTIONS'){await route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'GET, POST, OPTIONS'}});return;}
      if(req.method()==='GET'){
+      if(url.searchParams.has('preview')){
+       const d=records.get(id),i=d.items[0];
+       if(i.counted_stock===null){await json({success:false,message:'未確認の商品が残っています'},409);return;}
+       await json({success:true,format:'inventory-stocktaking-finalize-preview-v1',stocktaking_id:id,preview_token:'a'.repeat(64),session:d.session,rows:[{...i,difference:i.counted_stock-i.registered_stock}]});return;
+      }
       if(url.searchParams.has('id')){
        if(failReview){failReview=false;await json({success:false,message:'架空テスト：結果取得に失敗しました'},503);return;}
        await json({success:true,format,...structuredClone(records.get(id)||fixture())});return;
@@ -51,6 +57,11 @@ async function main(){
       const d=fixture();d.session.id=body.request_id;d.items[0].stocktaking_id=body.request_id;
       // The fixed fixture ID is used when opening on both devices.
       records.set(id,d);const r={success:true,request_id:body.request_id,stocktaking_id:body.request_id,item_count:1};receipts.set(body.request_id,r);await json(r);return;
+     }
+     if(body.action==='finalize'){
+      const d=records.get(id);inventoryQuantity=d.items[0].counted_stock;d.session.status='finalized';
+      const r={success:true,action:'finalize',request_id:body.request_id,stocktaking_id:id,preview_token:body.preview_token,status:'finalized',changed_count:1};receipts.set(body.request_id,r);
+      if(lost){lost=false;await route.abort();return;}await json(r);return;
      }
      const i=records.get(id).items[0];
      if(body.expected_version!==i.version){await json({success:false,message:'他の端末でこの商品が更新されました。再読み込みして数量を確認してください。'},409);return;}
@@ -120,9 +131,34 @@ async function main(){
   await a.locator('[data-search]').fill('FAKE-P001');
   assert.equal(await a.locator('[data-items] article').count(),1);
   assert.equal(await a.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Mobile horizontal overflow');
+  assert.equal(await a.locator('[data-finalize-preview]').isVisible(),false,'Worker saw finalization');
+  // Admin checks the actual changed rows. Cancel is read-only; dirty input blocks.
+  const c=await page('admin',390);await c.click('.mobile-home-stocktaking-button');
+  await c.locator('[data-sessions] button').click();
+  await c.locator('[data-items] input').fill('7');await c.click('[data-finalize-preview]');
+  await c.waitForFunction(()=>document.querySelector('[data-message]').textContent.includes('未保存'));
+  assert.equal(await c.locator('[data-finalize-result]').isVisible(),false);
+  await c.locator('[data-items] input').fill('4');await c.click('[data-finalize-preview]');
+  await c.waitForSelector('[data-finalize-result]',{state:'visible'});
+  assert.match(await c.locator('[data-finalize-rows]').innerText(),/10 → 4/);
+  assert.equal(await c.locator('[data-finalize-commit]').isDisabled(),true);
+  assert.equal(inventoryQuantity,10);await c.click('[data-finalize-cancel]');assert.equal(inventoryQuantity,10);
+  await c.click('[data-finalize-preview]');await c.waitForSelector('[data-finalize-result]',{state:'visible'});
+  assert.equal(await c.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Mobile finalize overflow');
+  await c.locator('[data-finalize-check]').check();
+  await c.evaluate(()=>{crypto.randomUUID=()=> '12345678-1234-4234-8234-123456789016';});
+  lost=true;await c.click('[data-finalize-commit]');await c.waitForSelector('[data-retry]',{state:'visible'});
+  assert.equal(inventoryQuantity,4);assert.ok(await c.evaluate(()=>sessionStorage.getItem('inventorySharedStocktakingFinalizePendingV1')));
+  await c.reload();await c.click('.mobile-home-stocktaking-button');await c.waitForSelector('[data-retry]',{state:'visible'});
+  await c.click('[data-retry]');await c.waitForSelector('[data-retry]',{state:'hidden'});
+  assert.match(await c.locator('[data-title]').innerText(),/確定・反映済み/);
+  assert.equal(await c.locator('[data-items] button').isDisabled(),true);
+  assert.equal(await c.locator('[data-finalize-preview]').isVisible(),false);
+  assert.equal(await c.evaluate(()=>sessionStorage.getItem('inventorySharedStocktakingFinalizePendingV1')),null);
+  assert.equal(posts.at(-1).request_id,posts.at(-2).request_id);assert.equal(inventoryQuantity,4);
   await a.evaluate(()=>{window.inventoryServerSearch.logout();});
   assert.equal(await a.locator('[data-items] article').count(),0);
-  console.log('PASS full app: worker/admin button, mobile 390px, start, resume, zero, read-only review, preserved unsaved input, stale review cleared on failure, conflict, retry, search, logout, external requests blocked');
+  console.log('PASS full app: worker/admin button, mobile 390px, start, resume, zero, read-only review, preserved unsaved input, stale review cleared on failure, conflict, retry, search, logout, admin-only finalize, preview/cancel/dirty-input guard, real stock simulated once, reload receipt recovery, finalized read-only, external requests blocked');
  }finally{await browser.close();server.close();}
 }
 main().catch(e=>{console.error(e);server.close();process.exitCode=1;});

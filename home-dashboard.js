@@ -1388,6 +1388,7 @@ function createHomeDashboardStyle() {
       }
 
       #home.home-dashboard {
+        grid-template-columns: minmax(0, 1fr);
         gap: 12px;
       }
 
@@ -1407,6 +1408,9 @@ function createHomeDashboardStyle() {
 
       #home .home-version-badge {
         justify-self: start;
+        max-width: 100%;
+        white-space: normal;
+        overflow-wrap: anywhere;
       }
 
       #home .home-summary-grid {

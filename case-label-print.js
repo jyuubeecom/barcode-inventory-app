@@ -5,9 +5,9 @@
   if (!button) return;
 
   const fields = [
-    ["社内コード", "#detail-internal-code"],
-    ["商品コード", "#detail-product-code"],
-    ["JANコード", "#detail-jan-code"]
+    ["社内コード", "#detail-internal-code", 5],
+    ["商品コード", "#detail-product-code", 3],
+    ["JANコード", "#detail-jan-code", 2]
   ];
 
   button.addEventListener("click", function () {
@@ -35,11 +35,11 @@
   .controls, main { max-width: 237mm; margin: 0 auto; }
   .controls { padding-bottom: 16px; }
   button { padding: 10px 22px; font: inherit; font-weight: bold; border: 0; border-radius: 6px; background: #1565c0; color: white; cursor: pointer; }
-  main { background: white; border: 1px solid; aspect-ratio: 237 / 161; container-type: inline-size; display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); }
-  .row { display: flex; flex-direction: column; justify-content: center; gap: 1cqw; min-width: 0; padding: 1cqw 5cqw; }
+  main { background: white; border: 1px solid; aspect-ratio: 237 / 161; container-type: inline-size; display: grid; grid-template-rows: var(--row-heights); }
+  .row { display: flex; flex-direction: column; justify-content: center; text-align: center; gap: 1cqw; min-width: 0; padding: 1cqw 5cqw; }
   .row + .row { border-top: 1px solid; }
   .caption { font-size: 3.5cqw; font-weight: bold; }
-  .code { font: 700 var(--code-size, 9cqw)/1.1 Arial, "Yu Gothic", Meiryo, sans-serif; white-space: pre; }
+  .code { font: 700 var(--code-size)/1.1 Arial, "Yu Gothic", Meiryo, sans-serif; white-space: pre; }
   @media print {
     body { padding: 0; background: white; }
     .controls { display: none; }
@@ -59,9 +59,10 @@
 
     const doc = preview.document;
     const label = doc.querySelector("main");
+    label.style.setProperty("--row-heights", fields.map(([, , weight]) => `minmax(0, ${weight}fr)`).join(" "));
     const measurement = doc.createElement("canvas").getContext("2d");
     measurement.font = '700 100px Arial, "Yu Gothic", Meiryo, sans-serif';
-    fields.forEach(function ([caption], index) {
+    fields.forEach(function ([caption, , weight], index) {
       const row = doc.createElement("div");
       row.className = "row";
       const heading = doc.createElement("div");
@@ -71,7 +72,7 @@
       code.className = "code";
       code.textContent = codes[index];
       const widthAt100px = measurement.measureText(code.textContent).width;
-      code.style.setProperty("--code-size", Math.min(9, 8900 / widthAt100px) + "cqw");
+      code.style.setProperty("--code-size", Math.min(2.8 * weight, 8900 / widthAt100px) + "cqw");
       row.append(heading, code);
       label.append(row);
     });

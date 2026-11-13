@@ -2,7 +2,7 @@
 
 // 同じドメインの桜花・本番版・テスト版のキャッシュを分ける。
 const CACHE_PREFIX = "barcode-inventory-app:" + encodeURIComponent(self.registration.scope) + ":";
-const CACHE_NAME = CACHE_PREFIX + "v2951-shared-stocktaking-review-1";
+const CACHE_NAME = CACHE_PREFIX + "v2951-case-label-b5-1";
 const APP_FILES = [
   "./", "./index.html", "./style.css?v=293171", "./storage.js?v=269",
   "./normal-shipment.js?v=226",
@@ -15,7 +15,7 @@ const APP_FILES = [
   "./stocktaking-history.js?v=35", "./stocktaking-transfer.js?v=201",
   "./csv.js?v=29406", "./csv-import.js?v=215", "./csv-update.js?v=74",
   "./sales-plan.js?v=2923", "./sales-actual.js?v=267", "./purchase-required.js?v=293151", "./order-remaining.js?v=120", "./low-shipment.js?v=226", "./seasonal-trend.js?v=235",
-  "./shipping-schedule.js?v=293151", "./dedicated-product.js?v=215", "./shipping-arrival.js?v=118", "./barcode-print.js?v=142",
+  "./shipping-schedule.js?v=293151", "./dedicated-product.js?v=215", "./shipping-arrival.js?v=118", "./barcode-print.js?v=142", "./case-label-print.js?v=1",
   "./disposal-list.js?v=246", "./backup.js?v=269", "./restore.js?v=269", "./location-management.js?v=100",
   "./processing-sheet.js?v=211",
   "./processing-conversion.js?v=213",

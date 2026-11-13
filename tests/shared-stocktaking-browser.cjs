@@ -120,6 +120,44 @@ async function main(){
   await a.locator('[data-search]').fill('FAKE-P001');
   assert.equal(await a.locator('[data-items] article').count(),1);
   assert.equal(await a.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Mobile horizontal overflow');
+  async function checkCaseLabel(page, codes) {
+   const popupPromise = page.waitForEvent('popup');
+   await page.getByRole('button', {name:'ケースラベルを印刷（B5横）'}).click();
+   const popup = await popupPromise;
+   assert.deepEqual(await popup.locator('.caption').allTextContents(), ['社内コード','商品コード','JANコード']);
+   assert.deepEqual(await popup.locator('.code').allTextContents(), codes);
+   assert.equal(await popup.locator('main img').count(), 0);
+   await popup.evaluate(() => {
+    window.print = () => { document.body.dataset.printRequested = 'yes'; };
+   });
+   await popup.getByRole('button', {name:'印刷する'}).click();
+   assert.equal(await popup.locator('body').getAttribute('data-print-requested'), 'yes');
+   await popup.emulateMedia({media:'print'});
+   assert.equal(await popup.getByRole('button', {name:'印刷する'}).isVisible(), false);
+   const pdf = Buffer.from(await popup.pdf({preferCSSPageSize:true})).toString('latin1');
+   assert.equal((pdf.match(/\/Type \/Page\b/g) || []).length, 1);
+   const box = pdf.match(/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/);
+   assert.ok(box && Math.abs(Number(box[1]) - 257 * 72 / 25.4) < 2 &&
+    Math.abs(Number(box[2]) - 182 * 72 / 25.4) < 2, 'B5 JIS landscape page');
+   await popup.close();
+  }
+
+  const beforePrintPosts = posts.length;
+  await a.evaluate(() => window.inventoryServerSearch.openProductDetail({
+   product:{internal_code:'00123', product_code:'<img src=x>', product_name:'架空ケース', jan_code:'0123456789012'},
+   stocks:[], total_stock:0
+  }, '00123'));
+  await checkCaseLabel(a, ['00123','<img src=x>','0123456789012']);
+
+  await b.evaluate(() => {
+   window.inventoryApp.applyUpdatedProduct({
+    internalCode:'00456', productCode:'FAKE-P02', productName:'架空ケース', stock:0
+   });
+   window.inventoryApp.openDetailScreen('00456');
+  });
+  await checkCaseLabel(b, ['00456','FAKE-P02','未登録']);
+  assert.equal(posts.length, beforePrintPosts);
+  console.log('PASS case labels: shared and local detail, leading zeroes, missing JAN, plain text, one B5 landscape page');
   await a.evaluate(()=>{window.inventoryServerSearch.logout();});
   assert.equal(await a.locator('[data-items] article').count(),0);
   console.log('PASS full app: worker/admin button, mobile 390px, start, resume, zero, read-only review, preserved unsaved input, stale review cleared on failure, conflict, retry, search, logout, external requests blocked');

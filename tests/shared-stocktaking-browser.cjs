@@ -73,12 +73,30 @@ async function main(){
    assert.deepEqual(await popup.locator('.caption').allTextContents(), ['社内コード','商品コード','JANコード']);
    assert.deepEqual(await popup.locator('.code').allTextContents(), codes);
    assert.equal(await popup.locator('main img').count(), 0);
+   async function checkLayout() {
+    const layout = await popup.locator('.row').evaluateAll(rows => rows.map(row => ({
+     height: row.getBoundingClientRect().height,
+     centered: [...row.children].every(child => getComputedStyle(child).textAlign === 'center'),
+     fontSize: parseFloat(getComputedStyle(row.querySelector('.code')).fontSize),
+     fits: row.scrollWidth <= row.clientWidth && row.scrollHeight <= row.clientHeight
+    })));
+    const total = layout.reduce((sum, row) => sum + row.height, 0);
+    [5, 3, 2].forEach((weight, index) => {
+     const row = layout[index];
+     assert.ok(row.centered && row.fits);
+     assert.ok(Math.abs(row.height - total * weight / 10) < 1);
+     assert.ok(Math.abs(row.fontSize - layout[0].fontSize * weight / 5) < 0.1);
+    });
+   }
+   await popup.setViewportSize({width:390, height:900});
+   await checkLayout();
    await popup.evaluate(() => {
     window.print = () => { document.body.dataset.printRequested = 'yes'; };
    });
    await popup.getByRole('button', {name:'印刷する'}).click();
    assert.equal(await popup.locator('body').getAttribute('data-print-requested'), 'yes');
    await popup.emulateMedia({media:'print'});
+   await checkLayout();
    assert.equal(await popup.getByRole('button', {name:'印刷する'}).isVisible(), false);
    const pdf = Buffer.from(await popup.pdf({preferCSSPageSize:true})).toString('latin1');
    assert.equal((pdf.match(/\/Type \/Page\b/g) || []).length, 1);

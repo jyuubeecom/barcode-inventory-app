@@ -66,24 +66,35 @@ async function main(){
    await p.evaluate(id=>{crypto.randomUUID=()=>id;},id);
    return p;
   }
-  async function checkCaseLabel(page, codes) {
+  async function checkCaseLabel(page, codes, barcodeRows) {
    const popupPromise = page.waitForEvent('popup');
    await page.getByRole('button', {name:'ケースラベルを印刷（B5横）'}).click();
    const popup = await popupPromise;
    assert.deepEqual(await popup.locator('.caption').allTextContents(), ['社内コード','商品コード','JANコード']);
    assert.deepEqual(await popup.locator('.code').allTextContents(), codes);
-   assert.equal(await popup.locator('main img').count(), 0);
+   assert.equal(await popup.locator('main b').count(), 0);
+   assert.deepEqual(await popup.locator('.row').evaluateAll(rows =>
+    rows.map(row => Boolean(row.querySelector('svg.case-barcode rect')))), barcodeRows);
    async function checkLayout() {
-    const layout = await popup.locator('.row').evaluateAll(rows => rows.map(row => ({
-     height: row.getBoundingClientRect().height,
-     centered: [...row.children].every(child => getComputedStyle(child).textAlign === 'center'),
-     fontSize: parseFloat(getComputedStyle(row.querySelector('.code')).fontSize),
-     fits: row.scrollWidth <= row.clientWidth && row.scrollHeight <= row.clientHeight
-    })));
+    const layout = await popup.locator('.row').evaluateAll(rows => rows.map(row => {
+     const barcode = row.querySelector('.case-barcode')?.getBoundingClientRect();
+     const bounds = row.getBoundingClientRect();
+     const text = document.createRange();
+     text.selectNodeContents(row.querySelector('.code'));
+     const right = text.getBoundingClientRect().right;
+     return {
+      height: bounds.height,
+      centered: [...row.children].every(child => getComputedStyle(child).textAlign === 'center'),
+      fontSize: parseFloat(getComputedStyle(row.querySelector('.code')).fontSize),
+      fits: row.scrollWidth <= row.clientWidth && row.scrollHeight <= row.clientHeight,
+      barcodeFits: !barcode || (barcode.left > right && barcode.right < bounds.right &&
+       barcode.bottom < bounds.bottom && barcode.top > bounds.top)
+     };
+    }));
     const total = layout.reduce((sum, row) => sum + row.height, 0);
     [5, 3, 2].forEach((weight, index) => {
      const row = layout[index];
-     assert.ok(row.centered && row.fits);
+     assert.ok(row.centered && row.fits && row.barcodeFits);
      assert.ok(Math.abs(row.height - total * weight / 10) < 1);
      assert.ok(Math.abs(row.fontSize - layout[0].fontSize * weight / 5) < 0.1);
     });
@@ -110,10 +121,10 @@ async function main(){
   const localLabelPage = await page('admin', 1280);
   const beforePrintPosts = posts.length;
   await sharedLabelPage.evaluate(() => window.inventoryServerSearch.openProductDetail({
-   product:{internal_code:'00123', product_code:'<img src=x>', product_name:'架空ケース', jan_code:'0123456789012'},
+   product:{internal_code:'00123', product_code:'<b>X', product_name:'架空ケース', jan_code:'0123456789012'},
    stocks:[], total_stock:0
   }, '00123'));
-  await checkCaseLabel(sharedLabelPage, ['00123','<img src=x>','0123456789012']);
+  await checkCaseLabel(sharedLabelPage, ['00123','<b>X','0123456789012'], [true, true, true]);
 
   await localLabelPage.evaluate(() => {
    window.inventoryApp.applyUpdatedProduct({
@@ -121,7 +132,7 @@ async function main(){
    });
    window.inventoryApp.openDetailScreen('00456');
   });
-  await checkCaseLabel(localLabelPage, ['00456','FAKE-P02','未登録']);
+  await checkCaseLabel(localLabelPage, ['00456','FAKE-P02','未登録'], [true, true, false]);
   assert.equal(posts.length, beforePrintPosts);
   await sharedLabelPage.context().close();
   await localLabelPage.context().close();

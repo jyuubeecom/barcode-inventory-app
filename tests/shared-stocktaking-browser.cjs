@@ -132,7 +132,18 @@ async function main(){
   assert.deepEqual(await a.locator('[data-review-counts] dd').allTextContents(),['1件','1件','0件','0件','1件','0件']);
   assert.match(await a.locator('[data-review-note]').innerText(),/未保存の入力 1件/);
   assert.equal(await a.locator('[data-items] input').inputValue(),'7');assert.equal(posts.length,beforeReviewPosts);
-  assert.equal(await a.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Mobile review overflow');
+  for (const width of [390, 320]) {
+   await a.setViewportSize({width, height:900});
+   const overflow = await a.evaluate(() => {
+    if (document.documentElement.scrollWidth <= innerWidth) return [];
+    return [document.documentElement.scrollWidth, ...[...document.body.querySelectorAll('*')]
+     .filter(element => element.getBoundingClientRect().right > innerWidth + 1)
+     .slice(0, 15)
+     .map(element => element.id || element.className || element.tagName)];
+   });
+   assert.deepEqual(overflow, [], `Mobile review overflow at ${width}px`);
+  }
+  await a.setViewportSize({width:390, height:900});
   await a.locator('[data-items] input').fill('0');
   assert.match(await a.locator('[data-review-note]').innerText(),/全対象を集計/);
   await a.locator('[data-items] input').fill('7');

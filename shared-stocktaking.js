@@ -124,14 +124,15 @@
     home.querySelector('#common-workspace-home')?.insertAdjacentElement('afterend', panel);
     const style = root.document.createElement('style');
     style.textContent = `body[data-workspace="legacy"] #show-shared-stocktaking-button,body[data-workspace="legacy"] #shared-stocktaking-panel{display:none!important}
-      #shared-stocktaking-panel{padding:20px;background:white;border:2px solid #9160b5;border-radius:12px;margin:20px 0}
+      #shared-stocktaking-panel{padding:20px;background:white;border:2px solid #9160b5;border-radius:12px;margin:20px 0;min-width:0;overflow-wrap:anywhere}
+      #home #shared-stocktaking-panel p{min-width:0;max-width:100%;margin-right:0}
       #shared-stocktaking-panel label{display:block;margin:12px 0;font-weight:bold}
-      #shared-stocktaking-panel input,#shared-stocktaking-panel select,#shared-stocktaking-panel textarea{display:block;width:100%;box-sizing:border-box;margin-top:6px;font-size:18px;padding:12px}
-      #shared-stocktaking-panel button{margin:6px 6px 6px 0;padding:14px;min-height:48px}
+      #shared-stocktaking-panel input,#shared-stocktaking-panel select,#shared-stocktaking-panel textarea{display:block;width:100%;min-width:0;box-sizing:border-box;margin-top:6px;font-size:18px;padding:12px}
+      #shared-stocktaking-panel button{margin:6px 0;padding:14px;min-height:48px;max-width:100%}
       #shared-stocktaking-panel article{padding:16px;margin:14px 0;border:1px solid #bbcbd6;border-radius:10px}
       #shared-stocktaking-panel [data-message]{white-space:pre-wrap;font-weight:bold}
       #shared-stocktaking-panel [data-review-result]{padding:16px;border:2px solid #86b5d5;border-radius:10px;margin:12px 0;background:#f6fbff}
-      #shared-stocktaking-panel [data-review-counts]{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+      #shared-stocktaking-panel [data-review-counts]{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:12px}
       #shared-stocktaking-panel [data-review-counts]>div{padding:12px;background:white;border:1px solid #bdcbd5;border-radius:8px}
       #shared-stocktaking-panel [data-review-counts] dt{font-weight:bold}#shared-stocktaking-panel [data-review-counts] dd{margin:8px 0 0;font-size:24px;font-weight:bold}
       #shared-stocktaking-panel .count-match{color:#246b35}#shared-stocktaking-panel .count-short{color:#ad2929}#shared-stocktaking-panel .count-over{color:#a45c00}`;

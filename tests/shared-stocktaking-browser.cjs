@@ -66,6 +66,49 @@ async function main(){
    await p.evaluate(id=>{crypto.randomUUID=()=>id;},id);
    return p;
   }
+  async function checkCaseLabel(page, codes) {
+   const popupPromise = page.waitForEvent('popup');
+   await page.getByRole('button', {name:'ケースラベルを印刷（B5横）'}).click();
+   const popup = await popupPromise;
+   assert.deepEqual(await popup.locator('.caption').allTextContents(), ['社内コード','商品コード','JANコード']);
+   assert.deepEqual(await popup.locator('.code').allTextContents(), codes);
+   assert.equal(await popup.locator('main img').count(), 0);
+   await popup.evaluate(() => {
+    window.print = () => { document.body.dataset.printRequested = 'yes'; };
+   });
+   await popup.getByRole('button', {name:'印刷する'}).click();
+   assert.equal(await popup.locator('body').getAttribute('data-print-requested'), 'yes');
+   await popup.emulateMedia({media:'print'});
+   assert.equal(await popup.getByRole('button', {name:'印刷する'}).isVisible(), false);
+   const pdf = Buffer.from(await popup.pdf({preferCSSPageSize:true})).toString('latin1');
+   assert.equal((pdf.match(/\/Type \/Page\b/g) || []).length, 1);
+   const box = pdf.match(/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/);
+   assert.ok(box && Math.abs(Number(box[1]) - 257 * 72 / 25.4) < 2 &&
+    Math.abs(Number(box[2]) - 182 * 72 / 25.4) < 2, 'B5 JIS landscape page');
+   await popup.close();
+  }
+
+  const sharedLabelPage = await page('worker', 390);
+  const localLabelPage = await page('admin', 1280);
+  const beforePrintPosts = posts.length;
+  await sharedLabelPage.evaluate(() => window.inventoryServerSearch.openProductDetail({
+   product:{internal_code:'00123', product_code:'<img src=x>', product_name:'架空ケース', jan_code:'0123456789012'},
+   stocks:[], total_stock:0
+  }, '00123'));
+  await checkCaseLabel(sharedLabelPage, ['00123','<img src=x>','0123456789012']);
+
+  await localLabelPage.evaluate(() => {
+   window.inventoryApp.applyUpdatedProduct({
+    internalCode:'00456', productCode:'FAKE-P02', productName:'架空ケース', stock:0
+   });
+   window.inventoryApp.openDetailScreen('00456');
+  });
+  await checkCaseLabel(localLabelPage, ['00456','FAKE-P02','未登録']);
+  assert.equal(posts.length, beforePrintPosts);
+  await sharedLabelPage.context().close();
+  await localLabelPage.context().close();
+  console.log('PASS case labels: shared and local detail, leading zeroes, missing JAN, plain text, one B5 landscape page');
+
   const a=await page('worker',390);
   await a.click('.mobile-home-stocktaking-button');
   await a.waitForSelector('[data-location]:not(:disabled)');
@@ -89,7 +132,18 @@ async function main(){
   assert.deepEqual(await a.locator('[data-review-counts] dd').allTextContents(),['1件','1件','0件','0件','1件','0件']);
   assert.match(await a.locator('[data-review-note]').innerText(),/未保存の入力 1件/);
   assert.equal(await a.locator('[data-items] input').inputValue(),'7');assert.equal(posts.length,beforeReviewPosts);
-  assert.equal(await a.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Mobile review overflow');
+  for (const width of [390, 320]) {
+   await a.setViewportSize({width, height:900});
+   const overflow = await a.evaluate(() => {
+    if (document.documentElement.scrollWidth <= innerWidth) return [];
+    return [document.documentElement.scrollWidth, ...[...document.body.querySelectorAll('*')]
+     .filter(element => element.getBoundingClientRect().right > innerWidth + 1)
+     .slice(0, 15)
+     .map(element => element.id || element.className || element.tagName)];
+   });
+   assert.deepEqual(overflow, [], `Mobile review overflow at ${width}px`);
+  }
+  await a.setViewportSize({width:390, height:900});
   await a.locator('[data-items] input').fill('0');
   assert.match(await a.locator('[data-review-note]').innerText(),/全対象を集計/);
   await a.locator('[data-items] input').fill('7');
